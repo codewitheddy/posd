@@ -1,0 +1,119 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Customer Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-people"></i> Customer Management</h2>
+        <a href="{% url 'customer_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add New Customer
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Search and Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" name="search" class="form-control" placeholder="Search by name, phone, or code..." value="{{ search }}">
+                </div>
+                <div class="col-md-3">
+                    <select name="customer_type" class="form-select">
+                        <option value="">All Customer Types</option>
+                        <option value="regular" {% if customer_type == 'regular' %}selected{% endif %}>Regular</option>
+                        <option value="vip" {% if customer_type == 'vip' %}selected{% endif %}>VIP</option>
+                        <option value="wholesale" {% if customer_type == 'wholesale' %}selected{% endif %}>Wholesale</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <a href="{% url 'customer_list' %}" class="btn btn-secondary w-100">
+                        <i class="bi bi-arrow-clockwise"></i> Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Customer List -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Customer Code</th>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Type</th>
+                            <th>Loyalty Points</th>
+                            <th>Total Purchases</th>
+                            <th>Visits</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for customer in customers %}
+                        <tr>
+                            <td><strong>{{ customer.customer_code }}</strong></td>
+                            <td>{{ customer.name }}</td>
+                            <td>{{ customer.phone }}</td>
+                            <td>{{ customer.email|default:"-" }}</td>
+                            <td>
+                                {% if customer.customer_type == 'vip' %}
+                                    <span class="badge bg-warning text-dark">VIP</span>
+                                {% elif customer.customer_type == 'wholesale' %}
+                                    <span class="badge bg-info">Wholesale</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Regular</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ customer.loyalty_points }}</strong> pts</td>
+                            <td>KES {{ customer.total_purchases|floatformat:2 }}</td>
+                            <td>{{ customer.visit_count }}</td>
+                            <td>
+                                {% if customer.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'customer_detail' customer.pk %}" class="btn btn-sm btn-info" title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'customer_edit' customer.pk %}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center">
+                                No customers found. <a href="{% url 'customer_create' %}">Add your first customer</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

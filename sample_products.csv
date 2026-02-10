@@ -1,0 +1,11 @@
+name,product_code,category,unit_price,stock_quantity,low_stock_threshold
+Laptop Computer,ELEC001,Electronics,45000.00,15,5
+Wireless Mouse,ELEC002,Electronics,1200.00,40,10
+USB Cable,ELEC003,Electronics,350.00,100,20
+Notebook A4,STAT001,Stationery,150.00,200,30
+Ballpoint Pen,STAT002,Stationery,25.00,500,50
+Marker Set,STAT003,Stationery,180.00,80,15
+Coffee Beans 1kg,BEV006,Beverages,1500.00,25,8
+Green Tea Box,BEV007,Beverages,450.00,35,10
+Orange Juice 1L,BEV008,Beverages,180.00,60,15
+Dishwashing Liquid,HOU004,Household,220.00,45,12

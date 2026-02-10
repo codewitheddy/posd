@@ -1,0 +1,43 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Categories{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Categories</h2>
+            <a href="{% url 'category_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Category
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Products</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                        <tr>
+                            <td>{{ category.name }}</td>
+                            <td>{{ category.products.count }}</td>
+                            <td>{{ category.created_at|date:"d/m/Y" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center">No categories found. <a href="{% url 'category_create' %}">Add your first category</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

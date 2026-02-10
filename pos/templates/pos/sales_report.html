@@ -1,0 +1,107 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Sales Report{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h2>Sales Report</h2>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="date" class="form-label">Select Date</label>
+                        <input type="date" class="form-control" id="date" name="date" 
+                               value="{{ filter_date|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Filter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <h6>Total Sales</h6>
+                        <h3>KES {{ summary.total_sales|default:0|floatformat:2 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h6>Total VAT</h6>
+                        <h3>KES {{ summary.total_vat|default:0|floatformat:2 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning">
+                    <div class="card-body">
+                        <h6>Total Discounts</h6>
+                        <h3>KES {{ summary.total_discounts|default:0|floatformat:2 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info">
+                    <div class="card-body">
+                        <h6>Transactions</h6>
+                        <h3>{{ summary.transaction_count|default:0 }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Transactions for {{ filter_date|date:"d/m/Y" }}</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Time</th>
+                            <th>Items</th>
+                            <th>Subtotal</th>
+                            <th>VAT</th>
+                            <th>Discount</th>
+                            <th>Total</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in sales %}
+                        <tr>
+                            <td>{{ sale.invoice_number }}</td>
+                            <td>{{ sale.date|date:"H:i" }}</td>
+                            <td>{{ sale.items.count }}</td>
+                            <td>KES {{ sale.subtotal|floatformat:2 }}</td>
+                            <td>KES {{ sale.vat_amount|floatformat:2 }}</td>
+                            <td>KES {{ sale.discount_amount|floatformat:2 }}</td>
+                            <td><strong>KES {{ sale.total|floatformat:2 }}</strong></td>
+                            <td>
+                                <a href="{% url 'invoice_view' sale.pk %}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center">No sales found for this date.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

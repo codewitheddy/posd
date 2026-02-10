@@ -1,0 +1,115 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Stock Alerts{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2><i class="bi bi-exclamation-triangle text-warning"></i> Stock Alerts</h2>
+            <a href="{% url 'stock_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Stock List
+            </a>
+        </div>
+
+        <!-- Out of Stock -->
+        {% if out_of_stock_products %}
+        <div class="card mb-4 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5><i class="bi bi-x-circle"></i> Out of Stock ({{ out_of_stock_products.count }})</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Product Code</th>
+                            <th>Category</th>
+                            <th>Unit Price</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in out_of_stock_products %}
+                        <tr>
+                            <td><strong>{{ product.name }}</strong></td>
+                            <td>
+                                {% if product.product_code %}
+                                    <span class="badge bg-info">{{ product.product_code }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ product.category.name|default:"Uncategorized" }}</td>
+                            <td>KES {{ product.unit_price|floatformat:2 }}</td>
+                            <td>
+                                <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-danger">
+                                    <i class="bi bi-plus-circle"></i> Restock Now
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Low Stock -->
+        {% if low_stock_products %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning">
+                <h5><i class="bi bi-exclamation-triangle"></i> Low Stock ({{ low_stock_products.count }})</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Product Code</th>
+                            <th>Category</th>
+                            <th>Current Stock</th>
+                            <th>Alert Threshold</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in low_stock_products %}
+                        <tr>
+                            <td><strong>{{ product.name }}</strong></td>
+                            <td>
+                                {% if product.product_code %}
+                                    <span class="badge bg-info">{{ product.product_code }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ product.category.name|default:"Uncategorized" }}</td>
+                            <td><span class="badge bg-warning text-dark">{{ product.stock_quantity }}</span></td>
+                            <td>{{ product.low_stock_threshold }}</td>
+                            <td>
+                                <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-warning">
+                                    <i class="bi bi-plus-circle"></i> Restock
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not out_of_stock_products and not low_stock_products %}
+        <div class="alert alert-success" role="alert">
+            <h4 class="alert-heading"><i class="bi bi-check-circle"></i> All Good!</h4>
+            <p>No stock alerts at this time. All products have sufficient stock levels.</p>
+            <hr>
+            <p class="mb-0">
+                <a href="{% url 'stock_list' %}" class="btn btn-success">View All Stock</a>
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

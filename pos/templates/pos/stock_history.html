@@ -1,0 +1,96 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Stock History - {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Stock History: {{ product.name }}</h2>
+            <div>
+                <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-primary">
+                    <i class="bi bi-plus-minus"></i> Adjust Stock
+                </a>
+                <a href="{% url 'stock_list' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Stock List
+                </a>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Product Code:</strong> {{ product.product_code|default:"-" }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Category:</strong> {{ product.category.name|default:"Uncategorized" }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Current Stock:</strong> <span class="badge bg-primary">{{ product.stock_quantity }}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Status:</strong>
+                        {% if product.is_out_of_stock %}
+                            <span class="badge bg-danger">Out of Stock</span>
+                        {% elif product.is_low_stock %}
+                            <span class="badge bg-warning text-dark">Low Stock</span>
+                        {% else %}
+                            <span class="badge bg-success">In Stock</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Adjustment History</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Type</th>
+                            <th>Change</th>
+                            <th>Previous Qty</th>
+                            <th>New Qty</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adjustment in adjustments %}
+                        <tr>
+                            <td>{{ adjustment.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if adjustment.adjustment_type == 'restock' %}bg-success
+                                    {% elif adjustment.adjustment_type == 'sale' %}bg-primary
+                                    {% elif adjustment.adjustment_type == 'damage' %}bg-danger
+                                    {% elif adjustment.adjustment_type == 'return' %}bg-info
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ adjustment.get_adjustment_type_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <strong class="{% if adjustment.quantity_change > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ adjustment.quantity_change|stringformat:"+d" }}
+                                </strong>
+                            </td>
+                            <td>{{ adjustment.previous_quantity }}</td>
+                            <td><strong>{{ adjustment.new_quantity }}</strong></td>
+                            <td>{{ adjustment.reason|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center">No stock adjustments recorded yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

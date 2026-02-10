@@ -1,0 +1,103 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Invoice {{ sale.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-body" id="invoice-content">
+                <div class="text-center mb-4">
+                    <h2>{{ shop_name }}</h2>
+                    <p class="text-muted">Sales Invoice</p>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-6">
+                        <strong>Invoice Number:</strong> {{ sale.invoice_number }}<br>
+                        {% if sale.cashier %}
+                        <strong>Cashier:</strong> {{ sale.cashier.get_full_name|default:sale.cashier.username }}
+                        {% endif %}
+                    </div>
+                    <div class="col-6 text-end">
+                        <strong>Date:</strong> {{ sale.date|date:"d/m/Y H:i" }}
+                    </div>
+                </div>
+
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Item</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-end">Price</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in sale.items.all %}
+                        <tr>
+                            <td>{{ item.product.name }}</td>
+                            <td class="text-center">{{ item.quantity }}</td>
+                            <td class="text-end">KES {{ item.unit_price|floatformat:2 }}</td>
+                            <td class="text-end">KES {{ item.total_price|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <div class="row">
+                    <div class="col-6"></div>
+                    <div class="col-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Subtotal:</strong></td>
+                                <td class="text-end">KES {{ sale.subtotal|floatformat:2 }}</td>
+                            </tr>
+                            {% if sale.discount_amount > 0 %}
+                            <tr>
+                                <td><strong>Discount ({{ sale.discount_value }}{% if sale.discount_type == 'percentage' %}%{% endif %}):</strong></td>
+                                <td class="text-end">KES {{ sale.discount_amount|floatformat:2 }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td><strong>VAT ({{ sale.vat_rate }}%):</strong></td>
+                                <td class="text-end">KES {{ sale.vat_amount|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="table-primary">
+                                <td><strong>TOTAL:</strong></td>
+                                <td class="text-end"><strong>KES {{ sale.total|floatformat:2 }}</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="text-center mt-4">
+                    <p class="text-muted">Thank you for your business!</p>
+                </div>
+            </div>
+
+            <div class="card-footer text-center">
+                <a href="{% url 'invoice_pdf' sale.pk %}" class="btn btn-primary" target="_blank">
+                    <i class="bi bi-file-pdf"></i> Download PDF
+                </a>
+                <button onclick="window.print()" class="btn btn-secondary">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+                <a href="{% url 'pos_screen' %}" class="btn btn-success">
+                    <i class="bi bi-cart-plus"></i> New Sale
+                </a>
+                <a href="{% url 'dashboard' %}" class="btn btn-info">
+                    <i class="bi bi-house"></i> Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .navbar, .card-footer, .btn { display: none !important; }
+    body { padding-top: 0; }
+}
+</style>
+{% endblock %}

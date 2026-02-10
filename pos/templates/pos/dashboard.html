@@ -1,0 +1,409 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Dashboard - POS System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        margin-bottom: 12px;
+    }
+    .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 8px 0;
+        color: #2c3e50;
+    }
+    .stat-label {
+        font-size: 13px;
+        color: #7f8c8d;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .stat-change {
+        font-size: 12px;
+        margin-top: 8px;
+    }
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 20px;
+    }
+    .alert-card {
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .quick-action-btn {
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 500;
+        border: none;
+        transition: all 0.2s;
+    }
+    .quick-action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .table-card {
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .page-header {
+        margin-bottom: 30px;
+    }
+    .page-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="text-muted">Welcome back! Here's what's happening today.</p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row">
+        <!-- Total Sales -->
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <i class="bi bi-receipt"></i>
+                </div>
+                <div class="stat-label">Total Sales</div>
+                <div class="stat-value">{{ today_sales_count }}</div>
+                <div class="stat-change text-success">
+                    <i class="bi bi-arrow-up"></i> Today
+                </div>
+            </div>
+        </div>
+
+        <!-- Today's Revenue -->
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
+                <div class="stat-label">Today's Revenue</div>
+                <div class="stat-value">KES {{ today_revenue|floatformat:0 }}</div>
+                <div class="stat-change text-muted">
+                    <small>This Month: KES {{ today_revenue|floatformat:0 }}</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Products -->
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="stat-label">Total Products</div>
+                <div class="stat-value">{{ total_products }}</div>
+                <div class="stat-change text-muted">
+                    <small>{{ total_categories }} Categories</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Suppliers -->
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
+                    <i class="bi bi-truck"></i>
+                </div>
+                <div class="stat-label">Active Suppliers</div>
+                <div class="stat-value">{{ total_suppliers }}</div>
+                <div class="stat-change text-warning">
+                    <i class="bi bi-clock"></i> {{ pending_purchases }} Pending
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts Section -->
+    {% if low_stock_count > 0 or out_of_stock_count > 0 or expired_count > 0 or expiring_soon_count > 0 %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert-card alert alert-warning">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-exclamation-triangle-fill" style="font-size: 32px;"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="mb-2"><strong>Attention Required</strong></h5>
+                        <div class="row">
+                            {% if out_of_stock_count > 0 %}
+                            <div class="col-md-3">
+                                <span class="badge bg-danger" style="font-size: 14px; padding: 8px 12px;">
+                                    {{ out_of_stock_count }} Out of Stock
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% if low_stock_count > 0 %}
+                            <div class="col-md-3">
+                                <span class="badge bg-warning text-dark" style="font-size: 14px; padding: 8px 12px;">
+                                    {{ low_stock_count }} Low Stock
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% if expired_count > 0 %}
+                            <div class="col-md-3">
+                                <span class="badge bg-danger" style="font-size: 14px; padding: 8px 12px;">
+                                    {{ expired_count }} Expired
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% if expiring_soon_count > 0 %}
+                            <div class="col-md-3">
+                                <span class="badge bg-warning text-dark" style="font-size: 14px; padding: 8px 12px;">
+                                    {{ expiring_soon_count }} Expiring Soon
+                                </span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="mt-3">
+                            <a href="{% url 'low_stock_alert' %}" class="btn btn-sm btn-warning me-2">
+                                <i class="bi bi-eye"></i> View Stock Alerts
+                            </a>
+                            {% if expired_count > 0 or expiring_soon_count > 0 %}
+                            <a href="{% url 'expiry_alert' %}" class="btn btn-sm btn-danger">
+                                <i class="bi bi-calendar-x"></i> View Expiry Alerts
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+        {% endif %}
+
+    <!-- Out of Stock & Expiring Products -->
+    <div class="row mt-4">
+        <!-- Out of Stock Products -->
+        {% if out_of_stock_list %}
+        <div class="col-xl-6">
+            <div class="table-card card">
+                <div class="card-header bg-white border-0 pt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="section-title mb-0">
+                            <i class="bi bi-exclamation-octagon text-danger"></i> Out of Stock
+                        </h5>
+                        {% if out_of_stock_count > 5 %}
+                        <a href="{% url 'low_stock_alert' %}" class="btn btn-sm btn-outline-danger">
+                            View All ({{ out_of_stock_count }})
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Price</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in out_of_stock_list %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ product.name }}</strong>
+                                        {% if product.product_code %}
+                                        <br><small class="text-muted">{{ product.product_code }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ product.category.name|default:"-" }}</td>
+                                    <td>KES {{ product.unit_price|floatformat:2 }}</td>
+                                    <td>
+                                        <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-plus-circle"></i> Restock
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Expiring Soon Products -->
+        {% if expiring_soon_list %}
+        <div class="col-xl-6">
+            <div class="table-card card">
+                <div class="card-header bg-white border-0 pt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="section-title mb-0">
+                            <i class="bi bi-calendar-x text-warning"></i> Expiring Soon
+                        </h5>
+                        {% if expiring_soon_count > 5 %}
+                        <a href="{% url 'expiry_alert' %}" class="btn btn-sm btn-outline-warning">
+                            View All ({{ expiring_soon_count }})
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Expiry Date</th>
+                                    <th>Days Left</th>
+                                    <th>Stock</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in expiring_soon_list %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ product.name }}</strong>
+                                        {% if product.product_code %}
+                                        <br><small class="text-muted">{{ product.product_code }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                                    <td>
+                                        <span class="badge bg-warning text-dark">
+                                            {{ product.days_until_expiry }} day{{ product.days_until_expiry|pluralize }}
+                                        </span>
+                                    </td>
+                                    <td>{{ product.stock_quantity }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Expired Products (if any) -->
+    {% if expired_list %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="table-card card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-exclamation-triangle"></i> Expired Products - Remove Immediately!
+                        </h5>
+                        {% if expired_count > 5 %}
+                        <a href="{% url 'expiry_alert' %}" class="btn btn-sm btn-light">
+                            View All ({{ expired_count }})
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Expiry Date</th>
+                                    <th>Days Overdue</th>
+                                    <th>Stock</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in expired_list %}
+                                <tr class="table-danger">
+                                    <td>
+                                        <strong>{{ product.name }}</strong>
+                                        {% if product.product_code %}
+                                        <br><small>{{ product.product_code }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ product.category.name|default:"-" }}</td>
+                                    <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                                    <td>
+                                        <span class="badge bg-danger">
+                                            {% widthratio product.days_until_expiry -1 1 %} days ago
+                                        </span>
+                                    </td>
+                                    <td><strong>{{ product.stock_quantity }}</strong></td>
+                                    <td>
+                                        <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i> Remove
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="table-card card">
+                <div class="card-body text-center py-4">
+                    <h5 class="section-title">Quick Actions</h5>
+                    <div class="mt-3">
+                        <a href="{% url 'pos_screen' %}" class="quick-action-btn btn btn-primary btn-lg me-2 mb-2">
+                            <i class="bi bi-cart-plus"></i> New Sale
+                        </a>
+                        <a href="{% url 'product_create' %}" class="quick-action-btn btn btn-success btn-lg me-2 mb-2">
+                            <i class="bi bi-plus-circle"></i> Add Product
+                        </a>
+                        <a href="{% url 'purchase_create' %}" class="quick-action-btn btn btn-info btn-lg me-2 mb-2">
+                            <i class="bi bi-bag-plus"></i> New Purchase
+                        </a>
+                        <a href="{% url 'stock_list' %}" class="quick-action-btn btn btn-secondary btn-lg me-2 mb-2">
+                            <i class="bi bi-boxes"></i> Manage Stock
+                        </a>
+                        <a href="{% url 'sales_report' %}" class="quick-action-btn btn btn-warning btn-lg mb-2">
+                            <i class="bi bi-file-earmark-text"></i> View Reports
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

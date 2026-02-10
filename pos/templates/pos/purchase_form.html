@@ -1,0 +1,197 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}New Purchase Order - POS System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="bi bi-bag-check"></i> New Purchase Order</h2>
+    </div>
+</div>
+
+<form method="post" id="purchaseForm">
+    {% csrf_token %}
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Purchase Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="supplier" class="form-label">Supplier <span class="text-danger">*</span></label>
+                            <select class="form-select" id="supplier" name="supplier" required>
+                                <option value="">Select Supplier</option>
+                                {% for supplier in suppliers %}
+                                    <option value="{{ supplier.pk }}">{{ supplier.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="expected_delivery" class="form-label">Expected Delivery</label>
+                            <input type="date" class="form-control" id="expected_delivery" name="expected_delivery">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Purchase Items</h5>
+                    <button type="button" class="btn btn-sm btn-success" onclick="addItem()">
+                        <i class="bi bi-plus-circle"></i> Add Item
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="itemsContainer">
+                        <!-- Items will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card sticky-top" style="top: 80px;">
+                <div class="card-header">
+                    <h5 class="mb-0">Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal:</span>
+                        <strong id="subtotal">KES 0.00</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Tax:</span>
+                        <strong id="tax">KES 0.00</strong>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total:</strong>
+                        <strong id="total" class="text-primary">KES 0.00</strong>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 mb-2">
+                        <i class="bi bi-check-circle"></i> Create Purchase Order
+                    </button>
+                    <a href="{% url 'purchase_list' %}" class="btn btn-secondary w-100">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let itemCount = 0;
+
+// Convert products to JSON for JavaScript
+const productsData = [
+    {% for product in products %}
+    {
+        id: {{ product.pk }},
+        name: "{{ product.name|escapejs }}",
+        code: "{{ product.product_code|default:''|escapejs }}",
+        price: {{ product.unit_price }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function addItem() {
+    itemCount++;
+    const container = document.getElementById('itemsContainer');
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'border rounded p-3 mb-3';
+    itemDiv.id = `item-${itemCount}`;
+    
+    // Build product options
+    let productOptions = '<option value="">Select Product</option>';
+    productsData.forEach(product => {
+        const code = product.code ? ` (${product.code})` : '';
+        productOptions += `<option value="${product.id}" data-price="${product.price}">${product.name}${code}</option>`;
+    });
+    
+    itemDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Item #${itemCount}</h6>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${itemCount})">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-2">
+                <label class="form-label">Product</label>
+                <select class="form-select" name="product_id[]" onchange="updatePrice(${itemCount})" id="product-${itemCount}" required>
+                    ${productOptions}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label class="form-label">Quantity</label>
+                <input type="number" class="form-control" name="quantity[]" min="1" value="1" 
+                       onchange="calculateTotal()" required>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label class="form-label">Unit Cost</label>
+                <input type="number" class="form-control" name="unit_cost[]" step="0.01" min="0" 
+                       id="cost-${itemCount}" onchange="calculateTotal()" required>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(itemDiv);
+}
+
+function removeItem(id) {
+    const item = document.getElementById(`item-${id}`);
+    if (item) {
+        item.remove();
+        calculateTotal();
+    }
+}
+
+function updatePrice(id) {
+    const select = document.getElementById(`product-${id}`);
+    const costInput = document.getElementById(`cost-${id}`);
+    const selectedOption = select.options[select.selectedIndex];
+    const price = selectedOption.getAttribute('data-price');
+    
+    if (price) {
+        costInput.value = price;
+        calculateTotal();
+    }
+}
+
+function calculateTotal() {
+    const quantities = document.getElementsByName('quantity[]');
+    const costs = document.getElementsByName('unit_cost[]');
+    let subtotal = 0;
+    
+    for (let i = 0; i < quantities.length; i++) {
+        const qty = parseFloat(quantities[i].value) || 0;
+        const cost = parseFloat(costs[i].value) || 0;
+        subtotal += qty * cost;
+    }
+    
+    const tax = 0; // Can be customized
+    const total = subtotal + tax;
+    
+    document.getElementById('subtotal').textContent = `KES ${subtotal.toFixed(2)}`;
+    document.getElementById('tax').textContent = `KES ${tax.toFixed(2)}`;
+    document.getElementById('total').textContent = `KES ${total.toFixed(2)}`;
+}
+
+// Add first item on page load
+document.addEventListener('DOMContentLoaded', function() {
+    addItem();
+});
+</script>
+{% endblock %}

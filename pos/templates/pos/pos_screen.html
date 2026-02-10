@@ -1,0 +1,664 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}POS - New Sale{% endblock %}
+
+{% block extra_css %}
+<style>
+    .product-card { 
+        cursor: pointer; 
+        transition: transform 0.2s, box-shadow 0.2s;
+        height: 100%;
+    }
+    .product-card:hover { 
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .product-image {
+        width: 100%;
+        height: 150px;
+        object-fit: contain;
+        border-radius: 8px 8px 0 0;
+        padding: 15px;
+        background: #f8f9fa;
+    }
+    .product-placeholder {
+        width: 100%;
+        height: 150px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px 8px 0 0;
+        padding: 15px;
+    }
+    .product-placeholder i {
+        font-size: 3rem;
+        color: rgba(255,255,255,0.7);
+    }
+    .cart-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
+    #cart-total { font-size: 1.5rem; font-weight: bold; }
+    #barcode-input { font-size: 1.1rem; border: 2px solid #0d6efd; }
+    .barcode-section { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-8">
+        <h3>Select Products</h3>
+        
+        <!-- Customer Selection Section -->
+        <div class="card mb-3 border-primary">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <label for="customer-select" class="form-label">
+                            <i class="bi bi-person-circle"></i> <strong>Select Customer (Optional - for Loyalty Points)</strong>
+                        </label>
+                        <select id="customer-select" class="form-select">
+                            <option value="">Walk-in Customer (No Points)</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.id }}" 
+                                    data-points="{{ customer.loyalty_points }}"
+                                    data-tier="{{ customer.tier }}"
+                                    data-name="{{ customer.name }}">
+                                {{ customer.name }} - {{ customer.phone }} ({{ customer.loyalty_points }} points - {{ customer.get_tier_display }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <div id="customer-info" class="mt-3" style="display: none;">
+                            <div class="alert alert-info mb-0">
+                                <strong id="customer-name"></strong><br>
+                                <span class="badge bg-warning text-dark" id="customer-tier"></span>
+                                <span class="badge bg-success" id="customer-points"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Barcode Scanner Section -->
+        <div class="barcode-section">
+            <label for="barcode-input" class="form-label">
+                <i class="bi bi-upc-scan"></i> <strong>Scan Barcode or Enter Product Code</strong>
+            </label>
+            <div class="input-group">
+                <input type="text" id="barcode-input" class="form-control" 
+                       placeholder="Scan barcode or type product code and press Enter..." 
+                       autocomplete="off">
+                <button class="btn btn-primary" type="button" onclick="searchByBarcode()">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+            <small class="text-muted">Tip: Focus this field and scan with your barcode scanner</small>
+        </div>
+
+        <div class="mb-3">
+            <input type="text" id="search" class="form-control" placeholder="Search products by name...">
+        </div>
+        <div class="mb-3">
+            <select id="category-filter" class="form-select">
+                <option value="">All Categories</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="row" id="products-grid">
+            {% for product in products %}
+            <div class="col-md-4 mb-3 product-item" data-category="{{ product.category.id|default:'' }}" data-name="{{ product.name|lower }}">
+                <div class="card product-card {% if product.is_out_of_stock %}border-danger{% elif product.is_low_stock %}border-warning{% endif %}" 
+                     onclick="{% if not product.is_out_of_stock %}addToCart({{ product.id }}, '{{ product.name }}', {{ product.unit_price }}, {{ product.stock_quantity }}){% else %}alert('This product is out of stock!'){% endif %}">
+                    
+                    <!-- Product Image -->
+                    {% if product.image %}
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image" loading="lazy">
+                    {% else %}
+                        <div class="product-placeholder">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="card-body text-center">
+                        <h5 class="card-title">{{ product.name }}</h5>
+                        {% if product.product_code %}
+                        <p class="text-muted small"><i class="bi bi-upc"></i> {{ product.product_code }}</p>
+                        {% endif %}
+                        <p class="text-muted">{{ product.category.name|default:"Uncategorized" }}</p>
+                        <h4 class="text-primary">KES {{ product.unit_price }}</h4>
+                        <div class="mt-2">
+                            {% if product.is_out_of_stock %}
+                                <span class="badge bg-danger">Out of Stock</span>
+                            {% elif product.is_low_stock %}
+                                <span class="badge bg-warning text-dark">Low Stock: {{ product.stock_quantity }}</span>
+                            {% else %}
+                                <span class="badge bg-success">In Stock: {{ product.stock_quantity }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <p class="text-center">No products available. <a href="{% url 'product_create' %}">Add products</a></p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card sticky-top" style="top: 80px;">
+            <div class="card-header bg-primary text-white">
+                <h4>Cart</h4>
+            </div>
+            <div class="card-body">
+                <div id="cart-items" style="max-height: 300px; overflow-y: auto;">
+                    <p class="text-muted text-center">Cart is empty</p>
+                </div>
+
+                <hr>
+
+                <div class="mb-3">
+                    <label>Discount Type:</label>
+                    <select id="discount-type" class="form-select" onchange="calculateTotal()">
+                        <option value="percentage">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (KES)</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label>Discount Value:</label>
+                    <input type="number" id="discount-value" class="form-control" value="0" min="0" step="0.01" onchange="calculateTotal()">
+                </div>
+
+                <div class="mb-2">
+                    <strong>Subtotal:</strong> <span class="float-end" id="subtotal">KES 0.00</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Discount:</strong> <span class="float-end" id="discount">KES 0.00</span>
+                </div>
+                <div class="mb-2">
+                    <strong>VAT ({{ vat_rate }}%):</strong> <span class="float-end" id="vat">KES 0.00</span>
+                </div>
+                <div class="mb-3">
+                    <h4>Total: <span class="float-end text-primary" id="cart-total">KES 0.00</span></h4>
+                </div>
+                
+                <!-- Loyalty Points Info -->
+                <div id="loyalty-info" class="alert alert-success" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-star-fill"></i> <strong>Points to Earn:</strong>
+                        </div>
+                        <div>
+                            <span class="badge bg-success" id="points-to-earn">0</span> points
+                        </div>
+                    </div>
+                    <small class="text-muted">1 point per KES 100 spent (with tier multiplier)</small>
+                </div>
+
+                <button class="btn btn-success btn-lg w-100" onclick="completeSale()" id="complete-btn" disabled>
+                    <i class="bi bi-check-circle"></i> Complete Sale
+                </button>
+                <button class="btn btn-danger w-100 mt-2" onclick="clearCart()">
+                    <i class="bi bi-trash"></i> Clear Cart
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="sale-form" method="POST" action="{% url 'complete_sale' %}" style="display: none;">
+    {% csrf_token %}
+    <input type="hidden" name="customer_id" id="form-customer-id">
+    <input type="hidden" name="discount_type" id="form-discount-type">
+    <input type="hidden" name="discount_value" id="form-discount-value">
+    <div id="form-items"></div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let cart = [];
+const VAT_RATE = {{ vat_rate }};
+const productStock = {};
+let selectedCustomer = null;
+
+// Initialize product stock data
+{% for product in products %}
+productStock[{{ product.id }}] = {{ product.stock_quantity }};
+{% endfor %}
+
+// ==================== CART PERSISTENCE ====================
+
+// Load cart from localStorage on page load
+function loadCartFromStorage() {
+    try {
+        const savedCart = localStorage.getItem('pos_cart');
+        const savedCustomer = localStorage.getItem('pos_customer');
+        const savedDiscount = localStorage.getItem('pos_discount');
+        
+        if (savedCart) {
+            cart = JSON.parse(savedCart);
+            console.log('Cart restored from storage:', cart.length, 'items');
+            
+            // Validate cart items against current stock
+            cart = cart.filter(item => {
+                if (productStock[item.id] !== undefined) {
+                    // Update available stock to current value
+                    item.availableStock = productStock[item.id];
+                    
+                    // Adjust quantity if it exceeds current stock
+                    if (item.quantity > item.availableStock) {
+                        if (item.availableStock > 0) {
+                            item.quantity = item.availableStock;
+                            showNotification(`${item.name} quantity adjusted to available stock (${item.availableStock})`, 'warning');
+                        } else {
+                            showNotification(`${item.name} removed from cart (out of stock)`, 'warning');
+                            return false; // Remove from cart
+                        }
+                    }
+                    return true;
+                } else {
+                    showNotification(`${item.name} removed from cart (product no longer available)`, 'warning');
+                    return false; // Remove if product doesn't exist
+                }
+            });
+        }
+        
+        if (savedCustomer) {
+            const customerData = JSON.parse(savedCustomer);
+            selectedCustomer = customerData;
+            
+            // Restore customer selection in dropdown
+            const customerSelect = document.getElementById('customer-select');
+            customerSelect.value = customerData.id;
+            
+            // Show customer info
+            document.getElementById('customer-name').textContent = customerData.name;
+            document.getElementById('customer-tier').textContent = customerData.tier.toUpperCase();
+            document.getElementById('customer-points').textContent = customerData.points + ' points';
+            document.getElementById('customer-info').style.display = 'block';
+            
+            console.log('Customer restored:', customerData.name);
+        }
+        
+        if (savedDiscount) {
+            const discountData = JSON.parse(savedDiscount);
+            document.getElementById('discount-type').value = discountData.type;
+            document.getElementById('discount-value').value = discountData.value;
+            console.log('Discount restored:', discountData);
+        }
+        
+        // Update UI
+        if (cart.length > 0) {
+            updateCart();
+            showNotification(`Cart restored with ${cart.length} item(s)`, 'success');
+        }
+    } catch (error) {
+        console.error('Error loading cart from storage:', error);
+        // Clear corrupted data
+        localStorage.removeItem('pos_cart');
+        localStorage.removeItem('pos_customer');
+        localStorage.removeItem('pos_discount');
+    }
+}
+
+// Save cart to localStorage
+function saveCartToStorage() {
+    try {
+        localStorage.setItem('pos_cart', JSON.stringify(cart));
+        
+        if (selectedCustomer) {
+            localStorage.setItem('pos_customer', JSON.stringify(selectedCustomer));
+        } else {
+            localStorage.removeItem('pos_customer');
+        }
+        
+        const discountData = {
+            type: document.getElementById('discount-type').value,
+            value: document.getElementById('discount-value').value
+        };
+        localStorage.setItem('pos_discount', JSON.stringify(discountData));
+        
+        console.log('Cart saved to storage');
+    } catch (error) {
+        console.error('Error saving cart to storage:', error);
+    }
+}
+
+// Clear cart from localStorage
+function clearCartStorage() {
+    localStorage.removeItem('pos_cart');
+    localStorage.removeItem('pos_customer');
+    localStorage.removeItem('pos_discount');
+    console.log('Cart storage cleared');
+}
+
+// Auto-save cart when window is about to close/refresh
+window.addEventListener('beforeunload', function(e) {
+    if (cart.length > 0) {
+        saveCartToStorage();
+    }
+});
+
+// Periodic auto-save (every 30 seconds)
+setInterval(function() {
+    if (cart.length > 0) {
+        saveCartToStorage();
+    }
+}, 30000);
+
+// ==================== END CART PERSISTENCE ====================
+
+// Customer selection handler
+document.getElementById('customer-select').addEventListener('change', function() {
+    const select = this;
+    const customerId = select.value;
+    
+    if (customerId) {
+        const option = select.options[select.selectedIndex];
+        selectedCustomer = {
+            id: customerId,
+            name: option.dataset.name,
+            points: parseInt(option.dataset.points),
+            tier: option.dataset.tier
+        };
+        
+        // Show customer info
+        document.getElementById('customer-name').textContent = selectedCustomer.name;
+        document.getElementById('customer-tier').textContent = selectedCustomer.tier.toUpperCase();
+        document.getElementById('customer-points').textContent = selectedCustomer.points + ' points';
+        document.getElementById('customer-info').style.display = 'block';
+    } else {
+        selectedCustomer = null;
+        document.getElementById('customer-info').style.display = 'none';
+    }
+    
+    calculateTotal();
+    saveCartToStorage(); // Save when customer changes
+});
+
+function getTierMultiplier(tier) {
+    const multipliers = {
+        'bronze': 1.0,
+        'silver': 1.2,
+        'gold': 1.5,
+        'platinum': 2.0
+    };
+    return multipliers[tier] || 1.0;
+}
+
+function calculateLoyaltyPoints(amount) {
+    if (!selectedCustomer) return 0;
+    
+    // Base: 1 point per 100 KES
+    const basePoints = Math.floor(amount / 100);
+    
+    // Apply tier multiplier
+    const multiplier = getTierMultiplier(selectedCustomer.tier);
+    const totalPoints = Math.floor(basePoints * multiplier);
+    
+    return totalPoints;
+}
+
+function addToCart(id, name, price, availableStock) {
+    const existing = cart.find(item => item.id === id);
+    const currentQty = existing ? existing.quantity : 0;
+    
+    // Check stock availability
+    if (currentQty >= availableStock) {
+        showNotification(`Cannot add more ${name}. Only ${availableStock} in stock!`, 'error');
+        return;
+    }
+    
+    if (existing) {
+        existing.quantity++;
+    } else {
+        cart.push({ id, name, price, quantity: 1, availableStock });
+    }
+    updateCart();
+    saveCartToStorage(); // Save after adding to cart
+}
+
+function removeFromCart(id) {
+    cart = cart.filter(item => item.id !== id);
+    updateCart();
+    saveCartToStorage(); // Save after removing from cart
+}
+
+function updateQuantity(id, quantity) {
+    const item = cart.find(item => item.id === id);
+    if (item) {
+        const newQty = Math.max(1, parseInt(quantity));
+        
+        // Check stock availability
+        if (newQty > item.availableStock) {
+            showNotification(`Cannot set quantity to ${newQty}. Only ${item.availableStock} in stock!`, 'error');
+            // Reset to available stock
+            document.querySelector(`input[onchange*="updateQuantity(${id}"]`).value = item.availableStock;
+            item.quantity = item.availableStock;
+        } else {
+            item.quantity = newQty;
+        }
+        updateCart();
+        saveCartToStorage(); // Save after quantity update
+    }
+}
+
+function updateCart() {
+    const cartItems = document.getElementById('cart-items');
+    
+    if (cart.length === 0) {
+        cartItems.innerHTML = '<p class="text-muted text-center">Cart is empty</p>';
+        document.getElementById('complete-btn').disabled = true;
+    } else {
+        let html = '';
+        cart.forEach(item => {
+            const total = item.price * item.quantity;
+            html += `
+                <div class="cart-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${item.name}</strong><br>
+                            <small>KES ${item.price.toFixed(2)} each</small>
+                        </div>
+                        <button class="btn btn-sm btn-danger" onclick="removeFromCart(${item.id})">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <input type="number" class="form-control form-control-sm" style="width: 80px;" 
+                               value="${item.quantity}" min="1" 
+                               onchange="updateQuantity(${item.id}, this.value)">
+                        <strong>KES ${total.toFixed(2)}</strong>
+                    </div>
+                </div>
+            `;
+        });
+        cartItems.innerHTML = html;
+        document.getElementById('complete-btn').disabled = false;
+    }
+    
+    calculateTotal();
+}
+
+function calculateTotal() {
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const discountType = document.getElementById('discount-type').value;
+    const discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
+    
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+        discountAmount = (subtotal * discountValue) / 100;
+    } else {
+        discountAmount = discountValue;
+    }
+    
+    const afterDiscount = subtotal - discountAmount;
+    const vatAmount = (afterDiscount * VAT_RATE) / 100;
+    const total = afterDiscount + vatAmount;
+    
+    document.getElementById('subtotal').textContent = `KES ${subtotal.toFixed(2)}`;
+    document.getElementById('discount').textContent = `KES ${discountAmount.toFixed(2)}`;
+    document.getElementById('vat').textContent = `KES ${vatAmount.toFixed(2)}`;
+    document.getElementById('cart-total').textContent = `KES ${total.toFixed(2)}`;
+    
+    // Calculate and show loyalty points
+    if (selectedCustomer && total > 0) {
+        const pointsToEarn = calculateLoyaltyPoints(total);
+        document.getElementById('points-to-earn').textContent = pointsToEarn;
+        document.getElementById('loyalty-info').style.display = 'block';
+    } else {
+        document.getElementById('loyalty-info').style.display = 'none';
+    }
+    
+    // Save discount changes
+    if (cart.length > 0) {
+        saveCartToStorage();
+    }
+}
+
+function completeSale() {
+    if (cart.length === 0) return;
+    
+    const formItems = document.getElementById('form-items');
+    formItems.innerHTML = '';
+    
+    cart.forEach(item => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'items';
+        input.value = `${item.id},${item.quantity},${item.price}`;
+        formItems.appendChild(input);
+    });
+    
+    document.getElementById('form-customer-id').value = selectedCustomer ? selectedCustomer.id : '';
+    document.getElementById('form-discount-type').value = document.getElementById('discount-type').value;
+    document.getElementById('form-discount-value').value = document.getElementById('discount-value').value;
+    
+    // Clear cart storage before submitting (sale is complete)
+    clearCartStorage();
+    
+    document.getElementById('sale-form').submit();
+}
+
+function clearCart() {
+    if (confirm('Clear all items from cart?')) {
+        cart = [];
+        updateCart();
+        clearCartStorage(); // Clear storage when cart is cleared
+    }
+}
+
+// Barcode scanning functionality
+function searchByBarcode() {
+    const barcodeInput = document.getElementById('barcode-input');
+    const code = barcodeInput.value.trim();
+    
+    if (!code) {
+        alert('Please enter a product code or scan a barcode');
+        return;
+    }
+    
+    // Show loading state
+    barcodeInput.disabled = true;
+    
+    fetch(`/api/product/search/?code=${encodeURIComponent(code)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Check stock availability
+                if (!data.product.in_stock) {
+                    showNotification(`${data.product.name} is out of stock!`, 'error');
+                    return;
+                }
+                
+                // Add product to cart
+                addToCart(data.product.id, data.product.name, data.product.price, data.product.stock_quantity);
+                
+                // Show success message
+                showNotification(`Added ${data.product.name} to cart`, 'success');
+                
+                // Clear input
+                barcodeInput.value = '';
+            } else {
+                showNotification(data.error || 'Product not found', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Error searching for product', 'error');
+        })
+        .finally(() => {
+            barcodeInput.disabled = false;
+            barcodeInput.focus();
+        });
+}
+
+// Handle Enter key in barcode input
+document.getElementById('barcode-input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        searchByBarcode();
+    }
+});
+
+// Auto-focus barcode input on page load
+window.addEventListener('load', function() {
+    // Load cart from storage first
+    loadCartFromStorage();
+    
+    // Then focus barcode input
+    document.getElementById('barcode-input').focus();
+});
+
+// Show notification
+function showNotification(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : (type === 'warning' ? 'alert-warning' : 'alert-danger');
+    const alertHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // Insert at top of page
+    const container = document.querySelector('.container-fluid');
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = alertHtml;
+    container.insertBefore(tempDiv.firstElementChild, container.firstChild);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+        const alert = container.querySelector('.alert');
+        if (alert) {
+            alert.remove();
+        }
+    }, 3000);
+}
+
+// Search and filter
+document.getElementById('search').addEventListener('input', function(e) {
+    const search = e.target.value.toLowerCase();
+    document.querySelectorAll('.product-item').forEach(item => {
+        const name = item.dataset.name;
+        item.style.display = name.includes(search) ? '' : 'none';
+    });
+});
+
+document.getElementById('category-filter').addEventListener('change', function(e) {
+    const categoryId = e.target.value;
+    document.querySelectorAll('.product-item').forEach(item => {
+        if (!categoryId || item.dataset.category === categoryId) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+});
+</script>
+{% endblock %}

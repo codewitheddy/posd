@@ -1,0 +1,334 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Write-Off Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-trash"></i> Write-Off Report</h2>
+        <div>
+            <a href="{% url 'stock_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Stock
+            </a>
+        </div>
+    </div>
+
+    <!-- Date Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">End Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary d-block w-100">
+                        <i class="bi bi-filter"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Write-Offs</h6>
+                    <h3 class="mb-0">{{ writeoff_count }}</h3>
+                    <small>Adjustments</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Items Written Off</h6>
+                    <h3 class="mb-0">{{ total_items_written_off }}</h3>
+                    <small>Units</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Value Lost</h6>
+                    <h3 class="mb-0">KES {{ total_value|floatformat:2 }}</h3>
+                    <small>Cost Value</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Expired in Stock</h6>
+                    <h3 class="mb-0">{{ expired_stock_quantity }}</h3>
+                    <small>KES {{ expired_stock_value|floatformat:2 }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Breakdown -->
+    {% if category_summary %}
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Write-Offs by Category</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th class="text-end">Adjustments</th>
+                            <th class="text-end">Quantity</th>
+                            <th class="text-end">Value Lost</th>
+                            <th class="text-end">% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category_name, data in category_summary %}
+                        <tr>
+                            <td><strong>{{ category_name }}</strong></td>
+                            <td class="text-end">{{ data.count }}</td>
+                            <td class="text-end">{{ data.quantity }}</td>
+                            <td class="text-end">KES {{ data.value|floatformat:2 }}</td>
+                            <td class="text-end">
+                                {% widthratio data.value total_value 100 %}%
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th>Total</th>
+                            <th class="text-end">{{ writeoff_count }}</th>
+                            <th class="text-end">{{ total_items_written_off }}</th>
+                            <th class="text-end">KES {{ total_value|floatformat:2 }}</th>
+                            <th class="text-end">100%</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Product Summary -->
+    {% if product_summary %}
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="bi bi-box"></i> Write-Offs by Product</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th class="text-end">Times Written Off</th>
+                            <th class="text-end">Total Quantity</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Total Value Lost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in product_summary %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.product.name }}</strong>
+                                {% if item.product.product_code %}
+                                <br><small class="text-muted">{{ item.product.product_code }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.product.category %}
+                                <span class="badge bg-secondary">{{ item.product.category.name }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-dark">Uncategorized</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ item.adjustments|length }}</td>
+                            <td class="text-end">{{ item.total_quantity }}</td>
+                            <td class="text-end">KES {{ item.product.unit_price|floatformat:2 }}</td>
+                            <td class="text-end"><strong>KES {{ item.total_value|floatformat:2 }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Expired Stock Alert -->
+    {% if expired_in_stock %}
+    <div class="card mb-4 border-danger">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Expired Products Still in Stock</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-danger">
+                <strong>Action Required!</strong> These products have expired but are still in your inventory. 
+                Consider writing them off to maintain accurate stock records.
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Expiry Date</th>
+                            <th>Days Expired</th>
+                            <th class="text-end">Stock Quantity</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Total Value</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in expired_in_stock %}
+                        <tr>
+                            <td>
+                                <strong>{{ product.name }}</strong>
+                                {% if product.product_code %}
+                                <br><small class="text-muted">{{ product.product_code }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if product.category %}
+                                <span class="badge bg-secondary">{{ product.category.name }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-dark">Uncategorized</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="text-danger">
+                                    {{ product.expiry_date|date:"d M Y" }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-danger">
+                                    {{ product.days_until_expiry|add:"-1"|add:"-1" }} days ago
+                                </span>
+                            </td>
+                            <td class="text-end">{{ product.stock_quantity }}</td>
+                            <td class="text-end">KES {{ product.unit_price|floatformat:2 }}</td>
+                            <td class="text-end">
+                                <strong>KES {% widthratio product.stock_quantity 1 product.unit_price %}</strong>
+                            </td>
+                            <td>
+                                <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-danger">
+                                    <i class="bi bi-trash"></i> Write Off
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="4">Total Expired Stock</th>
+                            <th class="text-end">{{ expired_stock_quantity }}</th>
+                            <th></th>
+                            <th class="text-end">KES {{ expired_stock_value|floatformat:2 }}</th>
+                            <th></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Detailed Write-Off History -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="bi bi-list-ul"></i> Detailed Write-Off History</h5>
+        </div>
+        <div class="card-body">
+            {% if writeoffs %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th class="text-end">Quantity</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Value Lost</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adjustment in writeoffs %}
+                        <tr>
+                            <td>{{ adjustment.created_at|date:"d M Y H:i" }}</td>
+                            <td>
+                                <strong>{{ adjustment.product.name }}</strong>
+                                {% if adjustment.product.product_code %}
+                                <br><small class="text-muted">{{ adjustment.product.product_code }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if adjustment.product.category %}
+                                <span class="badge bg-secondary">{{ adjustment.product.category.name }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-dark">Uncategorized</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <span class="badge bg-danger">{{ adjustment.quantity_change }}</span>
+                            </td>
+                            <td class="text-end">KES {{ adjustment.product.unit_price|floatformat:2 }}</td>
+                            <td class="text-end">
+                                <strong>KES {% widthratio adjustment.quantity_change|add:"0"|add:"0" -1 adjustment.product.unit_price %}</strong>
+                            </td>
+                            <td>
+                                {% if adjustment.reason %}
+                                <small>{{ adjustment.reason }}</small>
+                                {% else %}
+                                <small class="text-muted">No reason provided</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No write-offs found for the selected period.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    <div class="mt-4 text-end">
+        <button onclick="window.print()" class="btn btn-secondary">
+            <i class="bi bi-printer"></i> Print Report
+        </button>
+    </div>
+</div>
+
+<style>
+@media print {
+    .btn, .card-header, nav, .sidebar {
+        display: none !important;
+    }
+    .card {
+        border: 1px solid #000 !important;
+        page-break-inside: avoid;
+    }
+}
+</style>
+{% endblock %}

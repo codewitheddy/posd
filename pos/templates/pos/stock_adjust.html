@@ -1,0 +1,85 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Adjust Stock - {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4>Adjust Stock</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5>{{ product.name }}</h5>
+                    <p class="mb-1"><strong>Current Stock:</strong> {{ product.stock_quantity }} units</p>
+                    <p class="mb-0"><strong>Low Stock Alert:</strong> {{ product.low_stock_threshold }} units</p>
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="adjustment_type" class="form-label">Adjustment Type *</label>
+                        <select class="form-select" id="adjustment_type" name="adjustment_type" required>
+                            <option value="restock">Restock (Add Stock)</option>
+                            <option value="damage">Damage/Loss (Remove Stock)</option>
+                            <option value="return">Customer Return (Add Stock)</option>
+                            <option value="correction">Stock Correction</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="quantity_change" class="form-label">Quantity Change *</label>
+                        <input type="number" class="form-control" id="quantity_change" name="quantity_change" 
+                               required min="1" placeholder="Enter quantity">
+                        <small class="form-text text-muted">
+                            For adding stock (restock, return): Enter positive number<br>
+                            For removing stock (damage, correction): Enter positive number (will be deducted)
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Reason/Notes</label>
+                        <textarea class="form-control" id="reason" name="reason" rows="3" 
+                                  placeholder="Optional: Add notes about this adjustment"></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'stock_list' %}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Adjust Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>Recent Adjustments</h5>
+            </div>
+            <div class="card-body">
+                <a href="{% url 'stock_history' product.pk %}" class="btn btn-info btn-sm">
+                    <i class="bi bi-clock-history"></i> View Full History
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('adjustment_type').addEventListener('change', function() {
+    const quantityInput = document.getElementById('quantity_change');
+    const type = this.value;
+    
+    if (type === 'damage') {
+        quantityInput.placeholder = 'Enter quantity to remove';
+    } else if (type === 'restock' || type === 'return') {
+        quantityInput.placeholder = 'Enter quantity to add';
+    } else {
+        quantityInput.placeholder = 'Enter quantity';
+    }
+});
+</script>
+{% endblock %}

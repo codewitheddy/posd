@@ -1,0 +1,112 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Update Expiry Date - {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header bg-warning">
+                <h4 class="mb-0"><i class="bi bi-calendar-event"></i> Update Expiry Date</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Product:</strong> {{ product.name }}<br>
+                    {% if product.product_code %}
+                    <strong>Code:</strong> {{ product.product_code }}<br>
+                    {% endif %}
+                    <strong>Category:</strong> {{ product.category.name|default:"Uncategorized" }}<br>
+                    <strong>Current Stock:</strong> {{ product.stock_quantity }}
+                </div>
+
+                {% if product.expiry_date %}
+                <div class="alert {% if product.is_expired %}alert-danger{% elif product.is_expiring_soon %}alert-warning{% else %}alert-success{% endif %}">
+                    <strong>Current Expiry Date:</strong> {{ product.expiry_date|date:"d M Y" }}<br>
+                    {% if product.is_expired %}
+                        <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> This product has expired!</span>
+                    {% elif product.is_expiring_soon %}
+                        <span class="text-warning"><i class="bi bi-exclamation-circle"></i> Expires in {{ product.days_until_expiry }} day{{ product.days_until_expiry|pluralize }}</span>
+                    {% else %}
+                        <span class="text-success"><i class="bi bi-check-circle"></i> {{ product.days_until_expiry }} days until expiry</span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="alert alert-secondary">
+                    <i class="bi bi-info-circle"></i> This product currently has no expiry date set.
+                </div>
+                {% endif %}
+
+                <form method="POST">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="expiry_date" class="form-label">New Expiry Date</label>
+                        <input type="date" class="form-control" id="expiry_date" name="expiry_date" 
+                               value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}">
+                        <small class="form-text text-muted">
+                            Leave blank to remove expiry date (for non-perishable items)
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="expiry_alert_days" class="form-label">Alert Days Before Expiry</label>
+                        <input type="number" class="form-control" id="expiry_alert_days" name="expiry_alert_days" 
+                               value="{{ product.expiry_alert_days|default:3 }}" min="1" max="365">
+                        <small class="form-text text-muted">
+                            You'll be alerted X days before the expiry date
+                        </small>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <strong><i class="bi bi-lightbulb"></i> Tips:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Update expiry date when receiving new stock batches</li>
+                            <li>Use the earliest expiry date if you have multiple batches</li>
+                            <li>Set appropriate alert days based on product type</li>
+                            <li>Remove expiry date for non-perishable items</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'stock_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-check-circle"></i> Update Expiry Date
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Quick Reference -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Recommended Alert Days</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Perishable Foods:</strong>
+                        <ul class="small">
+                            <li>Dairy: 1-2 days</li>
+                            <li>Bread: 1-2 days</li>
+                            <li>Fresh produce: 2-3 days</li>
+                            <li>Meat: 1-2 days</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Other Products:</strong>
+                        <ul class="small">
+                            <li>Medicines: 7-14 days</li>
+                            <li>Cosmetics: 7-30 days</li>
+                            <li>Canned goods: 30-60 days</li>
+                            <li>Packaged foods: 7-14 days</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

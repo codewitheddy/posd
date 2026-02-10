@@ -1,0 +1,258 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}{% if product %}Edit{% else %}Add{% endif %} Product{% endblock %}
+
+{% block extra_css %}
+<style>
+    .image-preview-container {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: #f8f9fa;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .image-preview-container:hover {
+        border-color: #4e73df;
+        background: #f0f4ff;
+    }
+    
+    .image-preview-container img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+    
+    .image-placeholder {
+        text-align: center;
+        color: #858796;
+    }
+    
+    .image-placeholder i {
+        font-size: 3rem;
+        margin-bottom: 10px;
+        display: block;
+    }
+    
+    .remove-image-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        display: none;
+        z-index: 10;
+    }
+    
+    .image-preview-container:hover .remove-image-btn {
+        display: block;
+    }
+    
+    .image-info {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h4>{% if product %}Edit{% else %}Add New{% endif %} Product</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" id="productForm">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <!-- Left Column: Product Image -->
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Product Image</label>
+                                <div class="image-preview-container" onclick="document.getElementById('imageInput').click()">
+                                    {% if product.image %}
+                                        <img src="{{ product.image.url }}" alt="{{ product.name }}" id="imagePreview">
+                                        <button type="button" class="remove-image-btn" onclick="removeImage(event)" title="Remove image">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    {% else %}
+                                        <div class="image-placeholder" id="imagePlaceholder">
+                                            <i class="bi bi-image"></i>
+                                            <div>Click to upload</div>
+                                            <small>JPG, PNG, GIF</small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <input type="file" id="imageInput" name="image" accept="image/*" style="display: none;" onchange="previewImage(event)">
+                                <input type="hidden" id="removeImageFlag" name="remove_image" value="false">
+                                <div class="image-info">
+                                    <small>
+                                        <i class="bi bi-info-circle"></i> Max 5MB. Will be auto-optimized.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Product Details -->
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Product Name *</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{{ product.name|default:'' }}" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="product_code" class="form-label">Product Code / Barcode</label>
+                                <input type="text" class="form-control" id="product_code" name="product_code" 
+                                       value="{{ product.product_code|default:'' }}" 
+                                       placeholder="Enter barcode or product code">
+                                <small class="form-text text-muted">Optional. Used for barcode scanning at POS.</small>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="category" class="form-label">Category</label>
+                                    <select class="form-select" id="category" name="category">
+                                        <option value="">-- Select Category --</option>
+                                        {% for cat in categories %}
+                                        <option value="{{ cat.id }}" {% if product.category.id == cat.id %}selected{% endif %}>
+                                            {{ cat.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="unit_price" class="form-label">Unit Price (KES) *</label>
+                                    <input type="number" class="form-control" id="unit_price" name="unit_price" 
+                                           value="{{ product.unit_price|default:'' }}" step="0.01" min="0" required>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="stock_quantity" class="form-label">Stock Quantity *</label>
+                                    <input type="number" class="form-control" id="stock_quantity" name="stock_quantity" 
+                                           value="{{ product.stock_quantity|default:0 }}" min="0" required
+                                           {% if product %}readonly{% endif %}>
+                                    {% if product %}
+                                    <small class="form-text text-muted">Use "Adjust Stock" to change quantity.</small>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="low_stock_threshold" class="form-label">Low Stock Alert</label>
+                                    <input type="number" class="form-control" id="low_stock_threshold" name="low_stock_threshold" 
+                                           value="{{ product.low_stock_threshold|default:10 }}" min="0">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="expiry_date" class="form-label">Expiry Date</label>
+                                    <input type="date" class="form-control" id="expiry_date" name="expiry_date" 
+                                           value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}">
+                                    <small class="form-text text-muted">Optional for non-perishable items.</small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="expiry_alert_days" class="form-label">Expiry Alert (Days)</label>
+                                    <input type="number" class="form-control" id="expiry_alert_days" name="expiry_alert_days" 
+                                           value="{{ product.expiry_alert_days|default:3 }}" min="1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'product_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-save"></i> Save Product
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function previewImage(event) {
+        const file = event.target.files[0];
+        if (file) {
+            // Validate file size (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Image too large! Maximum size is 5MB.');
+                event.target.value = '';
+                return;
+            }
+
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file.');
+                event.target.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const container = document.querySelector('.image-preview-container');
+                container.innerHTML = `
+                    <img src="${e.target.result}" alt="Preview" id="imagePreview">
+                    <button type="button" class="remove-image-btn" onclick="removeImage(event)" title="Remove image">
+                        <i class="bi bi-x"></i>
+                    </button>
+                `;
+                document.getElementById('removeImageFlag').value = 'false';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function removeImage(event) {
+        event.stopPropagation();
+        
+        if (confirm('Remove this image?')) {
+            const container = document.querySelector('.image-preview-container');
+            container.innerHTML = `
+                <div class="image-placeholder" id="imagePlaceholder">
+                    <i class="bi bi-image"></i>
+                    <div>Click to upload</div>
+                    <small>JPG, PNG, GIF</small>
+                </div>
+            `;
+            
+            document.getElementById('imageInput').value = '';
+            document.getElementById('removeImageFlag').value = 'true';
+        }
+    }
+
+    // Prevent form submission on Enter key in text fields
+    document.getElementById('productForm').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+        }
+    });
+</script>
+{% endblock %}

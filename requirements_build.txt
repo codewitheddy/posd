@@ -1,0 +1,9 @@
+# Build requirements for creating executable
+pyinstaller>=6.0.0
+auto-py-to-exe>=2.40.0
+
+# Application requirements
+Django>=5.0,<5.1
+psycopg2-binary>=2.9.9
+reportlab>=4.0.0
+python-decouple>=3.8

@@ -1,0 +1,159 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Bulk Upload Products{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4><i class="bi bi-upload"></i> Bulk Upload Products</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> How to Use Bulk Upload</h5>
+                    <ol>
+                        <li>Download the CSV template or export existing products</li>
+                        <li>Fill in product details in the CSV file</li>
+                        <li>Upload the completed CSV file</li>
+                        <li>System will create new products or update existing ones</li>
+                    </ol>
+                </div>
+
+                <div class="mb-4">
+                    <h5>Step 1: Get CSV Template</h5>
+                    <div class="btn-group" role="group">
+                        <a href="{% url 'product_download_template' %}" class="btn btn-primary">
+                            <i class="bi bi-file-earmark-arrow-down"></i> Download Template
+                        </a>
+                        <a href="{% url 'product_export_csv' %}" class="btn btn-secondary">
+                            <i class="bi bi-download"></i> Export Existing Products
+                        </a>
+                    </div>
+                    <p class="text-muted mt-2 small">
+                        <strong>Template:</strong> Empty template with sample data<br>
+                        <strong>Export:</strong> Your current products as CSV
+                    </p>
+                </div>
+
+                <div class="mb-4">
+                    <h5>Step 2: CSV Format</h5>
+                    <p>Your CSV file must have these columns (in order):</p>
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Column</th>
+                                <th>Required</th>
+                                <th>Description</th>
+                                <th>Example</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>name</code></td>
+                                <td><span class="badge bg-danger">Yes</span></td>
+                                <td>Product name</td>
+                                <td>Coca Cola 500ml</td>
+                            </tr>
+                            <tr>
+                                <td><code>product_code</code></td>
+                                <td><span class="badge bg-secondary">No</span></td>
+                                <td>Barcode or product code</td>
+                                <td>BEV001</td>
+                            </tr>
+                            <tr>
+                                <td><code>category</code></td>
+                                <td><span class="badge bg-secondary">No</span></td>
+                                <td>Category name (created if doesn't exist)</td>
+                                <td>Beverages</td>
+                            </tr>
+                            <tr>
+                                <td><code>unit_price</code></td>
+                                <td><span class="badge bg-danger">Yes</span></td>
+                                <td>Price in KES</td>
+                                <td>80.00</td>
+                            </tr>
+                            <tr>
+                                <td><code>stock_quantity</code></td>
+                                <td><span class="badge bg-secondary">No</span></td>
+                                <td>Initial stock (default: 0)</td>
+                                <td>50</td>
+                            </tr>
+                            <tr>
+                                <td><code>low_stock_threshold</code></td>
+                                <td><span class="badge bg-secondary">No</span></td>
+                                <td>Low stock alert level (default: 10)</td>
+                                <td>10</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mb-4">
+                    <h5>Step 3: Upload CSV File</h5>
+                    <form method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="csv_file" class="form-label">Select CSV File</label>
+                            <input type="file" class="form-control" id="csv_file" name="csv_file" 
+                                   accept=".csv" required>
+                            <small class="form-text text-muted">
+                                File must be in CSV format (.csv)
+                            </small>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <strong><i class="bi bi-exclamation-triangle"></i> Important Notes:</strong>
+                            <ul class="mb-0">
+                                <li>Products with matching name or product_code will be <strong>updated</strong></li>
+                                <li>New products will be <strong>created</strong></li>
+                                <li>Categories will be created automatically if they don't exist</li>
+                                <li>Stock adjustments will be recorded for all changes</li>
+                                <li>Invalid rows will be skipped with error messages</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'product_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-upload"></i> Upload & Process
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6><i class="bi bi-lightbulb"></i> Tips for Success</h6>
+                        <ul class="mb-0 small">
+                            <li>Use Excel or Google Sheets to edit CSV files</li>
+                            <li>Save as CSV (Comma delimited) format</li>
+                            <li>Don't include extra columns</li>
+                            <li>Keep column names exactly as shown</li>
+                            <li>Use decimal point (.) for prices, not comma</li>
+                            <li>Leave product_code empty if not using barcodes</li>
+                            <li>Test with a few products first</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Example CSV Preview -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Example CSV Content</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 rounded"><code>name,product_code,category,unit_price,stock_quantity,low_stock_threshold
+Coca Cola 500ml,BEV001,Beverages,80.00,50,10
+Bread,GRO001,Groceries,55.00,25,15
+Soap Bar,PER001,Personal Care,45.00,30,10
+Tissue Paper,,Household,80.00,35,20</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

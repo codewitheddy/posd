@@ -1,0 +1,74 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Suppliers - POS System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="bi bi-truck"></i> Suppliers</h2>
+    </div>
+    <div class="col text-end">
+        <a href="{% url 'supplier_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Supplier
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if suppliers %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Contact Person</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Total Purchases</th>
+                            <th>Purchase Count</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supplier in suppliers %}
+                        <tr>
+                            <td><strong>{{ supplier.name }}</strong></td>
+                            <td>{{ supplier.contact_person|default:"-" }}</td>
+                            <td>{{ supplier.phone|default:"-" }}</td>
+                            <td>{{ supplier.email|default:"-" }}</td>
+                            <td>KES {{ supplier.total_purchases_amount|floatformat:2 }}</td>
+                            <td>{{ supplier.purchases_count }}</td>
+                            <td>
+                                {% if supplier.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'supplier_edit' supplier.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                                <a href="{% url 'supplier_delete' supplier.pk %}" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> Delete
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-truck" style="font-size: 4rem; color: #ccc;"></i>
+                <p class="text-muted mt-3">No suppliers found. Add your first supplier!</p>
+                <a href="{% url 'supplier_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Add Supplier
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

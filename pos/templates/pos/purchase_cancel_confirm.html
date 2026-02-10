@@ -1,0 +1,38 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Cancel Purchase - POS System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Confirm Cancellation</h5>
+            </div>
+            <div class="card-body">
+                <p>Are you sure you want to cancel this purchase order?</p>
+                <h4 class="text-danger">{{ purchase.purchase_number }}</h4>
+                <p><strong>Supplier:</strong> {{ purchase.supplier.name }}</p>
+                <p><strong>Total Amount:</strong> KES {{ purchase.total_amount|floatformat:2 }}</p>
+                
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This action cannot be undone. The purchase order will be marked as cancelled.
+                </div>
+                
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-x-circle"></i> Yes, Cancel Purchase
+                        </button>
+                        <a href="{% url 'purchase_detail' purchase.pk %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Go Back
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
