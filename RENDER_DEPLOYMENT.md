@@ -60,7 +60,7 @@ git push -u origin main
    - **Name**: `pos-system`
    - **Runtime**: Python 3
    - **Build Command**: `./build.sh`
-   - **Start Command**: `gunicorn pos_system.wsgi:application`
+   - **Start Command**: `gunicorn pos_system.wsgi:application --bind 0.0.0.0:$PORT`
    - **Plan**: Free (for testing)
 
 **Step 3: Add Environment Variables**
