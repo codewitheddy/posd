@@ -1,24 +1,23 @@
-# Use Python 3.12 slim image (required for Django 6.0)
-FROM python:3.12-slim
+# Alternative Dockerfile for Python 3.11 with Django 5.1
+# Rename this to "Dockerfile" if you prefer Python 3.11
 
-# Set environment variables
+FROM python:3.11-slim
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
-ENV DEBIAN_FRONTEND=noninteractive
 
-# Set work directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     postgresql-client \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
+# Install Python dependencies (using Python 3.11 compatible requirements)
+COPY requirements-py311.txt requirements.txt
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -34,8 +33,6 @@ RUN python manage.py collectstatic --no-input
 # Create media directory
 RUN mkdir -p /app/media
 
-# Expose port
 EXPOSE $PORT
 
-# Run startup script (migrations + gunicorn)
 CMD ["./start.sh"]
