@@ -26,6 +26,9 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpn)fmw-z%^9o@my_d#x4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
+# Test mode - bypasses authentication (ONLY FOR TESTING!)
+TEST_MODE = os.environ.get('TEST_MODE', 'False') == 'True'
+
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else []
 
 # Auto-detect Back4App and other cloud platforms

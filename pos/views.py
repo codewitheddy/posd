@@ -1085,6 +1085,26 @@ from django.contrib.auth.decorators import login_required
 
 def login_view(request):
     """User login"""
+    # TEST MODE: Auto-login for testing (REMOVE IN PRODUCTION!)
+    if getattr(settings, 'TEST_MODE', False):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Get or create test user
+        test_user, created = User.objects.get_or_create(
+            username='testuser',
+            defaults={
+                'email': 'test@example.com',
+                'is_staff': True,
+                'is_superuser': True
+            }
+        )
+        
+        # Auto-login
+        auth_login(request, test_user, backend='django.contrib.auth.backends.ModelBackend')
+        messages.success(request, '🧪 TEST MODE: Auto-logged in as testuser')
+        return redirect('dashboard')
+    
     if request.user.is_authenticated:
         return redirect('dashboard')
     
