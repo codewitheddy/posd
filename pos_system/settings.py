@@ -28,8 +28,29 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else []
 
+# Auto-detect Back4App and other cloud platforms
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['*']  # Allow all hosts if not specified
+
 # CSRF trusted origins for production
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
+
+# Auto-add common cloud platform patterns
+if not CSRF_TRUSTED_ORIGINS:
+    # Automatically trust Back4App, Render, and common platforms
+    CSRF_TRUSTED_ORIGINS = [
+        'https://*.b4a.run',
+        'https://*.onrender.com',
+        'https://*.herokuapp.com',
+    ]
+    # Add current host if available
+    import socket
+    try:
+        hostname = socket.gethostname()
+        if hostname:
+            CSRF_TRUSTED_ORIGINS.append(f'https://{hostname}')
+    except:
+        pass
 
 
 # Application definition
