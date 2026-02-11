@@ -166,8 +166,9 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="expiry_date" class="form-label">Expiry Date</label>
                                     <input type="date" class="form-control" id="expiry_date" name="expiry_date" 
-                                           value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}">
-                                    <small class="form-text text-muted">Optional for non-perishable items.</small>
+                                           value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}"
+                                           placeholder="YYYY-MM-DD">
+                                    <small class="form-text text-muted">Use date picker or format: YYYY-MM-DD (e.g., 2026-02-22)</small>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
@@ -247,6 +248,32 @@
             document.getElementById('removeImageFlag').value = 'true';
         }
     }
+
+    // Validate date format before submission
+    document.getElementById('productForm').addEventListener('submit', function(e) {
+        const expiryDateInput = document.getElementById('expiry_date');
+        const expiryDate = expiryDateInput.value.trim();
+        
+        if (expiryDate) {
+            // Check if date format is valid (YYYY-MM-DD)
+            const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+            if (!datePattern.test(expiryDate)) {
+                e.preventDefault();
+                alert('Invalid date format. Please use the date picker or enter date in YYYY-MM-DD format (e.g., 2026-02-22).');
+                expiryDateInput.focus();
+                return false;
+            }
+            
+            // Validate it's a real date
+            const date = new Date(expiryDate);
+            if (isNaN(date.getTime())) {
+                e.preventDefault();
+                alert('Invalid date. Please enter a valid date.');
+                expiryDateInput.focus();
+                return false;
+            }
+        }
+    });
 
     // Prevent form submission on Enter key in text fields
     document.getElementById('productForm').addEventListener('keypress', function(e) {
