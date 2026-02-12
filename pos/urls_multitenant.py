@@ -9,17 +9,24 @@ from . import views, tenant_views
 
 
 def landing_page(request):
-    """Landing page for visitors"""
-    if request.user.is_authenticated:
-        # Redirect to business list if logged in
-        return redirect('business_list')
+    """Landing page for visitors - always shows landing page"""
     return render(request, 'pos/landing.html')
+
+
+def root_redirect(request):
+    """Root URL - redirects logged-in users to business list, others to landing"""
+    if request.user.is_authenticated:
+        return redirect('business_list')
+    return redirect('landing')
 
 
 # Public URLs (no business context required)
 public_urlpatterns = [
-    # Home/Landing
-    path('', landing_page, name='home'),
+    # Root - smart redirect based on auth status
+    path('', root_redirect, name='home'),
+    
+    # Landing page - always accessible
+    path('home/', landing_page, name='landing'),
     
     # Platform Admin Dashboard (superuser only)
     path('platform-admin/', views.platform_admin_dashboard, name='platform_admin_dashboard'),

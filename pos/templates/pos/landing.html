@@ -95,17 +95,26 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand" href="{% url 'landing' %}">
                 <i class="fas fa-store text-primary"></i>
                 <strong>POS System</strong>
             </a>
             <div class="ms-auto">
-                <a href="{% url 'login' %}" class="btn btn-outline-primary me-2">
-                    <i class="fas fa-sign-in-alt"></i> Login
-                </a>
-                <a href="{% url 'register_business' %}" class="btn btn-primary">
-                    <i class="fas fa-rocket"></i> Get Started
-                </a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'business_list' %}" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-building"></i> My Businesses
+                    </a>
+                    <a href="{% url 'logout' %}" class="btn btn-outline-danger">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                {% else %}
+                    <a href="{% url 'login' %}" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </a>
+                    <a href="{% url 'register_business' %}" class="btn btn-primary">
+                        <i class="fas fa-rocket"></i> Get Started
+                    </a>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -116,14 +125,25 @@
             <h1>Manage Your Business with Ease</h1>
             <p>Complete POS system with inventory, sales, and reporting - all in one place</p>
             <div>
-                <a href="{% url 'register_business' %}" class="btn btn-light btn-hero">
-                    <i class="fas fa-rocket"></i> Start Free Trial
-                </a>
-                <a href="{% url 'login' %}" class="btn btn-outline-light btn-hero">
-                    <i class="fas fa-sign-in-alt"></i> Login
-                </a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'business_list' %}" class="btn btn-light btn-hero">
+                        <i class="fas fa-building"></i> Go to My Businesses
+                    </a>
+                    {% if user.is_superuser %}
+                        <a href="{% url 'platform_admin_dashboard' %}" class="btn btn-outline-light btn-hero">
+                            <i class="fas fa-crown"></i> Platform Admin
+                        </a>
+                    {% endif %}
+                {% else %}
+                    <a href="{% url 'register_business' %}" class="btn btn-light btn-hero">
+                        <i class="fas fa-rocket"></i> Start Free Trial
+                    </a>
+                    <a href="{% url 'login' %}" class="btn btn-outline-light btn-hero">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </a>
+                {% endif %}
             </div>
-            <p class="mt-4"><small>30-day free trial • No credit card required</small></p>
+            <p class="mt-4"><small>{% if not user.is_authenticated %}30-day free trial • No credit card required{% else %}Welcome back, {{ user.username }}!{% endif %}</small></p>
         </div>
     </section>
 
