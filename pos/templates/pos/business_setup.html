@@ -1,0 +1,129 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Business Setup - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <!-- Login Credentials Display (if just registered) -->
+            {% if request.session.new_user_credentials %}
+            <div class="card shadow-lg mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-check-circle"></i> Registration Successful!</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Important:</strong> Please save your login credentials below. You'll need them to access your account.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="text-muted mb-2"><i class="fas fa-user"></i> Username</h6>
+                                    <h5 class="mb-0 font-monospace">{{ request.session.new_user_credentials.username }}</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="text-muted mb-2"><i class="fas fa-envelope"></i> Email</h6>
+                                    <h5 class="mb-0 font-monospace">{{ request.session.new_user_credentials.email }}</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Login Options:</strong> You can use either your <strong>username</strong> or <strong>email</strong> to login.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-cog"></i> Complete Your Business Setup</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        Welcome! Let's set up your business profile to get started.
+                    </div>
+                    
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="address" class="form-label">
+                                <i class="fas fa-map-marker-alt"></i> Business Address
+                            </label>
+                            <textarea class="form-control" id="address" name="address" rows="3" 
+                                      placeholder="Enter your business address">{{ business.address }}</textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">
+                                <i class="fas fa-phone"></i> Phone Number
+                            </label>
+                            <input type="text" class="form-control" id="phone" name="phone" 
+                                   placeholder="+1234567890" value="{{ business.phone }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                <i class="fas fa-envelope"></i> Business Email
+                            </label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   placeholder="contact@business.com" value="{{ business.email }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="tax_id" class="form-label">
+                                <i class="fas fa-file-invoice"></i> Tax ID / VAT Number (Optional)
+                            </label>
+                            <input type="text" class="form-control" id="tax_id" name="tax_id" 
+                                   placeholder="Tax ID" value="{{ business.tax_id }}">
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-check"></i> Complete Setup
+                            </button>
+                            <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary">
+                                Skip for Now
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mt-4 shadow-sm">
+                <div class="card-body">
+                    <h5><i class="fas fa-lightbulb text-warning"></i> Next Steps</h5>
+                    <ul class="mb-0">
+                        <li>Add your products and categories</li>
+                        <li>Invite team members</li>
+                        <li>Configure business settings</li>
+                        <li>Start making sales!</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

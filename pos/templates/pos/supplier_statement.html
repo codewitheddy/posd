@@ -9,14 +9,14 @@
             <h2><i class="bi bi-file-text"></i> Supplier Statement - {{ supplier.name }}</h2>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}">Suppliers</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug  %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug  %}">Suppliers</a></li>
                     <li class="breadcrumb-item active">Statement</li>
                 </ol>
             </nav>
         </div>
         <div class="col-auto">
-            <a href="{% url 'supplier_payments' supplier.id %}" class="btn btn-primary">
+            <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
                 <i class="bi bi-cash-coin"></i> View Payments
             </a>
         </div>

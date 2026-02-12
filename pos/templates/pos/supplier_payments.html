@@ -9,17 +9,17 @@
             <h2><i class="bi bi-cash-stack"></i> Payments - {{ supplier.name }}</h2>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}">Suppliers</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug  %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug  %}">Suppliers</a></li>
                     <li class="breadcrumb-item active">Payments</li>
                 </ol>
             </nav>
         </div>
         <div class="col-auto">
-            <a href="{% url 'create_payment' supplier.id %}" class="btn btn-primary">
+            <a href="{% url 'create_payment' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> Create Payment
             </a>
-            <a href="{% url 'supplier_statement' supplier.id %}" class="btn btn-info">
+            <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-info">
                 <i class="bi bi-file-text"></i> View Statement
             </a>
         </div>
@@ -74,7 +74,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-funnel"></i> Filter
                         </button>
-                        <a href="{% url 'supplier_payments' supplier.id %}" class="btn btn-secondary">
+                        <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Clear
                         </a>
                     </div>
@@ -107,7 +107,7 @@
                         {% for payment in payments %}
                         <tr>
                             <td>
-                                <a href="{% url 'payment_detail' payment.id %}">{{ payment.payment_number }}</a>
+                                <a href="{% url 'payment_detail' slug=request.business.slug payment_id=payment.id %}">{{ payment.payment_number }}</a>
                             </td>
                             <td>{{ payment.payment_date|date:"Y-m-d" }}</td>
                             <td><strong>KES {{ payment.amount|floatformat:2 }}</strong></td>
@@ -115,10 +115,10 @@
                             <td>{{ payment.reference_number|default:"-" }}</td>
                             <td>{{ payment.created_by.username }}</td>
                             <td>
-                                <a href="{% url 'payment_detail' payment.id %}" class="btn btn-sm btn-info" title="View Details">
+                                <a href="{% url 'payment_detail' slug=request.business.slug payment_id=payment.id %}" class="btn btn-sm btn-info" title="View Details">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                <a href="{% url 'delete_payment' payment.id %}" class="btn btn-sm btn-danger" title="Delete" 
+                                <a href="{% url 'delete_payment' slug=request.business.slug payment_id=payment.id %}" class="btn btn-sm btn-danger" title="Delete" 
                                    onclick="return confirm('Are you sure you want to delete this payment?')">
                                     <i class="bi bi-trash"></i>
                                 </a>
@@ -137,7 +137,7 @@
             {% else %}
             <div class="alert alert-info">
                 <i class="bi bi-info-circle"></i> No payments found for this supplier.
-                <a href="{% url 'create_payment' supplier.id %}" class="alert-link">Create the first payment</a>
+                <a href="{% url 'create_payment' slug=request.business.slug supplier_id=supplier.id %}" class="alert-link">Create the first payment</a>
             </div>
             {% endif %}
         </div>

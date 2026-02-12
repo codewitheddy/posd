@@ -144,14 +144,14 @@
                     
                     <div class="mb-3">
                         <label for="username" class="form-label">
-                            <i class="bi bi-person"></i> Username
+                            <i class="bi bi-person"></i> Username or Email
                         </label>
                         <div class="input-group">
                             <span class="input-group-text">
                                 <i class="bi bi-person-fill"></i>
                             </span>
                             <input type="text" class="form-control" id="username" name="username" 
-                                   placeholder="Enter your username" required autofocus>
+                                   placeholder="Enter your username or email" required autofocus>
                         </div>
                     </div>
 
@@ -168,6 +168,11 @@
                             <span class="input-group-text password-toggle" onclick="togglePassword()">
                                 <i class="bi bi-eye" id="toggleIcon"></i>
                             </span>
+                        </div>
+                        <div class="text-end mt-2">
+                            <a href="{% url 'password_reset_request' %}" class="text-decoration-none" style="color: #667eea; font-size: 14px;">
+                                <i class="bi bi-key"></i> Forgot Password?
+                            </a>
                         </div>
                     </div>
 

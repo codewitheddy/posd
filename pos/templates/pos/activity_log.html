@@ -53,7 +53,7 @@
                     <button type="submit" class="btn btn-primary me-2">
                         <i class="fas fa-filter"></i> Filter
                     </button>
-                    <a href="{% url 'activity_log' %}" class="btn btn-secondary">
+                    <a href="{% url 'activity_log' slug=request.business.slug  %}" class="btn btn-secondary">
                         <i class="fas fa-redo"></i> Reset
                     </a>
                 </div>

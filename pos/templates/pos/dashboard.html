@@ -11,10 +11,23 @@
         border: none;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+        overflow: hidden;
     }
     .stat-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100px;
+        height: 100px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        transform: translate(30%, -30%);
     }
     .stat-icon {
         width: 48px;
@@ -27,7 +40,7 @@
         margin-bottom: 12px;
     }
     .stat-value {
-        font-size: 28px;
+        font-size: 32px;
         font-weight: 700;
         margin: 8px 0;
         color: #2c3e50;
@@ -40,8 +53,15 @@
         letter-spacing: 0.5px;
     }
     .stat-change {
-        font-size: 12px;
+        font-size: 13px;
         margin-top: 8px;
+        font-weight: 600;
+    }
+    .stat-change.positive {
+        color: #27ae60;
+    }
+    .stat-change.negative {
+        color: #e74c3c;
     }
     .section-title {
         font-size: 18px;
@@ -49,26 +69,38 @@
         color: #2c3e50;
         margin-bottom: 20px;
     }
-    .alert-card {
+    .chart-card {
         border-radius: 12px;
         border: none;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
     }
     .quick-action-btn {
-        border-radius: 10px;
-        padding: 12px 24px;
+        border-radius: 8px;
+        padding: 10px 20px;
         font-weight: 500;
         border: none;
         transition: all 0.2s;
+        font-size: 14px;
     }
     .quick-action-btn:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    .table-card {
+    .quick-actions-container {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 20px;
         border-radius: 12px;
-        border: none;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        z-index: 100;
+        margin-top: 30px;
+    }
+    .quick-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 15px;
     }
     .page-header {
         margin-bottom: 30px;
@@ -78,6 +110,40 @@
         font-weight: 700;
         color: #2c3e50;
     }
+    .mini-stat {
+        font-size: 12px;
+        color: #7f8c8d;
+        margin-top: 5px;
+    }
+    .payment-badge {
+        display: inline-block;
+        padding: 8px 15px;
+        border-radius: 8px;
+        margin: 5px;
+        font-weight: 600;
+    }
+    .top-product-item {
+        padding: 12px;
+        border-bottom: 1px solid #ecf0f1;
+        transition: background 0.2s;
+    }
+    .top-product-item:hover {
+        background: #f8f9fa;
+    }
+    .top-product-item:last-child {
+        border-bottom: none;
+    }
+    .recent-sale-item {
+        padding: 10px;
+        border-bottom: 1px solid #ecf0f1;
+        transition: background 0.2s;
+    }
+    .recent-sale-item:hover {
+        background: #f8f9fa;
+    }
+    .recent-sale-item:last-child {
+        border-bottom: none;
+    }
 </style>
 {% endblock %}
 
@@ -86,73 +152,87 @@
     <!-- Page Header -->
     <div class="page-header">
         <h1 class="page-title">Dashboard</h1>
-        <p class="text-muted">Welcome back! Here's what's happening today.</p>
+        <p class="text-muted">Welcome back! Here's your business overview for today.</p>
     </div>
 
-    <!-- Statistics Cards -->
+    <!-- Today's Statistics -->
     <div class="row">
-        <!-- Total Sales -->
+        <!-- Today's Sales -->
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
                     <i class="bi bi-receipt"></i>
                 </div>
-                <div class="stat-label">Total Sales</div>
-                <div class="stat-value">{{ today_sales_count }}</div>
-                <div class="stat-change text-success">
-                    <i class="bi bi-arrow-up"></i> Today
+                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Today's Sales</div>
+                <div class="stat-value" style="color: white;">{{ today_sales_count }}</div>
+                <div class="stat-change {% if sales_change >= 0 %}positive{% else %}negative{% endif %}" style="color: rgba(255,255,255,0.9);">
+                    <i class="bi bi-arrow-{% if sales_change >= 0 %}up{% else %}down{% endif %}"></i> 
+                    {{ sales_change|floatformat:1 }}% vs yesterday
+                </div>
+                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
+                    Week: {{ week_count }} | Month: {{ month_count }}
                 </div>
             </div>
         </div>
 
         <!-- Today's Revenue -->
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
                     <i class="bi bi-cash-stack"></i>
                 </div>
-                <div class="stat-label">Today's Revenue</div>
-                <div class="stat-value">KES {{ today_revenue|floatformat:0 }}</div>
-                <div class="stat-change text-muted">
-                    <small>This Month: KES {{ today_revenue|floatformat:0 }}</small>
+                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Today's Revenue</div>
+                <div class="stat-value" style="color: white;">KES {{ today_revenue|floatformat:0 }}</div>
+                <div class="stat-change {% if revenue_change >= 0 %}positive{% else %}negative{% endif %}" style="color: rgba(255,255,255,0.9);">
+                    <i class="bi bi-arrow-{% if revenue_change >= 0 %}up{% else %}down{% endif %}"></i> 
+                    {{ revenue_change|floatformat:1 }}% vs yesterday
+                </div>
+                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
+                    Week: KES {{ week_revenue|floatformat:0 }} | Month: KES {{ month_revenue|floatformat:0 }}
                 </div>
             </div>
         </div>
 
-        <!-- Total Products -->
+        <!-- Items Sold Today -->
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
                     <i class="bi bi-box-seam"></i>
                 </div>
-                <div class="stat-label">Total Products</div>
-                <div class="stat-value">{{ total_products }}</div>
-                <div class="stat-change text-muted">
-                    <small>{{ total_categories }} Categories</small>
+                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Items Sold Today</div>
+                <div class="stat-value" style="color: white;">{{ today_items_sold }}</div>
+                <div class="mini-stat" style="color: rgba(255,255,255,0.8); margin-top: 12px;">
+                    Total Products: {{ total_products }}
+                </div>
+                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
+                    Stock Value: KES {{ total_stock_value|floatformat:0 }}
                 </div>
             </div>
         </div>
 
-        <!-- Suppliers -->
+        <!-- Customers -->
         <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
-                    <i class="bi bi-truck"></i>
+            <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
+                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
+                    <i class="bi bi-people"></i>
                 </div>
-                <div class="stat-label">Active Suppliers</div>
-                <div class="stat-value">{{ total_suppliers }}</div>
-                <div class="stat-change text-warning">
-                    <i class="bi bi-clock"></i> {{ pending_purchases }} Pending
+                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Total Customers</div>
+                <div class="stat-value" style="color: white;">{{ total_customers }}</div>
+                <div class="stat-change" style="color: rgba(255,255,255,0.9);">
+                    <i class="bi bi-plus-circle"></i> {{ today_new_customers }} new today
+                </div>
+                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
+                    Suppliers: {{ total_suppliers }}
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Alerts Section -->
-    {% if low_stock_count > 0 or out_of_stock_count > 0 or expired_count > 0 or expiring_soon_count > 0 %}
-    <div class="row mt-4">
+    {% if low_stock_count > 0 or out_of_stock_count > 0 or expired_count > 0 or expiring_soon_count > 0 or pending_purchases > 0 %}
+    <div class="row">
         <div class="col-12">
-            <div class="alert-card alert alert-warning">
+            <div class="alert alert-warning" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
                 <div class="d-flex align-items-center">
                     <div class="flex-shrink-0">
                         <i class="bi bi-exclamation-triangle-fill" style="font-size: 32px;"></i>
@@ -161,41 +241,53 @@
                         <h5 class="mb-2"><strong>Attention Required</strong></h5>
                         <div class="row">
                             {% if out_of_stock_count > 0 %}
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <span class="badge bg-danger" style="font-size: 14px; padding: 8px 12px;">
                                     {{ out_of_stock_count }} Out of Stock
                                 </span>
                             </div>
                             {% endif %}
                             {% if low_stock_count > 0 %}
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <span class="badge bg-warning text-dark" style="font-size: 14px; padding: 8px 12px;">
                                     {{ low_stock_count }} Low Stock
                                 </span>
                             </div>
                             {% endif %}
                             {% if expired_count > 0 %}
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <span class="badge bg-danger" style="font-size: 14px; padding: 8px 12px;">
                                     {{ expired_count }} Expired
                                 </span>
                             </div>
                             {% endif %}
                             {% if expiring_soon_count > 0 %}
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <span class="badge bg-warning text-dark" style="font-size: 14px; padding: 8px 12px;">
                                     {{ expiring_soon_count }} Expiring Soon
                                 </span>
                             </div>
                             {% endif %}
+                            {% if pending_purchases > 0 %}
+                            <div class="col-md-2">
+                                <span class="badge bg-info" style="font-size: 14px; padding: 8px 12px;">
+                                    {{ pending_purchases }} Pending Orders
+                                </span>
+                            </div>
+                            {% endif %}
                         </div>
                         <div class="mt-3">
-                            <a href="{% url 'low_stock_alert' %}" class="btn btn-sm btn-warning me-2">
+                            <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-sm btn-warning me-2">
                                 <i class="bi bi-eye"></i> View Stock Alerts
                             </a>
                             {% if expired_count > 0 or expiring_soon_count > 0 %}
-                            <a href="{% url 'expiry_alert' %}" class="btn btn-sm btn-danger">
+                            <a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-danger me-2">
                                 <i class="bi bi-calendar-x"></i> View Expiry Alerts
+                            </a>
+                            {% endif %}
+                            {% if pending_purchases > 0 %}
+                            <a href="{% url 'purchase_list' slug=request.business.slug %}" class="btn btn-sm btn-info">
+                                <i class="bi bi-bag-check"></i> View Purchases
                             </a>
                             {% endif %}
                         </div>
@@ -204,21 +296,161 @@
             </div>
         </div>
     </div>
-        {% endif %}
+    {% endif %}
+
+    <!-- Top Selling and Payment Methods Row -->
+    <div class="row mt-4">
+        <!-- Top Selling Products Today -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="chart-card card">
+                <div class="card-header bg-white border-0 pt-3">
+                    <h5 class="section-title mb-0">
+                        <i class="bi bi-trophy text-warning"></i> Top Selling Today
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if top_products_today %}
+                        {% for product in top_products_today %}
+                        <div class="top-product-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ product.product__name }}</strong>
+                                    <div class="text-muted small">{{ product.total_quantity }} units sold</div>
+                                </div>
+                                <div class="text-end">
+                                    <strong class="text-success">KES {{ product.total_revenue|floatformat:0 }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-2">No sales yet today</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Methods Breakdown -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="chart-card card">
+                <div class="card-header bg-white border-0 pt-3">
+                    <h5 class="section-title mb-0">
+                        <i class="bi bi-credit-card text-primary"></i> Payment Methods Today
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if payment_breakdown %}
+                        {% for payment in payment_breakdown %}
+                        <div class="top-product-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ payment.payment_method__name }}</strong>
+                                    <div class="text-muted small">{{ payment.count }} transaction{{ payment.count|pluralize }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <strong class="text-primary">KES {{ payment.total|floatformat:0 }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-credit-card-2-front" style="font-size: 3rem;"></i>
+                            <p class="mt-2">No payments yet today</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sales - Full Width -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="chart-card card">
+                <div class="card-header bg-white border-0 pt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="section-title mb-0">
+                            <i class="bi bi-clock-history text-info"></i> Recent Sales
+                        </h5>
+                        <a href="{% url 'sales_list' slug=request.business.slug %}" class="btn btn-sm btn-outline-primary">
+                            View All
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if recent_sales %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Invoice #</th>
+                                        <th>Date & Time</th>
+                                        <th>Customer</th>
+                                        <th>Cashier</th>
+                                        <th>Items</th>
+                                        <th>Payment Method</th>
+                                        <th class="text-end">Total</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sale in recent_sales %}
+                                    <tr>
+                                        <td><strong>{{ sale.invoice_number }}</strong></td>
+                                        <td>{{ sale.date|date:"d/m/Y H:i" }}</td>
+                                        <td>
+                                            {% if sale.customer %}
+                                                {{ sale.customer.name }}
+                                            {% else %}
+                                                <span class="text-muted">Walk-in</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ sale.cashier.username }}</td>
+                                        <td>{{ sale.items.count }}</td>
+                                        <td>
+                                            {% for payment in sale.payments.all %}
+                                                <span class="badge bg-info">{{ payment.payment_method.name }}</span>
+                                            {% endfor %}
+                                        </td>
+                                        <td class="text-end"><strong class="text-success">KES {{ sale.total|floatformat:0 }}</strong></td>
+                                        <td>
+                                            <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-outline-primary" title="View Receipt">
+                                                <i class="bi bi-receipt"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-receipt" style="font-size: 3rem;"></i>
+                            <p class="mt-2">No recent sales</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Out of Stock & Expiring Products -->
     <div class="row mt-4">
         <!-- Out of Stock Products -->
         {% if out_of_stock_list %}
         <div class="col-xl-6">
-            <div class="table-card card">
+            <div class="chart-card card">
                 <div class="card-header bg-white border-0 pt-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="section-title mb-0">
                             <i class="bi bi-exclamation-octagon text-danger"></i> Out of Stock
                         </h5>
                         {% if out_of_stock_count > 5 %}
-                        <a href="{% url 'low_stock_alert' %}" class="btn btn-sm btn-outline-danger">
+                        <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-sm btn-outline-danger">
                             View All ({{ out_of_stock_count }})
                         </a>
                         {% endif %}
@@ -247,7 +479,7 @@
                                     <td>{{ product.category.name|default:"-" }}</td>
                                     <td>KES {{ product.unit_price|floatformat:2 }}</td>
                                     <td>
-                                        <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-primary">
+                                        <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-primary">
                                             <i class="bi bi-plus-circle"></i> Restock
                                         </a>
                                     </td>
@@ -264,14 +496,14 @@
         <!-- Expiring Soon Products -->
         {% if expiring_soon_list %}
         <div class="col-xl-6">
-            <div class="table-card card">
+            <div class="chart-card card">
                 <div class="card-header bg-white border-0 pt-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="section-title mb-0">
                             <i class="bi bi-calendar-x text-warning"></i> Expiring Soon
                         </h5>
                         {% if expiring_soon_count > 5 %}
-                        <a href="{% url 'expiry_alert' %}" class="btn btn-sm btn-outline-warning">
+                        <a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-outline-warning">
                             View All ({{ expiring_soon_count }})
                         </a>
                         {% endif %}
@@ -319,14 +551,14 @@
     {% if expired_list %}
     <div class="row mt-4">
         <div class="col-12">
-            <div class="table-card card border-danger">
+            <div class="chart-card card border-danger">
                 <div class="card-header bg-danger text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="bi bi-exclamation-triangle"></i> Expired Products - Remove Immediately!
                         </h5>
                         {% if expired_count > 5 %}
-                        <a href="{% url 'expiry_alert' %}" class="btn btn-sm btn-light">
+                        <a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-light">
                             View All ({{ expired_count }})
                         </a>
                         {% endif %}
@@ -363,7 +595,7 @@
                                     </td>
                                     <td><strong>{{ product.stock_quantity }}</strong></td>
                                     <td>
-                                        <a href="{% url 'stock_adjust' product.pk %}" class="btn btn-sm btn-danger">
+                                        <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-danger">
                                             <i class="bi bi-trash"></i> Remove
                                         </a>
                                     </td>
@@ -378,37 +610,42 @@
     </div>
     {% endif %}
 
-    <!-- Quick Actions -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="table-card card">
-                <div class="card-body text-center py-4">
-                    <h5 class="section-title">Quick Actions</h5>
-                    <div class="mt-3">
-                        <a href="{% url 'pos_screen' %}" class="quick-action-btn btn btn-primary btn-lg me-2 mb-2">
-                            <i class="bi bi-cart-plus"></i> New Sale
-                        </a>
-                        <a href="{% url 'product_create' %}" class="quick-action-btn btn btn-success btn-lg me-2 mb-2">
-                            <i class="bi bi-plus-circle"></i> Add Product
-                        </a>
-                        <a href="{% url 'purchase_create' %}" class="quick-action-btn btn btn-info btn-lg me-2 mb-2">
-                            <i class="bi bi-bag-plus"></i> New Purchase
-                        </a>
-                        <a href="{% url 'stock_list' %}" class="quick-action-btn btn btn-secondary btn-lg me-2 mb-2">
-                            <i class="bi bi-boxes"></i> Manage Stock
-                        </a>
-                        <button type="button" class="quick-action-btn btn btn-purple btn-lg me-2 mb-2" data-bs-toggle="modal" data-bs-target="#analyticsModal" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                            <i class="bi bi-graph-up"></i> Analytics
-                        </button>
-                        <a href="{% url 'payment_transactions_report' %}" class="quick-action-btn btn btn-dark btn-lg me-2 mb-2">
-                            <i class="bi bi-credit-card-2-front"></i> Payment Transactions
-                        </a>
-                        <a href="{% url 'sales_report' %}" class="quick-action-btn btn btn-warning btn-lg mb-2">
-                            <i class="bi bi-file-earmark-text"></i> View Reports
-                        </a>
-                    </div>
-                </div>
-            </div>
+    <!-- Quick Actions - Sticky Footer -->
+    <div class="quick-actions-container">
+        <h5 class="section-title text-center mb-3">Quick Actions</h5>
+        <div class="quick-actions-grid">
+            <a href="{% url 'pos_screen' slug=request.business.slug %}" class="quick-action-btn btn btn-primary">
+                <i class="bi bi-cart-plus"></i> New Sale
+            </a>
+            <a href="{% url 'sales_list' slug=request.business.slug %}" class="quick-action-btn btn btn-outline-primary">
+                <i class="bi bi-receipt"></i> All Sales
+            </a>
+            <a href="{% url 'product_create' slug=request.business.slug %}" class="quick-action-btn btn btn-success">
+                <i class="bi bi-plus-circle"></i> Add Product
+            </a>
+            <a href="{% url 'purchase_create' slug=request.business.slug %}" class="quick-action-btn btn btn-info">
+                <i class="bi bi-bag-plus"></i> New Purchase
+            </a>
+            <a href="{% url 'stock_list' slug=request.business.slug %}" class="quick-action-btn btn btn-secondary">
+                <i class="bi bi-boxes"></i> Manage Stock
+            </a>
+            <button type="button" class="quick-action-btn btn btn-purple" data-bs-toggle="modal" data-bs-target="#analyticsModal" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <i class="bi bi-graph-up"></i> Analytics
+            </button>
+            <a href="{% url 'payment_transactions_report' slug=request.business.slug %}" class="quick-action-btn btn btn-dark">
+                <i class="bi bi-credit-card-2-front"></i> Transactions
+            </a>
+            {% if user_permissions.can_manage_settings %}
+            <a href="{% url 'payment_method_list' slug=request.business.slug %}" class="quick-action-btn btn btn-outline-primary">
+                <i class="bi bi-credit-card"></i> Payment Methods
+            </a>
+            {% endif %}
+            <a href="{% url 'sales_report' slug=request.business.slug %}" class="quick-action-btn btn btn-warning">
+                <i class="bi bi-file-earmark-text"></i> Reports
+            </a>
+            <a href="{% url 'z_report' slug=request.business.slug %}" class="quick-action-btn btn btn-danger">
+                <i class="bi bi-calculator-fill"></i> Z-Report
+            </a>
         </div>
     </div>
 </div>

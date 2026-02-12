@@ -3,17 +3,139 @@ from django.utils import timezone
 from decimal import Decimal
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils.text import slugify
+from django.core.exceptions import ValidationError
 from .image_utils import ImageOptimizer, generate_upload_path
+
+
+from django.utils.text import slugify
+from django.core.exceptions import ValidationError
+
+
+# ==================== MULTI-TENANCY MODELS ====================
+
+class Business(models.Model):
+    """
+    Business/Tenant model - each business operates independently
+    """
+    name = models.CharField(max_length=200, help_text="Business name")
+    slug = models.SlugField(max_length=200, unique=True, help_text="URL-friendly identifier")
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name='owned_businesses')
+
+    # Business details
+    description = models.TextField(blank=True)
+    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    website = models.URLField(blank=True)
+    tax_id = models.CharField(max_length=50, blank=True)
+
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_trial = models.BooleanField(default=True, help_text="Trial period active")
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+
+    # Subscription (for future billing)
+    subscription_plan = models.CharField(
+        max_length=50,
+        choices=[
+            ('free', 'Free'),
+            ('basic', 'Basic'),
+            ('professional', 'Professional'),
+            ('enterprise', 'Enterprise'),
+        ],
+        default='free'
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Businesses"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+            # Ensure unique slug
+            original_slug = self.slug
+            counter = 1
+            while Business.objects.filter(slug=self.slug).exists():
+                self.slug = f"{original_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return f"/b/{self.slug}/"
+
+    @property
+    def is_trial_expired(self):
+        if not self.is_trial or not self.trial_ends_at:
+            return False
+        return timezone.now() > self.trial_ends_at
+
+
+class BusinessMembership(models.Model):
+    """
+    User membership in a business with role
+    """
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('admin', 'Administrator'),
+        ('manager', 'Manager'),
+        ('stock_manager', 'Stock Manager'),
+        ('cashier', 'Cashier'),
+        ('sales', 'Sales Associate'),
+        ('viewer', 'Viewer'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='business_memberships')
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='memberships')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='cashier')
+    is_active = models.BooleanField(default=True)
+
+    # Timestamps
+    joined_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'business')
+        ordering = ['business', 'user']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.business.name} ({self.role})"
+
+    def has_permission(self, permission):
+        """Check if user has specific permission in this business"""
+        role_permissions = {
+            'owner': ['all'],
+            'admin': ['all'],
+            'manager': ['view', 'create', 'edit', 'reports', 'users'],
+            'stock_manager': ['view', 'create', 'edit', 'stock'],
+            'cashier': ['view', 'create', 'pos'],
+            'sales': ['view', 'create', 'pos'],
+            'viewer': ['view'],
+        }
+
+        perms = role_permissions.get(self.role, [])
+        return 'all' in perms or permission in perms
+
 
 
 class Category(models.Model):
     """Product categories for organization"""
-    name = models.CharField(max_length=100, unique=True)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='categories')
+    name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name_plural = "Categories"
         ordering = ['name']
+        unique_together = [['business', 'name']]
 
     def __str__(self):
         return self.name
@@ -27,8 +149,9 @@ def product_image_path(instance, filename):
 
 class Product(models.Model):
     """Products available for sale"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
-    product_code = models.CharField(max_length=50, unique=True, blank=True, null=True, help_text="Barcode or product code for scanning")
+    product_code = models.CharField(max_length=50, blank=True, null=True, help_text="Barcode or product code for scanning")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     stock_quantity = models.IntegerField(default=0, help_text="Current stock quantity")
@@ -48,6 +171,7 @@ class Product(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        unique_together = [['business', 'product_code']]
         ordering = ['name']
 
     def __str__(self):
@@ -147,7 +271,8 @@ class Product(models.Model):
 
 class Sale(models.Model):
     """Sales transactions"""
-    invoice_number = models.CharField(max_length=20, unique=True, editable=False)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sales')
+    invoice_number = models.CharField(max_length=20, editable=False)
     date = models.DateTimeField(default=timezone.now)
     cashier = models.ForeignKey('auth.User', on_delete=models.PROTECT, related_name='sales', null=True, blank=True)
     customer = models.ForeignKey('Customer', on_delete=models.SET_NULL, null=True, blank=True, related_name='purchases')
@@ -174,6 +299,7 @@ class Sale(models.Model):
 
     class Meta:
         ordering = ['-date']
+        unique_together = [['business', 'invoice_number']]
 
     def __str__(self):
         return f"Invoice {self.invoice_number} - KES {self.total}"
@@ -183,7 +309,7 @@ class Sale(models.Model):
             # Generate invoice number: INV-YYYYMMDD-XXXX
             today = timezone.now()
             date_str = today.strftime('%Y%m%d')
-            last_sale = Sale.objects.filter(invoice_number__startswith=f'INV-{date_str}').order_by('-invoice_number').first()
+            last_sale = Sale.objects.filter(business=self.business, invoice_number__startswith=f'INV-{date_str}').order_by('-invoice_number').first()
             if last_sale:
                 last_num = int(last_sale.invoice_number.split('-')[-1])
                 new_num = last_num + 1
@@ -195,6 +321,7 @@ class Sale(models.Model):
 
 class SaleItem(models.Model):
     """Individual items in a sale"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sale_items')
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
@@ -206,6 +333,8 @@ class SaleItem(models.Model):
 
     def save(self, *args, **kwargs):
         self.total_price = Decimal(self.quantity) * self.unit_price
+        if not self.business_id and self.sale:
+            self.business = self.sale.business
         super().save(*args, **kwargs)
 
 
@@ -219,6 +348,7 @@ class StockAdjustment(models.Model):
         ('sale', 'Sale'),
     ]
     
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='stock_adjustments')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_adjustments')
     adjustment_type = models.CharField(max_length=20, choices=ADJUSTMENT_TYPES)
     quantity_change = models.IntegerField(help_text="Positive for additions, negative for deductions")
@@ -232,10 +362,16 @@ class StockAdjustment(models.Model):
     
     def __str__(self):
         return f"{self.product.name} - {self.adjustment_type} ({self.quantity_change:+d})"
+    
+    def save(self, *args, **kwargs):
+        if not self.business_id and self.product:
+            self.business = self.product.business
+        super().save(*args, **kwargs)
 
 
 class Supplier(models.Model):
     """Suppliers who provide products"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='suppliers')
     name = models.CharField(max_length=200)
     contact_person = models.CharField(max_length=100, blank=True)
     email = models.EmailField(blank=True)
@@ -248,6 +384,7 @@ class Supplier(models.Model):
     
     class Meta:
         ordering = ['name']
+        unique_together = [['business', 'name']]
     
     def __str__(self):
         return self.name
@@ -290,7 +427,8 @@ class Purchase(models.Model):
         ('cancelled', 'Cancelled'),
     ]
     
-    purchase_number = models.CharField(max_length=20, unique=True, editable=False)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='purchases')
+    purchase_number = models.CharField(max_length=20, editable=False)
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='purchases')
     date = models.DateTimeField(default=timezone.now)
     expected_delivery = models.DateField(blank=True, null=True)
@@ -305,6 +443,7 @@ class Purchase(models.Model):
     
     class Meta:
         ordering = ['-date']
+        unique_together = [['business', 'purchase_number']]
     
     def __str__(self):
         return f"{self.purchase_number} - {self.supplier.name}"
@@ -315,6 +454,7 @@ class Purchase(models.Model):
             today = timezone.now()
             date_str = today.strftime('%Y%m%d')
             last_purchase = Purchase.objects.filter(
+                business=self.business,
                 purchase_number__startswith=f'PO-{date_str}'
             ).order_by('-purchase_number').first()
             if last_purchase:
@@ -387,6 +527,7 @@ class Purchase(models.Model):
 
 class PurchaseItem(models.Model):
     """Individual items in a purchase order"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='purchase_items')
     purchase = models.ForeignKey(Purchase, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
@@ -398,6 +539,8 @@ class PurchaseItem(models.Model):
     
     def save(self, *args, **kwargs):
         self.total_cost = Decimal(self.quantity) * self.unit_cost
+        if not self.business_id and self.purchase:
+            self.business = self.purchase.business
         super().save(*args, **kwargs)
 
 
@@ -405,7 +548,8 @@ class PurchaseItem(models.Model):
 
 class SupplierPayment(models.Model):
     """Records payments made to suppliers"""
-    payment_number = models.CharField(max_length=20, unique=True, editable=False)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='supplier_payments')
+    payment_number = models.CharField(max_length=20, editable=False)
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='payments')
     payment_date = models.DateField(default=timezone.now)
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
@@ -418,6 +562,7 @@ class SupplierPayment(models.Model):
     
     class Meta:
         ordering = ['-payment_date', '-created_at']
+        unique_together = [['business', 'payment_number']]
         indexes = [
             models.Index(fields=['supplier', 'payment_date']),
             models.Index(fields=['payment_date']),
@@ -427,11 +572,16 @@ class SupplierPayment(models.Model):
         return f"{self.payment_number} - {self.supplier.name} - KES {self.amount}"
     
     def save(self, *args, **kwargs):
+        # Auto-populate business from supplier
+        if not self.business_id and self.supplier:
+            self.business = self.supplier.business
+        
         # Generate payment number: PAY-YYYYMMDD-XXXX
         if not self.payment_number:
             today = timezone.now()
             date_str = today.strftime('%Y%m%d')
             last_payment = SupplierPayment.objects.filter(
+                business=self.business,
                 payment_number__startswith=f'PAY-{date_str}'
             ).order_by('-payment_number').first()
             if last_payment:
@@ -526,10 +676,13 @@ class UserProfile(models.Model):
 # ==================== BUSINESS SETTINGS ====================
 
 class BusinessSettings(models.Model):
-    """Global business settings - singleton model"""
+    """Per-business settings - each business has its own settings"""
     
-    # Business Information
-    business_name = models.CharField(max_length=200, default="My Retail Shop")
+    # Link to business (OneToOne)
+    business = models.OneToOneField('Business', on_delete=models.CASCADE, related_name='settings')
+    
+    # Business Information (can override Business model fields)
+    business_name = models.CharField(max_length=200, blank=True, help_text="Override business name for receipts")
     business_address = models.TextField(blank=True)
     business_phone = models.CharField(max_length=20, blank=True)
     business_email = models.EmailField(blank=True)
@@ -599,6 +752,7 @@ class BusinessSettings(models.Model):
     auto_generate_product_code = models.BooleanField(default=False)
     
     # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     
@@ -607,12 +761,9 @@ class BusinessSettings(models.Model):
         verbose_name_plural = "Business Settings"
     
     def __str__(self):
-        return f"Business Settings - {self.business_name}"
+        return f"Settings for {self.business.name}"
     
     def save(self, *args, **kwargs):
-        # Ensure only one instance exists (singleton pattern)
-        self.pk = 1
-        
         # Optimize logo on upload
         if self.logo and hasattr(self.logo, 'file'):
             is_valid, error = ImageOptimizer.validate_image(self.logo)
@@ -623,10 +774,22 @@ class BusinessSettings(models.Model):
         super().save(*args, **kwargs)
     
     @classmethod
-    def get_settings(cls):
-        """Get or create the singleton settings instance"""
-        settings, created = cls.objects.get_or_create(pk=1)
+    def get_settings(cls, business):
+        """Get or create settings for a business"""
+        settings, created = cls.objects.get_or_create(
+            business=business,
+            defaults={
+                'business_name': business.name,
+                'business_address': business.address,
+                'business_phone': business.phone,
+                'business_email': business.email,
+            }
+        )
         return settings
+    
+    def get_business_name(self):
+        """Get business name (use override if set, otherwise use business.name)"""
+        return self.business_name or self.business.name
     
     def format_currency(self, amount):
         """Format amount with currency symbol"""
@@ -698,7 +861,8 @@ class ActivityLog(models.Model):
 
 class Customer(models.Model):
     """Customer information and loyalty tracking"""
-    customer_code = models.CharField(max_length=20, unique=True, editable=False)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='customers')
+    customer_code = models.CharField(max_length=20, editable=False)
     name = models.CharField(max_length=200)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20)
@@ -737,6 +901,7 @@ class Customer(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        unique_together = [['business', 'customer_code']]
     
     def __str__(self):
         return f"{self.name} ({self.customer_code})"
@@ -744,7 +909,7 @@ class Customer(models.Model):
     def save(self, *args, **kwargs):
         if not self.customer_code:
             # Generate customer code: CUST-XXXXXX
-            last_customer = Customer.objects.order_by('-id').first()
+            last_customer = Customer.objects.filter(business=self.business).order_by('-id').first()
             if last_customer and last_customer.customer_code:
                 last_num = int(last_customer.customer_code.split('-')[1])
                 new_num = last_num + 1
@@ -936,14 +1101,16 @@ class LoyaltyRedemption(models.Model):
 
 class PaymentMethod(models.Model):
     """Payment methods available in the system"""
-    name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=20, unique=True)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='payment_methods')
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20)
     is_active = models.BooleanField(default=True)
     requires_reference = models.BooleanField(default=False, help_text="Requires transaction reference (e.g., M-Pesa code)")
     icon = models.CharField(max_length=50, blank=True, help_text="Bootstrap icon class")
     
     class Meta:
         ordering = ['name']
+        unique_together = [['business', 'code']]
     
     def __str__(self):
         return self.name
@@ -951,6 +1118,7 @@ class PaymentMethod(models.Model):
 
 class SalePayment(models.Model):
     """Track multiple payment methods for a single sale"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sale_payments')
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='payments')
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -959,6 +1127,11 @@ class SalePayment(models.Model):
     
     def __str__(self):
         return f"{self.sale.invoice_number} - {self.payment_method.name}: {self.amount}"
+    
+    def save(self, *args, **kwargs):
+        if not self.business_id and self.sale:
+            self.business = self.sale.business
+        super().save(*args, **kwargs)
 
 
 # ==================== SHIFT MANAGEMENT ====================

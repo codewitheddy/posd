@@ -5,7 +5,8 @@ from .models import (
     BusinessSettings, ActivityLog, Customer, PaymentMethod,
     SalePayment, Shift, SaleReturn, SaleReturnItem, Promotion,
     ExpenseCategory, Expense, LoyaltyTransaction, LoyaltyReward,
-    LoyaltyRedemption, SupplierPayment, PaymentAllocation
+    LoyaltyRedemption, SupplierPayment, PaymentAllocation,
+    Business, BusinessMembership
 )
 
 
@@ -276,3 +277,86 @@ class PaymentAllocationAdmin(admin.ModelAdmin):
     search_fields = ['payment__payment_number', 'purchase__purchase_number']
     readonly_fields = ['created_at']
     autocomplete_fields = ['payment', 'purchase']
+
+
+# ==================== MULTI-TENANCY ADMIN ====================
+
+class BusinessMembershipInline(admin.TabularInline):
+    model = BusinessMembership
+    extra = 0
+    readonly_fields = ['joined_at']
+    autocomplete_fields = ['user']
+
+
+@admin.register(Business)
+class BusinessAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'owner', 'subscription_plan', 'is_active', 'is_trial', 'created_at']
+    list_filter = ['is_active', 'is_trial', 'subscription_plan', 'created_at']
+    search_fields = ['name', 'slug', 'owner__username', 'owner__email']
+    readonly_fields = ['slug', 'created_at', 'updated_at']
+    inlines = [BusinessMembershipInline]
+    prepopulated_fields = {'slug': ('name',)}  # Auto-generate slug from name
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'slug', 'owner', 'description')
+        }),
+        ('Contact Details', {
+            'fields': ('email', 'phone', 'address', 'website', 'tax_id')
+        }),
+        ('Subscription', {
+            'fields': ('subscription_plan', 'is_trial', 'trial_ends_at')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Make slug readonly only when editing existing business"""
+        if obj:  # Editing existing object
+            return ['slug', 'created_at', 'updated_at']
+        return ['created_at', 'updated_at']  # Creating new object
+    
+    def save_model(self, request, obj, form, change):
+        """Ensure slug is generated and membership is created"""
+        super().save_model(request, obj, form, change)
+        
+        # Create owner membership if this is a new business
+        if not change:
+            BusinessMembership.objects.get_or_create(
+                user=obj.owner,
+                business=obj,
+                defaults={'role': 'owner', 'is_active': True}
+            )
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('owner')
+
+
+@admin.register(BusinessMembership)
+class BusinessMembershipAdmin(admin.ModelAdmin):
+    list_display = ['user', 'business', 'role', 'is_active', 'joined_at']
+    list_filter = ['role', 'is_active', 'joined_at']
+    search_fields = ['user__username', 'user__email', 'business__name']
+    readonly_fields = ['joined_at']
+    autocomplete_fields = ['user', 'business']
+    
+    fieldsets = (
+        ('Membership Details', {
+            'fields': ('user', 'business', 'role', 'is_active')
+        }),
+        ('Timestamps', {
+            'fields': ('joined_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('user', 'business')

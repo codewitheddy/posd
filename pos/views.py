@@ -10,8 +10,9 @@ from datetime import datetime, timedelta
 from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
-    SalePayment, Shift
+    SalePayment, Shift, Business, BusinessMembership, PaymentMethod
 )
+from .decorators import business_required, business_permission_required
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -20,70 +21,258 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
 from django.core.exceptions import PermissionDenied
+from django.contrib.auth.models import User
 import io
 
 
+# ==================== PLATFORM ADMIN DASHBOARD ====================
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def platform_admin_dashboard(request):
+    """Platform-wide admin dashboard - only for superusers"""
+    from django.utils import timezone
+    
+    today = timezone.now().date()
+    month_start = today.replace(day=1)
+    
+    # Business statistics
+    total_businesses = Business.objects.count()
+    active_businesses = Business.objects.filter(is_active=True).count()
+    inactive_businesses = total_businesses - active_businesses
+    
+    # User statistics
+    total_users = User.objects.count()
+    
+    # Sales statistics
+    total_sales = Sale.objects.count()
+    total_revenue = Sale.objects.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    
+    today_sales = Sale.objects.filter(date__date=today).count()
+    today_revenue = Sale.objects.filter(date__date=today).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    
+    month_sales = Sale.objects.filter(date__date__gte=month_start).count()
+    month_revenue = Sale.objects.filter(date__date__gte=month_start).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    
+    # Product and customer statistics
+    total_products = Product.objects.count()
+    total_customers = Customer.objects.count()
+    
+    # Get all businesses with additional stats
+    businesses = Business.objects.select_related('owner').all()
+    for business in businesses:
+        business.member_count = BusinessMembership.objects.filter(business=business).count()
+        business.sales_count = Sale.objects.filter(business=business).count()
+    
+    context = {
+        'total_businesses': total_businesses,
+        'active_businesses': active_businesses,
+        'inactive_businesses': inactive_businesses,
+        'total_users': total_users,
+        'total_sales': total_sales,
+        'total_revenue': total_revenue,
+        'today_sales': today_sales,
+        'today_revenue': today_revenue,
+        'month_sales': month_sales,
+        'month_revenue': month_revenue,
+        'total_products': total_products,
+        'total_customers': total_customers,
+        'businesses': businesses,
+    }
+    
+    return render(request, 'pos/platform_admin_dashboard.html', context)
+
+
+# ==================== LEGACY DECORATORS ====================
+
 def manager_required(view_func):
-    """Decorator to check if user is a manager or superuser"""
+    """Decorator to check if user is a manager, owner, or superuser"""
     def wrapper(request, *args, **kwargs):
-        if request.user.is_superuser or request.user.groups.filter(name='Manager').exists():
+        # Check superuser
+        if request.user.is_superuser:
             return view_func(request, *args, **kwargs)
+        
+        # Check business membership role (multi-tenant)
+        if hasattr(request, 'business_membership') and request.business_membership:
+            role = request.business_membership.role
+            if role in ['owner', 'admin', 'manager']:
+                return view_func(request, *args, **kwargs)
+        
+        # Fallback to Django groups (legacy)
+        if request.user.groups.filter(name__in=['Administrator', 'Manager']).exists():
+            return view_func(request, *args, **kwargs)
+        
         messages.error(request, 'You do not have permission to access this page.')
-        return redirect('dashboard')
+        # Try to redirect with slug if business context exists
+        if hasattr(request, 'business') and request.business:
+            return redirect('dashboard', slug=request.business.slug)
+        return redirect('business_list')
     return wrapper
 
 
 def can_manage_products(view_func):
     """Decorator to check if user can manage products"""
     def wrapper(request, *args, **kwargs):
-        if (request.user.is_superuser or 
-            request.user.groups.filter(name__in=['Manager', 'Stock Manager']).exists() or
+        # Check superuser
+        if request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        
+        # Check business membership role (multi-tenant)
+        if hasattr(request, 'business_membership') and request.business_membership:
+            role = request.business_membership.role
+            if role in ['owner', 'admin', 'manager', 'stock_manager']:
+                return view_func(request, *args, **kwargs)
+        
+        # Fallback to Django groups/permissions (legacy)
+        if (request.user.groups.filter(name__in=['Administrator', 'Manager', 'Stock Manager']).exists() or
             request.user.has_perm('pos.change_product')):
             return view_func(request, *args, **kwargs)
+        
         messages.error(request, 'You do not have permission to manage products.')
-        return redirect('dashboard')
+        # Try to redirect with slug if business context exists
+        if hasattr(request, 'business') and request.business:
+            return redirect('dashboard', slug=request.business.slug)
+        return redirect('business_list')
     return wrapper
 
 
 def can_manage_purchases(view_func):
     """Decorator to check if user can manage purchases"""
     def wrapper(request, *args, **kwargs):
-        if (request.user.is_superuser or 
-            request.user.groups.filter(name__in=['Manager', 'Stock Manager']).exists() or
-            request.user.has_perm('pos.add_purchase')):
+        # Check superuser
+        if request.user.is_superuser:
             return view_func(request, *args, **kwargs)
+        
+        # Check business membership role (multi-tenant)
+        if hasattr(request, 'business_membership') and request.business_membership:
+            role = request.business_membership.role
+            if role in ['owner', 'admin', 'manager', 'stock_manager']:
+                return view_func(request, *args, **kwargs)
+        
+        # Fallback to Django groups/permissions (legacy)
+        if (request.user.groups.filter(name__in=['Administrator', 'Manager', 'Stock Manager']).exists() or
+            request.user.has_perm('pos.change_purchase')):
+            return view_func(request, *args, **kwargs)
+        
         messages.error(request, 'You do not have permission to manage purchases.')
-        return redirect('dashboard')
+        # Try to redirect with slug if business context exists
+        if hasattr(request, 'business') and request.business:
+            return redirect('dashboard', slug=request.business.slug)
+        return redirect('business_list')
     return wrapper
 
 
 @login_required
-@login_required
-def dashboard(request):
+@business_required
+def dashboard(request, slug=None):
     """Main dashboard with quick stats"""
     today = datetime.now().date()
-    today_sales = Sale.objects.filter(date__date=today)
+    yesterday = today - timedelta(days=1)
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    
+    # Today's sales
+    today_sales = Sale.objects.filter(date__date=today, business=request.business)
+    today_sales_count = today_sales.count()
+    today_revenue = today_sales.aggregate(Sum('total'))['total__sum'] or Decimal('0.00')
+    today_vat = today_sales.aggregate(Sum('vat_amount'))['vat_amount__sum'] or Decimal('0.00')
+    today_items_sold = today_sales.aggregate(Sum('items__quantity'))['items__quantity__sum'] or 0
+    
+    # Yesterday's sales for comparison
+    yesterday_sales = Sale.objects.filter(date__date=yesterday, business=request.business)
+    yesterday_revenue = yesterday_sales.aggregate(Sum('total'))['total__sum'] or Decimal('0.00')
+    yesterday_count = yesterday_sales.count()
+    
+    # This week's sales
+    week_sales = Sale.objects.filter(date__date__gte=week_start, business=request.business)
+    week_revenue = week_sales.aggregate(Sum('total'))['total__sum'] or Decimal('0.00')
+    week_count = week_sales.count()
+    
+    # This month's sales
+    month_sales = Sale.objects.filter(date__date__gte=month_start, business=request.business)
+    month_revenue = month_sales.aggregate(Sum('total'))['total__sum'] or Decimal('0.00')
+    month_count = month_sales.count()
+    
+    # Calculate percentage changes
+    revenue_change = 0
+    if yesterday_revenue > 0:
+        revenue_change = ((today_revenue - yesterday_revenue) / yesterday_revenue) * 100
+    
+    sales_change = 0
+    if yesterday_count > 0:
+        sales_change = ((today_sales_count - yesterday_count) / yesterday_count) * 100
+    
+    # Top selling products today
+    top_products_today = SaleItem.objects.filter(
+        sale__business=request.business,
+        sale__date__date=today
+    ).values('product__name').annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum(models.F('quantity') * models.F('unit_price'))
+    ).order_by('-total_quantity')[:5]
+    
+    # Recent sales (last 10)
+    recent_sales = Sale.objects.filter(
+        business=request.business
+    ).select_related('cashier', 'customer').order_by('-date')[:10]
+    
+    # Payment method breakdown for today
+    payment_breakdown = SalePayment.objects.filter(
+        sale__business=request.business,
+        sale__date__date=today
+    ).values('payment_method__name').annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
     
     # Stock statistics
-    low_stock_products = Product.objects.filter(stock_quantity__lte=models.F('low_stock_threshold')).count()
-    out_of_stock_products = Product.objects.filter(stock_quantity=0).count()
+    low_stock_products = Product.objects.filter(
+        business=request.business,
+        stock_quantity__lte=models.F('low_stock_threshold'),
+        stock_quantity__gt=0
+    ).count()
+    out_of_stock_products = Product.objects.filter(business=request.business, stock_quantity=0).count()
+    total_stock_value = Product.objects.filter(
+        business=request.business
+    ).aggregate(
+        value=Sum(models.F('stock_quantity') * models.F('unit_price'))
+    )['value'] or Decimal('0.00')
     
     # Supplier and Purchase statistics
-    total_suppliers = Supplier.objects.filter(is_active=True).count()
-    pending_purchases = Purchase.objects.filter(status='pending').count()
+    total_suppliers = Supplier.objects.filter(business=request.business, is_active=True).count()
+    pending_purchases = Purchase.objects.filter(business=request.business, status='pending').count()
+    
+    # Customer statistics
+    total_customers = Customer.objects.filter(business=request.business).count()
+    today_new_customers = Customer.objects.filter(
+        business=request.business,
+        created_at__date=today
+    ).count()
     
     # Expiry statistics
-    expired_count = Product.objects.filter(expiry_date__lt=today, stock_quantity__gt=0).count()
+    expired_count = Product.objects.filter(
+        business=request.business,
+        expiry_date__lt=today,
+        stock_quantity__gt=0
+    ).count()
     expiring_soon_count = 0
-    products_with_expiry = Product.objects.filter(expiry_date__gte=today, stock_quantity__gt=0)
+    products_with_expiry = Product.objects.filter(
+        business=request.business,
+        expiry_date__gte=today,
+        stock_quantity__gt=0
+    )
     for product in products_with_expiry:
         if product.is_expiring_soon():
             expiring_soon_count += 1
     
     # Fetch actual products for display
-    out_of_stock_list = Product.objects.filter(stock_quantity=0).select_related('category')[:5]
+    out_of_stock_list = Product.objects.filter(
+        business=request.business,
+        stock_quantity=0
+    ).select_related('category')[:5]
     
     expired_list = Product.objects.filter(
+        business=request.business,
         expiry_date__lt=today, 
         stock_quantity__gt=0
     ).select_related('category')[:5]
@@ -95,48 +284,89 @@ def dashboard(request):
             if len(expiring_soon_list) >= 5:  # Limit to 5
                 break
     
+    # Sales by hour today (for chart)
+    hourly_sales = today_sales.extra(
+        select={'hour': 'CAST(strftime("%%H", date) AS INTEGER)'}
+    ).values('hour').annotate(
+        count=Count('id'),
+        revenue=Sum('total')
+    ).order_by('hour')
+    
     context = {
-        'total_products': Product.objects.count(),
-        'total_categories': Category.objects.count(),
-        'today_sales_count': today_sales.count(),
-        'today_revenue': today_sales.aggregate(Sum('total'))['total__sum'] or 0,
+        # Product stats
+        'total_products': Product.objects.filter(business=request.business).count(),
+        'total_categories': Category.objects.filter(business=request.business).count(),
+        'total_stock_value': total_stock_value,
+        
+        # Today's stats
+        'today_sales_count': today_sales_count,
+        'today_revenue': today_revenue,
+        'today_vat': today_vat,
+        'today_items_sold': today_items_sold,
+        'today_new_customers': today_new_customers,
+        
+        # Comparison stats
+        'yesterday_revenue': yesterday_revenue,
+        'yesterday_count': yesterday_count,
+        'revenue_change': revenue_change,
+        'sales_change': sales_change,
+        
+        # Period stats
+        'week_revenue': week_revenue,
+        'week_count': week_count,
+        'month_revenue': month_revenue,
+        'month_count': month_count,
+        
+        # Stock alerts
         'low_stock_count': low_stock_products,
         'out_of_stock_count': out_of_stock_products,
+        'out_of_stock_list': out_of_stock_list,
+        
+        # Supplier stats
         'total_suppliers': total_suppliers,
         'pending_purchases': pending_purchases,
+        
+        # Customer stats
+        'total_customers': total_customers,
+        
+        # Expiry alerts
         'expired_count': expired_count,
         'expiring_soon_count': expiring_soon_count,
-        'out_of_stock_list': out_of_stock_list,
         'expired_list': expired_list,
         'expiring_soon_list': expiring_soon_list,
+        
+        # Lists and breakdowns
+        'top_products_today': top_products_today,
+        'recent_sales': recent_sales,
+        'payment_breakdown': payment_breakdown,
+        'hourly_sales': list(hourly_sales),
     }
     return render(request, 'pos/dashboard.html', context)
 
 
 @login_required
-@login_required
-def product_list(request):
+@business_required
+def product_list(request, slug=None):
     """List all products"""
-    products = Product.objects.select_related('category').all()
-    categories = Category.objects.all()
+    products = Product.objects.filter(business=request.business).select_related('category').all()
+    categories = Category.objects.filter(business=request.business).all()
     return render(request, 'pos/product_list.html', {'products': products, 'categories': categories})
 
 
-@login_required
-@login_required
-def product_bulk_upload(request):
+@business_required
+def product_bulk_upload(request, slug=None):
     """Bulk upload products via CSV"""
     if request.method == 'POST':
         if 'csv_file' not in request.FILES:
             messages.error(request, 'No file uploaded!')
-            return redirect('product_bulk_upload')
+            return redirect('product_bulk_upload', slug=request.business.slug)
         
         csv_file = request.FILES['csv_file']
         
         # Validate file extension
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'File must be a CSV!')
-            return redirect('product_bulk_upload')
+            return redirect('product_bulk_upload', slug=request.business.slug)
         
         try:
             # Read CSV file
@@ -156,7 +386,7 @@ def product_bulk_upload(request):
                     # Get or create category
                     category = None
                     if row.get('category'):
-                        category, _ = Category.objects.get_or_create(name=row['category'].strip())
+                        category, _ = Category.objects.get_or_create(business=request.business, name=row['category'].strip())
                     
                     # Prepare product data
                     product_code = row.get('product_code', '').strip() or None
@@ -166,9 +396,9 @@ def product_bulk_upload(request):
                     # Check if product exists (by name or code)
                     existing_product = None
                     if product_code:
-                        existing_product = Product.objects.filter(product_code=product_code).first()
+                        existing_product = Product.objects.filter(business=request.business, product_code=product_code).first()
                     if not existing_product:
-                        existing_product = Product.objects.filter(name=row['name'].strip()).first()
+                        existing_product = Product.objects.filter(business=request.business, name=row['name'].strip()).first()
                     
                     if existing_product:
                         # Update existing product
@@ -185,6 +415,7 @@ def product_bulk_upload(request):
                             
                             # Create stock adjustment record
                             StockAdjustment.objects.create(
+                                business=request.business,
                                 product=existing_product,
                                 adjustment_type='correction',
                                 quantity_change=stock_quantity - previous_qty,
@@ -198,6 +429,7 @@ def product_bulk_upload(request):
                     else:
                         # Create new product
                         product = Product.objects.create(
+                            business=request.business,
                             name=row['name'].strip(),
                             product_code=product_code,
                             category=category,
@@ -209,6 +441,7 @@ def product_bulk_upload(request):
                         # Create initial stock adjustment if stock > 0
                         if stock_quantity > 0:
                             StockAdjustment.objects.create(
+                                business=request.business,
                                 product=product,
                                 adjustment_type='restock',
                                 quantity_change=stock_quantity,
@@ -232,17 +465,17 @@ def product_bulk_upload(request):
                     error_msg += f'<br>...and {len(errors) - 10} more errors'
                 messages.error(request, error_msg)
             
-            return redirect('product_list')
+            return redirect('product_list', slug=request.business.slug)
             
         except Exception as e:
             messages.error(request, f'Error processing CSV file: {str(e)}')
-            return redirect('product_bulk_upload')
+            return redirect('product_bulk_upload', slug=request.business.slug)
     
     return render(request, 'pos/product_bulk_upload.html')
 
 
-@login_required
-def product_export_csv(request):
+@business_required
+def product_export_csv(request, slug=None):
     """Export products as CSV"""
     import csv
     
@@ -252,7 +485,7 @@ def product_export_csv(request):
     writer = csv.writer(response)
     writer.writerow(['name', 'product_code', 'category', 'unit_price', 'stock_quantity', 'low_stock_threshold'])
     
-    products = Product.objects.select_related('category').all()
+    products = Product.objects.filter(business=request.business).select_related('category').all()
     for product in products:
         writer.writerow([
             product.name,
@@ -285,8 +518,8 @@ def product_download_template(request):
     return response
 
 
-@login_required
-def product_create(request):
+@business_required
+def product_create(request, slug=None):
     """Create new product"""
     if request.method == 'POST':
         name = request.POST.get('name')
@@ -300,7 +533,7 @@ def product_create(request):
         image = request.FILES.get('image')  # Get uploaded image
         
         try:
-            category = Category.objects.get(id=category_id) if category_id else None
+            category = Category.objects.get(id=category_id, business=request.business) if category_id else None
             
             # Convert empty strings to default values
             stock_qty = int(stock_quantity) if stock_quantity else 0
@@ -308,6 +541,7 @@ def product_create(request):
             expiry_alert = int(expiry_alert_days) if expiry_alert_days else 3
             
             product = Product.objects.create(
+                business=request.business,
                 name=name, 
                 product_code=product_code if product_code else None,
                 category=category, 
@@ -331,25 +565,25 @@ def product_create(request):
                 )
             
             messages.success(request, 'Product created successfully!')
-            return redirect('product_list')
+            return redirect('product_list', slug=request.business.slug)
         except Exception as e:
             messages.error(request, f'Error creating product: {str(e)}')
     
-    categories = Category.objects.all()
+    categories = Category.objects.filter(business=request.business).all()
     return render(request, 'pos/product_form.html', {'categories': categories})
 
 
 
-@login_required
-def product_edit(request, pk):
+@business_required
+def product_edit(request, slug=None, pk=None):
     """Edit existing product"""
-    product = get_object_or_404(Product, pk=pk)
+    product = get_object_or_404(Product, business=request.business, pk=pk)
     
     if request.method == 'POST':
         product.name = request.POST.get('name')
         product.product_code = request.POST.get('product_code') if request.POST.get('product_code') else None
         category_id = request.POST.get('category')
-        product.category = Category.objects.get(id=category_id) if category_id else None
+        product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
         product.unit_price = request.POST.get('unit_price')
         
         # Convert empty strings to default values
@@ -374,52 +608,52 @@ def product_edit(request, pk):
         
         product.save()
         messages.success(request, 'Product updated successfully!')
-        return redirect('product_list')
+        return redirect('product_list', slug=request.business.slug)
     
-    categories = Category.objects.all()
+    categories = Category.objects.filter(business=request.business).all()
     return render(request, 'pos/product_form.html', {'product': product, 'categories': categories})
 
 
-@login_required
-def product_delete(request, pk):
+@business_required
+def product_delete(request, slug=None, pk=None):
     """Delete product"""
-    product = get_object_or_404(Product, pk=pk)
+    product = get_object_or_404(Product, business=request.business, pk=pk)
     if request.method == 'POST':
         product.delete()
         messages.success(request, 'Product deleted successfully!')
-        return redirect('product_list')
+        return redirect('product_list', slug=request.business.slug)
     return render(request, 'pos/product_confirm_delete.html', {'product': product})
 
 
-@login_required
-def category_list(request):
+@business_required
+def category_list(request, slug=None):
     """List all categories"""
-    categories = Category.objects.all()
+    categories = Category.objects.filter(business=request.business).all()
     return render(request, 'pos/category_list.html', {'categories': categories})
 
 
-@login_required
-def category_create(request):
+@business_required
+def category_create(request, slug=None):
     """Create new category"""
     if request.method == 'POST':
         name = request.POST.get('name')
         try:
-            Category.objects.create(name=name)
+            Category.objects.create(business=request.business, name=name)
             messages.success(request, 'Category created successfully!')
-            return redirect('category_list')
+            return redirect('category_list', slug=request.business.slug)
         except Exception as e:
             messages.error(request, f'Error creating category: {str(e)}')
     return render(request, 'pos/category_form.html')
 
 
-@login_required
-def pos_screen(request):
+@business_required
+def pos_screen(request, slug=None):
     """Main POS sales screen"""
     from .models import PaymentMethod
-    products = Product.objects.select_related('category').all()
-    categories = Category.objects.all()
-    customers = Customer.objects.filter(is_active=True).order_by('name')
-    payment_methods = PaymentMethod.objects.filter(is_active=True)
+    products = Product.objects.filter(business=request.business).select_related('category').all()
+    categories = Category.objects.filter(business=request.business).all()
+    customers = Customer.objects.filter(business=request.business, is_active=True).order_by('name')
+    payment_methods = PaymentMethod.objects.filter(business=request.business, is_active=True)
     vat_rate = getattr(settings, 'VAT_RATE', 16)
     
     context = {
@@ -432,8 +666,8 @@ def pos_screen(request):
     return render(request, 'pos/pos_screen.html', context)
 
 
-@login_required
-def complete_sale(request):
+@business_required
+def complete_sale(request, slug=None):
     """Process and complete a sale"""
     if request.method == 'POST':
         try:
@@ -449,13 +683,13 @@ def complete_sale(request):
             
             if not items_data:
                 messages.error(request, 'No items in cart!')
-                return redirect('pos_screen')
+                return redirect('pos_screen', slug=request.business.slug)
             
             # Get customer if selected
             customer = None
             if customer_id:
                 try:
-                    customer = Customer.objects.get(id=customer_id)
+                    customer = Customer.objects.get(id=customer_id, business=request.business)
                 except Customer.DoesNotExist:
                     pass
             
@@ -466,7 +700,7 @@ def complete_sale(request):
             
             for item_str in items_data:
                 product_id, quantity, price = item_str.split(',')
-                product = Product.objects.get(id=product_id)
+                product = Product.objects.get(id=product_id, business=request.business)
                 quantity = int(quantity)
                 unit_price = Decimal(price)  # This is tax-inclusive price
                 total_price = unit_price * quantity
@@ -474,7 +708,7 @@ def complete_sale(request):
                 # Check stock availability
                 if not product.has_sufficient_stock(quantity):
                     messages.error(request, f'Insufficient stock for {product.name}. Available: {product.stock_quantity}')
-                    return redirect('pos_screen')
+                    return redirect('pos_screen', slug=request.business.slug)
                 
                 total_inclusive += total_price
                 sale_items.append({
@@ -500,6 +734,7 @@ def complete_sale(request):
             
             # Create sale
             sale = Sale.objects.create(
+                business=request.business,
                 cashier=request.user,
                 customer=customer,
                 subtotal=subtotal,
@@ -540,7 +775,7 @@ def complete_sale(request):
             if payments_data:
                 for payment_str in payments_data:
                     method_id, amount, reference = payment_str.split(',')
-                    payment_method = PaymentMethod.objects.get(id=method_id)
+                    payment_method = PaymentMethod.objects.get(id=method_id, business=request.business)
                     
                     SalePayment.objects.create(
                         sale=sale,
@@ -566,56 +801,43 @@ def complete_sale(request):
                 else:
                     messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}')
             
-            return redirect('thermal_receipt', pk=sale.pk)
+            return redirect('thermal_receipt', slug=request.business.slug, pk=sale.pk)
             
         except Exception as e:
             messages.error(request, f'Error completing sale: {str(e)}')
-            return redirect('pos_screen')
+            return redirect('pos_screen', slug=request.business.slug)
     
-    return redirect('pos_screen')
+    return redirect('pos_screen', slug=request.business.slug)
 
 
 @login_required
-def invoice_view(request, pk):
+def invoice_view(request, slug, pk):
     """View invoice details"""
     sale = get_object_or_404(Sale, pk=pk)
     shop_name = getattr(settings, 'SHOP_NAME', 'My Retail Shop')
     return render(request, 'pos/invoice.html', {'sale': sale, 'shop_name': shop_name})
 @login_required
-def thermal_receipt(request, pk):
+def thermal_receipt(request, slug, pk):
     """View thermal printer receipt"""
     from .models import BusinessSettings
-    sale = get_object_or_404(Sale, pk=pk)
-    shop_name = getattr(settings, 'SHOP_NAME', 'My Retail Shop')
+    sale = get_object_or_404(Sale, pk=pk, business=request.business)
     
     # Get business settings
     try:
-        business_settings = BusinessSettings.get_settings()
+        business_settings = BusinessSettings.get_settings(request.business)
     except:
         business_settings = None
     
     return render(request, 'pos/receipt_thermal.html', {
         'sale': sale, 
-        'shop_name': shop_name,
-        'business_settings': business_settings
-    })
-
-    # Get business settings
-    try:
-        business_settings = BusinessSettings.get_settings()
-    except:
-        business_settings = None
-
-    return render(request, 'pos/receipt_thermal.html', {
-        'sale': sale,
-        'shop_name': shop_name,
+        'shop_name': request.business.name,
         'business_settings': business_settings
     })
 
 
 
 @login_required
-def invoice_pdf(request, pk):
+def invoice_pdf(request, slug, pk):
     """Generate PDF invoice"""
     sale = get_object_or_404(Sale, pk=pk)
     shop_name = getattr(settings, 'SHOP_NAME', 'My Retail Shop')
@@ -715,8 +937,8 @@ def invoice_pdf(request, pk):
     return response
 
 
-@login_required
-def sales_report(request):
+@business_required
+def sales_report(request, slug=None):
     """Daily sales report"""
     # Get date filter
     date_str = request.GET.get('date')
@@ -728,8 +950,8 @@ def sales_report(request):
     else:
         filter_date = datetime.now().date()
     
-    # Get sales for the date
-    sales = Sale.objects.filter(date__date=filter_date).prefetch_related('items')
+    # Get sales for the date - filter by business
+    sales = Sale.objects.filter(business=request.business, date__date=filter_date).prefetch_related('items')
     
     # Calculate summary
     summary = sales.aggregate(
@@ -747,8 +969,153 @@ def sales_report(request):
     return render(request, 'pos/sales_report.html', context)
 
 
-@login_required
-def search_product_by_code(request):
+@business_required
+def sales_list(request, slug=None):
+    """List all sales with filters and pagination"""
+    from django.core.paginator import Paginator
+    from datetime import datetime, timedelta
+    
+    # Get all sales for the business
+    sales = Sale.objects.filter(business=request.business).select_related('cashier', 'customer').prefetch_related('items', 'payments')
+    
+    # Date range filter
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    date_range = request.GET.get('date_range', '')
+    
+    # Quick date range filters
+    if date_range == 'today':
+        today = datetime.now().date()
+        sales = sales.filter(date__date=today)
+    elif date_range == 'yesterday':
+        yesterday = datetime.now().date() - timedelta(days=1)
+        sales = sales.filter(date__date=yesterday)
+    elif date_range == 'this_week':
+        today = datetime.now().date()
+        start_of_week = today - timedelta(days=today.weekday())
+        sales = sales.filter(date__date__gte=start_of_week)
+    elif date_range == 'this_month':
+        today = datetime.now().date()
+        start_of_month = today.replace(day=1)
+        sales = sales.filter(date__date__gte=start_of_month)
+    elif date_range == 'last_month':
+        today = datetime.now().date()
+        first_of_this_month = today.replace(day=1)
+        last_month_end = first_of_this_month - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        sales = sales.filter(date__date__gte=last_month_start, date__date__lte=last_month_end)
+    elif start_date and end_date:
+        # Custom date range
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            sales = sales.filter(date__date__gte=start, date__date__lte=end)
+        except ValueError:
+            pass
+    elif start_date:
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            sales = sales.filter(date__date__gte=start)
+        except ValueError:
+            pass
+    elif end_date:
+        try:
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            sales = sales.filter(date__date__lte=end)
+        except ValueError:
+            pass
+    
+    # Cashier filter
+    cashier_id = request.GET.get('cashier')
+    if cashier_id:
+        sales = sales.filter(cashier_id=cashier_id)
+    
+    # Customer filter
+    customer_id = request.GET.get('customer')
+    if customer_id:
+        sales = sales.filter(customer_id=customer_id)
+    
+    # Search by invoice number
+    search = request.GET.get('search', '').strip()
+    if search:
+        sales = sales.filter(invoice_number__icontains=search)
+    
+    # Payment method filter
+    payment_method_id = request.GET.get('payment_method')
+    if payment_method_id:
+        sales = sales.filter(payments__payment_method_id=payment_method_id).distinct()
+    
+    # Minimum amount filter
+    min_amount = request.GET.get('min_amount')
+    if min_amount:
+        try:
+            sales = sales.filter(total__gte=Decimal(min_amount))
+        except:
+            pass
+    
+    # Maximum amount filter
+    max_amount = request.GET.get('max_amount')
+    if max_amount:
+        try:
+            sales = sales.filter(total__lte=Decimal(max_amount))
+        except:
+            pass
+    
+    # Order by
+    order_by = request.GET.get('order_by', '-date')
+    if order_by in ['date', '-date', 'total', '-total', 'invoice_number', '-invoice_number']:
+        sales = sales.order_by(order_by)
+    
+    # Calculate summary before pagination
+    summary = sales.aggregate(
+        total_sales=Sum('total'),
+        total_vat=Sum('vat_amount'),
+        total_discounts=Sum('discount_amount'),
+        total_items=Sum('items__quantity'),
+        transaction_count=Count('id')
+    )
+    
+    # Pagination
+    per_page = request.GET.get('per_page', '50')
+    try:
+        per_page = int(per_page)
+        if per_page not in [25, 50, 100, 200]:
+            per_page = 50
+    except:
+        per_page = 50
+    
+    paginator = Paginator(sales, per_page)
+    page = request.GET.get('page', 1)
+    sales_page = paginator.get_page(page)
+    
+    # Get filter options
+    cashiers = User.objects.filter(business_memberships__business=request.business).distinct()
+    customers = Customer.objects.filter(business=request.business)
+    payment_methods = PaymentMethod.objects.filter(business=request.business)
+    
+    context = {
+        'sales': sales_page,
+        'summary': summary,
+        'cashiers': cashiers,
+        'customers': customers,
+        'payment_methods': payment_methods,
+        'search': search,
+        'start_date': start_date,
+        'end_date': end_date,
+        'date_range': date_range,
+        'cashier_id': cashier_id,
+        'customer_id': customer_id,
+        'payment_method_id': payment_method_id,
+        'min_amount': min_amount,
+        'max_amount': max_amount,
+        'order_by': order_by,
+        'per_page': per_page,
+    }
+    return render(request, 'pos/sales_list.html', context)
+
+
+@business_required
+def search_product_by_code(request, slug=None):
     """API endpoint to search product by barcode/product code"""
     code = request.GET.get('code', '').strip()
     
@@ -756,7 +1123,7 @@ def search_product_by_code(request):
         return JsonResponse({'error': 'No code provided'}, status=400)
     
     try:
-        product = Product.objects.get(product_code=code)
+        product = Product.objects.get(business=request.business, product_code=code)
         return JsonResponse({
             'success': True,
             'product': {
@@ -781,13 +1148,13 @@ def search_product_by_code(request):
         }, status=500)
 
 
-@login_required
-def stock_list(request):
+@business_required
+def stock_list(request, slug=None):
     """View all products with stock information"""
     # Filter options
     status_filter = request.GET.get('status', 'all')
     
-    products = Product.objects.select_related('category').all()
+    products = Product.objects.filter(business=request.business).select_related('category').all()
     
     if status_filter == 'low':
         products = products.filter(stock_quantity__lte=models.F('low_stock_threshold'))
@@ -801,10 +1168,10 @@ def stock_list(request):
     return render(request, 'pos/stock_list.html', context)
 
 
-@login_required
-def stock_adjust(request, pk):
+@business_required
+def stock_adjust(request, slug=None, pk=None):
     """Adjust stock for a product"""
-    product = get_object_or_404(Product, pk=pk)
+    product = get_object_or_404(Product, pk=pk, business=request.business)
     
     if request.method == 'POST':
         adjustment_type = request.POST.get('adjustment_type')
@@ -813,7 +1180,7 @@ def stock_adjust(request, pk):
         
         if quantity_change == 0:
             messages.error(request, 'Quantity change cannot be zero!')
-            return redirect('stock_adjust', pk=pk)
+            return redirect('stock_adjust', slug=request.business.slug, pk=pk)
         
         try:
             previous_qty = product.stock_quantity
@@ -823,7 +1190,7 @@ def stock_adjust(request, pk):
             else:
                 if not product.has_sufficient_stock(abs(quantity_change)):
                     messages.error(request, 'Cannot deduct more than available stock!')
-                    return redirect('stock_adjust', pk=pk)
+                    return redirect('stock_adjust', slug=request.business.slug, pk=pk)
                 product.deduct_stock(abs(quantity_change))
             
             # Create adjustment record
@@ -837,7 +1204,7 @@ def stock_adjust(request, pk):
             )
             
             messages.success(request, f'Stock adjusted successfully! New quantity: {product.stock_quantity}')
-            return redirect('stock_list')
+            return redirect('stock_list', slug=request.business.slug)
             
         except Exception as e:
             messages.error(request, f'Error adjusting stock: {str(e)}')
@@ -845,10 +1212,10 @@ def stock_adjust(request, pk):
     return render(request, 'pos/stock_adjust.html', {'product': product})
 
 
-@login_required
-def stock_history(request, pk):
+@business_required
+def stock_history(request, slug=None, pk=None):
     """View stock adjustment history for a product"""
-    product = get_object_or_404(Product, pk=pk)
+    product = get_object_or_404(Product, business=request.business, pk=pk)
     adjustments = product.stock_adjustments.all()
     
     context = {
@@ -858,15 +1225,19 @@ def stock_history(request, pk):
     return render(request, 'pos/stock_history.html', context)
 
 
-@login_required
-def low_stock_alert(request):
+@business_required
+def low_stock_alert(request, slug=None):
     """View products with low or out of stock"""
     low_stock = Product.objects.filter(
+        business=request.business,
         stock_quantity__lte=models.F('low_stock_threshold'),
         stock_quantity__gt=0
     ).select_related('category')
     
-    out_of_stock = Product.objects.filter(stock_quantity=0).select_related('category')
+    out_of_stock = Product.objects.filter(
+        business=request.business,
+        stock_quantity=0
+    ).select_related('category')
     
     context = {
         'low_stock_products': low_stock,
@@ -877,10 +1248,10 @@ def low_stock_alert(request):
 
 # ==================== SUPPLIER MANAGEMENT ====================
 
-@login_required
-def supplier_list(request):
+@business_required
+def supplier_list(request, slug=None):
     """List all suppliers"""
-    suppliers = Supplier.objects.all()
+    suppliers = Supplier.objects.filter(business=request.business).all()
     
     # Add purchase statistics for each supplier
     for supplier in suppliers:
@@ -893,8 +1264,8 @@ def supplier_list(request):
     return render(request, 'pos/supplier_list.html', context)
 
 
-@login_required
-def supplier_create(request):
+@business_required
+def supplier_create(request, slug=None):
     """Create a new supplier"""
     if request.method == 'POST':
         name = request.POST.get('name')
@@ -907,9 +1278,10 @@ def supplier_create(request):
         
         if not name:
             messages.error(request, 'Supplier name is required!')
-            return redirect('supplier_create')
+            return redirect('supplier_create', slug=request.business.slug)
         
         Supplier.objects.create(
+            business=request.business,
             name=name,
             contact_person=contact_person,
             email=email,
@@ -920,15 +1292,15 @@ def supplier_create(request):
         )
         
         messages.success(request, f'Supplier "{name}" created successfully!')
-        return redirect('supplier_list')
+        return redirect('supplier_list', slug=request.business.slug)
     
     return render(request, 'pos/supplier_form.html')
 
 
-@login_required
-def supplier_edit(request, pk):
+@business_required
+def supplier_edit(request, slug=None, pk=None):
     """Edit an existing supplier"""
-    supplier = get_object_or_404(Supplier, pk=pk)
+    supplier = get_object_or_404(Supplier, business=request.business, pk=pk)
     
     if request.method == 'POST':
         supplier.name = request.POST.get('name')
@@ -941,11 +1313,11 @@ def supplier_edit(request, pk):
         
         if not supplier.name:
             messages.error(request, 'Supplier name is required!')
-            return redirect('supplier_edit', pk=pk)
+            return redirect('supplier_edit', slug=request.business.slug, pk=pk)
         
         supplier.save()
         messages.success(request, f'Supplier "{supplier.name}" updated successfully!')
-        return redirect('supplier_list')
+        return redirect('supplier_list', slug=request.business.slug)
     
     context = {
         'supplier': supplier,
@@ -953,16 +1325,16 @@ def supplier_edit(request, pk):
     return render(request, 'pos/supplier_form.html', context)
 
 
-@login_required
-def supplier_delete(request, pk):
+@business_required
+def supplier_delete(request, slug=None, pk=None):
     """Delete a supplier"""
-    supplier = get_object_or_404(Supplier, pk=pk)
+    supplier = get_object_or_404(Supplier, business=request.business, pk=pk)
     
     if request.method == 'POST':
         name = supplier.name
         supplier.delete()
         messages.success(request, f'Supplier "{name}" deleted successfully!')
-        return redirect('supplier_list')
+        return redirect('supplier_list', slug=request.business.slug)
     
     context = {
         'supplier': supplier,
@@ -972,10 +1344,10 @@ def supplier_delete(request, pk):
 
 # ==================== PURCHASE MANAGEMENT ====================
 
-@login_required
-def purchase_list(request):
+@business_required
+def purchase_list(request, slug=None):
     """List all purchases"""
-    purchases = Purchase.objects.select_related('supplier').all()
+    purchases = Purchase.objects.filter(business=request.business).select_related('supplier').all()
     
     # Filter by status if provided
     status_filter = request.GET.get('status')
@@ -989,8 +1361,9 @@ def purchase_list(request):
     return render(request, 'pos/purchase_list.html', context)
 
 
-@login_required
-def purchase_create(request):
+@business_required
+@business_required
+def purchase_create(request, slug=None):
     """Create a new purchase order"""
     if request.method == 'POST':
         supplier_id = request.POST.get('supplier')
@@ -1004,15 +1377,16 @@ def purchase_create(request):
         
         if not supplier_id:
             messages.error(request, 'Please select a supplier!')
-            return redirect('purchase_create')
+            return redirect('purchase_create', slug=request.business.slug)
         
         if not product_ids or not any(product_ids):
             messages.error(request, 'Please add at least one product!')
-            return redirect('purchase_create')
+            return redirect('purchase_create', slug=request.business.slug)
         
         # Create purchase
-        supplier = get_object_or_404(Supplier, pk=supplier_id)
+        supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
         purchase = Purchase.objects.create(
+            business=request.business,
             supplier=supplier,
             expected_delivery=expected_delivery if expected_delivery else None,
             notes=notes,
@@ -1023,7 +1397,7 @@ def purchase_create(request):
         subtotal = Decimal('0.00')
         for i, product_id in enumerate(product_ids):
             if product_id and quantities[i] and unit_costs[i]:
-                product = get_object_or_404(Product, pk=product_id)
+                product = get_object_or_404(Product, pk=product_id, business=request.business)
                 quantity = int(quantities[i])
                 unit_cost = Decimal(unit_costs[i])
                 
@@ -1043,11 +1417,11 @@ def purchase_create(request):
         purchase.save()
         
         messages.success(request, f'Purchase order {purchase.purchase_number} created successfully!')
-        return redirect('purchase_detail', pk=purchase.pk)
+        return redirect('purchase_detail', slug=request.business.slug, pk=purchase.pk)
     
     # GET request
-    suppliers = Supplier.objects.filter(is_active=True)
-    products = Product.objects.select_related('category').all()
+    suppliers = Supplier.objects.filter(business=request.business, is_active=True)
+    products = Product.objects.filter(business=request.business).select_related('category').all()
     
     context = {
         'suppliers': suppliers,
@@ -1056,10 +1430,10 @@ def purchase_create(request):
     return render(request, 'pos/purchase_form.html', context)
 
 
-@login_required
-def purchase_detail(request, pk):
+@business_required
+def purchase_detail(request, slug=None, pk=None):
     """View purchase order details"""
-    purchase = get_object_or_404(Purchase, pk=pk)
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     items = purchase.items.select_related('product').all()
     
     context = {
@@ -1069,10 +1443,10 @@ def purchase_detail(request, pk):
     return render(request, 'pos/purchase_detail.html', context)
 
 
-@login_required
-def purchase_receive(request, pk):
+@business_required
+def purchase_receive(request, slug=None, pk=None):
     """Mark purchase as received and update stock"""
-    purchase = get_object_or_404(Purchase, pk=pk)
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     
     if request.method == 'POST':
         if purchase.status == 'received':
@@ -1084,7 +1458,7 @@ def purchase_receive(request, pk):
             else:
                 messages.error(request, 'Failed to mark purchase as received!')
         
-        return redirect('purchase_detail', pk=pk)
+        return redirect('purchase_detail', slug=request.business.slug, pk=pk)
     
     context = {
         'purchase': purchase,
@@ -1092,10 +1466,10 @@ def purchase_receive(request, pk):
     return render(request, 'pos/purchase_receive_confirm.html', context)
 
 
-@login_required
-def purchase_cancel(request, pk):
+@business_required
+def purchase_cancel(request, slug=None, pk=None):
     """Cancel a purchase order"""
-    purchase = get_object_or_404(Purchase, pk=pk)
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     
     if request.method == 'POST':
         if purchase.status == 'received':
@@ -1105,7 +1479,7 @@ def purchase_cancel(request, pk):
             purchase.save()
             messages.success(request, f'Purchase {purchase.purchase_number} cancelled!')
         
-        return redirect('purchase_detail', pk=pk)
+        return redirect('purchase_detail', slug=request.business.slug, pk=pk)
     
     context = {
         'purchase': purchase,
@@ -1116,23 +1490,25 @@ def purchase_cancel(request, pk):
 
 # ==================== EXPIRY MANAGEMENT ====================
 
-@login_required
-def expiry_alert(request):
+@business_required
+def expiry_alert(request, slug=None):
     """View products that are expired or expiring soon"""
     from django.utils import timezone
     from datetime import timedelta
     
     today = timezone.now().date()
     
-    # Get expired products
+    # Get expired products for current business
     expired_products = Product.objects.filter(
+        business=request.business,
         expiry_date__lt=today,
         stock_quantity__gt=0
     ).select_related('category')
     
-    # Get expiring soon products
+    # Get expiring soon products for current business
     expiring_soon = []
     products_with_expiry = Product.objects.filter(
+        business=request.business,
         expiry_date__gte=today,
         stock_quantity__gt=0
     ).select_related('category')
@@ -1149,10 +1525,10 @@ def expiry_alert(request):
 
 
 
-@login_required
-def update_expiry(request, pk):
+@business_required
+def update_expiry(request, slug=None, pk=None):
     """Update product expiry date"""
-    product = get_object_or_404(Product, pk=pk)
+    product = get_object_or_404(Product, business=request.business, pk=pk)
     
     if request.method == 'POST':
         expiry_date_str = request.POST.get('expiry_date')
@@ -1169,7 +1545,7 @@ def update_expiry(request, pk):
                 expiry_date_obj = dt.strptime(expiry_date_str, '%Y-%m-%d').date()
             except ValueError:
                 messages.error(request, 'Invalid date format')
-                return redirect('update_expiry', pk=pk)
+                return redirect('update_expiry', slug=request.business.slug, pk=pk)
         
         # Update expiry information
         product.expiry_date = expiry_date_obj
@@ -1184,7 +1560,7 @@ def update_expiry(request, pk):
         else:
             messages.success(request, 'Expiry date removed')
         
-        return redirect('stock_list')
+        return redirect('stock_list', slug=request.business.slug)
     
     context = {
         'product': product,
@@ -1203,10 +1579,10 @@ def login_view(request):
     # TEST MODE: Auto-login for testing (REMOVE IN PRODUCTION!)
     if getattr(settings, 'TEST_MODE', False):
         from django.contrib.auth import get_user_model
-        User = get_user_model()
+        UserModel = get_user_model()
         
         # Get or create test user
-        test_user, created = User.objects.get_or_create(
+        test_user, created = UserModel.objects.get_or_create(
             username='testuser',
             defaults={
                 'email': 'test@example.com',
@@ -1218,16 +1594,27 @@ def login_view(request):
         # Auto-login
         auth_login(request, test_user, backend='django.contrib.auth.backends.ModelBackend')
         messages.success(request, '🧪 TEST MODE: Auto-logged in as testuser')
-        return redirect('dashboard')
+        return redirect('business_list')
     
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('business_list')
     
     if request.method == 'POST':
-        username = request.POST.get('username')
+        username_or_email = request.POST.get('username')
         password = request.POST.get('password')
         
-        user = authenticate(request, username=username, password=password)
+        # Try to authenticate with username first
+        user = authenticate(request, username=username_or_email, password=password)
+        
+        # If authentication fails, try with email
+        if user is None:
+            try:
+                # Check if input is an email and get the user
+                user_obj = User.objects.get(email=username_or_email)
+                user = authenticate(request, username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                user = None
+        
         if user is not None:
             auth_login(request, user)
             
@@ -1235,15 +1622,15 @@ def login_view(request):
             ActivityLog.log_activity(
                 user=user,
                 action_type='login',
-                description=f'User logged in: {username}',
+                description=f'User logged in: {user.username}',
                 request=request
             )
             
-            next_url = request.GET.get('next', 'dashboard')
+            next_url = request.GET.get('next', 'business_list')
             messages.success(request, f'Welcome back, {user.username}!')
             return redirect(next_url)
         else:
-            messages.error(request, 'Invalid username or password')
+            messages.error(request, 'Invalid username/email or password')
     
     return render(request, 'pos/login.html')
 
@@ -1263,6 +1650,110 @@ def logout_view(request):
     messages.success(request, 'You have been logged out successfully')
     return redirect('login')
 
+
+# ==================== PASSWORD RESET ====================
+
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
+from django.urls import reverse
+
+def password_reset_request(request):
+    """Request password reset via email"""
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip()
+        
+        if email:
+            users = User.objects.filter(email=email)
+            
+            if users.exists():
+                for user in users:
+                    # Generate token
+                    token = default_token_generator.make_token(user)
+                    uid = urlsafe_base64_encode(force_bytes(user.pk))
+                    
+                    # Build reset URL
+                    reset_url = request.build_absolute_uri(
+                        reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+                    )
+                    
+                    # Send email
+                    subject = 'Password Reset Request - POS System'
+                    message = f'''Hello {user.get_full_name() or user.username},
+
+You requested a password reset for your POS account.
+
+Click the link below to reset your password:
+{reset_url}
+
+This link will expire in 24 hours.
+
+If you didn't request this, please ignore this email.
+
+Best regards,
+POS System Team'''
+                    
+                    try:
+                        send_mail(
+                            subject,
+                            message,
+                            settings.DEFAULT_FROM_EMAIL,
+                            [user.email],
+                            fail_silently=False,
+                        )
+                    except Exception as e:
+                        messages.error(request, 'Error sending email. Please contact support.')
+                        return render(request, 'pos/password_reset_request.html')
+        
+        # Always show success to prevent email enumeration
+        messages.success(request, 'If an account exists with that email, you will receive password reset instructions.')
+        return redirect('login')
+    
+    return render(request, 'pos/password_reset_request.html')
+
+
+def password_reset_confirm(request, uidb64, token):
+    """Confirm password reset with token"""
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+    
+    if user and default_token_generator.check_token(user, token):
+        if request.method == 'POST':
+            password1 = request.POST.get('password1')
+            password2 = request.POST.get('password2')
+            
+            if password1 and password2:
+                if password1 == password2:
+                    if len(password1) >= 8:
+                        user.set_password(password1)
+                        user.save()
+                        
+                        # Log activity
+                        ActivityLog.log_activity(
+                            user=user,
+                            action_type='update',
+                            model_name='User',
+                            object_id=user.id,
+                            description='Password reset via email',
+                            request=request
+                        )
+                        
+                        messages.success(request, 'Password reset successful! You can now login with your new password.')
+                        return redirect('login')
+                    else:
+                        messages.error(request, 'Password must be at least 8 characters long.')
+                else:
+                    messages.error(request, 'Passwords do not match.')
+            else:
+                messages.error(request, 'Please enter both password fields.')
+        
+        return render(request, 'pos/password_reset_confirm.html', {'validlink': True})
+    else:
+        return render(request, 'pos/password_reset_confirm.html', {'validlink': False})
 
 
 # ==================== CASHIER REPORTS ====================
@@ -1332,17 +1823,25 @@ from django.contrib.auth.models import User, Group
 from .models import UserProfile, ActivityLog
 
 @login_required
+@business_required
 @manager_required
-def user_list(request):
-    """List all users"""
-    users = User.objects.prefetch_related('groups', 'profile').all()
+def user_list(request, slug):
+    """List all users in this business"""
+    # Get users who are members of this business
+    memberships = request.business.memberships.filter(is_active=True).select_related('user')
+    user_ids = memberships.values_list('user_id', flat=True)
+    users = User.objects.filter(id__in=user_ids).prefetch_related('groups', 'profile')
     
-    # Add statistics for each user
+    # Add statistics for each user (filtered by business)
     for user in users:
-        user.total_sales = Sale.objects.filter(cashier=user).count()
-        user.total_revenue = Sale.objects.filter(cashier=user).aggregate(
+        user.total_sales = Sale.objects.filter(cashier=user, business=request.business).count()
+        user.total_revenue = Sale.objects.filter(cashier=user, business=request.business).aggregate(
             total=Sum('total')
         )['total'] or 0
+        
+        # Get user's role in this business
+        membership = memberships.filter(user=user).first()
+        user.business_role = membership.get_role_display() if membership else 'No Role'
     
     context = {
         'users': users,
@@ -1352,7 +1851,7 @@ def user_list(request):
 
 @login_required
 @manager_required
-def user_create(request):
+def user_create(request, slug):
     """Create a new user"""
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -1441,7 +1940,7 @@ def user_create(request):
 
 @login_required
 @manager_required
-def user_edit(request, pk):
+def user_edit(request, slug, pk):
     """Edit existing user"""
     user = get_object_or_404(User, pk=pk)
     
@@ -1518,7 +2017,7 @@ def user_edit(request, pk):
 
 @login_required
 @manager_required
-def user_delete(request, pk):
+def user_delete(request, slug, pk):
     """Delete user"""
     user = get_object_or_404(User, pk=pk)
     
@@ -1557,7 +2056,7 @@ def user_delete(request, pk):
 
 
 @login_required
-def user_profile(request):
+def user_profile(request, slug=None):
     """View and edit own profile"""
     user = request.user
     profile, created = UserProfile.objects.get_or_create(user=user)
@@ -1579,16 +2078,22 @@ def user_profile(request):
         if new_password:
             if not current_password:
                 messages.error(request, 'Current password is required to change password!')
-                return redirect('user_profile')
+                if slug:
+                    return redirect('user_profile', slug=slug)
+                return redirect('business_list')
             
             if not user.check_password(current_password):
                 messages.error(request, 'Current password is incorrect!')
-                return redirect('user_profile')
+                if slug:
+                    return redirect('user_profile', slug=slug)
+                return redirect('business_list')
             
             password_confirm = request.POST.get('password_confirm')
             if new_password != password_confirm:
                 messages.error(request, 'New passwords do not match!')
-                return redirect('user_profile')
+                if slug:
+                    return redirect('user_profile', slug=slug)
+                return redirect('business_list')
             
             user.set_password(new_password)
             messages.success(request, 'Password changed successfully! Please login again.')
@@ -1610,7 +2115,9 @@ def user_profile(request):
             if not new_password:
                 messages.success(request, 'Profile updated successfully!')
             
-            return redirect('user_profile')
+            if slug:
+                return redirect('user_profile', slug=slug)
+            return redirect('business_list')
             
         except Exception as e:
             messages.error(request, f'Error updating profile: {str(e)}')
@@ -1634,10 +2141,11 @@ def user_profile(request):
 from .models import BusinessSettings
 
 @login_required
+@login_required
 @manager_required
-def business_settings(request):
-    """View and edit business settings"""
-    settings = BusinessSettings.get_settings()
+def business_settings(request, slug=None):
+    """View and edit business settings (legacy view)"""
+    settings = BusinessSettings.get_settings(request.business)
     
     if request.method == 'POST':
         # Business Information
@@ -1707,7 +2215,9 @@ def business_settings(request):
             )
             
             messages.success(request, 'Business settings updated successfully!')
-            return redirect('business_settings')
+            if slug:
+                return redirect('business_settings', slug=slug)
+            return redirect('business_list')
             
         except Exception as e:
             messages.error(request, f'Error updating settings: {str(e)}')
@@ -1721,10 +2231,16 @@ def business_settings(request):
 # ==================== ACTIVITY LOG ====================
 
 @login_required
+@business_required
 @manager_required
-def activity_log(request):
-    """View system activity logs"""
-    logs = ActivityLog.objects.select_related('user').all()
+def activity_log(request, slug=None):
+    """View activity logs for this business"""
+    # Get users in this business
+    memberships = request.business.memberships.filter(is_active=True).select_related('user')
+    business_user_ids = memberships.values_list('user_id', flat=True)
+    
+    # Filter logs by users in this business
+    logs = ActivityLog.objects.filter(user_id__in=business_user_ids).select_related('user')
     
     # Filter by user
     user_filter = request.GET.get('user')
@@ -1751,8 +2267,8 @@ def activity_log(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # Get all users for filter
-    users = User.objects.all()
+    # Get users in this business for filter
+    users = User.objects.filter(id__in=business_user_ids)
     
     context = {
         'page_obj': page_obj,
@@ -1770,10 +2286,10 @@ def activity_log(request):
 
 from .models import Customer
 
-@login_required
-def customer_list(request):
+@business_required
+def customer_list(request, slug=None):
     """List all customers"""
-    customers = Customer.objects.all()
+    customers = Customer.objects.filter(business=request.business)
     
     # Search
     search = request.GET.get('search', '')
@@ -1798,8 +2314,8 @@ def customer_list(request):
     return render(request, 'pos/customer_list.html', context)
 
 
-@login_required
-def customer_create(request):
+@business_required
+def customer_create(request, slug=None):
     """Create new customer"""
     if request.method == 'POST':
         name = request.POST.get('name')
@@ -1813,6 +2329,7 @@ def customer_create(request):
         
         try:
             customer = Customer.objects.create(
+                business=request.business,
                 name=name,
                 phone=phone,
                 email=email,
@@ -1834,7 +2351,7 @@ def customer_create(request):
             )
             
             messages.success(request, f'Customer "{customer.name}" created successfully! Customer Code: {customer.customer_code}')
-            return redirect('customer_detail', pk=customer.pk)
+            return redirect('customer_detail', slug=request.business.slug, pk=customer.pk)
             
         except Exception as e:
             messages.error(request, f'Error creating customer: {str(e)}')
@@ -1842,10 +2359,10 @@ def customer_create(request):
     return render(request, 'pos/customer_form.html')
 
 
-@login_required
-def customer_edit(request, pk):
+@business_required
+def customer_edit(request, slug=None, pk=None):
     """Edit existing customer"""
-    customer = get_object_or_404(Customer, pk=pk)
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
     
     if request.method == 'POST':
         customer.name = request.POST.get('name')
@@ -1872,7 +2389,7 @@ def customer_edit(request, pk):
             )
             
             messages.success(request, f'Customer "{customer.name}" updated successfully!')
-            return redirect('customer_detail', pk=customer.pk)
+            return redirect('customer_detail', slug=request.business.slug, pk=customer.pk)
             
         except Exception as e:
             messages.error(request, f'Error updating customer: {str(e)}')
@@ -1883,11 +2400,11 @@ def customer_edit(request, pk):
     return render(request, 'pos/customer_form.html', context)
 
 
-@login_required
-def customer_detail(request, pk):
+@business_required
+def customer_detail(request, slug=None, pk=None):
     """View customer details and purchase history"""
-    customer = get_object_or_404(Customer, pk=pk)
-    purchases = Sale.objects.filter(customer=customer).order_by('-date')[:20]
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
+    purchases = Sale.objects.filter(business=request.business, customer=customer).order_by('-date')[:20]
     
     context = {
         'customer': customer,
@@ -1899,8 +2416,8 @@ def customer_detail(request, pk):
 
 # ==================== WRITE-OFF REPORT ====================
 
-@login_required
-def writeoff_report(request):
+@business_required
+def writeoff_report(request, slug=None):
     """Comprehensive write-off report for damaged and expired goods"""
     from django.utils import timezone
     
@@ -1925,8 +2442,9 @@ def writeoff_report(request):
         except ValueError:
             start_date = end_date - timedelta(days=30)
     
-    # Get all damage/loss adjustments
+    # Get all damage/loss adjustments for current business
     writeoffs = StockAdjustment.objects.filter(
+        business=request.business,
         adjustment_type='damage',
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
@@ -2030,7 +2548,7 @@ def writeoff_report(request):
 
 @login_required
 @can_manage_purchases
-def supplier_payments(request, supplier_id):
+def supplier_payments(request, slug, supplier_id):
     """List all payments for a supplier"""
     supplier = get_object_or_404(Supplier, pk=supplier_id)
     
@@ -2059,7 +2577,7 @@ def supplier_payments(request, supplier_id):
 
 @login_required
 @can_manage_purchases
-def create_payment(request, supplier_id):
+def create_payment(request, slug, supplier_id):
     """Create a new supplier payment"""
     from .services import SupplierPaymentService
     from .models import PaymentMethod
@@ -2088,7 +2606,7 @@ def create_payment(request, supplier_id):
             )
             
             messages.success(request, f'Payment {payment.payment_number} created successfully!')
-            return redirect('supplier_payments', supplier_id=supplier.id)
+            return redirect('supplier_payments', slug=request.business.slug, supplier_id=supplier.id)
             
         except Exception as e:
             messages.error(request, f'Error creating payment: {str(e)}')
@@ -2115,7 +2633,7 @@ def create_payment(request, supplier_id):
 
 @login_required
 @can_manage_purchases
-def payment_detail(request, payment_id):
+def payment_detail(request, slug, payment_id):
     """View payment details"""
     from .models import SupplierPayment
     
@@ -2131,7 +2649,7 @@ def payment_detail(request, payment_id):
 
 @login_required
 @can_manage_purchases
-def delete_payment(request, payment_id):
+def delete_payment(request, slug, payment_id):
     """Delete a supplier payment"""
     from .models import SupplierPayment
     
@@ -2151,14 +2669,14 @@ def delete_payment(request, payment_id):
         )
         
         messages.success(request, 'Payment deleted successfully!')
-        return redirect('supplier_payments', supplier_id=supplier_id)
+        return redirect('supplier_payments', slug=request.business.slug, supplier_id=supplier_id)
     
     return render(request, 'pos/payment_confirm_delete.html', {'payment': payment})
 
 
 @login_required
 @can_manage_purchases
-def supplier_statement(request, supplier_id):
+def supplier_statement(request, slug, supplier_id):
     """Generate supplier statement"""
     from .services import SupplierStatementService
     
@@ -2247,72 +2765,78 @@ def aging_analysis(request):
 
 # ==================== Z-REPORT (END OF DAY) ====================
 
-@login_required
-@manager_required
-def z_report(request):
+@business_required
+def z_report(request, slug=None):
     """Generate Z-Report for end of day closing"""
     from django.db.models import Sum, Count
-    
+
     # Get date filter (default to today)
     report_date = request.GET.get('date')
     if report_date:
         report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
     else:
         report_date = datetime.now().date()
-    
+
     # Get all sales for the date
     sales = Sale.objects.filter(
+        business=request.business,
         date__date=report_date
     ).select_related('cashier')
-    
+
     # Calculate totals
     total_sales_count = sales.count()
     total_revenue = sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
     total_subtotal = sales.aggregate(total=Sum('subtotal'))['total'] or Decimal('0.00')
     total_vat = sales.aggregate(total=Sum('vat_amount'))['total'] or Decimal('0.00')
     total_discounts = sales.aggregate(total=Sum('discount_amount'))['total'] or Decimal('0.00')
-    
+
     # Sales by payment method
     payment_methods = SalePayment.objects.filter(
+        sale__business=request.business,
         sale__date__date=report_date
     ).values('payment_method__name').annotate(
         total=Sum('amount'),
         count=Count('id')
     ).order_by('-total')
-    
+
     # Sales by cashier
     cashier_sales = sales.values('cashier__username', 'cashier__first_name', 'cashier__last_name').annotate(
         total=Sum('total'),
         count=Count('id')
     ).order_by('-total')
-    
+
     # Get shift information if available
+    # Filter shifts by cashiers who are members of this business
+    business_cashiers = User.objects.filter(business_memberships__business=request.business)
     shifts = Shift.objects.filter(
+        cashier__in=business_cashiers,
         start_time__date=report_date
     ).select_related('cashier')
-    
+
     # Calculate cash drawer summary
     cash_payments = SalePayment.objects.filter(
+        sale__business=request.business,
         sale__date__date=report_date,
         payment_method__code='CASH'
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     # Opening cash (from shifts)
     opening_cash = shifts.aggregate(total=Sum('opening_cash'))['total'] or Decimal('0.00')
     expected_cash = opening_cash + cash_payments
-    
+
     # Closing cash (from closed shifts)
     closing_cash = shifts.filter(status='closed').aggregate(total=Sum('closing_cash'))['total'] or Decimal('0.00')
     cash_difference = closing_cash - expected_cash if closing_cash > 0 else Decimal('0.00')
-    
+
     # Top selling products
     top_products = SaleItem.objects.filter(
+        sale__business=request.business,
         sale__date__date=report_date
     ).values('product__name').annotate(
         quantity=Sum('quantity'),
         revenue=Sum('total_price')
     ).order_by('-revenue')[:10]
-    
+
     # Hourly sales breakdown
     hourly_sales = sales.extra(
         select={'hour': 'CAST(strftime("%%H", date) AS INTEGER)'}
@@ -2320,7 +2844,7 @@ def z_report(request):
         total=Sum('total'),
         count=Count('id')
     ).order_by('hour')
-    
+
     context = {
         'report_date': report_date,
         'total_sales_count': total_sales_count,
@@ -2339,13 +2863,14 @@ def z_report(request):
         'top_products': top_products,
         'hourly_sales': hourly_sales,
     }
-    
+
     return render(request, 'pos/z_report.html', context)
 
 
-@login_required
+
+@business_required
 @manager_required
-def z_report_pdf(request):
+def z_report_pdf(request, slug=None):
     """Generate Z-Report as PDF"""
     from django.db.models import Sum, Count
     
@@ -2357,7 +2882,7 @@ def z_report_pdf(request):
         report_date = datetime.now().date()
     
     # Get all sales for the date
-    sales = Sale.objects.filter(date__date=report_date)
+    sales = Sale.objects.filter(business=request.business, date__date=report_date)
     
     # Calculate totals
     total_sales_count = sales.count()
@@ -2368,6 +2893,7 @@ def z_report_pdf(request):
     
     # Sales by payment method
     payment_methods = SalePayment.objects.filter(
+        sale__business=request.business,
         sale__date__date=report_date
     ).values('payment_method__name').annotate(
         total=Sum('amount'),
@@ -2452,8 +2978,8 @@ def z_report_pdf(request):
 
 
 
-@login_required
-def analytics_api(request):
+@business_required
+def analytics_api(request, slug=None):
     """API endpoint for analytics data"""
     from django.db.models import Sum, Count, Avg
     
@@ -2484,8 +3010,9 @@ def analytics_api(request):
             start_date = today.replace(day=1)
             end_date = today
         
-        # Get sales in date range
+        # Get sales in date range for current business
         sales = Sale.objects.filter(
+            business=request.business,
             date__date__gte=start_date,
             date__date__lte=end_date
         )
@@ -2498,6 +3025,7 @@ def analytics_api(request):
         
         # Payment methods breakdown
         payment_methods = list(SalePayment.objects.filter(
+            sale__business=request.business,
             sale__date__date__gte=start_date,
             sale__date__date__lte=end_date
         ).values('payment_method__name').annotate(
@@ -2533,6 +3061,7 @@ def analytics_api(request):
         
         # Top products
         top_products = list(SaleItem.objects.filter(
+            sale__business=request.business,
             sale__date__date__gte=start_date,
             sale__date__date__lte=end_date
         ).values('product__name').annotate(
@@ -2604,8 +3133,8 @@ def analytics_api(request):
 
 
 
-@login_required
-def analytics_export_pdf(request):
+@business_required
+def analytics_export_pdf(request, slug=None):
     """Export analytics as PDF"""
     from django.db.models import Sum, Count
     from reportlab.lib.pagesizes import A4
@@ -2649,8 +3178,9 @@ def analytics_export_pdf(request):
             end_date = today
             period_label = 'This Month'
         
-        # Get sales data
+        # Get sales data for current business
         sales = Sale.objects.filter(
+            business=request.business,
             date__date__gte=start_date,
             date__date__lte=end_date
         )
@@ -2663,6 +3193,7 @@ def analytics_export_pdf(request):
         
         # Payment methods
         payment_methods = SalePayment.objects.filter(
+            sale__business=request.business,
             sale__date__date__gte=start_date,
             sale__date__date__lte=end_date
         ).values('payment_method__name').annotate(
@@ -2672,6 +3203,7 @@ def analytics_export_pdf(request):
         
         # Top products
         top_products = SaleItem.objects.filter(
+            sale__business=request.business,
             sale__date__date__gte=start_date,
             sale__date__date__lte=end_date
         ).values('product__name').annotate(
@@ -2816,8 +3348,8 @@ def analytics_export_pdf(request):
 
 
 
-@login_required
-def payment_transactions_report(request):
+@business_required
+def payment_transactions_report(request, slug=None):
     """Detailed payment transactions report with filters"""
     from django.core.paginator import Paginator
     from django.db.models import Q
@@ -2840,8 +3372,9 @@ def payment_transactions_report(request):
     else:
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     
-    # Base query
+    # Base query - filter by business
     payments = SalePayment.objects.filter(
+        business=request.business,
         sale__date__date__gte=start_date,
         sale__date__date__lte=end_date
     ).select_related('sale', 'payment_method', 'sale__customer', 'sale__cashier')
@@ -2876,7 +3409,7 @@ def payment_transactions_report(request):
     
     # Get all payment methods for filter dropdown
     from .models import PaymentMethod
-    payment_methods_list = PaymentMethod.objects.filter(is_active=True).order_by('name')
+    payment_methods_list = PaymentMethod.objects.filter(business=request.business, is_active=True).order_by('name')
     
     context = {
         'payments': payments_page,
@@ -2894,8 +3427,8 @@ def payment_transactions_report(request):
     return render(request, 'pos/payment_transactions_report.html', context)
 
 
-@login_required
-def payment_transactions_export(request):
+@business_required
+def payment_transactions_export(request, slug=None):
     """Export payment transactions as PDF"""
     from django.db.models import Q, Sum
     
@@ -2917,8 +3450,9 @@ def payment_transactions_export(request):
     else:
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     
-    # Query payments
+    # Query payments - filter by business
     payments = SalePayment.objects.filter(
+        business=request.business,
         sale__date__date__gte=start_date,
         sale__date__date__lte=end_date
     ).select_related('sale', 'payment_method', 'sale__customer', 'sale__cashier')
@@ -3024,8 +3558,8 @@ def payment_transactions_export(request):
     return response
 
 
-@login_required
-def payment_transactions_csv(request):
+@business_required
+def payment_transactions_csv(request, slug=None):
     """Export payment transactions as CSV"""
     import csv
     from django.db.models import Q
@@ -3048,8 +3582,9 @@ def payment_transactions_csv(request):
     else:
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     
-    # Query payments
+    # Query payments - filter by business
     payments = SalePayment.objects.filter(
+        business=request.business,
         sale__date__date__gte=start_date,
         sale__date__date__lte=end_date
     ).select_related('sale', 'payment_method', 'sale__customer', 'sale__cashier')
@@ -3086,3 +3621,180 @@ def payment_transactions_csv(request):
         ])
     
     return response
+
+
+# ==================== PAYMENT METHODS MANAGEMENT ====================
+
+@login_required
+@business_required
+def payment_method_list(request, slug):
+    """List all payment methods for the business"""
+    payment_methods = request.business.payment_methods.all().order_by('name')
+    
+    context = {
+        'payment_methods': payment_methods,
+    }
+    return render(request, 'pos/payment_method_list.html', context)
+
+
+@login_required
+@business_required
+def payment_method_create(request, slug):
+    """Create a new payment method"""
+    from .models import PaymentMethod
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper()
+        is_active = request.POST.get('is_active') == 'on'
+        requires_reference = request.POST.get('requires_reference') == 'on'
+        icon = request.POST.get('icon', '').strip()
+        
+        # Validation
+        if not name or not code:
+            messages.error(request, 'Name and code are required.')
+            return redirect('payment_method_create', slug=request.business.slug)
+        
+        # Check if code already exists for this business
+        if PaymentMethod.objects.filter(business=request.business, code=code).exists():
+            messages.error(request, f'Payment method with code "{code}" already exists.')
+            return redirect('payment_method_create', slug=request.business.slug)
+        
+        # Create payment method
+        payment_method = PaymentMethod.objects.create(
+            business=request.business,
+            name=name,
+            code=code,
+            is_active=is_active,
+            requires_reference=requires_reference,
+            icon=icon
+        )
+        
+        # Log activity
+        ActivityLog.objects.create(
+            business=request.business,
+            user=request.user,
+            action='create',
+            model_name='PaymentMethod',
+            object_id=payment_method.id,
+            description=f'Created payment method: {payment_method.name}'
+        )
+        
+        messages.success(request, f'Payment method "{payment_method.name}" created successfully.')
+        return redirect('payment_method_list', slug=request.business.slug)
+    
+    # Bootstrap icon suggestions
+    icon_suggestions = [
+        {'icon': 'bi-cash-coin', 'name': 'Cash'},
+        {'icon': 'bi-credit-card', 'name': 'Card'},
+        {'icon': 'bi-phone', 'name': 'Mobile Money'},
+        {'icon': 'bi-bank', 'name': 'Bank Transfer'},
+        {'icon': 'bi-wallet2', 'name': 'Wallet'},
+    ]
+    
+    context = {
+        'icon_suggestions': icon_suggestions,
+    }
+    return render(request, 'pos/payment_method_form.html', context)
+
+
+@login_required
+@business_required
+def payment_method_edit(request, slug, pk):
+    """Edit an existing payment method"""
+    from .models import PaymentMethod
+    
+    payment_method = get_object_or_404(PaymentMethod, pk=pk, business=request.business)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper()
+        is_active = request.POST.get('is_active') == 'on'
+        requires_reference = request.POST.get('requires_reference') == 'on'
+        icon = request.POST.get('icon', '').strip()
+        
+        # Validation
+        if not name or not code:
+            messages.error(request, 'Name and code are required.')
+            return redirect('payment_method_edit', slug=request.business.slug, pk=pk)
+        
+        # Check if code already exists for another payment method
+        if PaymentMethod.objects.filter(business=request.business, code=code).exclude(pk=pk).exists():
+            messages.error(request, f'Payment method with code "{code}" already exists.')
+            return redirect('payment_method_edit', slug=request.business.slug, pk=pk)
+        
+        # Update payment method
+        payment_method.name = name
+        payment_method.code = code
+        payment_method.is_active = is_active
+        payment_method.requires_reference = requires_reference
+        payment_method.icon = icon
+        payment_method.save()
+        
+        # Log activity
+        ActivityLog.objects.create(
+            business=request.business,
+            user=request.user,
+            action='update',
+            model_name='PaymentMethod',
+            object_id=payment_method.id,
+            description=f'Updated payment method: {payment_method.name}'
+        )
+        
+        messages.success(request, f'Payment method "{payment_method.name}" updated successfully.')
+        return redirect('payment_method_list', slug=request.business.slug)
+    
+    # Bootstrap icon suggestions
+    icon_suggestions = [
+        {'icon': 'bi-cash-coin', 'name': 'Cash'},
+        {'icon': 'bi-credit-card', 'name': 'Card'},
+        {'icon': 'bi-phone', 'name': 'Mobile Money'},
+        {'icon': 'bi-bank', 'name': 'Bank Transfer'},
+        {'icon': 'bi-wallet2', 'name': 'Wallet'},
+    ]
+    
+    context = {
+        'payment_method': payment_method,
+        'icon_suggestions': icon_suggestions,
+    }
+    return render(request, 'pos/payment_method_form.html', context)
+
+
+@login_required
+@business_required
+def payment_method_delete(request, slug, pk):
+    """Delete a payment method"""
+    from .models import PaymentMethod
+    
+    payment_method = get_object_or_404(PaymentMethod, pk=pk, business=request.business)
+    
+    # Check if payment method is being used
+    if payment_method.salepayment_set.exists():
+        messages.error(request, f'Cannot delete "{payment_method.name}" because it has been used in sales.')
+        return redirect('payment_method_list', slug=request.business.slug)
+    
+    if payment_method.supplierpayment_set.exists():
+        messages.error(request, f'Cannot delete "{payment_method.name}" because it has been used in supplier payments.')
+        return redirect('payment_method_list', slug=request.business.slug)
+    
+    if request.method == 'POST':
+        name = payment_method.name
+        
+        # Log activity before deletion
+        ActivityLog.objects.create(
+            business=request.business,
+            user=request.user,
+            action='delete',
+            model_name='PaymentMethod',
+            object_id=payment_method.id,
+            description=f'Deleted payment method: {name}'
+        )
+        
+        payment_method.delete()
+        messages.success(request, f'Payment method "{name}" deleted successfully.')
+        return redirect('payment_method_list', slug=request.business.slug)
+    
+    context = {
+        'payment_method': payment_method,
+    }
+    return render(request, 'pos/payment_method_confirm_delete.html', context)

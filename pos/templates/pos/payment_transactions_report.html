@@ -48,10 +48,10 @@
             <p class="text-muted">Detailed payment transactions with reference numbers</p>
         </div>
         <div>
-            <a href="{% url 'payment_transactions_export' %}?{{ request.GET.urlencode }}" class="btn btn-success" target="_blank">
+            <a href="{% url 'payment_transactions_export' slug=request.business.slug  %}?{{ request.GET.urlencode }}" class="btn btn-success" target="_blank">
                 <i class="bi bi-file-pdf"></i> Export PDF
             </a>
-            <a href="{% url 'payment_transactions_csv' %}?{{ request.GET.urlencode }}" class="btn btn-primary">
+            <a href="{% url 'payment_transactions_csv' slug=request.business.slug  %}?{{ request.GET.urlencode }}" class="btn btn-primary">
                 <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
             </a>
         </div>
@@ -81,7 +81,7 @@
 
     <!-- Filters -->
     <div class="filter-card">
-        <form method="GET" action="{% url 'payment_transactions_report' %}">
+        <form method="GET" action="{% url 'payment_transactions_report' slug=request.business.slug  %}">
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Start Date</label>
@@ -110,7 +110,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-funnel"></i> Apply Filters
                     </button>
-                    <a href="{% url 'payment_transactions_report' %}" class="btn btn-secondary">
+                    <a href="{% url 'payment_transactions_report' slug=request.business.slug  %}" class="btn btn-secondary">
                         <i class="bi bi-x-circle"></i> Clear Filters
                     </a>
                 </div>
@@ -143,7 +143,7 @@
                                 <small class="text-muted">{{ payment.sale.date|date:"h:i A" }}</small>
                             </td>
                             <td>
-                                <a href="{% url 'invoice_view' payment.sale.pk %}" class="text-decoration-none">
+                                <a href="{% url 'invoice_view' slug=request.business.slug pk=payment.sale.pk %}" class="text-decoration-none">
                                     {{ payment.sale.invoice_number }}
                                 </a>
                             </td>
@@ -183,7 +183,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'invoice_view' payment.sale.pk %}" class="btn btn-sm btn-outline-primary" title="View Invoice">
+                                <a href="{% url 'invoice_view' slug=request.business.slug pk=payment.sale.pk %}" class="btn btn-sm btn-outline-primary" title="View Invoice">
                                     <i class="bi bi-eye"></i>
                                 </a>
                             </td>

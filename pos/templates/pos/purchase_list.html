@@ -8,7 +8,7 @@
         <h2><i class="bi bi-bag-check"></i> Purchase Orders</h2>
     </div>
     <div class="col text-end">
-        <a href="{% url 'purchase_create' %}" class="btn btn-primary">
+        <a href="{% url 'purchase_create' slug=request.business.slug  %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> New Purchase Order
         </a>
     </div>
@@ -67,7 +67,7 @@
                             </td>
                             <td><strong>KES {{ purchase.total_amount|floatformat:2 }}</strong></td>
                             <td>
-                                <a href="{% url 'purchase_detail' purchase.pk %}" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> View
                                 </a>
                             </td>
@@ -80,7 +80,7 @@
             <div class="text-center py-5">
                 <i class="bi bi-bag-check" style="font-size: 4rem; color: #ccc;"></i>
                 <p class="text-muted mt-3">No purchase orders found. Create your first purchase order!</p>
-                <a href="{% url 'purchase_create' %}" class="btn btn-primary">
+                <a href="{% url 'purchase_create' slug=request.business.slug  %}" class="btn btn-primary">
                     <i class="bi bi-plus-circle"></i> New Purchase Order
                 </a>
             </div>

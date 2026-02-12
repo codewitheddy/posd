@@ -274,23 +274,28 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% if has_business %}
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <h4><i class="bi bi-shop"></i> POS System</h4>
-            <small>Professional Edition</small>
+            <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
+            <small>POS System</small>
         </div>
 
         <ul class="sidebar-menu">
             <li class="nav-section">Main</li>
             <li>
-                <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                {% if has_business %}
+                <a href="{% url 'dashboard' slug=business_slug %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                {% else %}
+                <a href="{% url 'business_list' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                {% endif %}
                     <i class="bi bi-speedometer2"></i> Dashboard
                 </a>
             </li>
-            {% if user_permissions.can_make_sales %}
+            {% if user_permissions.can_make_sales and has_business %}
             <li>
-                <a href="{% url 'pos_screen' %}" class="{% if request.resolver_match.url_name == 'pos_screen' %}active{% endif %}">
+                <a href="{% url 'pos_screen' slug=business_slug %}" class="{% if request.resolver_match.url_name == 'pos_screen' %}active{% endif %}">
                     <i class="bi bi-cart-plus"></i> New Sale
                     <span class="badge bg-success">POS</span>
                 </a>
@@ -300,17 +305,17 @@
             {% if user_permissions.can_manage_products or user_permissions.is_stock_manager %}
             <li class="nav-section">Inventory</li>
             <li>
-                <a href="{% url 'product_list' %}" class="{% if 'product' in request.path %}active{% endif %}">
+                <a href="{% url 'product_list' slug=business_slug %}" class="{% if 'product' in request.path %}active{% endif %}">
                     <i class="bi bi-box-seam"></i> Products
                 </a>
             </li>
             <li>
-                <a href="{% url 'category_list' %}" class="{% if 'categor' in request.path %}active{% endif %}">
+                <a href="{% url 'category_list' slug=business_slug %}" class="{% if 'categor' in request.path %}active{% endif %}">
                     <i class="bi bi-tags"></i> Categories
                 </a>
             </li>
             <li>
-                <a href="{% url 'stock_list' %}" class="{% if 'stock' in request.path %}active{% endif %}">
+                <a href="{% url 'stock_list' slug=business_slug %}" class="{% if 'stock' in request.path %}active{% endif %}">
                     <i class="bi bi-boxes"></i> Stock Management
                 </a>
             </li>
@@ -319,12 +324,12 @@
             {% if user_permissions.can_manage_suppliers or user_permissions.is_stock_manager %}
             <li class="nav-section">Purchasing</li>
             <li>
-                <a href="{% url 'supplier_list' %}" class="{% if 'supplier' in request.path %}active{% endif %}">
+                <a href="{% url 'supplier_list' slug=business_slug %}" class="{% if 'supplier' in request.path %}active{% endif %}">
                     <i class="bi bi-truck"></i> Suppliers
                 </a>
             </li>
             <li>
-                <a href="{% url 'purchase_list' %}" class="{% if 'purchase' in request.path %}active{% endif %}">
+                <a href="{% url 'purchase_list' slug=business_slug %}" class="{% if 'purchase' in request.path %}active{% endif %}">
                     <i class="bi bi-bag-check"></i> Purchase Orders
                 </a>
             </li>
@@ -333,7 +338,7 @@
             {% if user_permissions.can_manage_customers or user_permissions.is_cashier %}
             <li class="nav-section">Customers</li>
             <li>
-                <a href="{% url 'customer_list' %}" class="{% if 'customer' in request.path %}active{% endif %}">
+                <a href="{% url 'customer_list' slug=business_slug %}" class="{% if 'customer' in request.path %}active{% endif %}">
                     <i class="bi bi-people"></i> Customer Management
                 </a>
             </li>
@@ -341,66 +346,77 @@
 
             <li class="nav-section">Loyalty Program</li>
             <li>
-                <a href="{% url 'customer_list' %}" class="{% if 'loyalty' in request.path %}active{% endif %}">
+                <a href="{% url 'customer_list' slug=business_slug %}" class="{% if 'loyalty' in request.path %}active{% endif %}">
                     <i class="bi bi-star-fill"></i> Loyalty Overview
                     <span class="badge bg-warning text-dark">New</span>
                 </a>
             </li>
+            <!-- TODO: Implement frontend loyalty management pages -->
+            <!--
             <li>
-                <a href="/admin/pos/loyaltytransaction/" target="_blank">
+                <a href="#" class="disabled text-muted" title="Coming soon">
                     <i class="bi bi-clock-history"></i> Points History
+                    <span class="badge bg-secondary">Soon</span>
                 </a>
             </li>
             {% if user_permissions.is_manager %}
             <li>
-                <a href="/admin/pos/loyaltyreward/" target="_blank">
+                <a href="#" class="disabled text-muted" title="Coming soon">
                     <i class="bi bi-gift"></i> Rewards Catalog
+                    <span class="badge bg-secondary">Soon</span>
                 </a>
             </li>
             <li>
-                <a href="/admin/pos/loyaltyredemption/" target="_blank">
+                <a href="#" class="disabled text-muted" title="Coming soon">
                     <i class="bi bi-ticket-perforated"></i> Redemptions
+                    <span class="badge bg-secondary">Soon</span>
                 </a>
             </li>
             {% endif %}
+            -->
 
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
             <li class="nav-section">Reports</li>
             <li>
-                <a href="{% url 'z_report' %}" class="{% if 'z_report' in request.path %}active{% endif %}">
+                <a href="{% url 'sales_list' slug=business_slug %}" class="{% if 'sales_list' in request.path or request.resolver_match.url_name == 'sales_list' %}active{% endif %}">
+                    <i class="bi bi-receipt"></i> All Sales
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'z_report' slug=business_slug %}" class="{% if 'z_report' in request.path %}active{% endif %}">
                     <i class="bi bi-calculator-fill"></i> Z-Report (EOD)
                     <span class="badge bg-danger">EOD</span>
                 </a>
             </li>
             <li>
-                <a href="{% url 'sales_report' %}" class="{% if 'sales_report' in request.path %}active{% endif %}">
+                <a href="{% url 'sales_report' slug=business_slug %}" class="{% if 'sales_report' in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up"></i> Sales Report
                 </a>
             </li>
             <li>
-                <a href="{% url 'payment_transactions_report' %}" class="{% if 'payment-transactions' in request.path %}active{% endif %}">
+                <a href="{% url 'payment_transactions_report' slug=business_slug %}" class="{% if 'payment-transactions' in request.path %}active{% endif %}">
                     <i class="bi bi-credit-card-2-front"></i> Payment Transactions
                 </a>
             </li>
             {% if user_permissions.is_manager %}
             <li>
-                <a href="{% url 'cashier_report' %}" class="{% if 'cashier_report' in request.path %}active{% endif %}">
+                <a href="{% url 'cashier_report' slug=business_slug %}" class="{% if 'cashier_report' in request.path %}active{% endif %}">
                     <i class="bi bi-person-badge"></i> Cashier Report
                 </a>
             </li>
             {% endif %}
             <li>
-                <a href="{% url 'writeoff_report' %}" class="{% if 'writeoff' in request.path %}active{% endif %}">
+                <a href="{% url 'writeoff_report' slug=business_slug %}" class="{% if 'writeoff' in request.path %}active{% endif %}">
                     <i class="bi bi-trash"></i> Write-Off Report
                 </a>
             </li>
             <li>
-                <a href="{% url 'low_stock_alert' %}" class="{% if 'low_stock' in request.path %}active{% endif %}">
+                <a href="{% url 'low_stock_alert' slug=business_slug %}" class="{% if 'low_stock' in request.path %}active{% endif %}">
                     <i class="bi bi-exclamation-triangle"></i> Stock Alerts
                 </a>
             </li>
             <li>
-                <a href="{% url 'expiry_alert' %}" class="{% if 'expiry' in request.path %}active{% endif %}">
+                <a href="{% url 'expiry_alert' slug=business_slug %}" class="{% if 'expiry' in request.path %}active{% endif %}">
                     <i class="bi bi-calendar-x"></i> Expiry Alerts
                 </a>
             </li>
@@ -410,21 +426,26 @@
             <li class="nav-section">Administration</li>
             {% if user_permissions.can_manage_users %}
             <li>
-                <a href="{% url 'user_list' %}" class="{% if 'users' in request.path %}active{% endif %}">
+                <a href="{% url 'user_list' slug=business_slug %}" class="{% if 'users' in request.path %}active{% endif %}">
                     <i class="bi bi-people-fill"></i> User Management
                 </a>
             </li>
             {% endif %}
             {% if user_permissions.can_manage_settings %}
             <li>
-                <a href="{% url 'business_settings' %}" class="{% if 'settings' in request.path %}active{% endif %}">
+                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'settings' in request.path and 'payment' not in request.path %}active{% endif %}">
                     <i class="bi bi-gear"></i> Business Settings
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'payment_method_list' slug=business_slug %}" class="{% if 'payment-method' in request.path %}active{% endif %}">
+                    <i class="bi bi-credit-card"></i> Payment Methods
                 </a>
             </li>
             {% endif %}
             {% if user_permissions.can_view_activity_log %}
             <li>
-                <a href="{% url 'activity_log' %}" class="{% if 'activity' in request.path %}active{% endif %}">
+                <a href="{% url 'activity_log' slug=business_slug %}" class="{% if 'activity' in request.path %}active{% endif %}">
                     <i class="bi bi-clock-history"></i> Activity Log
                 </a>
             </li>
@@ -449,6 +470,7 @@
             </li>
         </ul>
     </div>
+    {% endif %}
 
     <!-- Top Bar -->
     <div class="topbar">
@@ -479,8 +501,16 @@
                     <i class="bi bi-chevron-down" style="font-size: 0.8rem; color: #858796;"></i>
                 </div>
                 <ul class="dropdown-menu dropdown-menu-end">
+                    {% if user.is_superuser %}
                     <li>
-                        <a class="dropdown-item" href="{% url 'user_profile' %}">
+                        <a class="dropdown-item" href="{% url 'platform_admin_dashboard' %}">
+                            <i class="bi bi-speedometer2"></i> Platform Admin
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% endif %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'user_profile' slug=business_slug %}">
                             <i class="bi bi-person"></i> My Profile
                         </a>
                     </li>

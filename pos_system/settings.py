@@ -81,7 +81,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',  # Move before TenantMiddleware
+    'pos.middleware.TenantMiddleware',  # Multi-tenancy middleware
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -107,6 +108,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'pos.permissions.user_permissions',  # Add permission context processor
+                'pos.context_processors.business_context',  # Add business context processor
             ],
         },
     },
@@ -196,6 +198,22 @@ SHOP_NAME = 'My Retail Shop'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# Email Configuration for Password Reset
+# For development: Console backend (prints emails to console)
+# For production: Configure SMTP settings via environment variables
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+
+# SMTP Settings (for production)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yourpos.com')
+
+# Password Reset Token Expiry (in seconds)
+PASSWORD_RESET_TIMEOUT = 86400  # 24 hours
 
 
 # ==================== REST FRAMEWORK CONFIGURATION ====================
@@ -291,7 +309,7 @@ JAZZMIN_SETTINGS = {
     # Links to put along the top menu
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "POS", "url": "/pos/", "permissions": ["auth.view_user"]},
+        {"name": "Back to Frontend", "url": "/businesses/", "permissions": ["auth.view_user"], "icon": "fas fa-arrow-left"},
         {"model": "auth.User"},
         {"app": "pos"},
     ],
@@ -302,7 +320,7 @@ JAZZMIN_SETTINGS = {
     
     # Additional links to include in the user menu on the top right
     "usermenu_links": [
-        {"name": "POS Screen", "url": "/pos/", "icon": "fas fa-cash-register"},
+        {"name": "My Businesses", "url": "/businesses/", "icon": "fas fa-store"},
         {"model": "auth.user"},
     ],
     
@@ -336,9 +354,9 @@ JAZZMIN_SETTINGS = {
     # Custom links to append to app groups, keyed on app name
     "custom_links": {
         "pos": [{
-            "name": "POS Screen",
-            "url": "/pos/",
-            "icon": "fas fa-cash-register",
+            "name": "My Businesses",
+            "url": "/businesses/",
+            "icon": "fas fa-store",
             "permissions": ["pos.view_product"]
         }]
     },

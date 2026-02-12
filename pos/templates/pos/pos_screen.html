@@ -146,7 +146,7 @@
             </div>
             {% empty %}
             <div class="col-12">
-                <p class="text-center">No products available. <a href="{% url 'product_create' %}">Add products</a></p>
+                <p class="text-center">No products available. <a href="{% url 'product_create' slug=request.business.slug %}">Add products</a></p>
             </div>
             {% endfor %}
         </div>
@@ -203,7 +203,7 @@
                     <small class="text-muted">1 point per KES 100 spent (with tier multiplier)</small>
                 </div>
 
-                <button class="btn btn-success btn-lg w-100" onclick="completeSale()" id="complete-btn" disabled>
+                <button class="btn btn-success btn-lg w-100" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
                     <i class="bi bi-check-circle"></i> Complete Sale
                 </button>
                 <button class="btn btn-danger w-100 mt-2" onclick="clearCart()">
@@ -214,7 +214,7 @@
     </div>
 </div>
 
-<form id="sale-form" method="POST" action="{% url 'complete_sale' %}" style="display: none;">
+<form id="sale-form" method="POST" action="{% url 'complete_sale' slug=request.business.slug %}" style="display: none;">
     {% csrf_token %}
     <input type="hidden" name="customer_id" id="form-customer-id">
     <input type="hidden" name="discount_type" id="form-discount-type">
@@ -361,21 +361,28 @@ function loadCartFromStorage() {
             
             // Restore customer selection in dropdown
             const customerSelect = document.getElementById('customer-select');
-            customerSelect.value = customerData.id;
+            if (customerSelect) customerSelect.value = customerData.id;
             
-            // Show customer info
-            document.getElementById('customer-name').textContent = customerData.name;
-            document.getElementById('customer-tier').textContent = customerData.tier.toUpperCase();
-            document.getElementById('customer-points').textContent = customerData.points + ' points';
-            document.getElementById('customer-info').style.display = 'block';
+            // Show customer info with null checks
+            const customerNameEl = document.getElementById('customer-name');
+            const customerTierEl = document.getElementById('customer-tier');
+            const customerPointsEl = document.getElementById('customer-points');
+            const customerInfoEl = document.getElementById('customer-info');
+            
+            if (customerNameEl) customerNameEl.textContent = customerData.name;
+            if (customerTierEl) customerTierEl.textContent = customerData.tier.toUpperCase();
+            if (customerPointsEl) customerPointsEl.textContent = customerData.points + ' points';
+            if (customerInfoEl) customerInfoEl.style.display = 'block';
             
             console.log('Customer restored:', customerData.name);
         }
         
         if (savedDiscount) {
             const discountData = JSON.parse(savedDiscount);
-            document.getElementById('discount-type').value = discountData.type;
-            document.getElementById('discount-value').value = discountData.value;
+            const discountTypeEl = document.getElementById('discount-type');
+            const discountValueEl = document.getElementById('discount-value');
+            if (discountTypeEl) discountTypeEl.value = discountData.type;
+            if (discountValueEl) discountValueEl.value = discountData.value;
             console.log('Discount restored:', discountData);
         }
         
@@ -431,6 +438,34 @@ window.addEventListener('beforeunload', function(e) {
     }
 });
 
+// Handle page visibility change (when user returns to tab)
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // Check if sale was completed while tab was hidden
+        const saleCompleting = localStorage.getItem('pos_sale_completing');
+        if (saleCompleting === 'true') {
+            clearCartStorage();
+            localStorage.removeItem('pos_sale_completing');
+            cart = [];
+            selectedCustomer = null;
+            
+            // Reset UI with null checks
+            const customerSelectEl = document.getElementById('customer-select');
+            const customerInfoEl = document.getElementById('customer-info');
+            const discountTypeEl = document.getElementById('discount-type');
+            const discountValueEl = document.getElementById('discount-value');
+            
+            if (customerSelectEl) customerSelectEl.value = '';
+            if (customerInfoEl) customerInfoEl.style.display = 'none';
+            if (discountTypeEl) discountTypeEl.value = 'percentage';
+            if (discountValueEl) discountValueEl.value = '0';
+            
+            updateCart();
+            showNotification('Cart cleared - ready for next sale', 'success');
+        }
+    }
+});
+
 // Periodic auto-save (every 30 seconds)
 setInterval(function() {
     if (cart.length > 0) {
@@ -454,14 +489,20 @@ document.getElementById('customer-select').addEventListener('change', function()
             tier: option.dataset.tier
         };
         
-        // Show customer info
-        document.getElementById('customer-name').textContent = selectedCustomer.name;
-        document.getElementById('customer-tier').textContent = selectedCustomer.tier.toUpperCase();
-        document.getElementById('customer-points').textContent = selectedCustomer.points + ' points';
-        document.getElementById('customer-info').style.display = 'block';
+        // Show customer info with null checks
+        const customerNameEl = document.getElementById('customer-name');
+        const customerTierEl = document.getElementById('customer-tier');
+        const customerPointsEl = document.getElementById('customer-points');
+        const customerInfoEl = document.getElementById('customer-info');
+        
+        if (customerNameEl) customerNameEl.textContent = selectedCustomer.name;
+        if (customerTierEl) customerTierEl.textContent = selectedCustomer.tier.toUpperCase();
+        if (customerPointsEl) customerPointsEl.textContent = selectedCustomer.points + ' points';
+        if (customerInfoEl) customerInfoEl.style.display = 'block';
     } else {
         selectedCustomer = null;
-        document.getElementById('customer-info').style.display = 'none';
+        const customerInfoEl = document.getElementById('customer-info');
+        if (customerInfoEl) customerInfoEl.style.display = 'none';
     }
     
     calculateTotal();
@@ -492,6 +533,8 @@ function calculateLoyaltyPoints(amount) {
 }
 
 function addToCart(id, name, price, availableStock) {
+    console.log('addToCart called:', {id, name, price, availableStock});
+    
     const existing = cart.find(item => item.id === id);
     const currentQty = existing ? existing.quantity : 0;
     
@@ -506,6 +549,10 @@ function addToCart(id, name, price, availableStock) {
     } else {
         cart.push({ id, name, price, quantity: 1, availableStock });
     }
+    
+    console.log('Cart after adding:', cart);
+    console.log('Cart length:', cart.length);
+    
     updateCart();
     saveCartToStorage(); // Save after adding to cart
 }
@@ -536,11 +583,14 @@ function updateQuantity(id, quantity) {
 }
 
 function updateCart() {
+    console.log('updateCart called, cart length:', cart.length);
+    
     const cartItems = document.getElementById('cart-items');
     
     if (cart.length === 0) {
         cartItems.innerHTML = '<p class="text-muted text-center">Cart is empty</p>';
         document.getElementById('complete-btn').disabled = true;
+        console.log('Cart is empty, button disabled');
     } else {
         let html = '';
         cart.forEach(item => {
@@ -567,80 +617,134 @@ function updateCart() {
         });
         cartItems.innerHTML = html;
         document.getElementById('complete-btn').disabled = false;
+        console.log('Cart has items, button enabled');
     }
     
     calculateTotal();
 }
 
 function calculateTotal() {
-    // Cart prices are now tax-inclusive (final prices)
-    const totalInclusive = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const discountType = document.getElementById('discount-type').value;
-    const discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
-    
-    let discountAmount = 0;
-    if (discountType === 'percentage') {
-        discountAmount = (totalInclusive * discountValue) / 100;
-    } else {
-        discountAmount = discountValue;
+    try {
+        // Cart prices are now tax-inclusive (final prices)
+        const totalInclusive = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        const discountTypeEl = document.getElementById('discount-type');
+        const discountValueEl = document.getElementById('discount-value');
+        
+        if (!discountTypeEl || !discountValueEl) {
+            console.error('Discount elements not found');
+            return 0;
+        }
+        
+        const discountType = discountTypeEl.value;
+        const discountValue = parseFloat(discountValueEl.value) || 0;
+        
+        let discountAmount = 0;
+        if (discountType === 'percentage') {
+            discountAmount = (totalInclusive * discountValue) / 100;
+        } else {
+            discountAmount = discountValue;
+        }
+        
+        const afterDiscount = totalInclusive - discountAmount;
+        
+        // Extract VAT from the tax-inclusive price
+        // Formula: VAT = (Price * VAT_RATE) / (100 + VAT_RATE)
+        const vatAmount = (afterDiscount * VAT_RATE) / (100 + VAT_RATE);
+        const subtotalExclusive = afterDiscount - vatAmount;
+        
+        // Update display elements with null checks
+        const subtotalEl = document.getElementById('subtotal');
+        const discountEl = document.getElementById('discount');
+        const vatEl = document.getElementById('vat');
+        const cartTotalEl = document.getElementById('cart-total');
+        
+        if (subtotalEl) subtotalEl.textContent = `KES ${subtotalExclusive.toFixed(2)}`;
+        if (discountEl) discountEl.textContent = `KES ${discountAmount.toFixed(2)}`;
+        if (vatEl) vatEl.textContent = `KES ${vatAmount.toFixed(2)}`;
+        if (cartTotalEl) cartTotalEl.textContent = `KES ${afterDiscount.toFixed(2)}`;
+        
+        // Calculate and show loyalty points
+        const loyaltyInfoEl = document.getElementById('loyalty-info');
+        const pointsToEarnEl = document.getElementById('points-to-earn');
+        
+        if (selectedCustomer && afterDiscount > 0) {
+            const pointsToEarn = calculateLoyaltyPoints(afterDiscount);
+            if (pointsToEarnEl) pointsToEarnEl.textContent = pointsToEarn;
+            if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'block';
+        } else {
+            if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'none';
+        }
+        
+        // Save discount changes
+        if (cart.length > 0) {
+            saveCartToStorage();
+        }
+        
+        // Return the total for use in payment modal
+        return afterDiscount;
+        
+    } catch (error) {
+        console.error('Error in calculateTotal:', error);
+        return 0;
     }
-    
-    const afterDiscount = totalInclusive - discountAmount;
-    
-    // Extract VAT from the tax-inclusive price
-    // Formula: VAT = (Price * VAT_RATE) / (100 + VAT_RATE)
-    const vatAmount = (afterDiscount * VAT_RATE) / (100 + VAT_RATE);
-    const subtotalExclusive = afterDiscount - vatAmount;
-    
-    document.getElementById('subtotal').textContent = `KES ${subtotalExclusive.toFixed(2)}`;
-    document.getElementById('discount').textContent = `KES ${discountAmount.toFixed(2)}`;
-    document.getElementById('vat').textContent = `KES ${vatAmount.toFixed(2)}`;
-    document.getElementById('cart-total').textContent = `KES ${afterDiscount.toFixed(2)}`;
-    
-    // Calculate and show loyalty points
-    if (selectedCustomer && afterDiscount > 0) {
-        const pointsToEarn = calculateLoyaltyPoints(afterDiscount);
-        document.getElementById('points-to-earn').textContent = pointsToEarn;
-        document.getElementById('loyalty-info').style.display = 'block';
-    } else {
-        document.getElementById('loyalty-info').style.display = 'none';
-    }
-    
-    // Save discount changes
-    if (cart.length > 0) {
-        saveCartToStorage();
-    }
-    
-    // Return the total for use in payment modal
-    return afterDiscount;
 }
 
 function completeSale() {
-    if (cart.length === 0) return;
+    console.log('completeSale called, cart length:', cart.length);
     
-    // Calculate total and store in global variable
-    totalDue = calculateTotal();
+    if (cart.length === 0) {
+        console.log('Cart is empty, returning');
+        return;
+    }
     
-    // Reset payment methods
-    paymentMethods = [];
-    
-    // Update modal
-    document.getElementById('payment-total-due').textContent = `KES ${totalDue.toFixed(2)}`;
-    document.getElementById('payment-total-paid').textContent = 'KES 0.00';
-    document.getElementById('payment-status-label').textContent = 'Remaining Balance:';
-    document.getElementById('payment-status-amount').textContent = `KES ${totalDue.toFixed(2)}`;
-    document.getElementById('payment-status-amount').className = 'text-danger';
-    document.getElementById('payment-methods-list').innerHTML = '<p class="text-muted">No payments added yet.</p>';
-    document.getElementById('confirm-payment-btn').disabled = true;
-    
-    // Clear inputs
-    document.getElementById('payment-method-select').value = '';
-    document.getElementById('payment-amount-input').value = '';
-    document.getElementById('payment-reference-input').value = '';
-    
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
-    modal.show();
+    try {
+        // Calculate total and store in global variable
+        totalDue = calculateTotal();
+        console.log('Total due:', totalDue);
+        
+        // Reset payment methods
+        paymentMethods = [];
+        
+        // Update modal
+        document.getElementById('payment-total-due').textContent = `KES ${totalDue.toFixed(2)}`;
+        document.getElementById('payment-total-paid').textContent = 'KES 0.00';
+        document.getElementById('payment-status-label').textContent = 'Remaining Balance:';
+        document.getElementById('payment-status-amount').textContent = `KES ${totalDue.toFixed(2)}`;
+        document.getElementById('payment-status-amount').className = 'text-danger';
+        document.getElementById('payment-methods-list').innerHTML = '<p class="text-muted">No payments added yet.</p>';
+        document.getElementById('confirm-payment-btn').disabled = true;
+        
+        // Clear inputs
+        document.getElementById('payment-method-select').value = '';
+        document.getElementById('payment-amount-input').value = '';
+        document.getElementById('payment-reference-input').value = '';
+        
+        console.log('Opening payment modal...');
+        
+        // Show modal
+        const modalElement = document.getElementById('paymentModal');
+        if (!modalElement) {
+            console.error('Payment modal element not found!');
+            alert('Error: Payment modal not found. Please refresh the page.');
+            return;
+        }
+        
+        // Check if Bootstrap is loaded
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap is not loaded!');
+            alert('Error: Bootstrap library not loaded. Please refresh the page.');
+            return;
+        }
+        
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+        console.log('Modal shown successfully');
+        
+    } catch (error) {
+        console.error('Error in completeSale:', error);
+        alert('Error opening payment modal: ' + error.message);
+    }
 }
 
 function clearCart() {
@@ -716,8 +820,23 @@ window.addEventListener('load', function() {
         localStorage.removeItem('pos_sale_completing');
         cart = [];
         selectedCustomer = null;
+        
+        // Reset customer dropdown with null checks
+        const customerSelectEl = document.getElementById('customer-select');
+        const customerInfoEl = document.getElementById('customer-info');
+        const discountTypeEl = document.getElementById('discount-type');
+        const discountValueEl = document.getElementById('discount-value');
+        
+        if (customerSelectEl) customerSelectEl.value = '';
+        if (customerInfoEl) customerInfoEl.style.display = 'none';
+        if (discountTypeEl) discountTypeEl.value = 'percentage';
+        if (discountValueEl) discountValueEl.value = '0';
+        
         updateCart();
         console.log('Cart cleared after successful sale completion');
+        
+        // Show success notification
+        showNotification('Sale completed successfully! Ready for next sale.', 'success');
     } else {
         // Load cart from storage - preserves cart on refresh or accidental close
         loadCartFromStorage();
@@ -993,8 +1112,16 @@ function confirmPaymentAndComplete() {
     // Set flag to indicate sale is being completed
     localStorage.setItem('pos_sale_completing', 'true');
     
-    // Close modal and submit
+    // Close modal
     bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+    
+    // Show loading state
+    const completeBtn = document.getElementById('complete-btn');
+    const originalText = completeBtn.innerHTML;
+    completeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+    completeBtn.disabled = true;
+    
+    // Submit form - the backend will redirect to thermal receipt
     document.getElementById('sale-form').submit();
 }
 </script>

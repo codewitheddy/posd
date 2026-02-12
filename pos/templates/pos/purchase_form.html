@@ -80,7 +80,7 @@
                     <button type="submit" class="btn btn-primary w-100 mb-2">
                         <i class="bi bi-check-circle"></i> Create Purchase Order
                     </button>
-                    <a href="{% url 'purchase_list' %}" class="btn btn-secondary w-100">
+                    <a href="{% url 'purchase_list' slug=request.business.slug  %}" class="btn btn-secondary w-100">
                         <i class="bi bi-x-circle"></i> Cancel
                     </a>
                 </div>

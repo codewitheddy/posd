@@ -46,7 +46,7 @@
 
                     <form method="post" class="d-flex justify-content-between mt-4">
                         {% csrf_token %}
-                        <a href="{% url 'user_list' %}" class="btn btn-secondary">
+                        <a href="{% url 'user_list' slug=request.business.slug  %}" class="btn btn-secondary">
                             <i class="fas fa-arrow-left"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-danger">

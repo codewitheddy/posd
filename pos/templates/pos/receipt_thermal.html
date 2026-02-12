@@ -627,10 +627,10 @@
             <button onclick="window.print()" class="btn btn-primary" title="Print Receipt (P)">
                 <i class="bi bi-printer-fill"></i> Print Receipt
             </button>
-            <a href="{% url 'pos_screen' %}" class="btn btn-success" title="New Sale (N)">
+            <a href="{% url 'pos_screen' slug=request.business.slug  %}" class="btn btn-success" title="New Sale (N)">
                 <i class="bi bi-cart-plus-fill"></i> New Sale
             </a>
-            <a href="{% url 'dashboard' %}" class="btn btn-info" title="Dashboard (D)">
+            <a href="{% url 'dashboard' slug=request.business.slug  %}" class="btn btn-info" title="Dashboard (D)">
                 <i class="bi bi-house-door-fill"></i> Dashboard
             </a>
         </div>
@@ -657,14 +657,14 @@
             if (e.key === 'n' || e.key === 'N') {
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
-                    window.location.href = "{% url 'pos_screen' %}";
+                    window.location.href = "{% url 'pos_screen' slug=request.business.slug  %}";
                 }
             }
             // Press 'D' for dashboard
             if (e.key === 'd' || e.key === 'D') {
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
-                    window.location.href = "{% url 'dashboard' %}";
+                    window.location.href = "{% url 'dashboard' slug=request.business.slug  %}";
                 }
             }
         });

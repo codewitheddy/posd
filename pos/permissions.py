@@ -183,28 +183,55 @@ def user_permissions(request):
     
     user = request.user
     
+    # Check business membership role if available
+    is_owner = False
+    is_admin_role = False
+    is_manager_role = False
+    is_stock_manager_role = False
+    is_cashier_role = False
+    user_role_display = 'No Role'
+    
+    if hasattr(request, 'business_membership') and request.business_membership:
+        membership = request.business_membership
+        role = membership.role
+        
+        is_owner = role == 'owner'
+        is_admin_role = role in ['owner', 'admin']
+        is_manager_role = role in ['owner', 'admin', 'manager']
+        is_stock_manager_role = role in ['owner', 'admin', 'manager', 'stock_manager']
+        is_cashier_role = role in ['owner', 'admin', 'manager', 'stock_manager', 'cashier', 'sales']
+        user_role_display = membership.get_role_display()
+    else:
+        # Fallback to Django groups for backward compatibility
+        is_admin_role = user.is_superuser or has_role(user, 'Administrator')
+        is_manager_role = has_any_role(user, ['Administrator', 'Manager'])
+        is_stock_manager_role = has_any_role(user, ['Administrator', 'Manager', 'Stock Manager'])
+        is_cashier_role = has_any_role(user, ['Administrator', 'Manager', 'Stock Manager', 'Cashier', 'Sales Associate'])
+        user_role_display = user.groups.first().name if user.groups.exists() else 'No Role'
+    
     return {
         'user_permissions': {
-            # Role checks
-            'is_admin': user.is_superuser or has_role(user, 'Administrator'),
-            'is_manager': has_any_role(user, ['Administrator', 'Manager']),
-            'is_stock_manager': has_any_role(user, ['Administrator', 'Manager', 'Stock Manager']),
-            'is_cashier': has_any_role(user, ['Administrator', 'Manager', 'Stock Manager', 'Cashier', 'Sales Associate']),
-            'is_viewer': has_any_role(user, ['Administrator', 'Manager', 'Stock Manager', 'Cashier', 'Sales Associate', 'Viewer']),
+            # Role checks (business membership aware)
+            'is_owner': is_owner,
+            'is_admin': user.is_superuser or is_admin_role,
+            'is_manager': is_manager_role,
+            'is_stock_manager': is_stock_manager_role,
+            'is_cashier': is_cashier_role,
+            'is_viewer': True,  # Everyone can view
             
-            # Specific permissions
-            'can_manage_products': user.is_superuser or has_permission(user, 'pos.change_product'),
-            'can_manage_users': user.is_superuser or has_permission(user, 'auth.change_user'),
-            'can_manage_suppliers': user.is_superuser or has_permission(user, 'pos.change_supplier'),
-            'can_adjust_stock': user.is_superuser or has_permission(user, 'pos.add_stockadjustment'),
-            'can_view_reports': user.is_superuser or has_any_role(user, ['Administrator', 'Manager', 'Stock Manager', 'Viewer']),
-            'can_manage_settings': user.is_superuser or has_permission(user, 'pos.change_businesssettings'),
-            'can_view_activity_log': user.is_superuser or has_permission(user, 'pos.view_activitylog'),
-            'can_manage_customers': user.is_superuser or has_permission(user, 'pos.change_customer'),
-            'can_make_sales': user.is_superuser or has_permission(user, 'pos.add_sale'),
+            # Specific permissions (owner/admin have all)
+            'can_manage_products': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_stock_manager_role or has_permission(user, 'pos.change_product'),
+            'can_manage_users': user.is_superuser or is_owner or is_admin_role or is_manager_role or has_permission(user, 'auth.change_user'),
+            'can_manage_suppliers': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_stock_manager_role or has_permission(user, 'pos.change_supplier'),
+            'can_adjust_stock': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_stock_manager_role or has_permission(user, 'pos.add_stockadjustment'),
+            'can_view_reports': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_stock_manager_role or has_any_role(user, ['Viewer']),
+            'can_manage_settings': user.is_superuser or is_owner or is_admin_role or is_manager_role or has_permission(user, 'pos.change_businesssettings'),
+            'can_view_activity_log': user.is_superuser or is_owner or is_admin_role or is_manager_role or has_permission(user, 'pos.view_activitylog'),
+            'can_manage_customers': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_cashier_role or has_permission(user, 'pos.change_customer'),
+            'can_make_sales': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_cashier_role or has_permission(user, 'pos.add_sale'),
             
             # User role display
-            'user_role': user.groups.first().name if user.groups.exists() else 'No Role',
+            'user_role': user_role_display,
         }
     }
 

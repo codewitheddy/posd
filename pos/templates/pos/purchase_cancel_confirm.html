@@ -26,7 +26,7 @@
                         <button type="submit" class="btn btn-danger">
                             <i class="bi bi-x-circle"></i> Yes, Cancel Purchase
                         </button>
-                        <a href="{% url 'purchase_detail' purchase.pk %}" class="btn btn-secondary">
+                        <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-secondary">
                             <i class="bi bi-arrow-left"></i> Go Back
                         </a>
                     </div>

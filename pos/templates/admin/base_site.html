@@ -1,0 +1,17 @@
+{% extends "admin/base.html" %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">POS System Admin</a>
+</h1>
+<div style="margin-top: 10px;">
+    <a href="{% url 'business_list' %}" style="color: #79aec8; text-decoration: none; font-size: 14px;">
+        ← Back to My Businesses
+    </a>
+</div>
+{% endblock %}
+
+{% block userlinks %}
+<a href="{% url 'business_list' %}" style="margin-right: 20px; color: #79aec8;">My Businesses</a>
+{{ block.super }}
+{% endblock %}

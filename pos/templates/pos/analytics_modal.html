@@ -197,7 +197,7 @@ document.getElementById('analytics-period').addEventListener('change', function(
 
 function loadAnalytics() {
     const period = document.getElementById('analytics-period').value;
-    let url = '/api/analytics/?period=' + period;
+    let url = '{% url "analytics_api" slug=request.business.slug %}?period=' + period;
     
     if (period === 'custom') {
         const startDate = document.getElementById('analytics-start-date').value;
@@ -378,7 +378,7 @@ function updateCashierSalesTable(cashierSales) {
 
 function exportAnalytics() {
     const period = document.getElementById('analytics-period').value;
-    let url = '/analytics/export/?period=' + period;
+    let url = '{% url "analytics_export_pdf" slug=request.business.slug %}?period=' + period;
     
     if (period === 'custom') {
         const startDate = document.getElementById('analytics-start-date').value;

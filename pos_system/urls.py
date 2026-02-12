@@ -18,11 +18,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib.auth.decorators import user_passes_test
+
+# Restrict admin to superusers only
+admin.site.login = user_passes_test(lambda u: u.is_superuser, login_url='/login/')(admin.site.login)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('pos.api_urls')),  # REST API endpoints
-    path('', include('pos.urls')),  # Web interface
+    path('', include('pos.urls_multitenant')),  # Multi-tenant web interface
 ]
 
 # Serve media files in development

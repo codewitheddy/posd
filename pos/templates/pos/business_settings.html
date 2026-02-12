@@ -223,7 +223,7 @@
                 </div>
 
                 <div class="d-flex justify-content-between">
-                    <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+                    <a href="{% url 'dashboard' slug=request.business.slug  %}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Back to Dashboard
                     </a>
                     <button type="submit" class="btn btn-primary btn-lg">

@@ -1,0 +1,253 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System - Manage Your Business</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 100px 0;
+            text-align: center;
+        }
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .hero p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+        .btn-hero {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 50px;
+            margin: 0 10px;
+            transition: transform 0.2s;
+        }
+        .btn-hero:hover {
+            transform: translateY(-3px);
+        }
+        .features {
+            padding: 80px 0;
+        }
+        .feature-card {
+            text-align: center;
+            padding: 30px;
+            border-radius: 15px;
+            transition: transform 0.3s;
+            height: 100%;
+        }
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .feature-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        .feature-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .cta {
+            background: #f8f9fa;
+            padding: 80px 0;
+            text-align: center;
+        }
+        .cta h2 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .stats {
+            background: white;
+            padding: 60px 0;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+        }
+        .stat-number {
+            font-size: 48px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .stat-label {
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-store text-primary"></i>
+                <strong>POS System</strong>
+            </a>
+            <div class="ms-auto">
+                <a href="{% url 'login' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </a>
+                <a href="{% url 'register_business' %}" class="btn btn-primary">
+                    <i class="fas fa-rocket"></i> Get Started
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Manage Your Business with Ease</h1>
+            <p>Complete POS system with inventory, sales, and reporting - all in one place</p>
+            <div>
+                <a href="{% url 'register_business' %}" class="btn btn-light btn-hero">
+                    <i class="fas fa-rocket"></i> Start Free Trial
+                </a>
+                <a href="{% url 'login' %}" class="btn btn-outline-light btn-hero">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </a>
+            </div>
+            <p class="mt-4"><small>30-day free trial • No credit card required</small></p>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="stat-item">
+                        <div class="stat-number">∞</div>
+                        <div class="stat-label">Businesses</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-item">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">Data Isolation</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-item">
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">Available</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-item">
+                        <div class="stat-number">30</div>
+                        <div class="stat-label">Days Free Trial</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="display-5 fw-bold">Everything You Need</h2>
+                <p class="lead text-muted">Powerful features to run your business efficiently</p>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-cash-register"></i>
+                        </div>
+                        <div class="feature-title">Point of Sale</div>
+                        <p class="text-muted">Fast and intuitive POS interface with barcode scanning and quick checkout</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <div class="feature-title">Inventory Management</div>
+                        <p class="text-muted">Track stock levels, low stock alerts, and expiry date management</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="feature-title">Sales Reports</div>
+                        <p class="text-muted">Comprehensive reports and analytics to track your business performance</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="feature-title">Team Management</div>
+                        <p class="text-muted">Invite team members with role-based access control and permissions</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-user-friends"></i>
+                        </div>
+                        <div class="feature-title">Customer Management</div>
+                        <p class="text-muted">Manage customers, loyalty programs, and track purchase history</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                        <div class="feature-title">Supplier Management</div>
+                        <p class="text-muted">Track suppliers, purchases, and manage supplier payments efficiently</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <h2>Ready to Get Started?</h2>
+            <p class="lead mb-4">Join businesses already using our platform</p>
+            <a href="{% url 'register_business' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-rocket"></i> Create Your Business Account
+            </a>
+            <p class="mt-3"><small class="text-muted">30-day free trial • No credit card required • Cancel anytime</small></p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2024 POS System. All rights reserved.</p>
+            <p class="mb-0 mt-2">
+                <a href="{% url 'register_business' %}" class="text-white me-3">Get Started</a>
+                <a href="{% url 'login' %}" class="text-white">Login</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

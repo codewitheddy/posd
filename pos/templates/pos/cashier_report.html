@@ -111,7 +111,7 @@
                                                 <td>{{ sale.items.count }}</td>
                                                 <td>KES {{ sale.total|floatformat:2 }}</td>
                                                 <td>
-                                                    <a href="{% url 'invoice_view' sale.pk %}" 
+                                                    <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" 
                                                        class="btn btn-xs btn-outline-primary">
                                                         <i class="bi bi-receipt"></i> View
                                                     </a>

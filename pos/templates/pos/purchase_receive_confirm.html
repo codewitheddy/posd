@@ -54,7 +54,7 @@
                         <button type="submit" class="btn btn-success">
                             <i class="bi bi-check-circle"></i> Yes, Mark as Received
                         </button>
-                        <a href="{% url 'purchase_detail' purchase.pk %}" class="btn btn-secondary">
+                        <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Cancel
                         </a>
                     </div>

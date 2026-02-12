@@ -88,7 +88,7 @@
                         {% endif %}
 
                         <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'customer_list' %}" class="btn btn-secondary">
+                            <a href="{% url 'customer_list' slug=request.business.slug  %}" class="btn btn-secondary">
                                 <i class="bi bi-arrow-left"></i> Back
                             </a>
                             <button type="submit" class="btn btn-primary">

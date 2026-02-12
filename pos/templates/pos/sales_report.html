@@ -88,7 +88,7 @@
                             <td>KES {{ sale.discount_amount|floatformat:2 }}</td>
                             <td><strong>KES {{ sale.total|floatformat:2 }}</strong></td>
                             <td>
-                                <a href="{% url 'invoice_view' sale.pk %}" class="btn btn-sm btn-primary">
+                                <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-primary">
                                     <i class="bi bi-eye"></i> View
                                 </a>
                             </td>

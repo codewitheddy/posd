@@ -5,8 +5,76 @@ Middleware for POS System
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.conf import settings
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.http import Http404
 
 User = get_user_model()
+
+
+class TenantMiddleware:
+    """
+    Middleware to detect and set the current business (tenant) from URL.
+    
+    Extracts business slug from URL pattern /b/{slug}/... and sets:
+    - request.business: The Business instance
+    - request.business_membership: User's membership in this business
+    
+    Also verifies user has access to the requested business.
+    """
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        # Extract business slug from URL
+        business_slug = self._extract_business_slug(request.path)
+        
+        if business_slug:
+            # Import here to avoid circular imports
+            from .models import Business, BusinessMembership
+            
+            try:
+                # Get business
+                business = Business.objects.get(slug=business_slug, is_active=True)
+                request.business = business
+                
+                # Check user access if authenticated
+                if request.user.is_authenticated:
+                    # Check if user has access to this business
+                    try:
+                        membership = BusinessMembership.objects.get(
+                            user=request.user,
+                            business=business,
+                            is_active=True
+                        )
+                        request.business_membership = membership
+                    except BusinessMembership.DoesNotExist:
+                        # User doesn't have access to this business
+                        # Even superusers need explicit membership for privacy
+                        from django.contrib import messages
+                        messages.error(request, 'You do not have access to this business. The business owner must invite you first.')
+                        return redirect('business_list')
+                else:
+                    request.business_membership = None
+                    
+            except Business.DoesNotExist:
+                raise Http404("Business not found")
+        else:
+            # No business in URL (public pages like registration, login)
+            request.business = None
+            request.business_membership = None
+        
+        response = self.get_response(request)
+        return response
+    
+    def _extract_business_slug(self, path):
+        """Extract business slug from URL path"""
+        # Pattern: /b/{slug}/...
+        parts = path.strip('/').split('/')
+        if len(parts) >= 2 and parts[0] == 'b':
+            return parts[1]
+        return None
 
 
 class TestModeMiddleware:

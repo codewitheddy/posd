@@ -27,7 +27,7 @@
                         <button type="submit" class="btn btn-danger">
                             <i class="bi bi-trash"></i> Yes, Delete
                         </button>
-                        <a href="{% url 'supplier_list' %}" class="btn btn-secondary">
+                        <a href="{% url 'supplier_list' slug=request.business.slug  %}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Cancel
                         </a>
                     </div>

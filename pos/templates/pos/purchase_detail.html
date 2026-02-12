@@ -9,14 +9,14 @@
     </div>
     <div class="col text-end">
         {% if purchase.status == 'pending' or purchase.status == 'ordered' %}
-            <a href="{% url 'purchase_receive' purchase.pk %}" class="btn btn-success">
+            <a href="{% url 'purchase_receive' slug=request.business.slug pk=purchase.pk %}" class="btn btn-success">
                 <i class="bi bi-check-circle"></i> Mark as Received
             </a>
-            <a href="{% url 'purchase_cancel' purchase.pk %}" class="btn btn-danger">
+            <a href="{% url 'purchase_cancel' slug=request.business.slug pk=purchase.pk %}" class="btn btn-danger">
                 <i class="bi bi-x-circle"></i> Cancel
             </a>
         {% endif %}
-        <a href="{% url 'purchase_list' %}" class="btn btn-secondary">
+        <a href="{% url 'purchase_list' slug=request.business.slug  %}" class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i> Back to List
         </a>
     </div>

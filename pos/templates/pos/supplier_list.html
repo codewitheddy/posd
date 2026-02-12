@@ -8,7 +8,7 @@
         <h2><i class="bi bi-truck"></i> Suppliers</h2>
     </div>
     <div class="col text-end">
-        <a href="{% url 'supplier_create' %}" class="btn btn-primary">
+        <a href="{% url 'supplier_create' slug=request.business.slug  %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Add Supplier
         </a>
     </div>
@@ -52,16 +52,16 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'supplier_payments' supplier.pk %}" class="btn btn-sm btn-success" title="Payments">
+                                <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.pk %}" class="btn btn-sm btn-success" title="Payments">
                                     <i class="bi bi-cash-coin"></i>
                                 </a>
-                                <a href="{% url 'supplier_statement' supplier.pk %}" class="btn btn-sm btn-info" title="Statement">
+                                <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.pk %}" class="btn btn-sm btn-info" title="Statement">
                                     <i class="bi bi-file-text"></i>
                                 </a>
-                                <a href="{% url 'supplier_edit' supplier.pk %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                                <a href="{% url 'supplier_edit' slug=request.business.slug pk=supplier.pk %}" class="btn btn-sm btn-outline-primary" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                <a href="{% url 'supplier_delete' supplier.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <a href="{% url 'supplier_delete' slug=request.business.slug pk=supplier.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i class="bi bi-trash"></i>
                                 </a>
                             </td>
@@ -74,7 +74,7 @@
             <div class="text-center py-5">
                 <i class="bi bi-truck" style="font-size: 4rem; color: #ccc;"></i>
                 <p class="text-muted mt-3">No suppliers found. Add your first supplier!</p>
-                <a href="{% url 'supplier_create' %}" class="btn btn-primary">
+                <a href="{% url 'supplier_create' slug=request.business.slug  %}" class="btn btn-primary">
                     <i class="bi bi-plus-circle"></i> Add Supplier
                 </a>
             </div>

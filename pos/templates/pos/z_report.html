@@ -9,13 +9,13 @@
             <h2><i class="bi bi-calculator"></i> Z-Report - End of Day Closing</h2>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug  %}">Dashboard</a></li>
                     <li class="breadcrumb-item active">Z-Report</li>
                 </ol>
             </nav>
         </div>
         <div class="col-auto">
-            <a href="{% url 'z_report_pdf' %}?date={{ report_date|date:'Y-m-d' }}" class="btn btn-danger" target="_blank">
+            <a href="{% url 'z_report_pdf' slug=request.business.slug  %}?date={{ report_date|date:'Y-m-d' }}" class="btn btn-danger" target="_blank">
                 <i class="bi bi-file-pdf"></i> Download PDF
             </a>
             <button onclick="window.print()" class="btn btn-secondary">

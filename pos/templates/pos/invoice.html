@@ -122,19 +122,19 @@
                         <kbd>P</kbd> PDF Invoice
                     </small>
                 </div>
-                <a href="{% url 'thermal_receipt' sale.pk %}" class="btn btn-success" target="_blank">
+                <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn btn-success" target="_blank">
                     <i class="bi bi-receipt"></i> Print Thermal Receipt
                 </a>
-                <a href="{% url 'invoice_pdf' sale.pk %}" class="btn btn-primary" target="_blank">
+                <a href="{% url 'invoice_pdf' slug=request.business.slug pk=sale.pk %}" class="btn btn-primary" target="_blank">
                     <i class="bi bi-file-pdf"></i> Download PDF
                 </a>
                 <button onclick="window.print()" class="btn btn-secondary">
                     <i class="bi bi-printer"></i> Print Invoice
                 </button>
-                <a href="{% url 'pos_screen' %}" class="btn btn-success">
+                <a href="{% url 'pos_screen' slug=request.business.slug  %}" class="btn btn-success">
                     <i class="bi bi-cart-plus"></i> New Sale
                 </a>
-                <a href="{% url 'dashboard' %}" class="btn btn-info">
+                <a href="{% url 'dashboard' slug=request.business.slug  %}" class="btn btn-info">
                     <i class="bi bi-house"></i> Dashboard
                 </a>
             </div>
@@ -156,14 +156,14 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 't' || e.key === 'T') {
         if (!e.target.matches('input, textarea, select')) {
             e.preventDefault();
-            window.open("{% url 'thermal_receipt' sale.pk %}", '_blank');
+            window.open("{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}", '_blank');
         }
     }
     // Press 'P' for PDF
     if (e.key === 'p' || e.key === 'P') {
         if (!e.target.matches('input, textarea, select')) {
             e.preventDefault();
-            window.open("{% url 'invoice_pdf' sale.pk %}", '_blank');
+            window.open("{% url 'invoice_pdf' slug=request.business.slug pk=sale.pk %}", '_blank');
         }
     }
 });

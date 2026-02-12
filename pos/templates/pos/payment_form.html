@@ -9,9 +9,9 @@
             <h2><i class="bi bi-cash-coin"></i> Create Payment for {{ supplier.name }}</h2>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}">Suppliers</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'supplier_payments' supplier.id %}">Payments</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug  %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug  %}">Suppliers</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}">Payments</a></li>
                     <li class="breadcrumb-item active">Create Payment</li>
                 </ol>
             </nav>
@@ -62,7 +62,7 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-circle"></i> Create Payment
                             </button>
-                            <a href="{% url 'supplier_payments' supplier.id %}" class="btn btn-secondary">
+                            <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-secondary">
                                 <i class="bi bi-x-circle"></i> Cancel
                             </a>
                         </div>

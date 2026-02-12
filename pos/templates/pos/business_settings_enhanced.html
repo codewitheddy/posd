@@ -72,7 +72,7 @@
                     <h2><i class="bi bi-gear-fill"></i> Business Settings</h2>
                     <p class="text-muted">Configure your business information and system preferences</p>
                 </div>
-                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                <a href="{% url 'dashboard' slug=request.business.slug  %}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Back
                 </a>
             </div>
