@@ -397,6 +397,12 @@
                         <a href="{% url 'stock_list' %}" class="quick-action-btn btn btn-secondary btn-lg me-2 mb-2">
                             <i class="bi bi-boxes"></i> Manage Stock
                         </a>
+                        <button type="button" class="quick-action-btn btn btn-purple btn-lg me-2 mb-2" data-bs-toggle="modal" data-bs-target="#analyticsModal" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <i class="bi bi-graph-up"></i> Analytics
+                        </button>
+                        <a href="{% url 'payment_transactions_report' %}" class="quick-action-btn btn btn-dark btn-lg me-2 mb-2">
+                            <i class="bi bi-credit-card-2-front"></i> Payment Transactions
+                        </a>
                         <a href="{% url 'sales_report' %}" class="quick-action-btn btn btn-warning btn-lg mb-2">
                             <i class="bi bi-file-earmark-text"></i> View Reports
                         </a>
@@ -406,4 +412,7 @@
         </div>
     </div>
 </div>
+
+{% include 'pos/analytics_modal.html' %}
+
 {% endblock %}

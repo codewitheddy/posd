@@ -35,6 +35,15 @@ urlpatterns = [
     path('suppliers/<int:pk>/edit/', views.supplier_edit, name='supplier_edit'),
     path('suppliers/<int:pk>/delete/', views.supplier_delete, name='supplier_delete'),
     
+    # Supplier Payments
+    path('suppliers/<int:supplier_id>/payments/', views.supplier_payments, name='supplier_payments'),
+    path('suppliers/<int:supplier_id>/payments/create/', views.create_payment, name='create_payment'),
+    path('suppliers/<int:supplier_id>/statement/', views.supplier_statement, name='supplier_statement'),
+    path('payments/<int:payment_id>/', views.payment_detail, name='payment_detail'),
+    path('payments/<int:payment_id>/delete/', views.delete_payment, name='delete_payment'),
+    path('supplier-balances/', views.supplier_balances, name='supplier_balances'),
+    path('aging-analysis/', views.aging_analysis, name='aging_analysis'),
+    
     # Purchases
     path('purchases/', views.purchase_list, name='purchase_list'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),
@@ -50,11 +59,21 @@ urlpatterns = [
     # Invoices
     path('invoice/<int:pk>/', views.invoice_view, name='invoice_view'),
     path('invoice/<int:pk>/pdf/', views.invoice_pdf, name='invoice_pdf'),
+    path('invoice/<int:pk>/thermal/', views.thermal_receipt, name='thermal_receipt'),
     
     # Reports
     path('reports/sales/', views.sales_report, name='sales_report'),
     path('reports/cashier/', views.cashier_report, name='cashier_report'),
     path('reports/writeoff/', views.writeoff_report, name='writeoff_report'),
+    path('reports/z-report/', views.z_report, name='z_report'),
+    path('reports/z-report/pdf/', views.z_report_pdf, name='z_report_pdf'),
+    path('reports/payment-transactions/', views.payment_transactions_report, name='payment_transactions_report'),
+    path('reports/payment-transactions/export/', views.payment_transactions_export, name='payment_transactions_export'),
+    path('reports/payment-transactions/csv/', views.payment_transactions_csv, name='payment_transactions_csv'),
+    
+    # Analytics
+    path('api/analytics/', views.analytics_api, name='analytics_api'),
+    path('analytics/export/', views.analytics_export_pdf, name='analytics_export_pdf'),
     
     # User Management
     path('users/', views.user_list, name='user_list'),

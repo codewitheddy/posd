@@ -1,0 +1,127 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Create Payment - {{ supplier.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-cash-coin"></i> Create Payment for {{ supplier.name }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}">Suppliers</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_payments' supplier.id %}">Payments</a></li>
+                    <li class="breadcrumb-item active">Create Payment</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Payment Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Amount <span class="text-danger">*</span></label>
+                            <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Payment Date <span class="text-danger">*</span></label>
+                            <input type="date" name="payment_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                            <select name="payment_method" class="form-select" required>
+                                <option value="">Select payment method</option>
+                                {% for method in payment_methods %}
+                                <option value="{{ method.id }}">{{ method.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Reference Number</label>
+                            <input type="text" name="reference_number" class="form-control" placeholder="Check number, transaction ID, etc.">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Additional notes about this payment"></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Create Payment
+                            </button>
+                            <a href="{% url 'supplier_payments' supplier.id %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Supplier Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Name:</strong> {{ supplier.name }}</p>
+                    <p><strong>Contact:</strong> {{ supplier.contact_person }}</p>
+                    <p><strong>Phone:</strong> {{ supplier.phone }}</p>
+                    <p><strong>Email:</strong> {{ supplier.email }}</p>
+                    <p><strong>Outstanding Balance:</strong> <span class="badge bg-danger fs-6">KES {{ supplier.outstanding_balance|floatformat:2 }}</span></p>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Unpaid Purchases</h5>
+                </div>
+                <div class="card-body">
+                    {% if unpaid_purchases %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Purchase #</th>
+                                    <th>Date</th>
+                                    <th>Total</th>
+                                    <th>Remaining</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for purchase in unpaid_purchases %}
+                                <tr>
+                                    <td>{{ purchase.purchase_number }}</td>
+                                    <td>{{ purchase.date|date:"Y-m-d" }}</td>
+                                    <td>KES {{ purchase.total_amount|floatformat:2 }}</td>
+                                    <td><strong>KES {{ purchase.remaining_balance|floatformat:2 }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-info-circle"></i> Payment will be automatically allocated to oldest purchases first (FIFO)
+                    </p>
+                    {% else %}
+                    <p class="text-muted">No unpaid purchases for this supplier.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

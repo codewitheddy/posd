@@ -5,7 +5,7 @@ from .models import (
     BusinessSettings, ActivityLog, Customer, PaymentMethod,
     SalePayment, Shift, SaleReturn, SaleReturnItem, Promotion,
     ExpenseCategory, Expense, LoyaltyTransaction, LoyaltyReward,
-    LoyaltyRedemption
+    LoyaltyRedemption, SupplierPayment, PaymentAllocation
 )
 
 
@@ -230,3 +230,49 @@ class ExpenseAdmin(admin.ModelAdmin):
     search_fields = ['expense_number', 'description', 'reference_number']
     readonly_fields = ['expense_number', 'created_at']
     date_hierarchy = 'expense_date'
+
+
+# ==================== SUPPLIER PAYMENT ADMIN ====================
+
+class PaymentAllocationInline(admin.TabularInline):
+    model = PaymentAllocation
+    extra = 0
+    readonly_fields = ['created_at']
+    autocomplete_fields = ['purchase']
+
+
+@admin.register(SupplierPayment)
+class SupplierPaymentAdmin(admin.ModelAdmin):
+    list_display = ['payment_number', 'supplier', 'payment_date', 'amount', 'payment_method', 'created_by', 'created_at']
+    list_filter = ['payment_date', 'payment_method', 'supplier']
+    search_fields = ['payment_number', 'supplier__name', 'reference_number']
+    readonly_fields = ['payment_number', 'created_at', 'updated_at', 'created_by']
+    inlines = [PaymentAllocationInline]
+    date_hierarchy = 'payment_date'
+    
+    fieldsets = (
+        ('Payment Information', {
+            'fields': ('payment_number', 'supplier', 'payment_date', 'amount')
+        }),
+        ('Payment Details', {
+            'fields': ('payment_method', 'reference_number', 'notes')
+        }),
+        ('Audit Information', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # Only set created_by on creation
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(PaymentAllocation)
+class PaymentAllocationAdmin(admin.ModelAdmin):
+    list_display = ['payment', 'purchase', 'amount', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['payment__payment_number', 'purchase__purchase_number']
+    readonly_fields = ['created_at']
+    autocomplete_fields = ['payment', 'purchase']

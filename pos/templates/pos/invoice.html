@@ -50,7 +50,7 @@
                     <div class="col-6">
                         <table class="table table-sm">
                             <tr>
-                                <td><strong>Subtotal:</strong></td>
+                                <td><strong>Subtotal (excl. VAT):</strong></td>
                                 <td class="text-end">KES {{ sale.subtotal|floatformat:2 }}</td>
                             </tr>
                             {% if sale.discount_amount > 0 %}
@@ -64,12 +64,50 @@
                                 <td class="text-end">KES {{ sale.vat_amount|floatformat:2 }}</td>
                             </tr>
                             <tr class="table-primary">
-                                <td><strong>TOTAL:</strong></td>
+                                <td><strong>TOTAL (incl. VAT):</strong></td>
                                 <td class="text-end"><strong>KES {{ sale.total|floatformat:2 }}</strong></td>
                             </tr>
                         </table>
                     </div>
                 </div>
+
+                {% if sale.payments.exists %}
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Payment Details:</h6>
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Payment Method</th>
+                                    <th class="text-end">Amount</th>
+                                    <th>Reference</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in sale.payments.all %}
+                                <tr>
+                                    <td>{{ payment.payment_method.name }}</td>
+                                    <td class="text-end">KES {{ payment.amount|floatformat:2 }}</td>
+                                    <td>{{ payment.reference_number|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                                <tr class="table-light">
+                                    <td><strong>Total Paid:</strong></td>
+                                    <td class="text-end"><strong>KES {{ sale.amount_paid|floatformat:2 }}</strong></td>
+                                    <td></td>
+                                </tr>
+                                {% if sale.change_given > 0 %}
+                                <tr class="table-info">
+                                    <td><strong>Change Given:</strong></td>
+                                    <td class="text-end"><strong>KES {{ sale.change_given|floatformat:2 }}</strong></td>
+                                    <td></td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
 
                 <div class="text-center mt-4">
                     <p class="text-muted">Thank you for your business!</p>
@@ -77,11 +115,21 @@
             </div>
 
             <div class="card-footer text-center">
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="bi bi-keyboard"></i> Keyboard shortcuts: 
+                        <kbd>T</kbd> Thermal Receipt | 
+                        <kbd>P</kbd> PDF Invoice
+                    </small>
+                </div>
+                <a href="{% url 'thermal_receipt' sale.pk %}" class="btn btn-success" target="_blank">
+                    <i class="bi bi-receipt"></i> Print Thermal Receipt
+                </a>
                 <a href="{% url 'invoice_pdf' sale.pk %}" class="btn btn-primary" target="_blank">
                     <i class="bi bi-file-pdf"></i> Download PDF
                 </a>
                 <button onclick="window.print()" class="btn btn-secondary">
-                    <i class="bi bi-printer"></i> Print
+                    <i class="bi bi-printer"></i> Print Invoice
                 </button>
                 <a href="{% url 'pos_screen' %}" class="btn btn-success">
                     <i class="bi bi-cart-plus"></i> New Sale
@@ -100,4 +148,24 @@
     body { padding-top: 0; }
 }
 </style>
+
+<script>
+// Keyboard shortcut: Press 'T' to open thermal receipt
+document.addEventListener('keydown', function(e) {
+    // Check if 'T' key is pressed (not in an input field)
+    if (e.key === 't' || e.key === 'T') {
+        if (!e.target.matches('input, textarea, select')) {
+            e.preventDefault();
+            window.open("{% url 'thermal_receipt' sale.pk %}", '_blank');
+        }
+    }
+    // Press 'P' for PDF
+    if (e.key === 'p' || e.key === 'P') {
+        if (!e.target.matches('input, textarea, select')) {
+            e.preventDefault();
+            window.open("{% url 'invoice_pdf' sale.pk %}", '_blank');
+        }
+    }
+});
+</script>
 {% endblock %}

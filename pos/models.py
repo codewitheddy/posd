@@ -261,6 +261,24 @@ class Supplier(models.Model):
     def purchase_count(self):
         """Count number of purchases from this supplier"""
         return self.purchases.count()
+    
+    def outstanding_balance(self):
+        """Calculate current outstanding balance"""
+        total_purchases = self.purchases.filter(
+            status='received'
+        ).aggregate(total=models.Sum('total_amount'))['total'] or Decimal('0.00')
+        
+        total_payments = self.payments.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+        
+        return total_purchases - total_payments
+    
+    def total_payments(self):
+        """Calculate total payments made to this supplier"""
+        return self.payments.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
 
 
 class Purchase(models.Model):
@@ -333,6 +351,38 @@ class Purchase(models.Model):
             
             return True
         return False
+    
+    def total_allocated(self):
+        """Returns total amount allocated from payments"""
+        return self.payment_allocations.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+    
+    def remaining_balance(self):
+        """Returns unpaid balance"""
+        return self.total_amount - self.total_allocated()
+    
+    def is_fully_paid(self):
+        """Check if purchase is fully paid"""
+        return self.remaining_balance() <= Decimal('0.00')
+    
+    def days_outstanding(self):
+        """Calculate days since purchase date"""
+        if self.status != 'received' or self.is_fully_paid():
+            return 0
+        return (timezone.now().date() - self.date.date()).days
+    
+    def aging_category(self):
+        """Return aging category: current, 30, 60, 90+"""
+        days = self.days_outstanding()
+        if days <= 30:
+            return 'current'
+        elif days <= 60:
+            return '30_days'
+        elif days <= 90:
+            return '60_days'
+        else:
+            return '90_plus'
 
 
 class PurchaseItem(models.Model):
@@ -349,6 +399,99 @@ class PurchaseItem(models.Model):
     def save(self, *args, **kwargs):
         self.total_cost = Decimal(self.quantity) * self.unit_cost
         super().save(*args, **kwargs)
+
+
+# ==================== SUPPLIER PAYMENTS ====================
+
+class SupplierPayment(models.Model):
+    """Records payments made to suppliers"""
+    payment_number = models.CharField(max_length=20, unique=True, editable=False)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='payments')
+    payment_date = models.DateField(default=timezone.now)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    payment_method = models.ForeignKey('PaymentMethod', on_delete=models.PROTECT)
+    reference_number = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='supplier_payments_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-payment_date', '-created_at']
+        indexes = [
+            models.Index(fields=['supplier', 'payment_date']),
+            models.Index(fields=['payment_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.payment_number} - {self.supplier.name} - KES {self.amount}"
+    
+    def save(self, *args, **kwargs):
+        # Generate payment number: PAY-YYYYMMDD-XXXX
+        if not self.payment_number:
+            today = timezone.now()
+            date_str = today.strftime('%Y%m%d')
+            last_payment = SupplierPayment.objects.filter(
+                payment_number__startswith=f'PAY-{date_str}'
+            ).order_by('-payment_number').first()
+            if last_payment:
+                last_num = int(last_payment.payment_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            self.payment_number = f'PAY-{date_str}-{new_num:04d}'
+        super().save(*args, **kwargs)
+    
+    def total_allocated(self):
+        """Returns the total amount allocated to purchases"""
+        return self.allocations.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+    
+    def unallocated_amount(self):
+        """Returns the amount not yet allocated to specific purchases"""
+        return self.amount - self.total_allocated()
+
+
+class PaymentAllocation(models.Model):
+    """Tracks allocation of payments to specific purchases"""
+    payment = models.ForeignKey(SupplierPayment, on_delete=models.CASCADE, related_name='allocations')
+    purchase = models.ForeignKey(Purchase, on_delete=models.PROTECT, related_name='payment_allocations')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['payment']),
+            models.Index(fields=['purchase']),
+        ]
+    
+    def __str__(self):
+        return f"{self.payment.payment_number} -> {self.purchase.purchase_number}: KES {self.amount}"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        
+        # Validate allocation amount doesn't exceed payment amount
+        if self.amount > self.payment.amount:
+            raise ValidationError("Allocation amount cannot exceed payment amount")
+        
+        # Validate total allocations for this payment don't exceed payment amount
+        existing_allocations = PaymentAllocation.objects.filter(
+            payment=self.payment
+        ).exclude(pk=self.pk).aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+        
+        if existing_allocations + self.amount > self.payment.amount:
+            raise ValidationError("Total allocations exceed payment amount")
+        
+        # Validate total allocations for this purchase don't exceed purchase total
+        existing_purchase_allocations = PaymentAllocation.objects.filter(
+            purchase=self.purchase
+        ).exclude(pk=self.pk).aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+        
+        if existing_purchase_allocations + self.amount > self.purchase.total_amount:
+            raise ValidationError("Total allocations exceed purchase amount")
 
 
 
@@ -415,6 +558,24 @@ class BusinessSettings(models.Model):
     receipt_header = models.TextField(blank=True, help_text="Custom header text for receipts")
     receipt_footer = models.TextField(blank=True, help_text="Custom footer text for receipts")
     show_logo_on_receipt = models.BooleanField(default=False)
+    
+    # Thermal Receipt Settings
+    thermal_receipt_width = models.IntegerField(
+        default=80,
+        choices=[(58, '58mm'), (80, '80mm')],
+        help_text="Thermal printer paper width"
+    )
+    thermal_font_size = models.CharField(
+        max_length=10,
+        choices=[('small', 'Small'), ('medium', 'Medium'), ('large', 'Large')],
+        default='medium',
+        help_text="Font size for thermal receipts"
+    )
+    thermal_print_logo = models.BooleanField(default=True, help_text="Print logo on thermal receipts")
+    thermal_print_barcode = models.BooleanField(default=True, help_text="Print barcode on thermal receipts")
+    thermal_auto_cut = models.BooleanField(default=True, help_text="Auto-cut paper after printing")
+    thermal_copies = models.IntegerField(default=1, help_text="Number of receipt copies to print")
+    thermal_show_tax_breakdown = models.BooleanField(default=True, help_text="Show VAT breakdown on receipt")
     
     # Currency Settings
     currency_symbol = models.CharField(max_length=10, default="KES")

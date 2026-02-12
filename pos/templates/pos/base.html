@@ -367,8 +367,19 @@
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
             <li class="nav-section">Reports</li>
             <li>
+                <a href="{% url 'z_report' %}" class="{% if 'z_report' in request.path %}active{% endif %}">
+                    <i class="bi bi-calculator-fill"></i> Z-Report (EOD)
+                    <span class="badge bg-danger">EOD</span>
+                </a>
+            </li>
+            <li>
                 <a href="{% url 'sales_report' %}" class="{% if 'sales_report' in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up"></i> Sales Report
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'payment_transactions_report' %}" class="{% if 'payment-transactions' in request.path %}active{% endif %}">
+                    <i class="bi bi-credit-card-2-front"></i> Payment Transactions
                 </a>
             </li>
             {% if user_permissions.is_manager %}
@@ -418,9 +429,14 @@
                 </a>
             </li>
             {% endif %}
+            {% endif %}
+            
+            {% if user.is_superuser or user.is_staff %}
+            <li class="nav-section">System Admin</li>
             <li>
-                <a href="/admin/" target="_blank">
-                    <i class="bi bi-shield-lock"></i> General Admin
+                <a href="/admin/" target="_blank" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <i class="bi bi-shield-lock-fill"></i> Django Admin Panel
+                    <span class="badge bg-light text-dark">Admin</span>
                 </a>
             </li>
             {% endif %}

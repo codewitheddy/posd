@@ -46,6 +46,9 @@
 <div class="row mt-4">
     <div class="col-md-8">
         <h3>Select Products</h3>
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i> <strong>Note:</strong> All prices shown are tax-inclusive (VAT included). Tax breakdown will be shown in the cart.
+        </div>
         
         <!-- Customer Selection Section -->
         <div class="card mb-3 border-primary">
@@ -175,7 +178,7 @@
                 </div>
 
                 <div class="mb-2">
-                    <strong>Subtotal:</strong> <span class="float-end" id="subtotal">KES 0.00</span>
+                    <strong>Subtotal (excl. VAT):</strong> <span class="float-end" id="subtotal">KES 0.00</span>
                 </div>
                 <div class="mb-2">
                     <strong>Discount:</strong> <span class="float-end" id="discount">KES 0.00</span>
@@ -184,7 +187,7 @@
                     <strong>VAT ({{ vat_rate }}%):</strong> <span class="float-end" id="vat">KES 0.00</span>
                 </div>
                 <div class="mb-3">
-                    <h4>Total: <span class="float-end text-primary" id="cart-total">KES 0.00</span></h4>
+                    <h4>Total (incl. VAT): <span class="float-end text-primary" id="cart-total">KES 0.00</span></h4>
                 </div>
                 
                 <!-- Loyalty Points Info -->
@@ -217,7 +220,88 @@
     <input type="hidden" name="discount_type" id="form-discount-type">
     <input type="hidden" name="discount_value" id="form-discount-value">
     <div id="form-items"></div>
+    <div id="form-payments"></div>
 </form>
+
+<!-- Payment Method Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="paymentModalLabel">
+                    <i class="bi bi-credit-card"></i> Payment Methods
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Total Amount Due:</h6>
+                        <h3 class="text-primary" id="payment-total-due">KES 0.00</h3>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Amount Paid:</h6>
+                        <h3 class="text-success" id="payment-total-paid">KES 0.00</h3>
+                    </div>
+                </div>
+                <div class="row mb-3" id="payment-status-row">
+                    <div class="col-md-12">
+                        <h6 id="payment-status-label">Remaining Balance:</h6>
+                        <h3 id="payment-status-amount" class="text-danger">KES 0.00</h3>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="mb-3">Add Payment Method:</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Payment Method</label>
+                        <select class="form-select" id="payment-method-select">
+                            <option value="">Select method...</option>
+                            {% for method in payment_methods %}
+                            <option value="{{ method.id }}" data-code="{{ method.code }}" data-requires-ref="{{ method.requires_reference }}">
+                                {{ method.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Amount</label>
+                        <input type="number" class="form-control" id="payment-amount-input" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Reference (Optional)</label>
+                        <input type="text" class="form-control" id="payment-reference-input" placeholder="Transaction ID, Check #, etc.">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-primary" onclick="addPaymentMethod()">
+                            <i class="bi bi-plus-circle"></i> Add Payment
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="autoFillBalance()">
+                            <i class="bi bi-lightning-fill"></i> Pay Remaining
+                        </button>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="mb-3">Payment Breakdown:</h6>
+                <div id="payment-methods-list">
+                    <p class="text-muted">No payments added yet.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="confirmPaymentAndComplete()" id="confirm-payment-btn" disabled>
+                    <i class="bi bi-check-circle"></i> Confirm & Complete Sale
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -226,6 +310,8 @@ let cart = [];
 const VAT_RATE = {{ vat_rate }};
 const productStock = {};
 let selectedCustomer = null;
+let paymentMethods = [];
+let totalDue = 0;
 
 // Initialize product stock data
 {% for product in products %}
@@ -487,29 +573,33 @@ function updateCart() {
 }
 
 function calculateTotal() {
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Cart prices are now tax-inclusive (final prices)
+    const totalInclusive = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const discountType = document.getElementById('discount-type').value;
     const discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
     
     let discountAmount = 0;
     if (discountType === 'percentage') {
-        discountAmount = (subtotal * discountValue) / 100;
+        discountAmount = (totalInclusive * discountValue) / 100;
     } else {
         discountAmount = discountValue;
     }
     
-    const afterDiscount = subtotal - discountAmount;
-    const vatAmount = (afterDiscount * VAT_RATE) / 100;
-    const total = afterDiscount + vatAmount;
+    const afterDiscount = totalInclusive - discountAmount;
     
-    document.getElementById('subtotal').textContent = `KES ${subtotal.toFixed(2)}`;
+    // Extract VAT from the tax-inclusive price
+    // Formula: VAT = (Price * VAT_RATE) / (100 + VAT_RATE)
+    const vatAmount = (afterDiscount * VAT_RATE) / (100 + VAT_RATE);
+    const subtotalExclusive = afterDiscount - vatAmount;
+    
+    document.getElementById('subtotal').textContent = `KES ${subtotalExclusive.toFixed(2)}`;
     document.getElementById('discount').textContent = `KES ${discountAmount.toFixed(2)}`;
     document.getElementById('vat').textContent = `KES ${vatAmount.toFixed(2)}`;
-    document.getElementById('cart-total').textContent = `KES ${total.toFixed(2)}`;
+    document.getElementById('cart-total').textContent = `KES ${afterDiscount.toFixed(2)}`;
     
     // Calculate and show loyalty points
-    if (selectedCustomer && total > 0) {
-        const pointsToEarn = calculateLoyaltyPoints(total);
+    if (selectedCustomer && afterDiscount > 0) {
+        const pointsToEarn = calculateLoyaltyPoints(afterDiscount);
         document.getElementById('points-to-earn').textContent = pointsToEarn;
         document.getElementById('loyalty-info').style.display = 'block';
     } else {
@@ -520,30 +610,37 @@ function calculateTotal() {
     if (cart.length > 0) {
         saveCartToStorage();
     }
+    
+    // Return the total for use in payment modal
+    return afterDiscount;
 }
 
 function completeSale() {
     if (cart.length === 0) return;
     
-    const formItems = document.getElementById('form-items');
-    formItems.innerHTML = '';
+    // Calculate total and store in global variable
+    totalDue = calculateTotal();
     
-    cart.forEach(item => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'items';
-        input.value = `${item.id},${item.quantity},${item.price}`;
-        formItems.appendChild(input);
-    });
+    // Reset payment methods
+    paymentMethods = [];
     
-    document.getElementById('form-customer-id').value = selectedCustomer ? selectedCustomer.id : '';
-    document.getElementById('form-discount-type').value = document.getElementById('discount-type').value;
-    document.getElementById('form-discount-value').value = document.getElementById('discount-value').value;
+    // Update modal
+    document.getElementById('payment-total-due').textContent = `KES ${totalDue.toFixed(2)}`;
+    document.getElementById('payment-total-paid').textContent = 'KES 0.00';
+    document.getElementById('payment-status-label').textContent = 'Remaining Balance:';
+    document.getElementById('payment-status-amount').textContent = `KES ${totalDue.toFixed(2)}`;
+    document.getElementById('payment-status-amount').className = 'text-danger';
+    document.getElementById('payment-methods-list').innerHTML = '<p class="text-muted">No payments added yet.</p>';
+    document.getElementById('confirm-payment-btn').disabled = true;
     
-    // Clear cart storage before submitting (sale is complete)
-    clearCartStorage();
+    // Clear inputs
+    document.getElementById('payment-method-select').value = '';
+    document.getElementById('payment-amount-input').value = '';
+    document.getElementById('payment-reference-input').value = '';
     
-    document.getElementById('sale-form').submit();
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+    modal.show();
 }
 
 function clearCart() {
@@ -609,8 +706,23 @@ document.getElementById('barcode-input').addEventListener('keypress', function(e
 
 // Auto-focus barcode input on page load
 window.addEventListener('load', function() {
-    // Load cart from storage first
-    loadCartFromStorage();
+    // Always clear the sale completing flag and cart when returning to POS screen
+    // This ensures a fresh start after completing a sale
+    const saleCompleting = localStorage.getItem('pos_sale_completing');
+    
+    if (saleCompleting === 'true') {
+        // Sale was completed, clear everything
+        clearCartStorage();
+        localStorage.removeItem('pos_sale_completing');
+        cart = [];
+        selectedCustomer = null;
+        updateCart();
+        console.log('Cart cleared after successful sale completion');
+    } else {
+        // Load cart from storage - preserves cart on refresh or accidental close
+        loadCartFromStorage();
+        console.log('Cart loaded from storage (preserved)');
+    }
     
     // Then focus barcode input
     document.getElementById('barcode-input').focus();
@@ -660,5 +772,230 @@ document.getElementById('category-filter').addEventListener('change', function(e
         }
     });
 });
+
+// ==================== PAYMENT METHOD HANDLING ====================
+
+// Add listener to payment method select to show/hide reference requirement
+document.getElementById('payment-method-select').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const methodCode = selectedOption.getAttribute('data-code');
+    const referenceInput = document.getElementById('payment-reference-input');
+    const referenceLabel = referenceInput.previousElementSibling;
+    
+    const isCash = methodCode && methodCode.toUpperCase() === 'CASH';
+    
+    if (isCash) {
+        referenceLabel.innerHTML = 'Reference (Optional)';
+        referenceInput.required = false;
+        referenceInput.placeholder = 'Transaction ID, Check #, etc.';
+    } else if (methodCode) {
+        referenceLabel.innerHTML = 'Reference <span class="text-danger">*</span>';
+        referenceInput.required = true;
+        referenceInput.placeholder = 'Required: M-Pesa code, Transaction ID, etc.';
+    }
+});
+
+function addPaymentMethod() {
+    const methodSelect = document.getElementById('payment-method-select');
+    const amountInput = document.getElementById('payment-amount-input');
+    const referenceInput = document.getElementById('payment-reference-input');
+    
+    const methodId = methodSelect.value;
+    const selectedOption = methodSelect.options[methodSelect.selectedIndex];
+    const methodCode = selectedOption.getAttribute('data-code');
+    const requiresRef = selectedOption.getAttribute('data-requires-ref') === 'True';
+    const methodName = selectedOption.text;
+    const amount = parseFloat(amountInput.value);
+    const reference = referenceInput.value.trim();
+    
+    // Validation
+    if (!methodId) {
+        alert('Please select a payment method');
+        return;
+    }
+    
+    if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid amount');
+        return;
+    }
+    
+    // Check if this is a cash payment (case-insensitive)
+    const isCash = methodCode && (methodCode.toUpperCase() === 'CASH' || methodName.toUpperCase().includes('CASH'));
+    
+    // Require reference number for non-cash payments
+    if (!isCash && !reference) {
+        alert('Reference number is required for ' + methodName + ' payments (e.g., M-Pesa code, transaction ID)');
+        referenceInput.focus();
+        return;
+    }
+    
+    const totalPaid = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+    const remaining = totalDue - totalPaid;
+    
+    // For cash, allow overpayment (change will be given)
+    // For other methods, restrict to exact amount or less
+    if (!isCash && amount > remaining) {
+        alert(`Non-cash payment cannot exceed remaining balance of KES ${remaining.toFixed(2)}`);
+        return;
+    }
+    // For cash, no restriction - can pay any amount >= 0
+    // Change will be calculated automatically
+    
+    // Add payment method
+    paymentMethods.push({
+        id: methodId,
+        code: methodCode,
+        name: methodName,
+        amount: amount,
+        reference: reference
+    });
+    
+    // Update display
+    updatePaymentDisplay();
+    
+    // Clear inputs
+    methodSelect.value = '';
+    amountInput.value = '';
+    referenceInput.value = '';
+}
+
+function removePaymentMethod(index) {
+    paymentMethods.splice(index, 1);
+    updatePaymentDisplay();
+}
+
+function autoFillBalance() {
+    const totalPaid = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+    const remaining = totalDue - totalPaid;
+    
+    if (remaining > 0) {
+        document.getElementById('payment-amount-input').value = remaining.toFixed(2);
+    }
+}
+
+function updatePaymentDisplay() {
+    const totalPaid = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+    const remaining = totalDue - totalPaid;
+    const change = totalPaid > totalDue ? totalPaid - totalDue : 0;
+    
+    // Update totals
+    document.getElementById('payment-total-paid').textContent = `KES ${totalPaid.toFixed(2)}`;
+    
+    // Update status label and amount based on payment status
+    const statusLabel = document.getElementById('payment-status-label');
+    const statusAmount = document.getElementById('payment-status-amount');
+    
+    if (change > 0) {
+        // Overpaid - show change
+        statusLabel.textContent = 'Change to Give:';
+        statusAmount.textContent = `KES ${change.toFixed(2)}`;
+        statusAmount.className = 'text-info';
+        document.getElementById('confirm-payment-btn').disabled = false;
+    } else if (remaining > 0) {
+        // Underpaid - show remaining balance
+        statusLabel.textContent = 'Remaining Balance:';
+        statusAmount.textContent = `KES ${remaining.toFixed(2)}`;
+        statusAmount.className = 'text-danger';
+        document.getElementById('confirm-payment-btn').disabled = true;
+    } else {
+        // Exact payment
+        statusLabel.textContent = 'Payment Status:';
+        statusAmount.textContent = 'Paid in Full';
+        statusAmount.className = 'text-success';
+        document.getElementById('confirm-payment-btn').disabled = false;
+    }
+    
+    // Update payment list
+    const listEl = document.getElementById('payment-methods-list');
+    if (paymentMethods.length === 0) {
+        listEl.innerHTML = '<p class="text-muted">No payments added yet.</p>';
+    } else {
+        let html = '<div class="table-responsive"><table class="table table-sm">';
+        html += '<thead><tr><th>Method</th><th>Amount</th><th>Reference</th><th>Action</th></tr></thead><tbody>';
+        
+        paymentMethods.forEach((pm, index) => {
+            html += `<tr>
+                <td><strong>${pm.name}</strong></td>
+                <td>KES ${pm.amount.toFixed(2)}</td>
+                <td>${pm.reference || '-'}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="removePaymentMethod(${index})"><i class="bi bi-trash"></i></button></td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+        listEl.innerHTML = html;
+    }
+}
+
+function confirmPaymentAndComplete() {
+    if (paymentMethods.length === 0) {
+        alert('Please add at least one payment method');
+        return;
+    }
+    
+    const totalPaid = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+    
+    // Allow overpayment for cash (change will be given)
+    if (totalPaid < totalDue) {
+        alert('Payment total is less than the sale total');
+        return;
+    }
+    
+    const change = totalPaid > totalDue ? totalPaid - totalDue : 0;
+    
+    // Prepare form data
+    const formItems = document.getElementById('form-items');
+    formItems.innerHTML = '';
+    
+    cart.forEach(item => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'items';
+        input.value = `${item.id},${item.quantity},${item.price}`;
+        formItems.appendChild(input);
+    });
+    
+    // Add payment methods to form
+    const formPayments = document.getElementById('form-payments');
+    formPayments.innerHTML = '';
+    
+    paymentMethods.forEach(pm => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'payments';
+        input.value = `${pm.id},${pm.amount},${pm.reference}`;
+        formPayments.appendChild(input);
+    });
+    
+    // Add amount paid and change
+    const amountPaidInput = document.createElement('input');
+    amountPaidInput.type = 'hidden';
+    amountPaidInput.name = 'amount_paid';
+    amountPaidInput.value = totalPaid.toFixed(2);
+    formPayments.appendChild(amountPaidInput);
+    
+    const changeInput = document.createElement('input');
+    changeInput.type = 'hidden';
+    changeInput.name = 'change_given';
+    changeInput.value = change.toFixed(2);
+    formPayments.appendChild(changeInput);
+    
+    document.getElementById('form-customer-id').value = selectedCustomer ? selectedCustomer.id : '';
+    document.getElementById('form-discount-type').value = document.getElementById('discount-type').value;
+    document.getElementById('form-discount-value').value = document.getElementById('discount-value').value;
+    
+    // Clear cart immediately before submitting
+    // This ensures the cart is empty even if user doesn't return to POS screen
+    cart = [];
+    selectedCustomer = null;
+    clearCartStorage();
+    
+    // Set flag to indicate sale is being completed
+    localStorage.setItem('pos_sale_completing', 'true');
+    
+    // Close modal and submit
+    bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+    document.getElementById('sale-form').submit();
+}
 </script>
 {% endblock %}

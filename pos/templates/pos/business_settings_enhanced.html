@@ -1,0 +1,459 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Business Settings{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-nav {
+        position: sticky;
+        top: 80px;
+    }
+    .settings-section {
+        scroll-margin-top: 100px;
+    }
+    .logo-preview {
+        max-width: 200px;
+        max-height: 200px;
+        border: 2px dashed #ddd;
+        padding: 10px;
+        border-radius: 8px;
+    }
+    .logo-preview img {
+        max-width: 100%;
+        height: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Sidebar Navigation -->
+        <div class="col-md-3">
+            <div class="settings-nav">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="bi bi-gear"></i> Settings Menu</h6>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <a href="#business-info" class="list-group-item list-group-item-action">
+                            <i class="bi bi-building"></i> Business Information
+                        </a>
+                        <a href="#logo" class="list-group-item list-group-item-action">
+                            <i class="bi bi-image"></i> Logo
+                        </a>
+                        <a href="#tax" class="list-group-item list-group-item-action">
+                            <i class="bi bi-percent"></i> Tax Settings
+                        </a>
+                        <a href="#currency" class="list-group-item list-group-item-action">
+                            <i class="bi bi-currency-exchange"></i> Currency
+                        </a>
+                        <a href="#receipt" class="list-group-item list-group-item-action">
+                            <i class="bi bi-receipt"></i> Receipt Settings
+                        </a>
+                        <a href="#thermal" class="list-group-item list-group-item-action">
+                            <i class="bi bi-printer"></i> Thermal Printer
+                        </a>
+                        <a href="#stock" class="list-group-item list-group-item-action">
+                            <i class="bi bi-boxes"></i> Stock Management
+                        </a>
+                        <a href="#system" class="list-group-item list-group-item-action">
+                            <i class="bi bi-sliders"></i> System Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="bi bi-gear-fill"></i> Business Settings</h2>
+                    <p class="text-muted">Configure your business information and system preferences</p>
+                </div>
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Business Information -->
+                <div id="business-info" class="card mb-4 settings-section">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-building"></i> Business Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="business_name" class="form-label">Business Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="business_name" name="business_name" 
+                                       value="{{ settings.business_name }}" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="tax_id" class="form-label">Tax/VAT Registration Number</label>
+                                <input type="text" class="form-control" id="tax_id" name="tax_id" 
+                                       value="{{ settings.tax_id }}" placeholder="e.g., P051234567X">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="business_phone" class="form-label">Phone Number</label>
+                                <input type="text" class="form-control" id="business_phone" name="business_phone" 
+                                       value="{{ settings.business_phone }}" placeholder="+254 700 000 000">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="business_email" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="business_email" name="business_email" 
+                                       value="{{ settings.business_email }}" placeholder="info@business.com">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="business_website" class="form-label">Website</label>
+                                <input type="url" class="form-control" id="business_website" name="business_website" 
+                                       value="{{ settings.business_website }}" placeholder="https://www.business.com">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="business_address" class="form-label">Physical Address</label>
+                                <textarea class="form-control" id="business_address" name="business_address" 
+                                          rows="2" placeholder="Street, City, Country">{{ settings.business_address }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logo -->
+                <div id="logo" class="card mb-4 settings-section">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-image"></i> Business Logo</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="logo" class="form-label">Upload Logo</label>
+                                <input type="file" class="form-control" id="logo" name="logo" accept="image/*">
+                                <small class="text-muted">Recommended: Square image, max 2MB (PNG, JPG)</small>
+                                
+                                {% if settings.logo %}
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="remove_logo" name="remove_logo" value="true">
+                                    <label class="form-check-label text-danger" for="remove_logo">
+                                        Remove current logo
+                                    </label>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Current Logo</label>
+                                <div class="logo-preview">
+                                    {% if settings.logo %}
+                                        <img src="{{ settings.logo.url }}" alt="Business Logo" id="logo-preview">
+                                    {% else %}
+                                        <div class="text-center text-muted py-4">
+                                            <i class="bi bi-image" style="font-size: 48px;"></i>
+                                            <p>No logo uploaded</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tax Settings -->
+                <div id="tax" class="card mb-4 settings-section">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-percent"></i> Tax Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="vat_rate" class="form-label">VAT/Tax Rate (%)</label>
+                                <input type="number" class="form-control" id="vat_rate" name="vat_rate" 
+                                       value="{{ settings.vat_rate }}" step="0.01" min="0" max="100">
+                                <small class="text-muted">Standard VAT rate in Kenya is 16%</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label d-block">VAT Calculation</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="vat_enabled" name="vat_enabled" 
+                                           {% if settings.vat_enabled %}checked{% endif %}>
+                                    <label class="form-check-label" for="vat_enabled">Enable VAT calculation on sales</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Currency Settings -->
+                <div id="currency" class="card mb-4 settings-section">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-currency-exchange"></i> Currency Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="currency_symbol" class="form-label">Currency Symbol</label>
+                                <input type="text" class="form-control" id="currency_symbol" name="currency_symbol" 
+                                       value="{{ settings.currency_symbol }}" placeholder="KES">
+                                <small class="text-muted">e.g., KES, USD, EUR, GBP</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="currency_position" class="form-label">Currency Position</label>
+                                <select class="form-select" id="currency_position" name="currency_position">
+                                    <option value="before" {% if settings.currency_position == 'before' %}selected{% endif %}>
+                                        Before Amount (KES 100.00)
+                                    </option>
+                                    <option value="after" {% if settings.currency_position == 'after' %}selected{% endif %}>
+                                        After Amount (100.00 KES)
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Receipt Settings -->
+                <div id="receipt" class="card mb-4 settings-section">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="bi bi-receipt"></i> Receipt Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="receipt_header" class="form-label">Receipt Header Text</label>
+                            <textarea class="form-control" id="receipt_header" name="receipt_header" 
+                                      rows="3" placeholder="Welcome to our store!">{{ settings.receipt_header }}</textarea>
+                            <small class="text-muted">Custom text to appear at the top of receipts</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="receipt_footer" class="form-label">Receipt Footer Text</label>
+                            <textarea class="form-control" id="receipt_footer" name="receipt_footer" 
+                                      rows="3" placeholder="Thank you for your business!">{{ settings.receipt_footer }}</textarea>
+                            <small class="text-muted">Custom text to appear at the bottom of receipts</small>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="show_logo_on_receipt" name="show_logo_on_receipt" 
+                                   {% if settings.show_logo_on_receipt %}checked{% endif %}>
+                            <label class="form-check-label" for="show_logo_on_receipt">Show logo on PDF receipts</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thermal Printer Settings -->
+                <div id="thermal" class="card mb-4 settings-section">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0"><i class="bi bi-printer"></i> Thermal Printer Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Configure settings for thermal receipt printers (58mm or 80mm)
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="thermal_receipt_width" class="form-label">Paper Width</label>
+                                <select class="form-select" id="thermal_receipt_width" name="thermal_receipt_width">
+                                    <option value="58" {% if settings.thermal_receipt_width == 58 %}selected{% endif %}>58mm</option>
+                                    <option value="80" {% if settings.thermal_receipt_width == 80 %}selected{% endif %}>80mm</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="thermal_font_size" class="form-label">Font Size</label>
+                                <select class="form-select" id="thermal_font_size" name="thermal_font_size">
+                                    <option value="small" {% if settings.thermal_font_size == 'small' %}selected{% endif %}>Small</option>
+                                    <option value="medium" {% if settings.thermal_font_size == 'medium' %}selected{% endif %}>Medium</option>
+                                    <option value="large" {% if settings.thermal_font_size == 'large' %}selected{% endif %}>Large</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="thermal_copies" class="form-label">Number of Copies</label>
+                                <input type="number" class="form-control" id="thermal_copies" name="thermal_copies" 
+                                       value="{{ settings.thermal_copies }}" min="1" max="5">
+                                <small class="text-muted">How many receipt copies to print</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="thermal_print_logo" name="thermal_print_logo" 
+                                           {% if settings.thermal_print_logo %}checked{% endif %}>
+                                    <label class="form-check-label" for="thermal_print_logo">Print logo on thermal receipts</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="thermal_print_barcode" name="thermal_print_barcode" 
+                                           {% if settings.thermal_print_barcode %}checked{% endif %}>
+                                    <label class="form-check-label" for="thermal_print_barcode">Print barcode on receipts</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="thermal_auto_cut" name="thermal_auto_cut" 
+                                           {% if settings.thermal_auto_cut %}checked{% endif %}>
+                                    <label class="form-check-label" for="thermal_auto_cut">Auto-cut paper after printing</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="thermal_show_tax_breakdown" name="thermal_show_tax_breakdown" 
+                                           {% if settings.thermal_show_tax_breakdown %}checked{% endif %}>
+                                    <label class="form-check-label" for="thermal_show_tax_breakdown">Show VAT breakdown</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock Management Settings -->
+                <div id="stock" class="card mb-4 settings-section">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-boxes"></i> Stock Management Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="default_low_stock_threshold" class="form-label">Default Low Stock Threshold</label>
+                                <input type="number" class="form-control" id="default_low_stock_threshold" 
+                                       name="default_low_stock_threshold" value="{{ settings.default_low_stock_threshold }}" min="0">
+                                <small class="text-muted">Default threshold for new products</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label d-block">Low Stock Alerts</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="enable_low_stock_alerts" 
+                                           name="enable_low_stock_alerts" {% if settings.enable_low_stock_alerts %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_low_stock_alerts">Enable low stock alerts</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="default_expiry_alert_days" class="form-label">Default Expiry Alert Days</label>
+                                <input type="number" class="form-control" id="default_expiry_alert_days" 
+                                       name="default_expiry_alert_days" value="{{ settings.default_expiry_alert_days }}" min="1">
+                                <small class="text-muted">Alert X days before product expiry</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label d-block">Expiry Alerts</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="enable_expiry_alerts" 
+                                           name="enable_expiry_alerts" {% if settings.enable_expiry_alerts %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_expiry_alerts">Enable expiry alerts</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Settings -->
+                <div id="system" class="card mb-4 settings-section">
+                    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-sliders"></i> System Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="allow_negative_stock" 
+                                   name="allow_negative_stock" {% if settings.allow_negative_stock %}checked{% endif %}>
+                            <label class="form-check-label" for="allow_negative_stock">
+                                <strong>Allow negative stock</strong><br>
+                                <small class="text-muted">Allow sales when stock is 0 (not recommended)</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="require_product_code" 
+                                   name="require_product_code" {% if settings.require_product_code %}checked{% endif %}>
+                            <label class="form-check-label" for="require_product_code">
+                                <strong>Require product code</strong><br>
+                                <small class="text-muted">Make barcode/product code mandatory for all products</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="auto_generate_product_code" 
+                                   name="auto_generate_product_code" {% if settings.auto_generate_product_code %}checked{% endif %}>
+                            <label class="form-check-label" for="auto_generate_product_code">
+                                <strong>Auto-generate product codes</strong><br>
+                                <small class="text-muted">Automatically generate unique product codes</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-muted">
+                                <small>Last updated: {{ settings.updated_at|date:"M d, Y H:i" }}</small>
+                                {% if settings.updated_by %}
+                                <br><small>By: {{ settings.updated_by.get_full_name|default:settings.updated_by.username }}</small>
+                                {% endif %}
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Save All Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Preview logo before upload
+document.getElementById('logo').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('logo-preview');
+            if (preview) {
+                preview.src = e.target.result;
+            } else {
+                const container = document.querySelector('.logo-preview');
+                container.innerHTML = '<img src="' + e.target.result + '" alt="Logo Preview" id="logo-preview">';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Smooth scroll for navigation
+document.querySelectorAll('.settings-nav a').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+});
+</script>
+{% endblock %}

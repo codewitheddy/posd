@@ -85,6 +85,14 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Add TestModeMiddleware if TEST_MODE is enabled
+if TEST_MODE:
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index('django.contrib.messages.middleware.MessageMiddleware'),
+        'pos.middleware.TestModeMiddleware'
+    )
+    print("⚠️  TEST_MODE ENABLED - Authentication bypassed! Only use for testing!")
+
 ROOT_URLCONF = 'pos_system.urls'
 
 TEMPLATES = [

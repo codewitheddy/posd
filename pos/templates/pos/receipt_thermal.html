@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt {{ sale.invoice_number }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .receipt-wrapper {
+            max-width: 400px;
+            margin: 0 auto 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .page-footer {
+            max-width: 900px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .success-message {
+            color: white;
+            margin-bottom: 25px;
+            animation: fadeInUp 0.6s ease;
+        }
+        
+        .success-message i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: block;
+            color: #4ade80;
+            text-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
+        }
+        
+        .success-message h2 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .success-message p {
+            font-size: 15px;
+            opacity: 0.9;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background: #138496;
+        }
+        
+        .shortcuts-hint {
+            text-align: center;
+            color: white;
+            font-size: 13px;
+            opacity: 0.95;
+        }
+        
+        .shortcuts-hint kbd {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0 2px;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .receipt-container {
+            padding: 30px 25px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #000;
+        }
+        
+        .receipt {
+            width: 100%;
+        }
+        
+        .center {
+            text-align: center;
+        }
+        
+        .bold {
+            font-weight: bold;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px dashed #333;
+        }
+        
+        .shop-name {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+            letter-spacing: 1px;
+        }
+        
+        .shop-info {
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #555;
+        }
+        
+        .divider {
+            border-top: 1px dashed #999;
+            margin: 12px 0;
+        }
+        
+        .double-divider {
+            border-top: 2px solid #333;
+            margin: 12px 0;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .info-row span:first-child {
+            color: #666;
+        }
+        
+        .info-row span:last-child {
+            color: #000;
+            font-weight: 600;
+        }
+        
+        .items-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 12px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+            color: #333;
+        }
+        
+        .item {
+            margin-bottom: 12px;
+        }
+        
+        .item-name {
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #1a1a1a;
+        }
+        
+        .item-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #555;
+        }
+        
+        .item-details .bold {
+            color: #000;
+        }
+        
+        .totals {
+            margin-top: 15px;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        
+        .total-row span:first-child {
+            color: #555;
+        }
+        
+        .total-row span:last-child {
+            color: #000;
+            font-weight: 600;
+        }
+        
+        .total-row.grand-total {
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 8px;
+            padding-top: 8px;
+            color: #000;
+        }
+        
+        .total-row.grand-total span {
+            color: #000;
+        }
+        
+        .payment-section {
+            margin-top: 15px;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        
+        .payment-section .bold.center {
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 13px;
+        }
+        
+        .payment-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .payment-row span:first-child {
+            color: #555;
+        }
+        
+        .payment-row span:last-child {
+            color: #000;
+            font-weight: 600;
+        }
+        
+        .payment-row.bold {
+            font-weight: bold;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #ccc;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px dashed #333;
+        }
+        
+        .thank-you {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 15px;
+            color: #1a1a1a;
+        }
+        
+        .footer > div {
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .loyalty-box {
+            border: 2px solid #28a745;
+            background: #d4edda;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .loyalty-box > div:first-child {
+            font-size: 11px;
+            color: #155724;
+            margin-bottom: 5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .loyalty-points {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+            margin: 5px 0;
+        }
+        
+        .loyalty-box > div:last-child {
+            font-size: 11px;
+            color: #155724;
+            margin-top: 5px;
+        }
+        
+        .powered-by {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .invoice-number-footer {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 11px;
+            color: #666;
+            font-weight: 600;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .page-footer,
+            .success-message,
+            .action-bar,
+            .shortcuts-hint {
+                display: none !important;
+            }
+            
+            .receipt-wrapper {
+                box-shadow: none;
+                border-radius: 0;
+                max-width: 80mm;
+                margin: 0;
+            }
+            
+            .receipt-container {
+                padding: 5mm;
+            }
+            
+            @page {
+                size: 80mm auto;
+                margin: 0;
+            }
+        }
+        
+        /* For 58mm thermal printers */
+        @media print and (max-width: 58mm) {
+            .receipt-wrapper {
+                max-width: 58mm;
+            }
+            
+            .receipt-container {
+                font-size: 11px;
+            }
+            
+            .shop-name {
+                font-size: 16px;
+            }
+            
+            @page {
+                size: 58mm auto;
+            }
+        }
+        
+        /* Responsive for mobile */
+        @media (max-width: 480px) {
+            body {
+                padding: 20px 10px;
+            }
+            
+            .success-message h2 {
+                font-size: 22px;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Receipt First -->
+    <div class="receipt-wrapper">
+        <div class="receipt-container">
+        <div class="receipt">
+        <!-- Header -->
+        <div class="header">
+            <div class="shop-name">{{ shop_name|upper }}</div>
+            {% if business_settings %}
+            {% if business_settings.address %}
+            <div class="shop-info">{{ business_settings.address }}</div>
+            {% endif %}
+            {% if business_settings.phone %}
+            <div class="shop-info">Tel: {{ business_settings.phone }}</div>
+            {% endif %}
+            {% if business_settings.email %}
+            <div class="shop-info">{{ business_settings.email }}</div>
+            {% endif %}
+            {% if business_settings.tax_id %}
+            <div class="shop-info">PIN: {{ business_settings.tax_id }}</div>
+            {% endif %}
+            {% endif %}
+        </div>
+        
+        <!-- Invoice Info -->
+        <div class="info-row">
+            <span>Invoice:</span>
+            <span class="bold">{{ sale.invoice_number }}</span>
+        </div>
+        <div class="info-row">
+            <span>Date:</span>
+            <span>{{ sale.date|date:"d/m/Y H:i" }}</span>
+        </div>
+        {% if sale.cashier %}
+        <div class="info-row">
+            <span>Cashier:</span>
+            <span>{{ sale.cashier.get_full_name|default:sale.cashier.username }}</span>
+        </div>
+        {% endif %}
+        {% if sale.customer %}
+        <div class="info-row">
+            <span>Customer:</span>
+            <span>{{ sale.customer.name }}</span>
+        </div>
+        {% endif %}
+        
+        <div class="divider"></div>
+        
+        <!-- Items -->
+        <div class="items-header">
+            <span>ITEM</span>
+            <span>TOTAL</span>
+        </div>
+        
+        {% for item in sale.items.all %}
+        <div class="item">
+            <div class="item-name">{{ item.product.name }}</div>
+            <div class="item-details">
+                <span>{{ item.quantity }} x {{ item.unit_price|floatformat:2 }}</span>
+                <span class="bold">{{ item.total_price|floatformat:2 }}</span>
+            </div>
+        </div>
+        {% endfor %}
+        
+        <div class="divider"></div>
+        
+        <!-- Totals -->
+        <div class="totals">
+            <div class="total-row">
+                <span>Subtotal (excl. VAT):</span>
+                <span>{{ sale.subtotal|floatformat:2 }}</span>
+            </div>
+            
+            {% if sale.discount_amount > 0 %}
+            <div class="total-row">
+                <span>Discount ({{ sale.discount_value }}{% if sale.discount_type == 'percentage' %}%{% endif %}):</span>
+                <span>-{{ sale.discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            
+            <div class="total-row">
+                <span>VAT ({{ sale.vat_rate }}%):</span>
+                <span>{{ sale.vat_amount|floatformat:2 }}</span>
+            </div>
+            
+            <div class="double-divider"></div>
+            
+            <div class="total-row grand-total">
+                <span>TOTAL:</span>
+                <span>{{ sale.total|floatformat:2 }}</span>
+            </div>
+        </div>
+        
+        <!-- Payment Details -->
+        {% if sale.payments.exists %}
+        <div class="divider"></div>
+        <div class="payment-section">
+            <div class="bold center" style="margin-bottom: 5px;">PAYMENT</div>
+            {% for payment in sale.payments.all %}
+            <div class="payment-row">
+                <span>{{ payment.payment_method.name }}:</span>
+                <span>{{ payment.amount|floatformat:2 }}</span>
+            </div>
+            {% if payment.reference_number %}
+            <div class="payment-row" style="font-size: 10px; margin-top: -2px;">
+                <span>Ref: {{ payment.reference_number }}</span>
+                <span></span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            
+            <div class="divider"></div>
+            
+            <div class="payment-row bold">
+                <span>Amount Paid:</span>
+                <span>{{ sale.amount_paid|floatformat:2 }}</span>
+            </div>
+            
+            {% if sale.change_given > 0 %}
+            <div class="payment-row bold">
+                <span>Change:</span>
+                <span>{{ sale.change_given|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Loyalty Points -->
+        {% if sale.customer %}
+        <div class="divider"></div>
+        <div class="loyalty-box">
+            <div style="font-size: 11px; margin-bottom: 3px;">LOYALTY POINTS</div>
+            {% if sale.loyalty_transactions.exists %}
+            {% with sale.loyalty_transactions.first as loyalty %}
+            <div class="loyalty-points">+{{ loyalty.points }} Points Earned!</div>
+            <div style="font-size: 10px; margin-top: 3px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
+            {% endwith %}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Footer -->
+        <div class="divider"></div>
+        <div class="footer">
+            <div class="thank-you">THANK YOU!</div>
+            <div>Please come again</div>
+            {% if business_settings.website %}
+            <div style="margin-top: 5px;">{{ business_settings.website }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="powered-by">
+            Powered by POS System
+        </div>
+        
+        <!-- Invoice Number -->
+        <div class="invoice-number-footer">
+            {{ sale.invoice_number }}
+        </div>
+    </div>
+    </div>
+    </div>
+    
+    <!-- Success Message & Action Buttons Below Receipt -->
+    <div class="page-footer">
+        <div class="success-message">
+            <i class="bi bi-check-circle-fill"></i>
+            <h2>Sale Completed Successfully!</h2>
+            <p>Receipt #{{ sale.invoice_number }} · {{ sale.date|date:"d/m/Y H:i" }}</p>
+        </div>
+        
+        <div class="action-bar">
+            <button onclick="window.print()" class="btn btn-primary" title="Print Receipt (P)">
+                <i class="bi bi-printer-fill"></i> Print Receipt
+            </button>
+            <a href="{% url 'pos_screen' %}" class="btn btn-success" title="New Sale (N)">
+                <i class="bi bi-cart-plus-fill"></i> New Sale
+            </a>
+            <a href="{% url 'dashboard' %}" class="btn btn-info" title="Dashboard (D)">
+                <i class="bi bi-house-door-fill"></i> Dashboard
+            </a>
+        </div>
+        
+        <div class="shortcuts-hint">
+            <i class="bi bi-keyboard"></i> Keyboard shortcuts: 
+            <kbd>P</kbd> Print · 
+            <kbd>N</kbd> New Sale · 
+            <kbd>D</kbd> Dashboard
+        </div>
+    </div>
+    
+    <script>
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Press 'P' to print
+            if (e.key === 'p' || e.key === 'P') {
+                if (!e.target.matches('input, textarea, select')) {
+                    e.preventDefault();
+                    window.print();
+                }
+            }
+            // Press 'N' for new sale
+            if (e.key === 'n' || e.key === 'N') {
+                if (!e.target.matches('input, textarea, select')) {
+                    e.preventDefault();
+                    window.location.href = "{% url 'pos_screen' %}";
+                }
+            }
+            // Press 'D' for dashboard
+            if (e.key === 'd' || e.key === 'D') {
+                if (!e.target.matches('input, textarea, select')) {
+                    e.preventDefault();
+                    window.location.href = "{% url 'dashboard' %}";
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>

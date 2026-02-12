@@ -1,0 +1,47 @@
+# Production Requirements for POS System
+# Pin versions for security and stability
+
+# Django Core
+Django==4.2.11
+django-jazzmin==2.6.0
+
+# Database
+dj-database-url==2.1.0
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+
+# Static Files
+whitenoise[brotli]==6.6.0
+
+# REST API
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.3.1
+drf-spectacular==0.27.1
+
+# Image Processing
+Pillow==10.2.0
+
+# PDF Generation
+reportlab==4.1.0
+
+# Security
+django-ratelimit==4.1.0  # Rate limiting
+django-axes==6.1.1  # Login attempt limiting
+
+# Monitoring & Performance
+django-silk==5.0.4  # Performance profiling (optional)
+
+# Caching (optional - requires Redis)
+django-redis==5.4.0
+redis==5.0.1
+
+# Production Server
+gunicorn==21.2.0  # WSGI server
+gevent==24.2.1  # Async workers
+
+# Environment Variables
+python-decouple==3.8  # Better env var management
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2024.1

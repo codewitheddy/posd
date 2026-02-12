@@ -1,0 +1,396 @@
+<!-- Analytics Modal -->
+<div class="modal fade" id="analyticsModal" tabindex="-1" aria-labelledby="analyticsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="analyticsModalLabel">
+                    <i class="bi bi-graph-up"></i> Sales Analytics
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Date Range Selector -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <label class="form-label">Period:</label>
+                        <select class="form-select" id="analytics-period" onchange="loadAnalytics()">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">This Week</option>
+                            <option value="month" selected>This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3" id="custom-date-start" style="display: none;">
+                        <label class="form-label">Start Date:</label>
+                        <input type="date" class="form-control" id="analytics-start-date">
+                    </div>
+                    <div class="col-md-3" id="custom-date-end" style="display: none;">
+                        <label class="form-label">End Date:</label>
+                        <input type="date" class="form-control" id="analytics-end-date">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-primary w-100" onclick="loadAnalytics()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="analytics-loading" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading analytics...</p>
+                </div>
+
+                <!-- Analytics Content -->
+                <div id="analytics-content">
+                    <!-- Summary Cards -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title">Total Revenue</h6>
+                                    <h3 id="total-revenue">KES 0.00</h3>
+                                    <small id="revenue-change"></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title">Total Sales</h6>
+                                    <h3 id="total-sales">0</h3>
+                                    <small id="sales-change"></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title">Average Sale</h6>
+                                    <h3 id="average-sale">KES 0.00</h3>
+                                    <small id="avg-change"></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body">
+                                    <h6 class="card-title">Total Discounts</h6>
+                                    <h3 id="total-discounts">KES 0.00</h3>
+                                    <small id="discount-change"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Sales by Payment Method</h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="payment-methods-chart" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Sales Trend</h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="sales-trend-chart" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Products -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Top 10 Products</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Product</th>
+                                                    <th class="text-end">Quantity Sold</th>
+                                                    <th class="text-end">Revenue</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="top-products-table">
+                                                <tr>
+                                                    <td colspan="4" class="text-center text-muted">No data available</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sales by Cashier -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Sales by Cashier</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cashier</th>
+                                                    <th class="text-end">Sales Count</th>
+                                                    <th class="text-end">Total Revenue</th>
+                                                    <th class="text-end">Average Sale</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="cashier-sales-table">
+                                                <tr>
+                                                    <td colspan="4" class="text-center text-muted">No data available</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="exportAnalytics()">
+                    <i class="bi bi-download"></i> Export PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+let paymentMethodsChart = null;
+let salesTrendChart = null;
+
+// Show/hide custom date inputs
+document.getElementById('analytics-period').addEventListener('change', function() {
+    const isCustom = this.value === 'custom';
+    document.getElementById('custom-date-start').style.display = isCustom ? 'block' : 'none';
+    document.getElementById('custom-date-end').style.display = isCustom ? 'block' : 'none';
+});
+
+function loadAnalytics() {
+    const period = document.getElementById('analytics-period').value;
+    let url = '/api/analytics/?period=' + period;
+    
+    if (period === 'custom') {
+        const startDate = document.getElementById('analytics-start-date').value;
+        const endDate = document.getElementById('analytics-end-date').value;
+        if (!startDate || !endDate) {
+            alert('Please select both start and end dates');
+            return;
+        }
+        url += '&start_date=' + startDate + '&end_date=' + endDate;
+    }
+    
+    // Show loading
+    document.getElementById('analytics-loading').style.display = 'block';
+    document.getElementById('analytics-content').style.display = 'none';
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || 'Server error');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                console.error('Analytics error:', data.error);
+                console.error('Traceback:', data.traceback);
+                alert('Error loading analytics: ' + data.error);
+                return;
+            }
+            updateAnalyticsDashboard(data);
+            document.getElementById('analytics-loading').style.display = 'none';
+            document.getElementById('analytics-content').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error loading analytics:', error);
+            alert('Error loading analytics data: ' + error.message);
+            document.getElementById('analytics-loading').style.display = 'none';
+        });
+}
+
+function updateAnalyticsDashboard(data) {
+    // Update summary cards
+    document.getElementById('total-revenue').textContent = 'KES ' + parseFloat(data.total_revenue || 0).toFixed(2);
+    document.getElementById('total-sales').textContent = data.total_sales || 0;
+    document.getElementById('average-sale').textContent = 'KES ' + parseFloat(data.average_sale || 0).toFixed(2);
+    document.getElementById('total-discounts').textContent = 'KES ' + parseFloat(data.total_discounts || 0).toFixed(2);
+    
+    // Update payment methods chart
+    updatePaymentMethodsChart(data.payment_methods || []);
+    
+    // Update sales trend chart
+    updateSalesTrendChart(data.sales_trend || []);
+    
+    // Update top products table
+    updateTopProductsTable(data.top_products || []);
+    
+    // Update cashier sales table
+    updateCashierSalesTable(data.cashier_sales || []);
+}
+
+function updatePaymentMethodsChart(paymentMethods) {
+    const ctx = document.getElementById('payment-methods-chart').getContext('2d');
+    
+    if (paymentMethodsChart) {
+        paymentMethodsChart.destroy();
+    }
+    
+    if (!paymentMethods || paymentMethods.length === 0) {
+        // Show "No data" message
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('No payment data available', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
+    }
+    
+    paymentMethodsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: paymentMethods.map(pm => pm.name),
+            datasets: [{
+                data: paymentMethods.map(pm => pm.total),
+                backgroundColor: [
+                    '#0d6efd',
+                    '#198754',
+                    '#ffc107',
+                    '#dc3545',
+                    '#6c757d'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function updateSalesTrendChart(salesTrend) {
+    const ctx = document.getElementById('sales-trend-chart').getContext('2d');
+    
+    if (salesTrendChart) {
+        salesTrendChart.destroy();
+    }
+    
+    salesTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: salesTrend.map(st => st.label),
+            datasets: [{
+                label: 'Revenue',
+                data: salesTrend.map(st => st.total),
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function updateTopProductsTable(topProducts) {
+    const tbody = document.getElementById('top-products-table');
+    
+    if (topProducts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No data available</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = topProducts.map((product, index) => `
+        <tr>
+            <td>${index + 1}</td>
+            <td>${product.name}</td>
+            <td class="text-end">${product.quantity}</td>
+            <td class="text-end">KES ${parseFloat(product.revenue).toFixed(2)}</td>
+        </tr>
+    `).join('');
+}
+
+function updateCashierSalesTable(cashierSales) {
+    const tbody = document.getElementById('cashier-sales-table');
+    
+    if (cashierSales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No data available</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = cashierSales.map(cashier => `
+        <tr>
+            <td>${cashier.name}</td>
+            <td class="text-end">${cashier.count}</td>
+            <td class="text-end">KES ${parseFloat(cashier.total).toFixed(2)}</td>
+            <td class="text-end">KES ${parseFloat(cashier.average).toFixed(2)}</td>
+        </tr>
+    `).join('');
+}
+
+function exportAnalytics() {
+    const period = document.getElementById('analytics-period').value;
+    let url = '/analytics/export/?period=' + period;
+    
+    if (period === 'custom') {
+        const startDate = document.getElementById('analytics-start-date').value;
+        const endDate = document.getElementById('analytics-end-date').value;
+        url += '&start_date=' + startDate + '&end_date=' + endDate;
+    }
+    
+    window.open(url, '_blank');
+}
+
+// Load analytics when modal is shown
+document.getElementById('analyticsModal').addEventListener('shown.bs.modal', function () {
+    loadAnalytics();
+});
+</script>
