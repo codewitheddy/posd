@@ -1,0 +1,219 @@
+================================================================================
+                    NEW THERMAL RECEIPT WORKFLOW
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SALE COMPLETION FLOW                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    1. Cashier adds items to cart
+           ↓
+    2. Clicks "Complete Sale"
+           ↓
+    3. Selects payment method(s)
+           ↓
+    4. Confirms payment
+           ↓
+    5. ✅ Sale completed!
+           ↓
+    6. 🎯 AUTOMATICALLY REDIRECTED TO THERMAL RECEIPT
+           ↓
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                                                                  │
+    │  ┌────────────────────────────────────────────────────────────┐ │
+    │  │  [🖨️ Print Receipt]  [📄 PDF Invoice]                     │ │
+    │  │  [🛒 New Sale]       [🏠 Dashboard]                        │ │
+    │  └────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  💡 Keyboard shortcuts: [P] Print | [N] New Sale | [D] Dashboard│
+    │                                                                  │
+    │  ┌────────────────────────────────────────────────────────────┐ │
+    │  │                    MY RETAIL SHOP                          │ │
+    │  │                 123 Main Street, Nairobi                   │ │
+    │  │                  Tel: +254 712 345 678                     │ │
+    │  │                                                            │ │
+    │  │  Invoice: INV-2024-00123                                  │ │
+    │  │  Date: 12/02/2024 14:30                                   │ │
+    │  │  Cashier: John Doe                                        │ │
+    │  │  ─────────────────────────────────────────────────────    │ │
+    │  │  ITEM                                    TOTAL             │ │
+    │  │                                                            │ │
+    │  │  Coca Cola 500ml                                          │ │
+    │  │  2 x 60.00                              120.00            │ │
+    │  │                                                            │ │
+    │  │  ─────────────────────────────────────────────────────    │ │
+    │  │  Subtotal (excl. VAT):                  370.69            │ │
+    │  │  VAT (16%):                              59.31            │ │
+    │  │  ═════════════════════════════════════════════════════    │ │
+    │  │  TOTAL:                                 430.00            │ │
+    │  │  ─────────────────────────────────────────────────────    │ │
+    │  │                     PAYMENT                               │ │
+    │  │  Cash:                                  500.00            │ │
+    │  │  Amount Paid:                           500.00            │ │
+    │  │  Change:                                 70.00            │ │
+    │  │  ─────────────────────────────────────────────────────    │ │
+    │  │                   THANK YOU!                              │ │
+    │  │                Please come again                          │ │
+    │  └────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    └──────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                         CASHIER ACTION OPTIONS
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  OPTION 1: Print Receipt                                                   │
+│  ─────────────────────────                                                 │
+│  • Click [🖨️ Print Receipt] button                                         │
+│  • OR press 'P' key                                                        │
+│  • Print dialog opens                                                      │
+│  • Select thermal printer                                                  │
+│  • Receipt prints                                                          │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  OPTION 2: Start New Sale                                                  │
+│  ──────────────────────────                                                │
+│  • Click [🛒 New Sale] button                                              │
+│  • OR press 'N' key                                                        │
+│  • Returns to POS screen                                                   │
+│  • Ready for next customer                                                 │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  OPTION 3: Generate PDF Invoice                                            │
+│  ────────────────────────────────                                          │
+│  • Click [📄 PDF Invoice] button                                           │
+│  • PDF opens in new tab                                                    │
+│  • Can download or print formal invoice                                    │
+│  • Original receipt page remains open                                      │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  OPTION 4: Return to Dashboard                                             │
+│  ───────────────────────────────                                           │
+│  • Click [🏠 Dashboard] button                                             │
+│  • OR press 'D' key                                                        │
+│  • Returns to main dashboard                                               │
+│  • View sales summary and reports                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                         KEYBOARD SHORTCUTS
+================================================================================
+
+    ┌─────────┬──────────────────────────────────────────────────┐
+    │   KEY   │                   ACTION                         │
+    ├─────────┼──────────────────────────────────────────────────┤
+    │    P    │  Print thermal receipt                           │
+    │    N    │  Start new sale (go to POS screen)              │
+    │    D    │  Go to dashboard                                 │
+    └─────────┴──────────────────────────────────────────────────┘
+
+    💡 TIP: Keyboard shortcuts work anywhere on the page
+            (except when typing in input fields)
+
+
+================================================================================
+                         TYPICAL WORKFLOW
+================================================================================
+
+    FAST CHECKOUT (Most Common):
+    ────────────────────────────
+    1. Complete sale
+    2. Receipt appears
+    3. Press 'P' to print
+    4. Press 'N' for next customer
+    
+    Time: ~2 seconds after sale completion
+
+
+    WITH PDF INVOICE (When Needed):
+    ────────────────────────────────
+    1. Complete sale
+    2. Receipt appears
+    3. Click "PDF Invoice"
+    4. PDF opens in new tab
+    5. Download/print PDF
+    6. Close PDF tab
+    7. Press 'N' for next customer
+    
+    Time: ~10 seconds
+
+
+    END OF SHIFT:
+    ─────────────
+    1. Complete last sale
+    2. Receipt appears
+    3. Press 'P' to print
+    4. Press 'D' to go to dashboard
+    5. View sales reports
+    
+    Time: ~3 seconds
+
+
+================================================================================
+                         COMPARISON: OLD vs NEW
+================================================================================
+
+    OLD WORKFLOW:
+    ─────────────
+    Complete Sale → Standard Invoice → Click "Thermal Receipt" → Auto-print
+    
+    Steps: 4
+    Clicks: 2
+    Time: ~5 seconds
+
+
+    NEW WORKFLOW:
+    ─────────────
+    Complete Sale → Thermal Receipt → Press 'P' → Print
+    
+    Steps: 3
+    Clicks: 1 (or 0 with keyboard)
+    Time: ~2 seconds
+    
+    ⚡ 40% FASTER!
+
+
+================================================================================
+                         BENEFITS
+================================================================================
+
+    ✅ Faster checkout process
+    ✅ Fewer clicks required
+    ✅ Keyboard shortcuts for power users
+    ✅ No unexpected auto-printing
+    ✅ Clear action buttons
+    ✅ Professional receipt format
+    ✅ Easy access to PDF when needed
+    ✅ Quick navigation to next action
+
+
+================================================================================
+                         PRINTING TIPS
+================================================================================
+
+    📌 For Thermal Printers:
+       • Set paper size to 80mm
+       • Disable margins
+       • Enable background graphics
+       • Use "Print" button or 'P' key
+
+    📌 For Regular Printers:
+       • Receipt will print centered
+       • Action buttons won't print
+       • Clean, professional output
+
+    📌 For PDF Archiving:
+       • Use "PDF Invoice" button
+       • Formal A4 format
+       • Suitable for records
+
+
+================================================================================
