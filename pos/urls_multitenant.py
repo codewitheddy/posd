@@ -103,6 +103,7 @@ business_urlpatterns = [
     path('pos/', views.pos_screen, name='pos_screen'),
     path('pos/complete/', views.complete_sale, name='complete_sale'),
     path('api/product/search/', views.search_product_by_code, name='search_product_by_code'),
+    path('api/customer/search/', views.search_customer_by_phone, name='search_customer_by_phone'),
     
     # Invoices
     path('invoice/<int:pk>/', views.invoice_view, name='invoice_view'),
@@ -145,6 +146,15 @@ business_urlpatterns = [
     path('customers/<int:pk>/edit/', views.customer_edit, name='customer_edit'),
     path('customers/<int:pk>/delete/', views.customer_delete, name='customer_delete'),
     path('customers/<int:pk>/', views.customer_detail, name='customer_detail'),
+    
+    # Loyalty Program
+    path('customers/<int:pk>/loyalty/', views.loyalty_dashboard, name='loyalty_dashboard'),
+    path('customers/<int:pk>/loyalty/transactions/', views.loyalty_transactions, name='loyalty_transactions'),
+    path('customers/<int:pk>/loyalty/redeem/', views.loyalty_redeem, name='loyalty_redeem'),
+    path('customers/<int:pk>/loyalty/adjust/', views.loyalty_adjust, name='loyalty_adjust'),
+    path('loyalty/rewards/', views.loyalty_rewards_list, name='loyalty_rewards_list'),
+    path('loyalty/rewards/create/', views.loyalty_reward_create, name='loyalty_reward_create'),
+    path('loyalty/rewards/<int:pk>/edit/', views.loyalty_reward_edit, name='loyalty_reward_edit'),
     
     # Payment Methods Management
     path('payment-methods/', views.payment_method_list, name='payment_method_list'),

@@ -584,11 +584,18 @@
         <div class="divider"></div>
         <div class="loyalty-box">
             <div style="font-size: 11px; margin-bottom: 3px;">LOYALTY POINTS</div>
-            {% if sale.loyalty_transactions.exists %}
+            <div style="font-size: 12px; font-weight: bold; color: #155724; margin-bottom: 5px;">{{ sale.customer.name }}</div>
             {% with sale.loyalty_transactions.first as loyalty %}
+            {% if loyalty %}
             <div class="loyalty-points">+{{ loyalty.points }} Points Earned!</div>
             <div style="font-size: 10px; margin-top: 3px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
+            {% else %}
+            <div style="font-size: 11px; color: #666;">No points earned this transaction</div>
+            <div style="font-size: 10px; margin-top: 3px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
+            {% endif %}
             {% endwith %}
+            {% if sale.customer.phone %}
+            <div style="font-size: 10px; color: #155724; margin-top: 3px;">{{ sale.customer.phone }}</div>
             {% endif %}
         </div>
         {% endif %}

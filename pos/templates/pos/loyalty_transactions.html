@@ -1,0 +1,114 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Loyalty Transactions - {{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-clock-history"></i> Loyalty Transactions</h2>
+            <p class="text-muted mb-0">{{ customer.name }} ({{ customer.customer_code }})</p>
+        </div>
+        <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <select name="type" class="form-select">
+                        <option value="">All Transaction Types</option>
+                        <option value="earn" {% if transaction_type == 'earn' %}selected{% endif %}>Points Earned</option>
+                        <option value="redeem" {% if transaction_type == 'redeem' %}selected{% endif %}>Points Redeemed</option>
+                        <option value="adjust" {% if transaction_type == 'adjust' %}selected{% endif %}>Manual Adjustment</option>
+                        <option value="bonus" {% if transaction_type == 'bonus' %}selected{% endif %}>Bonus Points</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-filter"></i> Filter
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <a href="{% url 'loyalty_transactions' slug=request.business.slug pk=customer.pk %}" class="btn btn-secondary w-100">
+                        <i class="bi bi-arrow-clockwise"></i> Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Transactions List -->
+    <div class="card">
+        <div class="card-body">
+            {% if transactions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Points</th>
+                            <th>Amount</th>
+                            <th>Invoice</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction.created_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                {% if transaction.transaction_type == 'earn' %}
+                                    <span class="badge bg-success">Earned</span>
+                                {% elif transaction.transaction_type == 'redeem' %}
+                                    <span class="badge bg-danger">Redeemed</span>
+                                {% elif transaction.transaction_type == 'adjust' %}
+                                    <span class="badge bg-warning text-dark">Adjusted</span>
+                                {% elif transaction.transaction_type == 'bonus' %}
+                                    <span class="badge bg-info">Bonus</span>
+                                {% elif transaction.transaction_type == 'expire' %}
+                                    <span class="badge bg-secondary">Expired</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction.description }}</td>
+                            <td>
+                                <strong class="{% if transaction.points > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ transaction.points|stringformat:"+d" }}
+                                </strong>
+                            </td>
+                            <td>
+                                {% if transaction.amount > 0 %}
+                                    KES {{ transaction.amount|floatformat:2 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if transaction.sale %}
+                                    <a href="{% url 'invoice_view' slug=request.business.slug pk=transaction.sale.pk %}">
+                                        {{ transaction.sale.invoice_number }}
+                                    </a>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                <p class="text-muted mt-3">No transactions found</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}{% if reward %}Edit{% else %}Create{% endif %} Loyalty Reward{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>{% if reward %}Edit{% else %}Create New{% endif %} Loyalty Reward</h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Reward Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ reward.name|default:'' }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description *</label>
+                            <textarea class="form-control" id="description" name="description" 
+                                      rows="3" required>{{ reward.description|default:'' }}</textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="points_required" class="form-label">Points Required *</label>
+                                <input type="number" class="form-control" id="points_required" name="points_required" 
+                                       value="{{ reward.points_required|default:'' }}" min="1" required>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="reward_type" class="form-label">Reward Type *</label>
+                                <select class="form-select" id="reward_type" name="reward_type" required>
+                                    <option value="discount" {% if not reward or reward.reward_type == 'discount' %}selected{% endif %}>
+                                        Discount
+                                    </option>
+                                    <option value="product" {% if reward.reward_type == 'product' %}selected{% endif %}>
+                                        Free Product
+                                    </option>
+                                    <option value="voucher" {% if reward.reward_type == 'voucher' %}selected{% endif %}>
+                                        Voucher
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="discountValueField">
+                            <label for="discount_value" class="form-label">Discount Value (KES) *</label>
+                            <input type="number" class="form-control" id="discount_value" name="discount_value" 
+                                   value="{{ reward.discount_value|default:'0' }}" step="0.01" min="0">
+                        </div>
+
+                        {% if reward %}
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                       {% if reward.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">
+                                    Active (customers can redeem this reward)
+                                </label>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Note:</strong> Customers can redeem rewards when they have enough points.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'loyalty_rewards_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-save"></i> Save Reward
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Show/hide discount value field based on reward type
+    document.getElementById('reward_type').addEventListener('change', function() {
+        const discountField = document.getElementById('discountValueField');
+        if (this.value === 'discount') {
+            discountField.style.display = 'block';
+            document.getElementById('discount_value').required = true;
+        } else {
+            discountField.style.display = 'none';
+            document.getElementById('discount_value').required = false;
+        }
+    });
+    
+    // Initialize on page load
+    document.getElementById('reward_type').dispatchEvent(new Event('change'));
+</script>
+{% endblock %}

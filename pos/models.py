@@ -1018,16 +1018,16 @@ class Customer(models.Model):
             self.loyalty_points += points
             self.lifetime_points += points
             self.save()
-            
-            # Create transaction record
-            LoyaltyTransaction.objects.create(
-                customer=self,
-                transaction_type='earn',
-                points=points,
-                amount=amount,
-                sale=sale,
-                description=description
-            )
+        
+        # Always create transaction record, even for 0 points (for tracking)
+        LoyaltyTransaction.objects.create(
+            customer=self,
+            transaction_type='earn',
+            points=points,
+            amount=amount,
+            sale=sale,
+            description=description
+        )
         
         return points
     

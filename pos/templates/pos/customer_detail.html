@@ -55,6 +55,9 @@
                     <h4 class="text-success">KES {{ customer.total_purchases|floatformat:2 }}</h4></p>
 
                     <div class="d-grid gap-2 mt-3">
+                        <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-primary">
+                            <i class="bi bi-star-fill"></i> Loyalty Dashboard
+                        </a>
                         <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn btn-warning">
                             <i class="bi bi-pencil"></i> Edit Customer
                         </a>
@@ -93,7 +96,15 @@
                                     <td>{{ sale.date|date:"d M Y H:i" }}</td>
                                     <td>{{ sale.items.count }}</td>
                                     <td>KES {{ sale.total|floatformat:2 }}</td>
-                                    <td>{{ sale.total|floatformat:0|add:"0"|floatformat:0|divisibleby:100|yesno:"1,0" }} pts</td>
+                                    <td>
+                                        {% with points_earned=sale.loyalty_transactions.first %}
+                                            {% if points_earned %}
+                                                <span class="badge bg-success">+{{ points_earned.points }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0 pts</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
                                     <td>
                                         <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-info">
                                             <i class="bi bi-eye"></i> View

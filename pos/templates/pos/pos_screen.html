@@ -122,53 +122,61 @@
             <i class="bi bi-info-circle"></i> <strong>Note:</strong> All prices shown are tax-inclusive (VAT included). Tax breakdown will be shown in the cart.
         </div>
         
-        <!-- Customer Selection Section -->
+        <!-- Customer Selection and Barcode Scanner Section - Side by Side -->
         <div class="card mb-3 border-primary">
             <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <label for="customer-select" class="form-label">
-                            <i class="bi bi-person-circle"></i> <strong>Select Customer (Optional - for Loyalty Points)</strong>
+                <div class="row">
+                    <!-- Customer Lookup by Phone -->
+                    <div class="col-md-6 mb-3 mb-md-0">
+                        <label for="customer-phone-input" class="form-label">
+                            <i class="bi bi-person-circle"></i> <strong>Customer Phone/Code (Optional - for Loyalty Points)</strong>
                         </label>
-                        <select id="customer-select" class="form-select">
-                            <option value="">Walk-in Customer (No Points)</option>
-                            {% for customer in customers %}
-                            <option value="{{ customer.id }}" 
-                                    data-points="{{ customer.loyalty_points }}"
-                                    data-tier="{{ customer.tier }}"
-                                    data-name="{{ customer.name }}">
-                                {{ customer.name }} - {{ customer.phone }} ({{ customer.loyalty_points }} points - {{ customer.get_tier_display }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <div id="customer-info" class="mt-3" style="display: none;">
-                            <div class="alert alert-info mb-0">
-                                <strong id="customer-name"></strong><br>
-                                <span class="badge bg-warning text-dark" id="customer-tier"></span>
-                                <span class="badge bg-success" id="customer-points"></span>
+                        <div class="input-group">
+                            <input type="text" id="customer-phone-input" class="form-control" 
+                                   placeholder="Type phone number (auto-search)..." 
+                                   autocomplete="off">
+                            <button class="btn btn-success" type="button" onclick="searchCustomer()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearCustomer()" id="clear-customer-btn" style="display: none;">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Auto-searches after 9+ digits or CUST- code</small>
+                        <div id="customer-info" class="mt-2" style="display: none;">
+                            <div class="alert alert-success mb-0 py-2">
+                                <small>
+                                    <i class="bi bi-check-circle"></i> <strong id="customer-name"></strong><br>
+                                    <span class="badge bg-warning text-dark" id="customer-tier"></span>
+                                    <span class="badge bg-success" id="customer-points"></span>
+                                </small>
                             </div>
                         </div>
+                        <div id="customer-error" class="mt-2" style="display: none;">
+                            <div class="alert alert-danger mb-0 py-2">
+                                <small id="customer-error-message"></small>
+                            </div>
+                        </div>
+                        <input type="hidden" id="selected-customer-id" value="">
+                    </div>
+                    
+                    <!-- Barcode Scanner -->
+                    <div class="col-md-6">
+                        <label for="barcode-input" class="form-label">
+                            <i class="bi bi-upc-scan"></i> <strong>Scan Barcode or Enter Product Code</strong>
+                        </label>
+                        <div class="input-group">
+                            <input type="text" id="barcode-input" class="form-control" 
+                                   placeholder="Scan or type code..." 
+                                   autocomplete="off">
+                            <button class="btn btn-primary" type="button" onclick="searchByBarcode()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Focus and scan with barcode scanner</small>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Barcode Scanner Section -->
-        <div class="barcode-section">
-            <label for="barcode-input" class="form-label">
-                <i class="bi bi-upc-scan"></i> <strong>Scan Barcode or Enter Product Code</strong>
-            </label>
-            <div class="input-group">
-                <input type="text" id="barcode-input" class="form-control" 
-                       placeholder="Scan barcode or type product code and press Enter..." 
-                       autocomplete="off">
-                <button class="btn btn-primary" type="button" onclick="searchByBarcode()">
-                    <i class="bi bi-search"></i> Search
-                </button>
-            </div>
-            <small class="text-muted">Tip: Focus this field and scan with your barcode scanner</small>
         </div>
 
         <div class="mb-3">
@@ -413,15 +421,18 @@ function loadCartFromStorage() {
                     if (item.quantity > item.availableStock) {
                         if (item.availableStock > 0) {
                             item.quantity = item.availableStock;
-                            showNotification(`${item.name} quantity adjusted to available stock (${item.availableStock})`, 'warning');
+                            const notifEl = document.querySelector('.alert');
+                            if (notifEl) {
+                                console.log(`${item.name} quantity adjusted to available stock (${item.availableStock})`);
+                            }
                         } else {
-                            showNotification(`${item.name} removed from cart (out of stock)`, 'warning');
+                            console.log(`${item.name} removed from cart (out of stock)`);
                             return false; // Remove from cart
                         }
                     }
                     return true;
                 } else {
-                    showNotification(`${item.name} removed from cart (product no longer available)`, 'warning');
+                    console.log(`${item.name} removed from cart (product no longer available)`);
                     return false; // Remove if product doesn't exist
                 }
             });
@@ -431,20 +442,25 @@ function loadCartFromStorage() {
             const customerData = JSON.parse(savedCustomer);
             selectedCustomer = customerData;
             
-            // Restore customer selection in dropdown
-            const customerSelect = document.getElementById('customer-select');
-            if (customerSelect) customerSelect.value = customerData.id;
+            // Restore customer in new phone input system
+            const phoneInput = document.getElementById('customer-phone-input');
+            const hiddenField = document.getElementById('selected-customer-id');
+            const nameEl = document.getElementById('customer-name');
+            const tierEl = document.getElementById('customer-tier');
+            const pointsEl = document.getElementById('customer-points');
+            const infoEl = document.getElementById('customer-info');
+            const clearBtn = document.getElementById('clear-customer-btn');
             
-            // Show customer info with null checks
-            const customerNameEl = document.getElementById('customer-name');
-            const customerTierEl = document.getElementById('customer-tier');
-            const customerPointsEl = document.getElementById('customer-points');
-            const customerInfoEl = document.getElementById('customer-info');
-            
-            if (customerNameEl) customerNameEl.textContent = customerData.name;
-            if (customerTierEl) customerTierEl.textContent = customerData.tier.toUpperCase();
-            if (customerPointsEl) customerPointsEl.textContent = customerData.points + ' points';
-            if (customerInfoEl) customerInfoEl.style.display = 'block';
+            if (phoneInput) {
+                phoneInput.value = customerData.phone || customerData.name;
+                phoneInput.disabled = true;
+            }
+            if (hiddenField) hiddenField.value = customerData.id;
+            if (nameEl) nameEl.textContent = customerData.name;
+            if (tierEl) tierEl.textContent = (customerData.tier || 'bronze').toUpperCase();
+            if (pointsEl) pointsEl.textContent = (customerData.points || 0) + ' points';
+            if (infoEl) infoEl.style.display = 'block';
+            if (clearBtn) clearBtn.style.display = 'inline-block';
             
             console.log('Customer restored:', customerData.name);
         }
@@ -461,7 +477,7 @@ function loadCartFromStorage() {
         // Update UI
         if (cart.length > 0) {
             updateCart();
-            showNotification(`Cart restored with ${cart.length} item(s)`, 'success');
+            console.log(`Cart restored with ${cart.length} item(s)`);
         }
     } catch (error) {
         console.error('Error loading cart from storage:', error);
@@ -547,39 +563,140 @@ setInterval(function() {
 
 // ==================== END CART PERSISTENCE ====================
 
-// Customer selection handler
-document.getElementById('customer-select').addEventListener('change', function() {
-    const select = this;
-    const customerId = select.value;
+// Customer search by phone/code
+function searchCustomer() {
+    const input = document.getElementById('customer-phone-input');
+    const query = input.value.trim();
     
-    if (customerId) {
-        const option = select.options[select.selectedIndex];
-        selectedCustomer = {
-            id: customerId,
-            name: option.dataset.name,
-            points: parseInt(option.dataset.points),
-            tier: option.dataset.tier
-        };
-        
-        // Show customer info with null checks
-        const customerNameEl = document.getElementById('customer-name');
-        const customerTierEl = document.getElementById('customer-tier');
-        const customerPointsEl = document.getElementById('customer-points');
-        const customerInfoEl = document.getElementById('customer-info');
-        
-        if (customerNameEl) customerNameEl.textContent = selectedCustomer.name;
-        if (customerTierEl) customerTierEl.textContent = selectedCustomer.tier.toUpperCase();
-        if (customerPointsEl) customerPointsEl.textContent = selectedCustomer.points + ' points';
-        if (customerInfoEl) customerInfoEl.style.display = 'block';
-    } else {
-        selectedCustomer = null;
-        const customerInfoEl = document.getElementById('customer-info');
-        if (customerInfoEl) customerInfoEl.style.display = 'none';
+    if (!query) {
+        return; // Silently return if empty (for auto-lookup)
     }
     
+    // Don't search if already disabled (customer already selected)
+    if (input.disabled) {
+        return;
+    }
+    
+    // Show loading state
+    const originalPlaceholder = input.placeholder;
+    input.placeholder = 'Searching...';
+    
+    fetch(`/b/{{ request.business.slug }}/api/customer/search/?query=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            input.placeholder = originalPlaceholder;
+            
+            if (data.success) {
+                // Customer found
+                selectedCustomer = {
+                    id: data.customer.id,
+                    name: data.customer.name,
+                    points: data.customer.loyalty_points,
+                    tier: data.customer.tier
+                };
+                
+                // Update hidden field
+                const hiddenField = document.getElementById('selected-customer-id');
+                if (hiddenField) hiddenField.value = data.customer.id;
+                
+                // Show customer info with null checks
+                const nameEl = document.getElementById('customer-name');
+                const tierEl = document.getElementById('customer-tier');
+                const pointsEl = document.getElementById('customer-points');
+                const infoEl = document.getElementById('customer-info');
+                const errorEl = document.getElementById('customer-error');
+                const clearBtn = document.getElementById('clear-customer-btn');
+                
+                if (nameEl) nameEl.textContent = data.customer.name;
+                if (tierEl) tierEl.textContent = data.customer.tier_display;
+                if (pointsEl) pointsEl.textContent = data.customer.loyalty_points + ' points';
+                if (infoEl) infoEl.style.display = 'block';
+                if (errorEl) errorEl.style.display = 'none';
+                if (clearBtn) clearBtn.style.display = 'inline-block';
+                
+                // Disable input after successful search
+                input.disabled = true;
+                
+                calculateTotal();
+                saveCartToStorage();
+            } else {
+                // Customer not found - only show error if manually triggered
+                const errorMsgEl = document.getElementById('customer-error-message');
+                const errorEl = document.getElementById('customer-error');
+                const infoEl = document.getElementById('customer-info');
+                
+                if (errorMsgEl) errorMsgEl.textContent = data.error;
+                if (errorEl) errorEl.style.display = 'block';
+                if (infoEl) infoEl.style.display = 'none';
+                selectedCustomer = null;
+            }
+        })
+        .catch(error => {
+            input.placeholder = originalPlaceholder;
+            console.error('Error searching customer:', error);
+        });
+}
+
+// Clear customer selection
+function clearCustomer() {
+    selectedCustomer = null;
+    
+    const input = document.getElementById('customer-phone-input');
+    const hiddenField = document.getElementById('selected-customer-id');
+    const infoEl = document.getElementById('customer-info');
+    const errorEl = document.getElementById('customer-error');
+    const clearBtn = document.getElementById('clear-customer-btn');
+    
+    if (input) {
+        input.value = '';
+        input.disabled = false;
+    }
+    if (hiddenField) hiddenField.value = '';
+    if (infoEl) infoEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
+    
     calculateTotal();
-    saveCartToStorage(); // Save when customer changes
-});
+    saveCartToStorage();
+}
+
+// Allow Enter key to search customer
+const customerPhoneInput = document.getElementById('customer-phone-input');
+if (customerPhoneInput) {
+    customerPhoneInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchCustomer();
+        }
+    });
+    
+    // Auto-lookup customer as user types (with debouncing)
+    let customerSearchTimeout;
+    customerPhoneInput.addEventListener('input', function(e) {
+        const query = e.target.value.trim();
+        
+        // Clear previous timeout
+        clearTimeout(customerSearchTimeout);
+        
+        // Clear customer info if input is empty
+        if (!query) {
+            clearCustomer();
+            return;
+        }
+        
+        // Only auto-search if input looks like a phone number (at least 9 digits)
+        // or a customer code (starts with CUST-)
+        const isPhoneNumber = /^\d{9,}$/.test(query);
+        const isCustomerCode = /^CUST-/i.test(query);
+        
+        if (isPhoneNumber || isCustomerCode) {
+            // Debounce: wait 500ms after user stops typing
+            customerSearchTimeout = setTimeout(() => {
+                searchCustomer();
+            }, 500);
+        }
+    });
+}
 
 function getTierMultiplier(tier) {
     const multipliers = {

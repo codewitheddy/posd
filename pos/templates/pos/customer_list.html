@@ -148,6 +148,9 @@
                                 <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-info" title="View Details">
                                     <i class="bi bi-eye"></i>
                                 </a>
+                                <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-primary" title="Loyalty">
+                                    <i class="bi bi-star-fill"></i>
+                                </a>
                                 <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>

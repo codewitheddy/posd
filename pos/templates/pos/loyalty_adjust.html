@@ -1,0 +1,82 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Adjust Points - {{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h4><i class="bi bi-pencil-square"></i> Manual Points Adjustment</h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Customer Info -->
+                    <div class="alert alert-info">
+                        <h5>{{ customer.name }}</h5>
+                        <p class="mb-0">
+                            <strong>Current Points:</strong> {{ customer.loyalty_points }}<br>
+                            <strong>Lifetime Points:</strong> {{ customer.lifetime_points }}
+                        </p>
+                    </div>
+
+                    <!-- Adjustment Form -->
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Adjustment Type *</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="adjustment_type" id="add" value="add" checked>
+                                <label class="btn btn-outline-success" for="add">
+                                    <i class="bi bi-plus-circle"></i> Add Points
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="adjustment_type" id="subtract" value="subtract">
+                                <label class="btn btn-outline-danger" for="subtract">
+                                    <i class="bi bi-dash-circle"></i> Subtract Points
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="points" class="form-label">Number of Points *</label>
+                            <input type="number" class="form-control" id="points" name="points" 
+                                   min="1" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Reason *</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="3" 
+                                      placeholder="Explain why you're adjusting points..." required></textarea>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Admin Action:</strong> This adjustment will be logged and cannot be undone.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-warning btn-lg">
+                                <i class="bi bi-check-circle"></i> Apply Adjustment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

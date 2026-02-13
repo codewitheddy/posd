@@ -1,0 +1,227 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Loyalty Dashboard - {{ customer.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tier-badge {
+        font-size: 1.5rem;
+        padding: 10px 20px;
+        border-radius: 10px;
+    }
+    .tier-bronze { background: linear-gradient(135deg, #CD7F32 0%, #B87333 100%); }
+    .tier-silver { background: linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%); }
+    .tier-gold { background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); }
+    .tier-platinum { background: linear-gradient(135deg, #E5E4E2 0%, #B0B0B0 100%); }
+    
+    .points-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 30px;
+    }
+    
+    .progress-bar-custom {
+        height: 25px;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+    
+    .transaction-earn { border-left: 4px solid #28a745; }
+    .transaction-redeem { border-left: 4px solid #dc3545; }
+    .transaction-adjust { border-left: 4px solid #ffc107; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-star-fill text-warning"></i> Loyalty Dashboard</h2>
+            <p class="text-muted mb-0">{{ customer.name }} ({{ customer.customer_code }})</p>
+        </div>
+        <div>
+            <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn btn-secondary me-2">
+                <i class="bi bi-arrow-left"></i> Back to Customer
+            </a>
+            <a href="{% url 'loyalty_adjust' slug=request.business.slug pk=customer.pk %}" class="btn btn-warning">
+                <i class="bi bi-pencil"></i> Adjust Points
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column: Points & Tier -->
+        <div class="col-md-4">
+            <!-- Current Points Card -->
+            <div class="card points-card mb-4">
+                <div class="text-center">
+                    <h6 class="mb-2">Available Points</h6>
+                    <h1 class="display-3 mb-0">{{ customer.loyalty_points }}</h1>
+                    <p class="mb-3">Worth KES {{ points_value|floatformat:2 }}</p>
+                    <a href="{% url 'loyalty_redeem' slug=request.business.slug pk=customer.pk %}" class="btn btn-light btn-lg">
+                        <i class="bi bi-gift"></i> Redeem Points
+                    </a>
+                </div>
+            </div>
+
+            <!-- Tier Card -->
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Current Tier</h5>
+                    <div class="tier-badge tier-{{ customer.tier }} text-white mb-3">
+                        <i class="{{ tier_info.icon }}"></i> {{ customer.get_tier_display }}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted">Lifetime Points</small>
+                        <h4>{{ customer.lifetime_points }}</h4>
+                    </div>
+                    
+                    {% if tier_info.next %}
+                    <div>
+                        <small class="text-muted">Progress to {{ tier_info.next_tier }}</small>
+                        <div class="progress progress-bar-custom mt-2">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {{ progress_percentage }}%">
+                                {{ progress_percentage|floatformat:0 }}%
+                            </div>
+                        </div>
+                        <small class="text-muted mt-2 d-block">{{ points_to_next }} points to go</small>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-trophy-fill"></i> Highest Tier Achieved!
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Stats Card -->
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Customer Stats</h5>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Total Purchases:</span>
+                            <strong>KES {{ customer.total_purchases|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Visit Count:</span>
+                            <strong>{{ customer.visit_count }}</strong>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="d-flex justify-content-between">
+                            <span>Points Multiplier:</span>
+                            <strong>{{ customer.get_tier_multiplier }}x</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Transactions & Activity -->
+        <div class="col-md-8">
+            <!-- Recent Transactions -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Transactions</h5>
+                    <a href="{% url 'loyalty_transactions' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-primary">
+                        View All
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if transactions %}
+                    <div class="list-group list-group-flush">
+                        {% for transaction in transactions %}
+                        <div class="list-group-item transaction-{{ transaction.transaction_type }} px-0">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">
+                                        {% if transaction.transaction_type == 'earn' %}
+                                            <i class="bi bi-plus-circle text-success"></i> Points Earned
+                                        {% elif transaction.transaction_type == 'redeem' %}
+                                            <i class="bi bi-dash-circle text-danger"></i> Points Redeemed
+                                        {% elif transaction.transaction_type == 'adjust' %}
+                                            <i class="bi bi-pencil-square text-warning"></i> Manual Adjustment
+                                        {% elif transaction.transaction_type == 'bonus' %}
+                                            <i class="bi bi-gift text-info"></i> Bonus Points
+                                        {% endif %}
+                                    </h6>
+                                    <p class="mb-1 text-muted small">{{ transaction.description }}</p>
+                                    <small class="text-muted">{{ transaction.created_at|date:"M d, Y H:i" }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <h5 class="mb-0 {% if transaction.points > 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ transaction.points|stringformat:"+d" }}
+                                    </h5>
+                                    {% if transaction.amount > 0 %}
+                                    <small class="text-muted">KES {{ transaction.amount|floatformat:2 }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                        <p class="text-muted mt-2">No transactions yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recent Purchases -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cart"></i> Recent Purchases</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_purchases %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Points Earned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sale in recent_purchases %}
+                                <tr>
+                                    <td><strong>{{ sale.invoice_number }}</strong></td>
+                                    <td>{{ sale.date|date:"M d, Y" }}</td>
+                                    <td>KES {{ sale.total|floatformat:2 }}</td>
+                                    <td>
+                                        {% with points_earned=sale.loyalty_transactions.first %}
+                                            {% if points_earned %}
+                                                <span class="badge bg-success">+{{ points_earned.points }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cart-x" style="font-size: 3rem; color: #ccc;"></i>
+                        <p class="text-muted mt-2">No purchases yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

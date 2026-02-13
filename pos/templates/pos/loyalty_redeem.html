@@ -1,0 +1,89 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Redeem Points - {{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="bi bi-gift"></i> Redeem Loyalty Points</h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Customer Info -->
+                    <div class="alert alert-info">
+                        <h5>{{ customer.name }}</h5>
+                        <p class="mb-0">
+                            <strong>Available Points:</strong> {{ customer.loyalty_points }}<br>
+                            <strong>Points Value:</strong> KES {{ customer.get_points_value|floatformat:2 }}
+                        </p>
+                    </div>
+
+                    <!-- Redemption Form -->
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="points" class="form-label">Points to Redeem *</label>
+                            <input type="number" class="form-control" id="points" name="points" 
+                                   min="1" max="{{ customer.loyalty_points }}" required>
+                            <small class="form-text text-muted">
+                                1 point = KES 1.00 discount
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6>Discount Preview</h6>
+                                    <p class="mb-0">
+                                        <span id="pointsPreview">0</span> points = 
+                                        <strong>KES <span id="discountPreview">0.00</span></strong> discount
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Note:</strong> Redeemed points will be deducted immediately and cannot be reversed.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Redeem Points
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update discount preview
+    document.getElementById('points').addEventListener('input', function() {
+        const points = parseInt(this.value) || 0;
+        const discount = points; // 1 point = 1 KES
+        
+        document.getElementById('pointsPreview').textContent = points;
+        document.getElementById('discountPreview').textContent = discount.toFixed(2);
+    });
+</script>
+{% endblock %}

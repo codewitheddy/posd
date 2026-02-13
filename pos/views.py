@@ -1250,6 +1250,47 @@ def search_product_by_code(request, slug=None):
 
 
 @business_required
+def search_customer_by_phone(request, slug=None):
+    """API endpoint to search customer by phone number or customer code"""
+    query = request.GET.get('query', '').strip()
+    
+    if not query:
+        return JsonResponse({'error': 'No phone or code provided'}, status=400)
+    
+    try:
+        # Try to find by phone first (most common in Kenya)
+        try:
+            customer = Customer.objects.get(business=request.business, phone=query)
+        except Customer.DoesNotExist:
+            # If not found by phone, try customer code
+            customer = Customer.objects.get(business=request.business, customer_code=query)
+        
+        return JsonResponse({
+            'success': True,
+            'customer': {
+                'id': customer.id,
+                'name': customer.name,
+                'phone': customer.phone,
+                'customer_code': customer.customer_code,
+                'loyalty_points': customer.loyalty_points,
+                'tier': customer.tier,
+                'tier_display': customer.get_tier_display(),
+                'customer_type': customer.customer_type,
+            }
+        })
+    except Customer.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Customer with phone/code "{query}" not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@business_required
 def stock_list(request, slug=None):
     """View all products with stock information"""
     # Filter options
@@ -2559,7 +2600,10 @@ def customer_edit(request, slug=None, pk=None):
 def customer_detail(request, slug=None, pk=None):
     """View customer details and purchase history"""
     customer = get_object_or_404(Customer, business=request.business, pk=pk)
-    purchases = Sale.objects.filter(business=request.business, customer=customer).order_by('-date')[:20]
+    purchases = Sale.objects.filter(
+        business=request.business, 
+        customer=customer
+    ).prefetch_related('loyalty_transactions').order_by('-date')[:20]
     
     context = {
         'customer': customer,
@@ -2611,6 +2655,216 @@ def customer_delete(request, slug=None, pk=None):
     }
     return render(request, 'pos/customer_confirm_delete.html', context)
 
+
+# ==================== LOYALTY PROGRAM ====================
+
+@business_required
+def loyalty_dashboard(request, slug=None, pk=None):
+    """Customer loyalty dashboard showing points, tier, and transaction history"""
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
+    
+    # Get loyalty transactions
+    transactions = customer.loyalty_transactions.all().order_by('-created_at')[:50]
+    
+    # Get tier info
+    tier_info = customer.get_tier_display_info()
+    
+    # Calculate progress to next tier
+    progress_percentage = 0
+    points_to_next = 0
+    if tier_info['next']:
+        points_to_next = tier_info['next'] - customer.lifetime_points
+        progress_percentage = (customer.lifetime_points / tier_info['next']) * 100
+    
+    # Get recent purchases with loyalty transactions prefetched
+    recent_purchases = Sale.objects.filter(
+        business=request.business, 
+        customer=customer
+    ).prefetch_related('loyalty_transactions').order_by('-date')[:10]
+    
+    context = {
+        'customer': customer,
+        'transactions': transactions,
+        'tier_info': tier_info,
+        'progress_percentage': progress_percentage,
+        'points_to_next': points_to_next,
+        'recent_purchases': recent_purchases,
+        'points_value': customer.get_points_value(),
+    }
+    return render(request, 'pos/loyalty_dashboard.html', context)
+
+
+@business_required
+def loyalty_transactions(request, slug=None, pk=None):
+    """View all loyalty transactions for a customer"""
+    from .models import LoyaltyTransaction
+    
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
+    transactions = customer.loyalty_transactions.all().order_by('-created_at')
+    
+    # Filter by transaction type if specified
+    transaction_type = request.GET.get('type')
+    if transaction_type:
+        transactions = transactions.filter(transaction_type=transaction_type)
+    
+    context = {
+        'customer': customer,
+        'transactions': transactions,
+        'transaction_type': transaction_type,
+    }
+    return render(request, 'pos/loyalty_transactions.html', context)
+
+
+@business_required
+def loyalty_redeem(request, slug=None, pk=None):
+    """Redeem loyalty points for discount"""
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        points_to_redeem = int(request.POST.get('points', 0))
+        
+        if points_to_redeem <= 0:
+            messages.error(request, 'Please enter a valid number of points.')
+        elif points_to_redeem > customer.loyalty_points:
+            messages.error(request, f'Customer only has {customer.loyalty_points} points available.')
+        else:
+            # Redeem points
+            discount_amount = customer.redeem_points(
+                points_to_redeem, 
+                description="Manual Points Redemption"
+            )
+            
+            messages.success(
+                request, 
+                f'Successfully redeemed {points_to_redeem} points for KES {discount_amount} discount!'
+            )
+            return redirect('loyalty_dashboard', slug=request.business.slug, pk=pk)
+    
+    context = {
+        'customer': customer,
+    }
+    return render(request, 'pos/loyalty_redeem.html', context)
+
+
+@business_required
+def loyalty_adjust(request, slug=None, pk=None):
+    """Manually adjust customer loyalty points (admin only)"""
+    from .models import LoyaltyTransaction
+    
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        adjustment_type = request.POST.get('adjustment_type')
+        points = int(request.POST.get('points', 0))
+        reason = request.POST.get('reason', '')
+        
+        if points == 0:
+            messages.error(request, 'Please enter a valid number of points.')
+        else:
+            # Apply adjustment
+            if adjustment_type == 'add':
+                customer.loyalty_points += points
+                customer.lifetime_points += points
+                transaction_points = points
+            else:  # subtract
+                if points > customer.loyalty_points:
+                    messages.error(request, f'Cannot subtract {points} points. Customer only has {customer.loyalty_points} points.')
+                    return redirect('loyalty_adjust', slug=request.business.slug, pk=pk)
+                customer.loyalty_points -= points
+                transaction_points = -points
+            
+            customer.save()
+            
+            # Create transaction record
+            LoyaltyTransaction.objects.create(
+                customer=customer,
+                transaction_type='adjust',
+                points=transaction_points,
+                amount=Decimal('0.00'),
+                description=reason or f'Manual adjustment by {request.user.username}',
+                created_by=request.user
+            )
+            
+            messages.success(
+                request, 
+                f'Successfully {"added" if adjustment_type == "add" else "subtracted"} {points} points!'
+            )
+            return redirect('loyalty_dashboard', slug=request.business.slug, pk=pk)
+    
+    context = {
+        'customer': customer,
+    }
+    return render(request, 'pos/loyalty_adjust.html', context)
+
+
+@business_required
+def loyalty_rewards_list(request, slug=None):
+    """List all available loyalty rewards"""
+    from .models import LoyaltyReward
+    
+    rewards = LoyaltyReward.objects.filter(is_active=True).order_by('points_required')
+    
+    context = {
+        'rewards': rewards,
+    }
+    return render(request, 'pos/loyalty_rewards_list.html', context)
+
+
+@business_required
+def loyalty_reward_create(request, slug=None):
+    """Create a new loyalty reward"""
+    from .models import LoyaltyReward
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description')
+        points_required = int(request.POST.get('points_required'))
+        reward_type = request.POST.get('reward_type')
+        discount_value = Decimal(request.POST.get('discount_value', 0))
+        
+        try:
+            LoyaltyReward.objects.create(
+                name=name,
+                description=description,
+                points_required=points_required,
+                reward_type=reward_type,
+                discount_value=discount_value,
+                is_active=True
+            )
+            messages.success(request, 'Loyalty reward created successfully!')
+            return redirect('loyalty_rewards_list', slug=request.business.slug)
+        except Exception as e:
+            messages.error(request, f'Error creating reward: {str(e)}')
+    
+    return render(request, 'pos/loyalty_reward_form.html')
+
+
+@business_required
+def loyalty_reward_edit(request, slug=None, pk=None):
+    """Edit an existing loyalty reward"""
+    from .models import LoyaltyReward
+    
+    reward = get_object_or_404(LoyaltyReward, pk=pk)
+    
+    if request.method == 'POST':
+        reward.name = request.POST.get('name')
+        reward.description = request.POST.get('description')
+        reward.points_required = int(request.POST.get('points_required'))
+        reward.reward_type = request.POST.get('reward_type')
+        reward.discount_value = Decimal(request.POST.get('discount_value', 0))
+        reward.is_active = request.POST.get('is_active') == 'on'
+        
+        try:
+            reward.save()
+            messages.success(request, 'Loyalty reward updated successfully!')
+            return redirect('loyalty_rewards_list', slug=request.business.slug)
+        except Exception as e:
+            messages.error(request, f'Error updating reward: {str(e)}')
+    
+    context = {
+        'reward': reward,
+    }
+    return render(request, 'pos/loyalty_reward_form.html', context)
 
 
 # ==================== WRITE-OFF REPORT ====================
