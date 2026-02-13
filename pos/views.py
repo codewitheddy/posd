@@ -2982,7 +2982,8 @@ def loyalty_rewards_list(request, slug=None):
     """List all available loyalty rewards"""
     from .models import LoyaltyReward
     
-    rewards = LoyaltyReward.objects.filter(is_active=True).order_by('points_required')
+    business = request.business
+    rewards = LoyaltyReward.objects.filter(business=business, is_active=True).order_by('points_required')
     
     context = {
         'rewards': rewards,
@@ -2995,6 +2996,8 @@ def loyalty_reward_create(request, slug=None):
     """Create a new loyalty reward"""
     from .models import LoyaltyReward
     
+    business = request.business
+    
     if request.method == 'POST':
         name = request.POST.get('name')
         description = request.POST.get('description')
@@ -3004,6 +3007,7 @@ def loyalty_reward_create(request, slug=None):
         
         try:
             LoyaltyReward.objects.create(
+                business=business,
                 name=name,
                 description=description,
                 points_required=points_required,
@@ -3012,7 +3016,7 @@ def loyalty_reward_create(request, slug=None):
                 is_active=True
             )
             messages.success(request, 'Loyalty reward created successfully!')
-            return redirect('loyalty_rewards_list', slug=request.business.slug)
+            return redirect('loyalty_rewards_list', slug=business.slug)
         except Exception as e:
             messages.error(request, f'Error creating reward: {str(e)}')
     
@@ -3024,7 +3028,8 @@ def loyalty_reward_edit(request, slug=None, pk=None):
     """Edit an existing loyalty reward"""
     from .models import LoyaltyReward
     
-    reward = get_object_or_404(LoyaltyReward, pk=pk)
+    business = request.business
+    reward = get_object_or_404(LoyaltyReward, pk=pk, business=business)
     
     if request.method == 'POST':
         reward.name = request.POST.get('name')
@@ -3037,7 +3042,7 @@ def loyalty_reward_edit(request, slug=None, pk=None):
         try:
             reward.save()
             messages.success(request, 'Loyalty reward updated successfully!')
-            return redirect('loyalty_rewards_list', slug=request.business.slug)
+            return redirect('loyalty_rewards_list', slug=business.slug)
         except Exception as e:
             messages.error(request, f'Error updating reward: {str(e)}')
     

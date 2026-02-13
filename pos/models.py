@@ -1137,6 +1137,7 @@ class LoyaltyTransaction(models.Model):
 
 class LoyaltyReward(models.Model):
     """Rewards that customers can redeem with points"""
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='loyalty_rewards', null=True, blank=True)
     name = models.CharField(max_length=200)
     description = models.TextField()
     points_required = models.IntegerField(help_text="Points needed to redeem this reward")

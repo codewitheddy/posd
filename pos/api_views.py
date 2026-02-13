@@ -256,9 +256,15 @@ class LoyaltyTransactionViewSet(viewsets.ReadOnlyModelViewSet):
 
 class LoyaltyRewardViewSet(viewsets.ModelViewSet):
     """API endpoint for loyalty rewards"""
-    queryset = LoyaltyReward.objects.filter(is_active=True)
     serializer_class = LoyaltyRewardSerializer
     ordering = ['points_required']
+    
+    def get_queryset(self):
+        """Filter rewards by business"""
+        business = getattr(self.request, 'business', None)
+        if business:
+            return LoyaltyReward.objects.filter(business=business, is_active=True)
+        return LoyaltyReward.objects.filter(is_active=True)
 
 
 class BusinessSettingsViewSet(viewsets.ModelViewSet):
