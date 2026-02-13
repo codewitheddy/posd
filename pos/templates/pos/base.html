@@ -7,6 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/mobile-first.css' %}">
     <style>
         :root {
             --sidebar-width: 260px;
@@ -236,22 +238,74 @@
         @media (max-width: 768px) {
             .sidebar {
                 left: -var(--sidebar-width);
+                transform: translateX(0);
+                transition: transform 0.3s ease-in-out;
             }
 
             .sidebar.show {
-                left: 0;
+                transform: translateX(var(--sidebar-width));
+                box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
             }
 
             .topbar {
                 left: 0;
+                padding: 0 15px;
             }
 
             .main-content {
                 margin-left: 0;
+                padding: 15px;
+                padding-bottom: 80px; /* Space for bottom nav */
             }
 
             .mobile-menu-toggle {
-                display: block !important;
+                display: none !important; /* Hide hamburger on mobile - use bottom nav instead */
+            }
+            
+            /* Hide search bar on very small screens */
+            .search-bar {
+                display: none;
+            }
+            
+            /* Optimize topbar for mobile */
+            .topbar-right {
+                gap: 10px;
+            }
+            
+            .user-menu > div:last-child {
+                display: none; /* Hide user name on mobile */
+            }
+            
+            /* Stack cards on mobile */
+            .row > [class*="col-"] {
+                margin-bottom: 1rem;
+            }
+            
+            /* Full width buttons on mobile */
+            .btn-group {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .btn-group .btn {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+        }
+        
+        /* Tablet adjustments */
+        @media (min-width: 769px) and (max-width: 1023px) {
+            .sidebar {
+                width: 220px;
+            }
+            
+            :root {
+                --sidebar-width: 220px;
+            }
+            
+            .main-content {
+                padding: 20px;
             }
         }
 
@@ -262,6 +316,30 @@
             font-size: 1.5rem;
             color: #858796;
             cursor: pointer;
+        }
+        
+        /* Mobile sidebar backdrop */
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1040;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .sidebar-backdrop.show {
+            display: block;
+            opacity: 1;
+        }
+        
+        /* Prevent body scroll when sidebar is open on mobile */
+        body.sidebar-open {
+            overflow: hidden;
         }
 
         /* Dropdown Menu */
@@ -274,6 +352,9 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- Sidebar Backdrop for Mobile -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+    
     {% if has_business %}
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
@@ -484,6 +565,11 @@
         </div>
 
         <div class="topbar-right">
+            <!-- Connection Status (inline with topbar) -->
+            <div id="connectionStatus" class="connection-status-inline">
+                <i class="fas fa-wifi"></i>
+            </div>
+            
             <div class="notification-icon" title="Notifications">
                 <i class="bi bi-bell"></i>
                 <span class="badge bg-danger">3</span>
@@ -525,6 +611,9 @@
         </div>
     </div>
 
+    <!-- Connection Status Indicator -->
+    {% include 'pos/components/connection_status.html' %}
+
     <!-- Main Content -->
     <div class="main-content">
         {% if messages %}
@@ -539,24 +628,78 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- Mobile Bottom Navigation -->
+    {% if has_business %}
+        {% include 'pos/components/mobile_bottom_nav.html' %}
+    {% endif %}
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Toggle sidebar on mobile
         function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('show');
-        }
-
-        // Global search functionality
-        document.getElementById('globalSearch').addEventListener('keyup', function(e) {
-            if (e.key === 'Enter') {
-                const query = this.value.trim();
-                if (query) {
-                    // Redirect to search page (to be implemented)
-                    console.log('Searching for:', query);
-                    // window.location.href = '/search/?q=' + encodeURIComponent(query);
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            
+            if (sidebar && backdrop) {
+                const isShowing = sidebar.classList.contains('show');
+                
+                if (isShowing) {
+                    // Hide sidebar
+                    sidebar.classList.remove('show');
+                    backdrop.classList.remove('show');
+                    document.body.style.overflow = '';
+                } else {
+                    // Show sidebar
+                    sidebar.classList.add('show');
+                    backdrop.classList.add('show');
+                    document.body.style.overflow = 'hidden'; // Prevent body scroll
                 }
             }
+        }
+        
+        // Close sidebar when clicking a link on mobile
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebar = document.getElementById('sidebar');
+            
+            // Only add click handlers on mobile
+            function handleSidebarLinks() {
+                if (window.innerWidth <= 768 && sidebar) {
+                    const sidebarLinks = sidebar.querySelectorAll('a');
+                    sidebarLinks.forEach(link => {
+                        link.addEventListener('click', function() {
+                            // Close sidebar after clicking a link
+                            setTimeout(() => {
+                                toggleSidebar();
+                            }, 200);
+                        });
+                    });
+                }
+            }
+            
+            handleSidebarLinks();
+            
+            // Re-attach handlers on window resize
+            let resizeTimer;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(handleSidebarLinks, 250);
+            });
         });
+
+        // Global search functionality
+        const globalSearchInput = document.getElementById('globalSearch');
+        if (globalSearchInput) {
+            globalSearchInput.addEventListener('keyup', function(e) {
+                if (e.key === 'Enter') {
+                    const query = this.value.trim();
+                    if (query) {
+                        // Redirect to search page (to be implemented)
+                        console.log('Searching for:', query);
+                        // window.location.href = '/search/?q=' + encodeURIComponent(query);
+                    }
+                }
+            });
+        }
 
         // Auto-hide alerts after 5 seconds
         setTimeout(function() {
@@ -566,6 +709,9 @@
                 bsAlert.close();
             });
         }, 5000);
+        
+        // Prevent zoom on input focus (iOS)
+        document.addEventListener('touchstart', function() {}, {passive: true});
     </script>
     {% block extra_js %}{% endblock %}
 </body>

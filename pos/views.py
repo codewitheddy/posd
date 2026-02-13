@@ -1760,7 +1760,7 @@ def password_reset_confirm(request, uidb64, token):
 
 @login_required
 @manager_required
-def cashier_report(request):
+def cashier_report(request, slug=None):
     """View sales by cashier"""
     from django.contrib.auth.models import User
     from django.utils import timezone
@@ -1775,13 +1775,17 @@ def cashier_report(request):
     else:
         filter_date = timezone.now().date()
     
-    # Get all users who have made sales
-    cashiers = User.objects.filter(sales__isnull=False).distinct()
+    # Get all users who have made sales for this business
+    cashiers = User.objects.filter(
+        sales__business=request.business,
+        sales__isnull=False
+    ).distinct()
     
     cashier_stats = []
     for cashier in cashiers:
-        # Get sales for this cashier on the selected date
+        # Get sales for this cashier on the selected date for this business
         sales = Sale.objects.filter(
+            business=request.business,
             cashier=cashier,
             date__date=filter_date
         )
@@ -1801,8 +1805,11 @@ def cashier_report(request):
                 'sales': sales
             })
     
-    # Overall totals
-    all_sales = Sale.objects.filter(date__date=filter_date)
+    # Overall totals for this business
+    all_sales = Sale.objects.filter(
+        business=request.business,
+        date__date=filter_date
+    )
     overall_stats = all_sales.aggregate(
         total_sales=Count('id'),
         total_revenue=Sum('total')

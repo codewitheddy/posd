@@ -1,0 +1,506 @@
+/* ============================================
+   MOBILE-FIRST RESPONSIVE CSS
+   Kenyan Market Optimization
+   ============================================ */
+
+:root {
+    /* Breakpoints */
+    --mobile-max: 767px;
+    --tablet-min: 768px;
+    --tablet-max: 1023px;
+    --desktop-min: 1024px;
+    
+    /* Touch targets */
+    --touch-target-min: 44px;
+    
+    /* Spacing */
+    --mobile-padding: 1rem;
+    --tablet-padding: 1.5rem;
+    --desktop-padding: 2rem;
+}
+
+/* ============================================
+   BASE MOBILE STYLES (< 768px)
+   ============================================ */
+
+/* Hide sidebar by default on mobile */
+@media (max-width: 767px) {
+    .sidebar {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: var(--sidebar-width, 260px);
+        z-index: 1050;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+    }
+    
+    .sidebar.show {
+        display: block;
+        transform: translateX(0);
+    }
+    
+    /* Ensure sidebar doesn't affect layout on mobile */
+    .main-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* Touch-friendly buttons */
+.btn-touch {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+    padding: 12px 20px;
+    font-size: 1rem;
+}
+
+/* Prevent text selection on interactive elements */
+.no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth scrolling */
+.smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+}
+
+/* Mobile-optimized forms */
+@media (max-width: 767px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="number"],
+    input[type="password"],
+    select,
+    textarea {
+        font-size: 16px !important; /* Prevents zoom on iOS */
+        min-height: var(--touch-target-min);
+        padding: 12px 16px;
+    }
+    
+    .form-control {
+        font-size: 16px !important;
+        min-height: var(--touch-target-min);
+    }
+    
+    .btn {
+        min-height: var(--touch-target-min);
+        padding: 12px 20px;
+        font-size: 1rem;
+    }
+    
+    /* Single column layout */
+    .row > [class*="col-"] {
+        margin-bottom: 1rem;
+    }
+    
+    /* Full width cards */
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    /* Responsive tables */
+    .table-responsive {
+        border: none;
+        margin-bottom: 1rem;
+    }
+    
+    table {
+        font-size: 0.875rem;
+    }
+    
+    /* Hide desktop-only elements */
+    .desktop-only {
+        display: none !important;
+    }
+    
+    /* Stack navigation items */
+    .navbar-nav {
+        flex-direction: column;
+    }
+}
+
+/* ============================================
+   BOTTOM NAVIGATION (Mobile)
+   ============================================ */
+
+.mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: #fff;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    padding: 0;
+}
+
+.mobile-bottom-nav .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: #858796;
+    padding: 8px 0;
+    transition: all 0.2s;
+    min-height: var(--touch-target-min);
+}
+
+.mobile-bottom-nav .nav-item:active {
+    background: rgba(78, 115, 223, 0.1);
+}
+
+.mobile-bottom-nav .nav-item.active {
+    color: #4e73df;
+}
+
+.mobile-bottom-nav .nav-item i {
+    font-size: 1.25rem;
+    margin-bottom: 4px;
+}
+
+.mobile-bottom-nav .nav-item span {
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* Add padding to main content when bottom nav is visible */
+@media (max-width: 767px) {
+    .main-content {
+        padding-bottom: 80px !important;
+    }
+}
+
+/* ============================================
+   MOBILE OFFCANVAS MENU
+   ============================================ */
+
+.offcanvas-mobile {
+    width: 280px !important;
+}
+
+.offcanvas-header {
+    background: var(--sidebar-bg, #1a1d29);
+    color: #fff;
+    padding: 1.5rem;
+}
+
+.offcanvas-body {
+    padding: 0;
+}
+
+.offcanvas-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.offcanvas-menu li {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.offcanvas-menu a {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    color: #333;
+    text-decoration: none;
+    min-height: var(--touch-target-min);
+}
+
+.offcanvas-menu a:active {
+    background: #f8f9fc;
+}
+
+.offcanvas-menu a i {
+    width: 30px;
+    font-size: 1.1rem;
+    margin-right: 12px;
+}
+
+/* ============================================
+   CONNECTION STATUS INDICATOR
+   ============================================ */
+
+/* Inline connection status in topbar */
+.connection-status-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f8f9fc;
+    color: #28a745;
+    font-size: 1rem;
+    transition: all 0.3s;
+    cursor: pointer;
+    position: relative;
+}
+
+.connection-status-inline:hover {
+    background: #e9ecef;
+}
+
+.connection-status-inline.offline {
+    color: #dc3545;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Tooltip on hover */
+.connection-status-inline::after {
+    content: attr(data-status);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.connection-status-inline:hover::after {
+    opacity: 1;
+}
+
+/* Old floating connection status - hide it */
+.connection-status {
+    display: none !important;
+}
+
+/* ============================================
+   TABLET STYLES (768px - 1023px)
+   ============================================ */
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    /* Hide mobile bottom nav */
+    .mobile-bottom-nav {
+        display: none;
+    }
+    
+    /* Show tablet-optimized sidebar */
+    .sidebar {
+        width: 220px;
+    }
+    
+    .topbar {
+        left: 220px;
+    }
+    
+    .main-content {
+        margin-left: 220px;
+        padding: 1.5rem;
+    }
+    
+    /* Two-column layout for cards */
+    .card-deck > .card {
+        flex: 0 0 calc(50% - 1rem);
+    }
+    
+    /* Show desktop elements */
+    .desktop-only {
+        display: block !important;
+    }
+    
+    /* Hide mobile-only elements */
+    .mobile-only {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   DESKTOP STYLES (> 1024px)
+   ============================================ */
+
+@media (min-width: 1024px) {
+    /* Hide mobile bottom nav */
+    .mobile-bottom-nav {
+        display: none;
+    }
+    
+    /* Full sidebar */
+    .sidebar {
+        width: 260px;
+    }
+    
+    .topbar {
+        left: 260px;
+    }
+    
+    .main-content {
+        margin-left: 260px;
+        padding: 2rem;
+    }
+    
+    /* Show desktop elements */
+    .desktop-only {
+        display: block !important;
+    }
+    
+    /* Hide mobile-only elements */
+    .mobile-only {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   TOUCH OPTIMIZATIONS
+   ============================================ */
+
+/* Larger clickable areas */
+.touch-target {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Touch feedback */
+.touch-feedback:active {
+    transform: scale(0.95);
+    opacity: 0.8;
+}
+
+/* Swipe indicators */
+.swipeable {
+    position: relative;
+    overflow: hidden;
+}
+
+.swipeable::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.05);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.swipeable:active::after {
+    opacity: 1;
+}
+
+/* ============================================
+   PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+/* Lazy load images */
+img[data-src] {
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+img[data-src].loaded {
+    opacity: 1;
+}
+
+/* Loading skeleton */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+*:focus-visible {
+    outline: 2px solid #4e73df;
+    outline-offset: 2px;
+}
+
+/* Skip to main content */
+.skip-to-main {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #4e73df;
+    color: #fff;
+    padding: 8px 16px;
+    text-decoration: none;
+    z-index: 9999;
+}
+
+.skip-to-main:focus {
+    top: 0;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Responsive text sizes */
+.text-responsive {
+    font-size: clamp(0.875rem, 2vw, 1rem);
+}
+
+/* Responsive spacing */
+.p-responsive {
+    padding: var(--mobile-padding);
+}
+
+@media (min-width: 768px) {
+    .p-responsive {
+        padding: var(--tablet-padding);
+    }
+}
+
+@media (min-width: 1024px) {
+    .p-responsive {
+        padding: var(--desktop-padding);
+    }
+}
+
+/* Full width on mobile */
+.mobile-full-width {
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .mobile-full-width {
+        width: auto;
+    }
+}

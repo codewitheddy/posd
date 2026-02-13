@@ -1,0 +1,175 @@
+<!-- Mobile Bottom Navigation (Visible only on mobile devices) -->
+<nav class="mobile-bottom-nav d-md-none">
+    {% if has_business and user_permissions.can_make_sales %}
+    <a href="{% url 'pos_screen' slug=business_slug %}" 
+       class="nav-item no-select {% if request.resolver_match.url_name == 'pos_screen' %}active{% endif %}">
+        <i class="bi bi-cart-plus"></i>
+        <span>POS</span>
+    </a>
+    {% endif %}
+    
+    <a href="{% if has_business %}{% url 'dashboard' slug=business_slug %}{% else %}{% url 'business_list' %}{% endif %}" 
+       class="nav-item no-select {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2"></i>
+        <span>Dashboard</span>
+    </a>
+    
+    {% if has_business and user_permissions.can_manage_products %}
+    <a href="{% url 'product_list' slug=business_slug %}" 
+       class="nav-item no-select {% if 'product' in request.path %}active{% endif %}">
+        <i class="bi bi-box-seam"></i>
+        <span>Products</span>
+    </a>
+    {% endif %}
+    
+    {% if has_business and user_permissions.can_view_reports %}
+    <a href="{% url 'sales_list' slug=business_slug %}" 
+       class="nav-item no-select {% if 'sales' in request.path %}active{% endif %}">
+        <i class="bi bi-receipt"></i>
+        <span>Sales</span>
+    </a>
+    {% endif %}
+    
+    <a href="#" class="nav-item no-select" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+        <i class="bi bi-list"></i>
+        <span>More</span>
+    </a>
+</nav>
+
+<!-- Mobile Offcanvas Menu -->
+<div class="offcanvas offcanvas-end offcanvas-mobile" tabindex="-1" id="mobileMenu">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title">
+            <i class="bi bi-shop"></i> 
+            {% if has_business %}{{ request.business.name }}{% else %}Menu{% endif %}
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <ul class="offcanvas-menu">
+            {% if has_business %}
+            
+            <!-- Inventory Section -->
+            {% if user_permissions.can_manage_products or user_permissions.is_stock_manager %}
+            <li>
+                <a href="{% url 'category_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-tags"></i> Categories
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'stock_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-boxes"></i> Stock Management
+                </a>
+            </li>
+            {% endif %}
+            
+            <!-- Purchasing Section -->
+            {% if user_permissions.can_manage_suppliers or user_permissions.is_stock_manager %}
+            <li>
+                <a href="{% url 'supplier_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-truck"></i> Suppliers
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'purchase_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-bag-check"></i> Purchase Orders
+                </a>
+            </li>
+            {% endif %}
+            
+            <!-- Customers Section -->
+            {% if user_permissions.can_manage_customers or user_permissions.is_cashier %}
+            <li>
+                <a href="{% url 'customer_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-people"></i> Customers
+                </a>
+            </li>
+            {% endif %}
+            
+            <!-- Reports Section -->
+            {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
+            <li>
+                <a href="{% url 'z_report' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-calculator-fill"></i> Z-Report (EOD)
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'sales_report' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-graph-up"></i> Sales Report
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'payment_transactions_report' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-credit-card-2-front"></i> Payment Transactions
+                </a>
+            </li>
+            {% if user_permissions.is_manager %}
+            <li>
+                <a href="{% url 'cashier_report' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-person-badge"></i> Cashier Report
+                </a>
+            </li>
+            {% endif %}
+            <li>
+                <a href="{% url 'writeoff_report' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-trash"></i> Write-Off Report
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'low_stock_alert' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-exclamation-triangle"></i> Stock Alerts
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'expiry_alert' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-calendar-x"></i> Expiry Alerts
+                </a>
+            </li>
+            {% endif %}
+            
+            <!-- Administration Section -->
+            {% if user_permissions.is_manager %}
+            {% if user_permissions.can_manage_users %}
+            <li>
+                <a href="{% url 'user_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-people-fill"></i> User Management
+                </a>
+            </li>
+            {% endif %}
+            {% if user_permissions.can_manage_settings %}
+            <li>
+                <a href="{% url 'business_settings' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-gear"></i> Business Settings
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'payment_method_list' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-credit-card"></i> Payment Methods
+                </a>
+            </li>
+            {% endif %}
+            {% if user_permissions.can_view_activity_log %}
+            <li>
+                <a href="{% url 'activity_log' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-clock-history"></i> Activity Log
+                </a>
+            </li>
+            {% endif %}
+            {% endif %}
+            
+            {% endif %}
+            
+            <!-- User Section -->
+            <li style="border-top: 2px solid #e0e0e0; margin-top: 10px; padding-top: 10px;">
+                <a href="{% url 'user_profile' slug=business_slug %}" class="touch-target">
+                    <i class="bi bi-person"></i> My Profile
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'logout' %}" class="touch-target" style="color: #dc3545;">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>

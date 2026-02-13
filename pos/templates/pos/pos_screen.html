@@ -3,6 +3,8 @@
 {% block title %}POS - New Sale{% endblock %}
 
 {% block extra_css %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/pos-mobile.css' %}">
 <style>
     .product-card { 
         cursor: pointer; 
@@ -43,8 +45,78 @@
 {% endblock %}
 
 {% block content %}
+<!-- Mobile Cart Toggle Button -->
+<button class="cart-toggle-btn d-md-none" onclick="toggleMobileCart()" id="cartToggleBtn">
+    <i class="bi bi-cart3"></i>
+    <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
+</button>
+
+<!-- Mobile Cart (Bottom Sheet) -->
+<div class="cart-sticky-mobile" id="mobileCart">
+    <div class="card border-0">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-cart3"></i> Cart</h5>
+            <button class="btn btn-sm btn-light" onclick="toggleMobileCart()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="mobile-cart-items" style="max-height: 200px; overflow-y: auto;">
+                <p class="text-muted text-center">Cart is empty</p>
+            </div>
+
+            <hr>
+
+            <div class="mb-2">
+                <label class="form-label small">Discount Type:</label>
+                <select id="mobile-discount-type" class="form-select form-select-sm" onchange="syncDiscount('type')">
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (KES)</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small">Discount Value:</label>
+                <input type="number" id="mobile-discount-value" class="form-control form-control-sm" value="0" min="0" step="0.01" onchange="syncDiscount('value')">
+            </div>
+
+            <div class="mb-2 d-flex justify-content-between">
+                <strong>Subtotal (excl. VAT):</strong> <span id="mobile-subtotal">KES 0.00</span>
+            </div>
+            <div class="mb-2 d-flex justify-content-between">
+                <strong>Discount:</strong> <span id="mobile-discount">KES 0.00</span>
+            </div>
+            <div class="mb-2 d-flex justify-content-between">
+                <strong>VAT ({{ vat_rate }}%):</strong> <span id="mobile-vat">KES 0.00</span>
+            </div>
+            <div class="mb-3 d-flex justify-content-between">
+                <h5>Total:</h5> <h5 class="text-primary" id="mobile-cart-total">KES 0.00</h5>
+            </div>
+            
+            <!-- Loyalty Points Info -->
+            <div id="mobile-loyalty-info" class="alert alert-success" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-star-fill"></i> <strong>Points to Earn:</strong>
+                    </div>
+                    <div>
+                        <span class="badge bg-success" id="mobile-points-to-earn">0</span> points
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-success btn-lg w-100 mb-2" onclick="completeSale()" id="mobile-complete-btn" disabled>
+                <i class="bi bi-check-circle"></i> Complete Sale
+            </button>
+            <button class="btn btn-danger w-100" onclick="clearCart()">
+                <i class="bi bi-trash"></i> Clear Cart
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="row mt-4">
-    <div class="col-md-8">
+    <div class="col-12 col-md-8 products-section">
         <h3>Select Products</h3>
         <div class="alert alert-info mb-3">
             <i class="bi bi-info-circle"></i> <strong>Note:</strong> All prices shown are tax-inclusive (VAT included). Tax breakdown will be shown in the cart.
@@ -152,7 +224,7 @@
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-4 d-none d-md-block desktop-cart">
         <div class="card sticky-top" style="top: 80px;">
             <div class="card-header bg-primary text-white">
                 <h4>Cart</h4>
@@ -1047,12 +1119,15 @@ function updatePaymentDisplay() {
 }
 
 function confirmPaymentAndComplete() {
+    console.log('confirmPaymentAndComplete called');
+    
     if (paymentMethods.length === 0) {
         alert('Please add at least one payment method');
         return;
     }
     
     const totalPaid = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+    console.log('Total paid:', totalPaid, 'Total due:', totalDue);
     
     // Allow overpayment for cash (change will be given)
     if (totalPaid < totalDue) {
@@ -1061,29 +1136,42 @@ function confirmPaymentAndComplete() {
     }
     
     const change = totalPaid > totalDue ? totalPaid - totalDue : 0;
+    console.log('Change:', change);
     
     // Prepare form data
     const formItems = document.getElementById('form-items');
+    const formPayments = document.getElementById('form-payments');
+    const saleForm = document.getElementById('sale-form');
+    
+    if (!formItems || !formPayments || !saleForm) {
+        console.error('Form elements not found!', {formItems, formPayments, saleForm});
+        alert('Error: Form elements not found. Please refresh the page.');
+        return;
+    }
+    
     formItems.innerHTML = '';
     
+    console.log('Adding cart items to form:', cart.length);
     cart.forEach(item => {
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'items';
         input.value = `${item.id},${item.quantity},${item.price}`;
         formItems.appendChild(input);
+        console.log('Added item:', input.value);
     });
     
     // Add payment methods to form
-    const formPayments = document.getElementById('form-payments');
     formPayments.innerHTML = '';
     
+    console.log('Adding payment methods to form:', paymentMethods.length);
     paymentMethods.forEach(pm => {
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'payments';
         input.value = `${pm.id},${pm.amount},${pm.reference}`;
         formPayments.appendChild(input);
+        console.log('Added payment:', input.value);
     });
     
     // Add amount paid and change
@@ -1092,16 +1180,26 @@ function confirmPaymentAndComplete() {
     amountPaidInput.name = 'amount_paid';
     amountPaidInput.value = totalPaid.toFixed(2);
     formPayments.appendChild(amountPaidInput);
+    console.log('Amount paid:', amountPaidInput.value);
     
     const changeInput = document.createElement('input');
     changeInput.type = 'hidden';
     changeInput.name = 'change_given';
     changeInput.value = change.toFixed(2);
     formPayments.appendChild(changeInput);
+    console.log('Change given:', changeInput.value);
     
-    document.getElementById('form-customer-id').value = selectedCustomer ? selectedCustomer.id : '';
-    document.getElementById('form-discount-type').value = document.getElementById('discount-type').value;
-    document.getElementById('form-discount-value').value = document.getElementById('discount-value').value;
+    const customerIdInput = document.getElementById('form-customer-id');
+    const discountTypeInput = document.getElementById('form-discount-type');
+    const discountValueInput = document.getElementById('form-discount-value');
+    
+    if (customerIdInput) customerIdInput.value = selectedCustomer ? selectedCustomer.id : '';
+    if (discountTypeInput) discountTypeInput.value = document.getElementById('discount-type').value;
+    if (discountValueInput) discountValueInput.value = document.getElementById('discount-value').value;
+    
+    console.log('Customer ID:', customerIdInput ? customerIdInput.value : 'N/A');
+    console.log('Discount type:', discountTypeInput ? discountTypeInput.value : 'N/A');
+    console.log('Discount value:', discountValueInput ? discountValueInput.value : 'N/A');
     
     // Clear cart immediately before submitting
     // This ensures the cart is empty even if user doesn't return to POS screen
@@ -1111,18 +1209,200 @@ function confirmPaymentAndComplete() {
     
     // Set flag to indicate sale is being completed
     localStorage.setItem('pos_sale_completing', 'true');
+    console.log('Set pos_sale_completing flag');
     
     // Close modal
-    bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+    const modalElement = document.getElementById('paymentModal');
+    if (modalElement) {
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+            modalInstance.hide();
+            console.log('Modal closed');
+        }
+    }
     
     // Show loading state
     const completeBtn = document.getElementById('complete-btn');
-    const originalText = completeBtn.innerHTML;
-    completeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
-    completeBtn.disabled = true;
+    if (completeBtn) {
+        const originalText = completeBtn.innerHTML;
+        completeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        completeBtn.disabled = true;
+    }
+    
+    // Log form action and method
+    console.log('Form action:', saleForm.action);
+    console.log('Form method:', saleForm.method);
+    console.log('Submitting form...');
     
     // Submit form - the backend will redirect to thermal receipt
-    document.getElementById('sale-form').submit();
+    saleForm.submit();
+    console.log('Form submitted');
 }
+
+// ==================== MOBILE CART FUNCTIONS ====================
+
+function toggleMobileCart() {
+    const mobileCart = document.getElementById('mobileCart');
+    const cartToggleBtn = document.getElementById('cartToggleBtn');
+    
+    if (mobileCart.classList.contains('show')) {
+        mobileCart.classList.remove('show');
+        cartToggleBtn.querySelector('i').className = 'bi bi-cart3';
+    } else {
+        mobileCart.classList.add('show');
+        cartToggleBtn.querySelector('i').className = 'bi bi-x-lg';
+    }
+}
+
+function updateMobileCart() {
+    const mobileCartItems = document.getElementById('mobile-cart-items');
+    const cartBadge = document.getElementById('cartBadge');
+    const mobileCompleteBtn = document.getElementById('mobile-complete-btn');
+    
+    // Update badge
+    if (cart.length > 0) {
+        cartBadge.textContent = cart.length;
+        cartBadge.style.display = 'flex';
+    } else {
+        cartBadge.style.display = 'none';
+    }
+    
+    // Update mobile cart items
+    if (cart.length === 0) {
+        mobileCartItems.innerHTML = '<p class="text-muted text-center">Cart is empty</p>';
+        if (mobileCompleteBtn) mobileCompleteBtn.disabled = true;
+    } else {
+        let html = '';
+        cart.forEach(item => {
+            const total = item.price * item.quantity;
+            html += `
+                <div class="cart-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${item.name}</strong><br>
+                            <small>KES ${item.price.toFixed(2)} each</small>
+                        </div>
+                        <button class="btn btn-sm btn-danger touch-target" onclick="removeFromCart(${item.id})">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <input type="number" class="form-control form-control-sm" style="width: 80px;" 
+                               value="${item.quantity}" min="1" 
+                               onchange="updateQuantity(${item.id}, this.value)">
+                        <strong>KES ${total.toFixed(2)}</strong>
+                    </div>
+                </div>
+            `;
+        });
+        mobileCartItems.innerHTML = html;
+        if (mobileCompleteBtn) mobileCompleteBtn.disabled = false;
+    }
+    
+    // Update mobile totals
+    updateMobileTotals();
+}
+
+function updateMobileTotals() {
+    const totalInclusive = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    const discountType = document.getElementById('discount-type').value;
+    const discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
+    
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+        discountAmount = (totalInclusive * discountValue) / 100;
+    } else {
+        discountAmount = discountValue;
+    }
+    
+    const afterDiscount = totalInclusive - discountAmount;
+    const vatAmount = (afterDiscount * VAT_RATE) / (100 + VAT_RATE);
+    const subtotalExclusive = afterDiscount - vatAmount;
+    
+    // Update mobile display
+    const mobileSubtotal = document.getElementById('mobile-subtotal');
+    const mobileDiscount = document.getElementById('mobile-discount');
+    const mobileVat = document.getElementById('mobile-vat');
+    const mobileCartTotal = document.getElementById('mobile-cart-total');
+    
+    if (mobileSubtotal) mobileSubtotal.textContent = `KES ${subtotalExclusive.toFixed(2)}`;
+    if (mobileDiscount) mobileDiscount.textContent = `KES ${discountAmount.toFixed(2)}`;
+    if (mobileVat) mobileVat.textContent = `KES ${vatAmount.toFixed(2)}`;
+    if (mobileCartTotal) mobileCartTotal.textContent = `KES ${afterDiscount.toFixed(2)}`;
+    
+    // Update mobile loyalty info
+    const mobileLoyaltyInfo = document.getElementById('mobile-loyalty-info');
+    const mobilePointsToEarn = document.getElementById('mobile-points-to-earn');
+    
+    if (selectedCustomer && afterDiscount > 0) {
+        const pointsToEarn = calculateLoyaltyPoints(afterDiscount);
+        if (mobilePointsToEarn) mobilePointsToEarn.textContent = pointsToEarn;
+        if (mobileLoyaltyInfo) mobileLoyaltyInfo.style.display = 'block';
+    } else {
+        if (mobileLoyaltyInfo) mobileLoyaltyInfo.style.display = 'none';
+    }
+}
+
+function syncDiscount(type) {
+    if (type === 'type') {
+        const mobileValue = document.getElementById('mobile-discount-type').value;
+        document.getElementById('discount-type').value = mobileValue;
+    } else {
+        const mobileValue = document.getElementById('mobile-discount-value').value;
+        document.getElementById('discount-value').value = mobileValue;
+    }
+    calculateTotal();
+    updateMobileCart();
+}
+
+// Override the original updateCart to also update mobile cart
+const originalUpdateCart = updateCart;
+updateCart = function() {
+    originalUpdateCart();
+    if (window.innerWidth < 768) {
+        updateMobileCart();
+    }
+};
+
+// Close mobile cart when clicking outside
+document.addEventListener('click', function(e) {
+    const mobileCart = document.getElementById('mobileCart');
+    const cartToggleBtn = document.getElementById('cartToggleBtn');
+    
+    if (mobileCart && mobileCart.classList.contains('show')) {
+        if (!mobileCart.contains(e.target) && !cartToggleBtn.contains(e.target)) {
+            toggleMobileCart();
+        }
+    }
+});
+
+// Sync discount values on page load
+window.addEventListener('load', function() {
+    const discountType = document.getElementById('discount-type').value;
+    const discountValue = document.getElementById('discount-value').value;
+    
+    const mobileDiscountType = document.getElementById('mobile-discount-type');
+    const mobileDiscountValue = document.getElementById('mobile-discount-value');
+    
+    if (mobileDiscountType) mobileDiscountType.value = discountType;
+    if (mobileDiscountValue) mobileDiscountValue.value = discountValue;
+    
+    // Initial mobile cart update
+    if (window.innerWidth < 768) {
+        updateMobileCart();
+    }
+});
+
+// Handle window resize
+let resizeTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+        if (window.innerWidth < 768) {
+            updateMobileCart();
+        }
+    }, 250);
+});
 </script>
 {% endblock %}

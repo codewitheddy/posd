@@ -1,0 +1,77 @@
+<!-- Connection Status Indicator (Inline in Topbar) -->
+<script>
+// Connection Status Manager (Inline Version)
+(function() {
+    const statusElement = document.getElementById('connectionStatus');
+    
+    if (!statusElement) return;
+    
+    // Update connection status
+    function updateConnectionStatus() {
+        const isOnline = navigator.onLine;
+        
+        if (isOnline) {
+            statusElement.classList.remove('offline');
+            statusElement.setAttribute('data-status', 'Online');
+            statusElement.querySelector('i').className = 'fas fa-wifi';
+        } else {
+            statusElement.classList.add('offline');
+            statusElement.setAttribute('data-status', 'Offline');
+            statusElement.querySelector('i').className = 'fas fa-wifi-slash';
+        }
+    }
+    
+    // Show notification when connection changes
+    function showConnectionNotification(isOnline) {
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${isOnline ? 'success' : 'warning'} alert-dismissible fade show`;
+        toast.style.position = 'fixed';
+        toast.style.top = '80px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '9999';
+        toast.style.minWidth = '250px';
+        toast.innerHTML = `
+            <i class="fas fa-${isOnline ? 'wifi' : 'wifi-slash'}"></i>
+            <strong>${isOnline ? 'Back Online' : 'Connection Lost'}</strong>
+            <p class="mb-0 small">${isOnline ? 'You are now connected' : 'Working in offline mode'}</p>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+    
+    // Listen for connection changes
+    window.addEventListener('online', function() {
+        updateConnectionStatus();
+        showConnectionNotification(true);
+        
+        // Trigger sync when back online (Phase 2)
+        // syncPendingData();
+    });
+    
+    window.addEventListener('offline', function() {
+        updateConnectionStatus();
+        showConnectionNotification(false);
+    });
+    
+    // Initial status check
+    updateConnectionStatus();
+    
+    // Periodic status check (every 30 seconds)
+    setInterval(updateConnectionStatus, 30000);
+    
+    // Expose to global scope for other scripts
+    window.ConnectionStatus = {
+        isOnline: () => navigator.onLine,
+        updateStatus: updateConnectionStatus
+    };
+})();
+</script>
