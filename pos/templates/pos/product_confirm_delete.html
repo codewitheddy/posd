@@ -3,25 +3,110 @@
 {% block title %}Delete Product{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-md-6 offset-md-3">
-        <div class="card">
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card border-danger">
             <div class="card-header bg-danger text-white">
-                <h4>Confirm Delete</h4>
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Product</h5>
             </div>
             <div class="card-body">
-                <p>Are you sure you want to delete <strong>{{ product.name }}</strong>?</p>
-                <p class="text-danger">This action cannot be undone.</p>
-
-                <form method="POST">
-                    {% csrf_token %}
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'product_list' slug=request.business.slug  %}" class="btn btn-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-trash"></i> Delete
-                        </button>
+                <p>You are about to delete the product:</p>
+                <h4 class="text-danger mb-4">{{ product.name }}</h4>
+                
+                {% if has_related_records %}
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading"><i class="bi bi-shield-exclamation"></i> Cannot Delete - Transaction History Exists</h5>
+                        <hr>
+                        <p class="mb-2">This product appears in your transaction history:</p>
+                        <ul class="mb-3">
+                            {% if sale_items_count > 0 %}
+                                <li><strong>{{ sale_items_count }}</strong> sale transaction{{ sale_items_count|pluralize }}</li>
+                            {% endif %}
+                            {% if purchase_items_count > 0 %}
+                                <li><strong>{{ purchase_items_count }}</strong> purchase transaction{{ purchase_items_count|pluralize }}</li>
+                            {% endif %}
+                        </ul>
+                        <p class="mb-0">
+                            <strong>Deleting this product would break your sales and inventory history.</strong> 
+                            Instead, you should discontinue the product.
+                        </p>
                     </div>
-                </form>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card border-warning h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title text-warning">
+                                        <i class="bi bi-pause-circle"></i> Recommended: Discontinue
+                                    </h5>
+                                    <p class="card-text">
+                                        Set stock to 0 to stop selling this product while preserving all historical data.
+                                    </p>
+                                    <ul class="small">
+                                        <li>Keeps all sales history intact</li>
+                                        <li>Preserves purchase records</li>
+                                        <li>Stock set to 0 (won't appear in POS)</li>
+                                        <li>Can restock later if needed</li>
+                                    </ul>
+                                    <form method="post" class="mt-3">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="discontinue">
+                                        <button type="submit" class="btn btn-warning w-100">
+                                            <i class="bi bi-pause-circle"></i> Discontinue Product
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card border-secondary h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title text-secondary">
+                                        <i class="bi bi-info-circle"></i> Why Can't I Delete?
+                                    </h5>
+                                    <p class="card-text">
+                                        Products with transaction history cannot be deleted to maintain data integrity.
+                                    </p>
+                                    <ul class="small">
+                                        <li>Sales reports need product info</li>
+                                        <li>Inventory tracking requires history</li>
+                                        <li>Tax records must be preserved</li>
+                                        <li>Financial audits need complete data</li>
+                                    </ul>
+                                    <div class="alert alert-light mt-3 mb-0">
+                                        <small><strong>Tip:</strong> Discontinuing is the standard practice for products you no longer sell.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Products
+                        </a>
+                    </div>
+                    
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        This product has no sales or purchase history. It can be safely deleted.
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Yes, Delete Permanently
+                            </button>
+                            <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                {% endif %}
             </div>
         </div>
     </div>

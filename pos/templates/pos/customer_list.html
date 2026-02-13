@@ -20,15 +20,51 @@
         {% endfor %}
     {% endif %}
 
+    <!-- Customer Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="bi bi-people"></i> Total Customers</h6>
+                    <h3>{{ total_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="bi bi-person"></i> Regular</h6>
+                    <h3>{{ regular_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="bi bi-star-fill"></i> VIP</h6>
+                    <h3>{{ vip_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="bi bi-shop"></i> Wholesale</h6>
+                    <h3>{{ wholesale_count }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Search and Filter -->
     <div class="card mb-4">
         <div class="card-body">
-            <form method="get" class="row g-3">
+            <form method="get" class="row g-3" id="customerFilterForm">
                 <div class="col-md-4">
                     <input type="text" name="search" class="form-control" placeholder="Search by name, phone, or code..." value="{{ search }}">
                 </div>
                 <div class="col-md-3">
-                    <select name="customer_type" class="form-select">
+                    <select name="customer_type" class="form-select" id="customerTypeFilter">
                         <option value="">All Customer Types</option>
                         <option value="regular" {% if customer_type == 'regular' %}selected{% endif %}>Regular</option>
                         <option value="vip" {% if customer_type == 'vip' %}selected{% endif %}>VIP</option>
@@ -46,6 +82,20 @@
                     </a>
                 </div>
             </form>
+            
+            <!-- Active Filters Display -->
+            {% if search or customer_type %}
+            <div class="mt-3">
+                <strong>Active Filters:</strong>
+                {% if search %}
+                    <span class="badge bg-info me-2">Search: "{{ search }}"</span>
+                {% endif %}
+                {% if customer_type %}
+                    <span class="badge bg-warning text-dark me-2">Type: {{ customer_type|title }}</span>
+                {% endif %}
+                <span class="text-muted">({{ customers.count }} result{{ customers.count|pluralize }})</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -101,12 +151,32 @@
                                 <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
+                                <a href="{% url 'customer_delete' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center">
-                                No customers found. <a href="{% url 'customer_create' slug=request.business.slug %}">Add your first customer</a>
+                            <td colspan="10" class="text-center py-5">
+                                {% if search or customer_type %}
+                                    <i class="bi bi-search" style="font-size: 3rem; color: #ccc;"></i>
+                                    <p class="mt-3 mb-2"><strong>No customers found matching your filters</strong></p>
+                                    <p class="text-muted">
+                                        {% if customer_type %}
+                                            No {{ customer_type }} customers found.
+                                        {% endif %}
+                                        Try adjusting your search criteria or <a href="{% url 'customer_list' slug=request.business.slug %}">reset filters</a>.
+                                    </p>
+                                {% else %}
+                                    <i class="bi bi-people" style="font-size: 3rem; color: #ccc;"></i>
+                                    <p class="mt-3 mb-2"><strong>No customers yet</strong></p>
+                                    <p class="text-muted">
+                                        <a href="{% url 'customer_create' slug=request.business.slug %}" class="btn btn-primary">
+                                            <i class="bi bi-plus-circle"></i> Add your first customer
+                                        </a>
+                                    </p>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

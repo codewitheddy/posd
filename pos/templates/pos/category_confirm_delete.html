@@ -1,0 +1,86 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Delete Category{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Category</h5>
+            </div>
+            <div class="card-body">
+                <p>You are about to delete the category:</p>
+                <h4 class="text-danger mb-4">{{ category.name }}</h4>
+                
+                {% if has_products %}
+                    <div class="alert alert-warning">
+                        <h5 class="alert-heading"><i class="bi bi-box-seam"></i> This Category Has Products</h5>
+                        <hr>
+                        <p class="mb-2">This category contains <strong>{{ product_count }}</strong> product{{ product_count|pluralize }}.</p>
+                        <p class="mb-0">You must reassign these products before deleting the category.</p>
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reassign">
+                        
+                        <div class="mb-3">
+                            <label for="new_category" class="form-label">
+                                <strong>Reassign products to:</strong>
+                            </label>
+                            <select name="new_category" id="new_category" class="form-select">
+                                <option value="">-- Uncategorized --</option>
+                                {% for cat in other_categories %}
+                                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                Select a category to move the products to, or leave as "Uncategorized"
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>What will happen:</strong>
+                            <ol class="mb-0 mt-2">
+                                <li>All {{ product_count }} product{{ product_count|pluralize }} will be moved to the selected category</li>
+                                <li>The category "{{ category.name }}" will be deleted</li>
+                                <li>Product data will remain intact</li>
+                            </ol>
+                        </div>
+                        
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-arrow-right-circle"></i> Reassign & Delete
+                            </button>
+                            <a href="{% url 'category_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                    
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        This category has no products. It can be safely deleted.
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Yes, Delete Permanently
+                            </button>
+                            <a href="{% url 'category_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -116,16 +116,26 @@
                                        value="{{ product.name|default:'' }}" required>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="product_code" class="form-label">Product Code / Barcode</label>
-                                <input type="text" class="form-control" id="product_code" name="product_code" 
-                                       value="{{ product.product_code|default:'' }}" 
-                                       placeholder="Enter barcode or product code">
-                                <small class="form-text text-muted">Optional. Used for barcode scanning at POS.</small>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="product_code" class="form-label">Product Code / SKU</label>
+                                    <input type="text" class="form-control" id="product_code" name="product_code" 
+                                           value="{{ product.product_code|default:'' }}" 
+                                           placeholder="e.g., PROD-001">
+                                    <small class="form-text text-muted">Internal product code or SKU</small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="barcode" class="form-label">Barcode</label>
+                                    <input type="text" class="form-control" id="barcode" name="barcode" 
+                                           value="{{ product.barcode|default:'' }}" 
+                                           placeholder="e.g., 1234567890123">
+                                    <small class="form-text text-muted">EAN, UPC, or other barcode format</small>
+                                </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-12 mb-3">
                                     <label for="category" class="form-label">Category</label>
                                     <select class="form-select" id="category" name="category">
                                         <option value="">-- Select Category --</option>
@@ -136,45 +146,74 @@
                                         {% endfor %}
                                     </select>
                                 </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label for="unit_price" class="form-label">Unit Price (KES) *</label>
-                                    <input type="number" class="form-control" id="unit_price" name="unit_price" 
-                                           value="{{ product.unit_price|default:'' }}" step="0.01" min="0" required>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label for="tax_class" class="form-label">Tax Class</label>
+                                    <select class="form-select" id="tax_class" name="tax_class">
+                                        <option value="standard" {% if not product or product.tax_class == 'standard' %}selected{% endif %}>Standard (16% VAT)</option>
+                                        <option value="zero_rated" {% if product.tax_class == 'zero_rated' %}selected{% endif %}>Zero Rated (0% VAT)</option>
+                                        <option value="exempt" {% if product.tax_class == 'exempt' %}selected{% endif %}>Exempt (No VAT)</option>
+                                    </select>
+                                    <small class="form-text text-muted">
+                                        Standard: Most goods and services | Zero Rated: Exports, basic foods | Exempt: Financial services, education
+                                    </small>
                                 </div>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="stock_quantity" class="form-label">Stock Quantity *</label>
-                                    <input type="number" class="form-control" id="stock_quantity" name="stock_quantity" 
-                                           value="{{ product.stock_quantity|default:0 }}" min="0" required
-                                           {% if product %}readonly{% endif %}>
-                                    {% if product %}
-                                    <small class="form-text text-muted">Use "Adjust Stock" to change quantity.</small>
-                                    {% endif %}
+                                    <label for="cost_price" class="form-label">Cost Price (KES) *</label>
+                                    <input type="number" class="form-control" id="cost_price" name="cost_price" 
+                                           value="{{ product.cost_price|default:'0' }}" step="0.01" min="0" required onchange="calculateProfit()">
+                                    <small class="form-text text-muted">What you pay to stock this product</small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="unit_price" class="form-label">Selling Price (KES) *</label>
+                                    <input type="number" class="form-control" id="unit_price" name="unit_price" 
+                                           value="{{ product.unit_price|default:'' }}" step="0.01" min="0" required onchange="calculateProfit()">
+                                    <small class="form-text text-muted">Price customers pay (tax-inclusive)</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Profit Display Fields -->
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="profit_amount" class="form-label">Profit per Unit (KES)</label>
+                                    <input type="text" class="form-control bg-light" id="profit_amount" readonly value="0.00">
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label for="profit_margin" class="form-label">Profit Margin (%)</label>
+                                    <input type="text" class="form-control bg-light" id="profit_margin" readonly value="0.0">
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label for="profit_markup" class="form-label">Markup (%)</label>
+                                    <input type="text" class="form-control bg-light" id="profit_markup" readonly value="0.0">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="stock_quantity" class="form-label">Stock Quantity</label>
+                                    <input type="number" class="form-control bg-light" id="stock_quantity" name="stock_quantity" 
+                                           value="{% if product %}{{ product.stock_quantity }}{% else %}0{% endif %}" min="0" readonly>
+                                    <small class="form-text text-muted">
+                                        {% if product %}
+                                            Use "Adjust Stock" to change quantity.
+                                        {% else %}
+                                            Stock will be added through purchases.
+                                        {% endif %}
+                                    </small>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
                                     <label for="low_stock_threshold" class="form-label">Low Stock Alert</label>
                                     <input type="number" class="form-control" id="low_stock_threshold" name="low_stock_threshold" 
                                            value="{{ product.low_stock_threshold|default:10 }}" min="0">
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="expiry_date" class="form-label">Expiry Date</label>
-                                    <input type="date" class="form-control" id="expiry_date" name="expiry_date" 
-                                           value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}"
-                                           placeholder="YYYY-MM-DD">
-                                    <small class="form-text text-muted">Use date picker or format: YYYY-MM-DD (e.g., 2026-02-22)</small>
-                                </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label for="expiry_alert_days" class="form-label">Expiry Alert (Days)</label>
-                                    <input type="number" class="form-control" id="expiry_alert_days" name="expiry_alert_days" 
-                                           value="{{ product.expiry_alert_days|default:3 }}" min="1">
                                 </div>
                             </div>
                         </div>
@@ -199,6 +238,53 @@
 
 {% block extra_js %}
 <script>
+    // Calculate and display profit margin
+    function calculateProfit() {
+        const costPrice = parseFloat(document.getElementById('cost_price').value) || 0;
+        const sellingPrice = parseFloat(document.getElementById('unit_price').value) || 0;
+        
+        if (costPrice >= 0 && sellingPrice > 0) {
+            const profit = sellingPrice - costPrice;
+            const margin = (profit / sellingPrice) * 100;
+            const markup = costPrice > 0 ? (profit / costPrice) * 100 : 0;
+            
+            document.getElementById('profit_amount').value = profit.toFixed(2);
+            document.getElementById('profit_margin').value = margin.toFixed(1);
+            document.getElementById('profit_markup').value = markup.toFixed(1);
+            
+            // Color code based on margin
+            const profitField = document.getElementById('profit_amount');
+            const marginField = document.getElementById('profit_margin');
+            const markupField = document.getElementById('profit_markup');
+            
+            if (profit < 0) {
+                profitField.classList.add('text-danger', 'fw-bold');
+                marginField.classList.add('text-danger', 'fw-bold');
+                markupField.classList.add('text-danger', 'fw-bold');
+            } else if (profit > 0) {
+                profitField.classList.remove('text-danger');
+                profitField.classList.add('text-success', 'fw-bold');
+                marginField.classList.remove('text-danger');
+                marginField.classList.add('text-success', 'fw-bold');
+                markupField.classList.remove('text-danger');
+                markupField.classList.add('text-success', 'fw-bold');
+            } else {
+                profitField.classList.remove('text-danger', 'text-success', 'fw-bold');
+                marginField.classList.remove('text-danger', 'text-success', 'fw-bold');
+                markupField.classList.remove('text-danger', 'text-success', 'fw-bold');
+            }
+        } else {
+            document.getElementById('profit_amount').value = '0.00';
+            document.getElementById('profit_margin').value = '0.0';
+            document.getElementById('profit_markup').value = '0.0';
+        }
+    }
+    
+    // Calculate profit on page load if values exist
+    window.addEventListener('load', function() {
+        calculateProfit();
+    });
+    
     function previewImage(event) {
         const file = event.target.files[0];
         if (file) {

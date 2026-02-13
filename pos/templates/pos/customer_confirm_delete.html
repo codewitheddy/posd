@@ -1,0 +1,139 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Delete Customer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Customer</h5>
+            </div>
+            <div class="card-body">
+                <p>You are about to delete the customer:</p>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h4 class="text-danger mb-2">{{ customer.name }}</h4>
+                        <p class="mb-1"><strong>Code:</strong> {{ customer.customer_code }}</p>
+                        <p class="mb-1"><strong>Phone:</strong> {{ customer.phone }}</p>
+                        {% if customer.email %}
+                            <p class="mb-1"><strong>Email:</strong> {{ customer.email }}</p>
+                        {% endif %}
+                        <p class="mb-0"><strong>Loyalty Points:</strong> {{ customer.loyalty_points }} pts</p>
+                    </div>
+                </div>
+                
+                {% if has_related_records %}
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading"><i class="bi bi-shield-exclamation"></i> Cannot Delete - Purchase History Exists</h5>
+                        <hr>
+                        <p class="mb-2">This customer has transaction history:</p>
+                        <ul class="mb-3">
+                            {% if sales_count > 0 %}
+                                <li><strong>{{ sales_count }}</strong> purchase{{ sales_count|pluralize }} (KES {{ customer.total_purchases|floatformat:2 }})</li>
+                            {% endif %}
+                            {% if loyalty_transactions_count > 0 %}
+                                <li><strong>{{ loyalty_transactions_count }}</strong> loyalty transaction{{ loyalty_transactions_count|pluralize }}</li>
+                            {% endif %}
+                        </ul>
+                        <p class="mb-0">
+                            <strong>Deleting this customer would break your sales history and loyalty program data.</strong> 
+                            Instead, you should deactivate the customer.
+                        </p>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card border-warning h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title text-warning">
+                                        <i class="bi bi-pause-circle"></i> Recommended: Deactivate
+                                    </h5>
+                                    <p class="card-text">
+                                        Deactivate the customer to hide them from active lists while preserving all historical data.
+                                    </p>
+                                    <ul class="small">
+                                        <li>Keeps all purchase history intact</li>
+                                        <li>Preserves loyalty points and transactions</li>
+                                        <li>Can be reactivated later</li>
+                                        <li>Won't appear in customer dropdowns</li>
+                                        <li>Sales reports remain accurate</li>
+                                    </ul>
+                                    <form method="post" class="mt-3">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="deactivate">
+                                        <button type="submit" class="btn btn-warning w-100">
+                                            <i class="bi bi-pause-circle"></i> Deactivate Customer
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card border-info h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title text-info">
+                                        <i class="bi bi-eye"></i> View Purchase History
+                                    </h5>
+                                    <p class="card-text">
+                                        Review the customer's purchase history and loyalty transactions.
+                                    </p>
+                                    <ul class="small">
+                                        <li>View all purchases</li>
+                                        <li>Check loyalty points earned/redeemed</li>
+                                        <li>See total spending</li>
+                                        <li>Review visit history</li>
+                                    </ul>
+                                    <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn btn-info w-100 mt-3">
+                                        <i class="bi bi-eye"></i> View Customer Details
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-light mt-4">
+                        <h6><i class="bi bi-info-circle"></i> Why Can't I Delete?</h6>
+                        <p class="small mb-0">
+                            Customers with purchase history cannot be deleted to maintain data integrity for:
+                            sales reports, tax records, loyalty program tracking, and financial audits.
+                            Deactivating is the standard practice for customers you no longer serve.
+                        </p>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Customers
+                        </a>
+                    </div>
+                    
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        This customer has no purchase history or loyalty transactions. It can be safely deleted.
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> This action cannot be undone. The customer record and their loyalty points ({{ customer.loyalty_points }} pts) will be permanently removed.
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Yes, Delete Permanently
+                            </button>
+                            <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

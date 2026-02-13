@@ -524,47 +524,39 @@ def product_create(request, slug=None):
     if request.method == 'POST':
         name = request.POST.get('name')
         product_code = request.POST.get('product_code')
+        barcode = request.POST.get('barcode')
         category_id = request.POST.get('category')
+        cost_price = request.POST.get('cost_price', 0)
         unit_price = request.POST.get('unit_price')
-        stock_quantity = request.POST.get('stock_quantity', 0)
+        tax_class = request.POST.get('tax_class', 'standard')
         low_stock_threshold = request.POST.get('low_stock_threshold', 10)
-        expiry_date = request.POST.get('expiry_date')
-        expiry_alert_days = request.POST.get('expiry_alert_days', 3)
         image = request.FILES.get('image')  # Get uploaded image
         
         try:
             category = Category.objects.get(id=category_id, business=request.business) if category_id else None
             
             # Convert empty strings to default values
-            stock_qty = int(stock_quantity) if stock_quantity else 0
             low_stock = int(low_stock_threshold) if low_stock_threshold else 10
-            expiry_alert = int(expiry_alert_days) if expiry_alert_days else 3
+            cost = Decimal(cost_price) if cost_price else Decimal('0.00')
             
             product = Product.objects.create(
                 business=request.business,
                 name=name, 
                 product_code=product_code if product_code else None,
-                category=category, 
+                barcode=barcode if barcode else '',
+                category=category,
+                cost_price=cost,
                 unit_price=unit_price,
-                stock_quantity=stock_qty,
+                tax_class=tax_class,
+                stock_quantity=0,  # Always 0 for new products
                 low_stock_threshold=low_stock,
-                expiry_date=expiry_date if expiry_date else None,
-                expiry_alert_days=expiry_alert,
                 image=image if image else None  # Add image
             )
             
             # Create initial stock adjustment record
-            if stock_qty > 0:
-                StockAdjustment.objects.create(
-                    product=product,
-                    adjustment_type='restock',
-                    quantity_change=stock_qty,
-                    previous_quantity=0,
-                    new_quantity=stock_qty,
-                    reason='Initial stock'
-                )
+            # Stock is 0 for new products - will be added through purchases
             
-            messages.success(request, 'Product created successfully!')
+            messages.success(request, 'Product created successfully! Add stock through purchase orders.')
             return redirect('product_list', slug=request.business.slug)
         except Exception as e:
             messages.error(request, f'Error creating product: {str(e)}')
@@ -582,19 +574,21 @@ def product_edit(request, slug=None, pk=None):
     if request.method == 'POST':
         product.name = request.POST.get('name')
         product.product_code = request.POST.get('product_code') if request.POST.get('product_code') else None
+        product.barcode = request.POST.get('barcode', '')
         category_id = request.POST.get('category')
         product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
+        
+        # Update cost price and selling price
+        cost_price = request.POST.get('cost_price', 0)
+        product.cost_price = Decimal(cost_price) if cost_price else Decimal('0.00')
         product.unit_price = request.POST.get('unit_price')
+        
+        # Update tax class
+        product.tax_class = request.POST.get('tax_class', 'standard')
         
         # Convert empty strings to default values
         low_stock = request.POST.get('low_stock_threshold')
         product.low_stock_threshold = int(low_stock) if low_stock else 10
-        
-        expiry_date = request.POST.get('expiry_date')
-        product.expiry_date = expiry_date if expiry_date else None
-        
-        expiry_alert = request.POST.get('expiry_alert_days')
-        product.expiry_alert_days = int(expiry_alert) if expiry_alert else 3
         
         # Handle image upload
         image = request.FILES.get('image')
@@ -618,11 +612,44 @@ def product_edit(request, slug=None, pk=None):
 def product_delete(request, slug=None, pk=None):
     """Delete product"""
     product = get_object_or_404(Product, business=request.business, pk=pk)
+    
+    # Check if product has related records
+    sale_items_count = product.saleitem_set.count()
+    purchase_items_count = product.purchaseitem_set.count()
+    has_related_records = sale_items_count > 0 or purchase_items_count > 0
+    
     if request.method == 'POST':
-        product.delete()
-        messages.success(request, 'Product deleted successfully!')
-        return redirect('product_list', slug=request.business.slug)
-    return render(request, 'pos/product_confirm_delete.html', {'product': product})
+        action = request.POST.get('action', 'delete')
+        
+        if action == 'discontinue':
+            # Mark as out of stock and set quantity to 0
+            product.stock_quantity = 0
+            product.save()
+            messages.success(request, f'Product "{product.name}" has been discontinued (stock set to 0).')
+            return redirect('product_list', slug=request.business.slug)
+        
+        elif action == 'delete':
+            try:
+                name = product.name
+                product.delete()
+                messages.success(request, f'Product "{name}" deleted successfully!')
+                return redirect('product_list', slug=request.business.slug)
+            except models.ProtectedError as e:
+                # Handle protected foreign key error
+                messages.error(
+                    request, 
+                    f'Cannot delete product "{product.name}" because it appears in sales or purchase history. '
+                    f'Please discontinue the product instead (set stock to 0).'
+                )
+                return redirect('product_list', slug=request.business.slug)
+    
+    context = {
+        'product': product,
+        'sale_items_count': sale_items_count,
+        'purchase_items_count': purchase_items_count,
+        'has_related_records': has_related_records,
+    }
+    return render(request, 'pos/product_confirm_delete.html', context)
 
 
 @business_required
@@ -644,6 +671,80 @@ def category_create(request, slug=None):
         except Exception as e:
             messages.error(request, f'Error creating category: {str(e)}')
     return render(request, 'pos/category_form.html')
+
+
+@business_required
+def category_edit(request, slug=None, pk=None):
+    """Edit existing category"""
+    category = get_object_or_404(Category, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        try:
+            category.name = name
+            category.save()
+            messages.success(request, 'Category updated successfully!')
+            return redirect('category_list', slug=request.business.slug)
+        except Exception as e:
+            messages.error(request, f'Error updating category: {str(e)}')
+    
+    return render(request, 'pos/category_form.html', {'category': category})
+
+
+@business_required
+def category_delete(request, slug=None, pk=None):
+    """Delete category"""
+    category = get_object_or_404(Category, business=request.business, pk=pk)
+    
+    # Check if category has products
+    product_count = category.products.count()
+    has_products = product_count > 0
+    
+    if request.method == 'POST':
+        action = request.POST.get('action', 'delete')
+        
+        if action == 'reassign':
+            # Reassign products to another category or uncategorized
+            new_category_id = request.POST.get('new_category')
+            if new_category_id:
+                new_category = get_object_or_404(Category, business=request.business, pk=new_category_id)
+                category.products.update(category=new_category)
+                messages.success(request, f'{product_count} product(s) reassigned to "{new_category.name}".')
+            else:
+                # Set to null (uncategorized)
+                category.products.update(category=None)
+                messages.success(request, f'{product_count} product(s) set to uncategorized.')
+            
+            # Now delete the category
+            name = category.name
+            category.delete()
+            messages.success(request, f'Category "{name}" deleted successfully!')
+            return redirect('category_list', slug=request.business.slug)
+        
+        elif action == 'delete':
+            try:
+                name = category.name
+                category.delete()
+                messages.success(request, f'Category "{name}" deleted successfully!')
+                return redirect('category_list', slug=request.business.slug)
+            except models.ProtectedError:
+                messages.error(
+                    request, 
+                    f'Cannot delete category "{category.name}" because it has {product_count} product(s). '
+                    f'Please reassign the products first.'
+                )
+                return redirect('category_list', slug=request.business.slug)
+    
+    # Get other categories for reassignment option
+    other_categories = Category.objects.filter(business=request.business).exclude(pk=pk)
+    
+    context = {
+        'category': category,
+        'product_count': product_count,
+        'has_products': has_products,
+        'other_categories': other_categories,
+    }
+    return render(request, 'pos/category_confirm_delete.html', context)
 
 
 @business_required
@@ -1330,14 +1431,41 @@ def supplier_delete(request, slug=None, pk=None):
     """Delete a supplier"""
     supplier = get_object_or_404(Supplier, business=request.business, pk=pk)
     
+    # Check if supplier has related records
+    purchase_count = supplier.purchases.count()
+    payment_count = supplier.payments.count()
+    has_related_records = purchase_count > 0 or payment_count > 0
+    
     if request.method == 'POST':
-        name = supplier.name
-        supplier.delete()
-        messages.success(request, f'Supplier "{name}" deleted successfully!')
-        return redirect('supplier_list', slug=request.business.slug)
+        action = request.POST.get('action', 'delete')
+        
+        if action == 'deactivate':
+            # Deactivate instead of delete
+            supplier.is_active = False
+            supplier.save()
+            messages.success(request, f'Supplier "{supplier.name}" has been deactivated.')
+            return redirect('supplier_list', slug=request.business.slug)
+        
+        elif action == 'delete':
+            try:
+                name = supplier.name
+                supplier.delete()
+                messages.success(request, f'Supplier "{name}" deleted successfully!')
+                return redirect('supplier_list', slug=request.business.slug)
+            except models.ProtectedError as e:
+                # Handle protected foreign key error
+                messages.error(
+                    request, 
+                    f'Cannot delete supplier "{supplier.name}" because it has related purchase orders or payments. '
+                    f'Please deactivate the supplier instead, or delete all related records first.'
+                )
+                return redirect('supplier_statement', slug=request.business.slug, supplier_id=pk)
     
     context = {
         'supplier': supplier,
+        'purchase_count': purchase_count,
+        'payment_count': payment_count,
+        'has_related_records': has_related_records,
     }
     return render(request, 'pos/supplier_confirm_delete.html', context)
 
@@ -1759,6 +1887,7 @@ def password_reset_confirm(request, uidb64, token):
 # ==================== CASHIER REPORTS ====================
 
 @login_required
+@business_required
 @manager_required
 def cashier_report(request, slug=None):
     """View sales by cashier"""
@@ -2296,7 +2425,13 @@ from .models import Customer
 @business_required
 def customer_list(request, slug=None):
     """List all customers"""
-    customers = Customer.objects.filter(business=request.business)
+    all_customers = Customer.objects.filter(business=request.business)
+    customers = all_customers
+    
+    # Get counts by type for statistics
+    regular_count = all_customers.filter(customer_type='regular').count()
+    vip_count = all_customers.filter(customer_type='vip').count()
+    wholesale_count = all_customers.filter(customer_type='wholesale').count()
     
     # Search
     search = request.GET.get('search', '')
@@ -2313,10 +2448,23 @@ def customer_list(request, slug=None):
     if customer_type:
         customers = customers.filter(customer_type=customer_type)
     
+    # Debug: Log the filter parameters and results
+    print(f"DEBUG - Customer List Filter:")
+    print(f"  Search: '{search}'")
+    print(f"  Customer Type Filter: '{customer_type}'")
+    print(f"  Total Results: {customers.count()}")
+    if customers.exists():
+        for c in customers[:5]:
+            print(f"    - {c.name} ({c.customer_type})")
+    
     context = {
         'customers': customers,
         'search': search,
         'customer_type': customer_type,
+        'total_count': all_customers.count(),
+        'regular_count': regular_count,
+        'vip_count': vip_count,
+        'wholesale_count': wholesale_count,
     }
     return render(request, 'pos/customer_list.html', context)
 
@@ -2418,6 +2566,50 @@ def customer_detail(request, slug=None, pk=None):
         'purchases': purchases,
     }
     return render(request, 'pos/customer_detail.html', context)
+
+
+@business_required
+def customer_delete(request, slug=None, pk=None):
+    """Delete customer"""
+    customer = get_object_or_404(Customer, business=request.business, pk=pk)
+    
+    # Check if customer has related records
+    sales_count = customer.purchases.count()
+    loyalty_transactions_count = customer.loyalty_transactions.count() if hasattr(customer, 'loyalty_transactions') else 0
+    has_related_records = sales_count > 0 or loyalty_transactions_count > 0
+    
+    if request.method == 'POST':
+        action = request.POST.get('action', 'delete')
+        
+        if action == 'deactivate':
+            # Deactivate instead of delete
+            customer.is_active = False
+            customer.save()
+            messages.success(request, f'Customer "{customer.name}" has been deactivated.')
+            return redirect('customer_list', slug=request.business.slug)
+        
+        elif action == 'delete':
+            try:
+                name = customer.name
+                customer.delete()
+                messages.success(request, f'Customer "{name}" deleted successfully!')
+                return redirect('customer_list', slug=request.business.slug)
+            except models.ProtectedError as e:
+                # Handle protected foreign key error
+                messages.error(
+                    request, 
+                    f'Cannot delete customer "{customer.name}" because they have purchase history. '
+                    f'Please deactivate the customer instead.'
+                )
+                return redirect('customer_detail', slug=request.business.slug, pk=pk)
+    
+    context = {
+        'customer': customer,
+        'sales_count': sales_count,
+        'loyalty_transactions_count': loyalty_transactions_count,
+        'has_related_records': has_related_records,
+    }
+    return render(request, 'pos/customer_confirm_delete.html', context)
 
 
 
@@ -3679,9 +3871,8 @@ def payment_method_create(request, slug):
         
         # Log activity
         ActivityLog.objects.create(
-            business=request.business,
             user=request.user,
-            action='create',
+            action_type='create',
             model_name='PaymentMethod',
             object_id=payment_method.id,
             description=f'Created payment method: {payment_method.name}'
@@ -3740,9 +3931,8 @@ def payment_method_edit(request, slug, pk):
         
         # Log activity
         ActivityLog.objects.create(
-            business=request.business,
             user=request.user,
-            action='update',
+            action_type='update',
             model_name='PaymentMethod',
             object_id=payment_method.id,
             description=f'Updated payment method: {payment_method.name}'
@@ -3789,9 +3979,8 @@ def payment_method_delete(request, slug, pk):
         
         # Log activity before deletion
         ActivityLog.objects.create(
-            business=request.business,
             user=request.user,
-            action='delete',
+            action_type='delete',
             model_name='PaymentMethod',
             object_id=payment_method.id,
             description=f'Deleted payment method: {name}'

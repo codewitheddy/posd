@@ -149,11 +149,20 @@ def product_image_path(instance, filename):
 
 class Product(models.Model):
     """Products available for sale"""
+    TAX_CLASS_CHOICES = [
+        ('standard', 'Standard (16% VAT)'),
+        ('zero_rated', 'Zero Rated (0% VAT)'),
+        ('exempt', 'Exempt (No VAT)'),
+    ]
+    
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
-    product_code = models.CharField(max_length=50, blank=True, null=True, help_text="Barcode or product code for scanning")
+    product_code = models.CharField(max_length=50, blank=True, null=True, help_text="Internal product code or SKU")
+    barcode = models.CharField(max_length=100, blank=True, help_text="Barcode for scanning (EAN, UPC, etc.)")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Cost price (what you pay to stock the product)")
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price (what customers pay)")
+    tax_class = models.CharField(max_length=20, choices=TAX_CLASS_CHOICES, default='standard', help_text="Tax classification for this product")
     stock_quantity = models.IntegerField(default=0, help_text="Current stock quantity")
     low_stock_threshold = models.IntegerField(default=10, help_text="Alert when stock falls below this level")
     expiry_date = models.DateField(blank=True, null=True, help_text="Product expiry date (optional)")
@@ -176,6 +185,15 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} - KES {self.unit_price}"
+    
+    def get_tax_rate(self):
+        """Get the tax rate for this product based on tax class"""
+        tax_rates = {
+            'standard': Decimal('16.00'),
+            'zero_rated': Decimal('0.00'),
+            'exempt': Decimal('0.00'),
+        }
+        return tax_rates.get(self.tax_class, Decimal('16.00'))
     
     def save(self, *args, **kwargs):
         # Optimize image on upload
@@ -267,6 +285,24 @@ class Product(models.Model):
             return f"Expires in {days} day{'s' if days != 1 else ''}"
         else:
             return "Good"
+    
+    def get_profit_per_unit(self):
+        """Calculate profit per unit"""
+        return self.unit_price - self.cost_price
+    
+    def get_profit_margin_percentage(self):
+        """Calculate profit margin as percentage"""
+        if self.unit_price == 0:
+            return 0
+        profit = self.get_profit_per_unit()
+        return (profit / self.unit_price) * 100
+    
+    def get_markup_percentage(self):
+        """Calculate markup percentage (profit / cost)"""
+        if self.cost_price == 0:
+            return 0
+        profit = self.get_profit_per_unit()
+        return (profit / self.cost_price) * 100
 
 
 class Sale(models.Model):
@@ -533,6 +569,8 @@ class PurchaseItem(models.Model):
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    expiry_date = models.DateField(blank=True, null=True, help_text='Expiry date for this batch of products')
+    batch_number = models.CharField(max_length=100, blank=True, help_text='Batch or lot number for tracking')
     
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
@@ -542,6 +580,30 @@ class PurchaseItem(models.Model):
         if not self.business_id and self.purchase:
             self.business = self.purchase.business
         super().save(*args, **kwargs)
+    
+    def is_expired(self):
+        """Check if this batch has expired"""
+        if not self.expiry_date:
+            return False
+        from django.utils import timezone
+        return self.expiry_date < timezone.now().date()
+    
+    def is_expiring_soon(self, alert_days=7):
+        """Check if this batch is expiring soon"""
+        if not self.expiry_date or self.is_expired():
+            return False
+        from django.utils import timezone
+        from datetime import timedelta
+        alert_date = timezone.now().date() + timedelta(days=alert_days)
+        return self.expiry_date <= alert_date
+    
+    def days_until_expiry(self):
+        """Calculate days until expiry"""
+        if not self.expiry_date:
+            return None
+        from django.utils import timezone
+        delta = self.expiry_date - timezone.now().date()
+        return delta.days
 
 
 # ==================== SUPPLIER PAYMENTS ====================

@@ -3,35 +3,110 @@
 {% block title %}Delete Supplier - POS System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
         <div class="card border-danger">
             <div class="card-header bg-danger text-white">
-                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Confirm Delete</h5>
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Supplier</h5>
             </div>
             <div class="card-body">
-                <p>Are you sure you want to delete the supplier:</p>
-                <h4 class="text-danger">{{ supplier.name }}</h4>
+                <p>You are about to delete the supplier:</p>
+                <h4 class="text-danger mb-4">{{ supplier.name }}</h4>
                 
-                {% if supplier.purchases.count > 0 %}
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <strong>Warning:</strong> This supplier has {{ supplier.purchases.count }} purchase order(s). 
-                        Deleting this supplier may affect your purchase history.
+                {% if has_related_records %}
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading"><i class="bi bi-shield-exclamation"></i> Cannot Delete - Related Records Exist</h5>
+                        <hr>
+                        <p class="mb-2">This supplier has the following related records:</p>
+                        <ul class="mb-3">
+                            {% if purchase_count > 0 %}
+                                <li><strong>{{ purchase_count }}</strong> purchase order{{ purchase_count|pluralize }}</li>
+                            {% endif %}
+                            {% if payment_count > 0 %}
+                                <li><strong>{{ payment_count }}</strong> payment{{ payment_count|pluralize }}</li>
+                            {% endif %}
+                        </ul>
+                        <p class="mb-0">
+                            <strong>Deleting this supplier would break data integrity.</strong> 
+                            You have two options:
+                        </p>
                     </div>
-                {% endif %}
-                
-                <form method="post" class="mt-4">
-                    {% csrf_token %}
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-trash"></i> Yes, Delete
-                        </button>
-                        <a href="{% url 'supplier_list' slug=request.business.slug  %}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle"></i> Cancel
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card border-warning h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title text-warning">
+                                        <i class="bi bi-pause-circle"></i> Option 1: Deactivate
+                                    </h5>
+                                    <p class="card-text">
+                                        Deactivate the supplier to hide it from lists while preserving all historical data.
+                                    </p>
+                                    <ul class="small">
+                                        <li>Keeps all purchase history intact</li>
+                                        <li>Preserves payment records</li>
+                                        <li>Can be reactivated later</li>
+                                        <li>Won't appear in active supplier lists</li>
+                                    </ul>
+                                    <form method="post" class="mt-3">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="deactivate">
+                                        <button type="submit" class="btn btn-warning w-100">
+                                            <i class="bi bi-pause-circle"></i> Deactivate Supplier
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card border-info h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title text-info">
+                                        <i class="bi bi-list-check"></i> Option 2: View Records
+                                    </h5>
+                                    <p class="card-text">
+                                        Review and delete all related records first, then delete the supplier.
+                                    </p>
+                                    <ul class="small">
+                                        <li>View all purchase orders</li>
+                                        <li>View all payments</li>
+                                        <li>Delete records individually</li>
+                                        <li>Then delete the supplier</li>
+                                    </ul>
+                                    <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.pk %}" class="btn btn-info w-100 mt-3">
+                                        <i class="bi bi-eye"></i> View Supplier Statement
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'supplier_list' slug=request.business.slug %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Suppliers
                         </a>
                     </div>
-                </form>
+                    
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        This supplier has no related purchase orders or payments. It can be safely deleted.
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Yes, Delete Permanently
+                            </button>
+                            <a href="{% url 'supplier_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                {% endif %}
             </div>
         </div>
     </div>
