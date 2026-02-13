@@ -3672,9 +3672,8 @@ def payment_method_create(request, slug):
         
         # Log activity
         ActivityLog.objects.create(
-            business=request.business,
             user=request.user,
-            action='create',
+            action_type='create',
             model_name='PaymentMethod',
             object_id=payment_method.id,
             description=f'Created payment method: {payment_method.name}'
@@ -3733,9 +3732,8 @@ def payment_method_edit(request, slug, pk):
         
         # Log activity
         ActivityLog.objects.create(
-            business=request.business,
             user=request.user,
-            action='update',
+            action_type='update',
             model_name='PaymentMethod',
             object_id=payment_method.id,
             description=f'Updated payment method: {payment_method.name}'
@@ -3782,9 +3780,8 @@ def payment_method_delete(request, slug, pk):
         
         # Log activity before deletion
         ActivityLog.objects.create(
-            business=request.business,
             user=request.user,
-            action='delete',
+            action_type='delete',
             model_name='PaymentMethod',
             object_id=payment_method.id,
             description=f'Deleted payment method: {name}'
