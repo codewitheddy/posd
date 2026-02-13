@@ -510,7 +510,7 @@
         <div class="item">
             <div class="item-name">{{ item.product.name }}</div>
             <div class="item-details">
-                <span>{{ item.quantity }} x {{ item.unit_price|floatformat:2 }}</span>
+                <span>{{ item.quantity }}{% if item.product.unit %} {{ item.product.unit.abbreviation }}{% endif %} x {{ item.unit_price|floatformat:2 }}</span>
                 <span class="bold">{{ item.total_price|floatformat:2 }}</span>
             </div>
         </div>
@@ -527,7 +527,7 @@
             
             {% if sale.discount_amount > 0 %}
             <div class="total-row">
-                <span>Discount ({{ sale.discount_value }}{% if sale.discount_type == 'percentage' %}%{% endif %}):</span>
+                <span>Discount {% if sale.discount_type == 'points' %}(Points Redeemed){% else %}({{ sale.discount_value }}{% if sale.discount_type == 'percentage' %}%{% endif %}){% endif %}:</span>
                 <span>-{{ sale.discount_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
@@ -585,10 +585,18 @@
         <div class="loyalty-box">
             <div style="font-size: 11px; margin-bottom: 3px;">LOYALTY POINTS</div>
             <div style="font-size: 12px; font-weight: bold; color: #155724; margin-bottom: 5px;">{{ sale.customer.name }}</div>
-            {% with sale.loyalty_transactions.first as loyalty %}
-            {% if loyalty %}
-            <div class="loyalty-points">+{{ loyalty.points }} Points Earned!</div>
-            <div style="font-size: 10px; margin-top: 3px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
+            {% with sale.loyalty_transactions.all as transactions %}
+            {% if transactions %}
+                {% for transaction in transactions %}
+                    {% if transaction.transaction_type == 'redeem' %}
+                    <div style="font-size: 11px; color: #dc3545; margin-bottom: 3px;">
+                        <i class="bi bi-dash-circle"></i> {% if transaction.points < 0 %}{{ transaction.points|slice:"1:" }}{% else %}{{ transaction.points }}{% endif %} Points Redeemed
+                    </div>
+                    {% elif transaction.transaction_type == 'earn' %}
+                    <div class="loyalty-points">+{{ transaction.points }} Points Earned!</div>
+                    {% endif %}
+                {% endfor %}
+                <div style="font-size: 10px; margin-top: 5px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
             {% else %}
             <div style="font-size: 11px; color: #666;">No points earned this transaction</div>
             <div style="font-size: 10px; margin-top: 3px;">Balance: {{ sale.customer.loyalty_points }} pts</div>

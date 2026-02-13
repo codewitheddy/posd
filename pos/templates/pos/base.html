@@ -396,6 +396,11 @@
                 </a>
             </li>
             <li>
+                <a href="{% url 'unit_list' slug=business_slug %}" class="{% if 'unit' in request.path %}active{% endif %}">
+                    <i class="bi bi-rulers"></i> Units
+                </a>
+            </li>
+            <li>
                 <a href="{% url 'stock_list' slug=business_slug %}" class="{% if 'stock' in request.path %}active{% endif %}">
                     <i class="bi bi-boxes"></i> Stock Management
                 </a>

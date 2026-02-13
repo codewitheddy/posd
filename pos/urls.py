@@ -21,6 +21,12 @@ urlpatterns = [
     path('categories/', views.category_list, name='category_list'),
     path('categories/create/', views.category_create, name='category_create'),
     
+    # Units of Measurement
+    path('units/', views.unit_list, name='unit_list'),
+    path('units/create/', views.unit_create, name='unit_create'),
+    path('units/<int:pk>/edit/', views.unit_edit, name='unit_edit'),
+    path('units/<int:pk>/delete/', views.unit_delete, name='unit_delete'),
+    
     # Stock Management
     path('stock/', views.stock_list, name='stock_list'),
     path('stock/<int:pk>/adjust/', views.stock_adjust, name='stock_adjust'),

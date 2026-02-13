@@ -521,11 +521,14 @@ def product_download_template(request):
 @business_required
 def product_create(request, slug=None):
     """Create new product"""
+    from .models import UnitOfMeasurement
+    
     if request.method == 'POST':
         name = request.POST.get('name')
         product_code = request.POST.get('product_code')
         barcode = request.POST.get('barcode')
         category_id = request.POST.get('category')
+        unit_id = request.POST.get('unit')
         cost_price = request.POST.get('cost_price', 0)
         unit_price = request.POST.get('unit_price')
         tax_class = request.POST.get('tax_class', 'standard')
@@ -534,9 +537,10 @@ def product_create(request, slug=None):
         
         try:
             category = Category.objects.get(id=category_id, business=request.business) if category_id else None
+            unit = UnitOfMeasurement.objects.get(id=unit_id, business=request.business) if unit_id else None
             
             # Convert empty strings to default values
-            low_stock = int(low_stock_threshold) if low_stock_threshold else 10
+            low_stock = Decimal(low_stock_threshold) if low_stock_threshold else Decimal('10')
             cost = Decimal(cost_price) if cost_price else Decimal('0.00')
             
             product = Product.objects.create(
@@ -545,6 +549,7 @@ def product_create(request, slug=None):
                 product_code=product_code if product_code else None,
                 barcode=barcode if barcode else '',
                 category=category,
+                unit=unit,
                 cost_price=cost,
                 unit_price=unit_price,
                 tax_class=tax_class,
@@ -562,13 +567,15 @@ def product_create(request, slug=None):
             messages.error(request, f'Error creating product: {str(e)}')
     
     categories = Category.objects.filter(business=request.business).all()
-    return render(request, 'pos/product_form.html', {'categories': categories})
+    units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+    return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
 
 
 
 @business_required
 def product_edit(request, slug=None, pk=None):
     """Edit existing product"""
+    from .models import UnitOfMeasurement
     product = get_object_or_404(Product, business=request.business, pk=pk)
     
     if request.method == 'POST':
@@ -577,6 +584,10 @@ def product_edit(request, slug=None, pk=None):
         product.barcode = request.POST.get('barcode', '')
         category_id = request.POST.get('category')
         product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
+        
+        # Update unit
+        unit_id = request.POST.get('unit')
+        product.unit = UnitOfMeasurement.objects.get(business=request.business, id=unit_id) if unit_id else None
         
         # Update cost price and selling price
         cost_price = request.POST.get('cost_price', 0)
@@ -588,7 +599,7 @@ def product_edit(request, slug=None, pk=None):
         
         # Convert empty strings to default values
         low_stock = request.POST.get('low_stock_threshold')
-        product.low_stock_threshold = int(low_stock) if low_stock else 10
+        product.low_stock_threshold = Decimal(low_stock) if low_stock else Decimal('10')
         
         # Handle image upload
         image = request.FILES.get('image')
@@ -605,7 +616,8 @@ def product_edit(request, slug=None, pk=None):
         return redirect('product_list', slug=request.business.slug)
     
     categories = Category.objects.filter(business=request.business).all()
-    return render(request, 'pos/product_form.html', {'product': product, 'categories': categories})
+    units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+    return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
 
 
 @business_required
@@ -747,6 +759,145 @@ def category_delete(request, slug=None, pk=None):
     return render(request, 'pos/category_confirm_delete.html', context)
 
 
+# ==================== UNIT OF MEASUREMENT VIEWS ====================
+
+@business_required
+def unit_list(request, slug=None):
+    """List all units of measurement"""
+    from .models import UnitOfMeasurement
+    units = UnitOfMeasurement.objects.filter(business=request.business).all()
+    return render(request, 'pos/unit_list.html', {'units': units})
+
+
+@business_required
+def unit_create(request, slug=None):
+    """Create new unit of measurement"""
+    from .models import UnitOfMeasurement
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        abbreviation = request.POST.get('abbreviation')
+        unit_type = request.POST.get('unit_type', 'count')
+        base_unit_id = request.POST.get('base_unit')
+        conversion_factor = request.POST.get('conversion_factor', 1)
+        
+        try:
+            base_unit = None
+            if base_unit_id:
+                base_unit = UnitOfMeasurement.objects.get(pk=base_unit_id, business=request.business)
+            
+            UnitOfMeasurement.objects.create(
+                business=request.business,
+                name=name,
+                abbreviation=abbreviation,
+                unit_type=unit_type,
+                base_unit=base_unit,
+                conversion_factor=Decimal(conversion_factor)
+            )
+            messages.success(request, f'Unit "{name}" created successfully!')
+            return redirect('unit_list', slug=request.business.slug)
+        except Exception as e:
+            messages.error(request, f'Error creating unit: {str(e)}')
+    
+    # Get existing units for base unit selection
+    units = UnitOfMeasurement.objects.filter(business=request.business).all()
+    return render(request, 'pos/unit_form.html', {'units': units})
+
+
+@business_required
+def unit_edit(request, slug=None, pk=None):
+    """Edit existing unit of measurement"""
+    from .models import UnitOfMeasurement
+    unit = get_object_or_404(UnitOfMeasurement, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        abbreviation = request.POST.get('abbreviation')
+        unit_type = request.POST.get('unit_type', 'count')
+        base_unit_id = request.POST.get('base_unit')
+        conversion_factor = request.POST.get('conversion_factor', 1)
+        is_active = request.POST.get('is_active') == 'on'
+        
+        try:
+            base_unit = None
+            if base_unit_id:
+                base_unit = UnitOfMeasurement.objects.get(pk=base_unit_id, business=request.business)
+            
+            unit.name = name
+            unit.abbreviation = abbreviation
+            unit.unit_type = unit_type
+            unit.base_unit = base_unit
+            unit.conversion_factor = Decimal(conversion_factor)
+            unit.is_active = is_active
+            unit.save()
+            
+            messages.success(request, f'Unit "{name}" updated successfully!')
+            return redirect('unit_list', slug=request.business.slug)
+        except Exception as e:
+            messages.error(request, f'Error updating unit: {str(e)}')
+    
+    # Get other units for base unit selection (exclude self)
+    units = UnitOfMeasurement.objects.filter(business=request.business).exclude(pk=pk)
+    return render(request, 'pos/unit_form.html', {'unit': unit, 'units': units})
+
+
+@business_required
+def unit_delete(request, slug=None, pk=None):
+    """Delete unit of measurement"""
+    from .models import UnitOfMeasurement
+    unit = get_object_or_404(UnitOfMeasurement, business=request.business, pk=pk)
+    
+    # Check if unit has products
+    product_count = unit.products.count()
+    has_products = product_count > 0
+    
+    if request.method == 'POST':
+        action = request.POST.get('action', 'delete')
+        
+        if action == 'reassign':
+            # Reassign products to another unit or no unit
+            new_unit_id = request.POST.get('new_unit')
+            if new_unit_id:
+                new_unit = get_object_or_404(UnitOfMeasurement, business=request.business, pk=new_unit_id)
+                unit.products.update(unit=new_unit)
+                messages.success(request, f'{product_count} product(s) reassigned to "{new_unit.name}".')
+            else:
+                # Set to null (no unit)
+                unit.products.update(unit=None)
+                messages.success(request, f'{product_count} product(s) set to no unit.')
+            
+            # Now delete the unit
+            name = unit.name
+            unit.delete()
+            messages.success(request, f'Unit "{name}" deleted successfully!')
+            return redirect('unit_list', slug=request.business.slug)
+        
+        elif action == 'delete':
+            try:
+                name = unit.name
+                unit.delete()
+                messages.success(request, f'Unit "{name}" deleted successfully!')
+                return redirect('unit_list', slug=request.business.slug)
+            except models.ProtectedError:
+                messages.error(
+                    request, 
+                    f'Cannot delete unit "{unit.name}" because it has {product_count} product(s). '
+                    f'Please reassign the products first.'
+                )
+                return redirect('unit_list', slug=request.business.slug)
+    
+    # Get other units for reassignment option
+    other_units = UnitOfMeasurement.objects.filter(business=request.business).exclude(pk=pk)
+    
+    context = {
+        'unit': unit,
+        'product_count': product_count,
+        'has_products': has_products,
+        'other_units': other_units,
+    }
+    return render(request, 'pos/unit_confirm_delete.html', context)
+
+
 @business_required
 def pos_screen(request, slug=None):
     """Main POS sales screen"""
@@ -885,17 +1036,46 @@ def complete_sale(request, slug=None):
                         reference_number=reference
                     )
             
-            # Award loyalty points if customer is selected
+            # Handle loyalty points
             if customer:
+                # Redeem points if discount type is 'points'
+                if discount_type == 'points' and discount_value > 0:
+                    points_redeemed = int(discount_value)
+                    
+                    # Enforce minimum redemption of 100 points
+                    if points_redeemed < 100:
+                        messages.error(request, 'Minimum redemption is 100 points')
+                        return redirect('pos_screen', slug=request.business.slug)
+                    
+                    if customer.loyalty_points < 100:
+                        messages.error(request, f'Customer needs at least 100 points to redeem. Current balance: {customer.loyalty_points} points')
+                        return redirect('pos_screen', slug=request.business.slug)
+                    
+                    if points_redeemed <= customer.loyalty_points:
+                        customer.redeem_points(
+                            points_redeemed, 
+                            sale=sale, 
+                            description=f"Redeemed for discount - {sale.invoice_number}"
+                        )
+                    else:
+                        messages.error(request, f'Customer only has {customer.loyalty_points} points available')
+                        return redirect('pos_screen', slug=request.business.slug)
+                
+                # Award loyalty points for the purchase (after discount)
                 points_earned = customer.add_loyalty_points(total, sale=sale, description=f"Purchase - {sale.invoice_number}")
                 customer.total_purchases += total
                 customer.visit_count += 1
                 customer.save()
                 
+                # Build success message
+                message_parts = [f'Sale completed! Invoice: {sale.invoice_number}.']
                 if change_given > 0:
-                    messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}. Change: KES {change_given}. Customer earned {points_earned} loyalty points!')
-                else:
-                    messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}. Customer earned {points_earned} loyalty points!')
+                    message_parts.append(f'Change: KES {change_given}.')
+                if discount_type == 'points' and discount_value > 0:
+                    message_parts.append(f'{int(discount_value)} points redeemed.')
+                message_parts.append(f'Earned {points_earned} loyalty points!')
+                
+                messages.success(request, ' '.join(message_parts))
             else:
                 if change_given > 0:
                     messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}. Change: KES {change_given}')

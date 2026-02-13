@@ -72,6 +72,7 @@
                 <select id="mobile-discount-type" class="form-select form-select-sm" onchange="syncDiscount('type')">
                     <option value="percentage">Percentage (%)</option>
                     <option value="fixed">Fixed Amount (KES)</option>
+                    <option value="points">Loyalty Points</option>
                 </select>
             </div>
 
@@ -211,14 +212,19 @@
                         <p class="text-muted small"><i class="bi bi-upc"></i> {{ product.product_code }}</p>
                         {% endif %}
                         <p class="text-muted">{{ product.category.name|default:"Uncategorized" }}</p>
-                        <h4 class="text-primary">KES {{ product.unit_price }}</h4>
+                        <h4 class="text-primary">
+                            KES {{ product.unit_price }}
+                            {% if product.unit %}
+                                <small class="text-muted">/ {{ product.unit.abbreviation }}</small>
+                            {% endif %}
+                        </h4>
                         <div class="mt-2">
                             {% if product.is_out_of_stock %}
                                 <span class="badge bg-danger">Out of Stock</span>
                             {% elif product.is_low_stock %}
-                                <span class="badge bg-warning text-dark">Low Stock: {{ product.stock_quantity }}</span>
+                                <span class="badge bg-warning text-dark">Low Stock: {{ product.stock_quantity }}{% if product.unit %} {{ product.unit.abbreviation }}{% endif %}</span>
                             {% else %}
-                                <span class="badge bg-success">In Stock: {{ product.stock_quantity }}</span>
+                                <span class="badge bg-success">In Stock: {{ product.stock_quantity }}{% if product.unit %} {{ product.unit.abbreviation }}{% endif %}</span>
                             {% endif %}
                         </div>
                     </div>
@@ -246,15 +252,34 @@
 
                 <div class="mb-3">
                     <label>Discount Type:</label>
-                    <select id="discount-type" class="form-select" onchange="calculateTotal()">
+                    <select id="discount-type" class="form-select" onchange="handleDiscountTypeChange()">
                         <option value="percentage">Percentage (%)</option>
                         <option value="fixed">Fixed Amount (KES)</option>
+                        <option value="points">Loyalty Points</option>
                     </select>
                 </div>
 
                 <div class="mb-3">
-                    <label>Discount Value:</label>
+                    <label id="discount-label">Discount Value:</label>
                     <input type="number" id="discount-value" class="form-control" value="0" min="0" step="0.01" onchange="calculateTotal()">
+                    <small class="text-muted" id="discount-hint"></small>
+                </div>
+                
+                <!-- Quick Points Redemption -->
+                <div id="points-redemption-section" style="display: none;" class="mb-3">
+                    <div class="alert alert-info py-2 mb-2">
+                        <small>
+                            <i class="bi bi-info-circle"></i> 
+                            <strong id="available-points-text">0 points available</strong> 
+                            (1 point = KES 1, min 100 pts)
+                        </small>
+                    </div>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="redeemPoints(100)">100 pts</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="redeemPoints(200)">200 pts</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="redeemPoints(500)">500 pts</button>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="redeemAllPoints()">All</button>
+                    </div>
                 </div>
 
                 <div class="mb-2">
@@ -660,6 +685,100 @@ function clearCustomer() {
     saveCartToStorage();
 }
 
+// Handle discount type change
+function handleDiscountTypeChange() {
+    const discountType = document.getElementById('discount-type').value;
+    const discountLabel = document.getElementById('discount-label');
+    const discountHint = document.getElementById('discount-hint');
+    const discountValue = document.getElementById('discount-value');
+    const pointsSection = document.getElementById('points-redemption-section');
+    
+    if (discountType === 'points') {
+        // Show points redemption section
+        if (!selectedCustomer) {
+            alert('Please select a customer first to redeem loyalty points');
+            document.getElementById('discount-type').value = 'percentage';
+            return;
+        }
+        
+        // Check minimum points requirement
+        if (selectedCustomer.points < 100) {
+            alert('Customer needs at least 100 points to redeem. Current balance: ' + selectedCustomer.points + ' points');
+            document.getElementById('discount-type').value = 'percentage';
+            return;
+        }
+        
+        discountLabel.textContent = 'Points to Redeem:';
+        discountHint.textContent = `Customer has ${selectedCustomer.points} points available (1 point = KES 1, min 100 pts)`;
+        discountValue.min = 100;
+        discountValue.max = selectedCustomer.points;
+        discountValue.value = 0;
+        
+        if (pointsSection) pointsSection.style.display = 'block';
+        
+        // Update available points text
+        const availablePointsText = document.getElementById('available-points-text');
+        if (availablePointsText) {
+            availablePointsText.textContent = `${selectedCustomer.points} points available`;
+        }
+    } else {
+        discountLabel.textContent = 'Discount Value:';
+        discountHint.textContent = '';
+        discountValue.min = 0;
+        discountValue.max = '';
+        
+        if (pointsSection) pointsSection.style.display = 'none';
+    }
+    
+    calculateTotal();
+}
+
+// Redeem specific amount of points
+function redeemPoints(points) {
+    if (!selectedCustomer) {
+        alert('Please select a customer first');
+        return;
+    }
+    
+    if (selectedCustomer.points < 100) {
+        alert('Customer needs at least 100 points to redeem. Current balance: ' + selectedCustomer.points + ' points');
+        return;
+    }
+    
+    if (points < 100) {
+        alert('Minimum redemption is 100 points');
+        return;
+    }
+    
+    if (points > selectedCustomer.points) {
+        alert(`Customer only has ${selectedCustomer.points} points available`);
+        return;
+    }
+    
+    const discountValue = document.getElementById('discount-value');
+    const discountType = document.getElementById('discount-type');
+    
+    discountType.value = 'points';
+    discountValue.value = points;
+    
+    handleDiscountTypeChange();
+}
+
+// Redeem all available points
+function redeemAllPoints() {
+    if (!selectedCustomer) {
+        alert('Please select a customer first');
+        return;
+    }
+    
+    if (selectedCustomer.points < 100) {
+        alert('Customer needs at least 100 points to redeem. Current balance: ' + selectedCustomer.points + ' points');
+        return;
+    }
+    
+    redeemPoints(selectedCustomer.points);
+}
+
 // Allow Enter key to search customer
 const customerPhoneInput = document.getElementById('customer-phone-input');
 if (customerPhoneInput) {
@@ -831,7 +950,33 @@ function calculateTotal() {
         let discountAmount = 0;
         if (discountType === 'percentage') {
             discountAmount = (totalInclusive * discountValue) / 100;
+        } else if (discountType === 'points') {
+            // Points redemption: 1 point = 1 KES, minimum 100 points
+            if (!selectedCustomer) {
+                alert('Please select a customer to redeem points');
+                discountTypeEl.value = 'percentage';
+                discountValueEl.value = 0;
+                return calculateTotal();
+            }
+            if (selectedCustomer.points < 100) {
+                alert(`Customer needs at least 100 points to redeem. Current balance: ${selectedCustomer.points} points`);
+                discountTypeEl.value = 'percentage';
+                discountValueEl.value = 0;
+                return calculateTotal();
+            }
+            if (discountValue > 0 && discountValue < 100) {
+                alert('Minimum redemption is 100 points');
+                discountValueEl.value = 100;
+                return calculateTotal();
+            }
+            if (discountValue > selectedCustomer.points) {
+                alert(`Customer only has ${selectedCustomer.points} points available`);
+                discountValueEl.value = selectedCustomer.points;
+                return calculateTotal();
+            }
+            discountAmount = discountValue; // 1 point = 1 KES
         } else {
+            // Fixed amount
             discountAmount = discountValue;
         }
         
@@ -849,7 +994,13 @@ function calculateTotal() {
         const cartTotalEl = document.getElementById('cart-total');
         
         if (subtotalEl) subtotalEl.textContent = `KES ${subtotalExclusive.toFixed(2)}`;
-        if (discountEl) discountEl.textContent = `KES ${discountAmount.toFixed(2)}`;
+        if (discountEl) {
+            if (discountType === 'points') {
+                discountEl.textContent = `KES ${discountAmount.toFixed(2)} (${discountValue} pts)`;
+            } else {
+                discountEl.textContent = `KES ${discountAmount.toFixed(2)}`;
+            }
+        }
         if (vatEl) vatEl.textContent = `KES ${vatAmount.toFixed(2)}`;
         if (cartTotalEl) cartTotalEl.textContent = `KES ${afterDiscount.toFixed(2)}`;
         

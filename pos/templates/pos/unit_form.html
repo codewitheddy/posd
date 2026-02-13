@@ -1,0 +1,151 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}{% if unit %}Edit Unit{% else %}Create Unit{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>
+                        <i class="bi bi-rulers"></i> 
+                        {% if unit %}Edit Unit: {{ unit.name }}{% else %}Create New Unit{% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Unit Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ unit.name|default:'' }}" required
+                                   placeholder="e.g., Kilogram, Liter, Meter">
+                            <small class="text-muted">Full name of the unit</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="abbreviation" class="form-label">Abbreviation <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="abbreviation" name="abbreviation" 
+                                   value="{{ unit.abbreviation|default:'' }}" required maxlength="10"
+                                   placeholder="e.g., kg, L, m">
+                            <small class="text-muted">Short form (max 10 characters)</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="unit_type" class="form-label">Unit Type <span class="text-danger">*</span></label>
+                            <select class="form-select" id="unit_type" name="unit_type" required>
+                                <option value="weight" {% if unit.unit_type == 'weight' %}selected{% endif %}>Weight</option>
+                                <option value="volume" {% if unit.unit_type == 'volume' %}selected{% endif %}>Volume</option>
+                                <option value="length" {% if unit.unit_type == 'length' %}selected{% endif %}>Length</option>
+                                <option value="area" {% if unit.unit_type == 'area' %}selected{% endif %}>Area</option>
+                                <option value="count" {% if unit.unit_type == 'count' or not unit %}selected{% endif %}>Count/Pieces</option>
+                                <option value="other" {% if unit.unit_type == 'other' %}selected{% endif %}>Other</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="base_unit" class="form-label">Base Unit (Optional)</label>
+                            <select class="form-select" id="base_unit" name="base_unit">
+                                <option value="">None - This is a base unit</option>
+                                {% for u in units %}
+                                    <option value="{{ u.pk }}" {% if unit.base_unit.pk == u.pk %}selected{% endif %}>
+                                        {{ u.name }} ({{ u.abbreviation }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Select if this unit converts to another (e.g., gram converts to kilogram)</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="conversion_factor" class="form-label">Conversion Factor</label>
+                            <input type="number" class="form-control" id="conversion_factor" name="conversion_factor" 
+                                   value="{{ unit.conversion_factor|default:'1' }}" step="0.0001" min="0">
+                            <small class="text-muted">
+                                Factor to convert to base unit. Examples:<br>
+                                - Gram to Kilogram: 0.001 (1g = 0.001kg)<br>
+                                - Milliliter to Liter: 0.001 (1ml = 0.001L)<br>
+                                - Centimeter to Meter: 0.01 (1cm = 0.01m)
+                            </small>
+                        </div>
+
+                        {% if unit %}
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                       {% if unit.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">
+                                    Active
+                                </label>
+                            </div>
+                            <small class="text-muted">Inactive units won't appear in product forms</small>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'unit_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> {% if unit %}Update{% else %}Create{% endif %} Unit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Examples Card -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="bi bi-lightbulb"></i> Examples</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Unit</th>
+                                <th>Abbr</th>
+                                <th>Type</th>
+                                <th>Base Unit</th>
+                                <th>Factor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Kilogram</td>
+                                <td>kg</td>
+                                <td>Weight</td>
+                                <td>-</td>
+                                <td>1</td>
+                            </tr>
+                            <tr>
+                                <td>Gram</td>
+                                <td>g</td>
+                                <td>Weight</td>
+                                <td>kg</td>
+                                <td>0.001</td>
+                            </tr>
+                            <tr>
+                                <td>Liter</td>
+                                <td>L</td>
+                                <td>Volume</td>
+                                <td>-</td>
+                                <td>1</td>
+                            </tr>
+                            <tr>
+                                <td>Milliliter</td>
+                                <td>ml</td>
+                                <td>Volume</td>
+                                <td>L</td>
+                                <td>0.001</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

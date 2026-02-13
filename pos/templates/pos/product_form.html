@@ -135,7 +135,7 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-12 mb-3">
+                                <div class="col-md-6 mb-3">
                                     <label for="category" class="form-label">Category</label>
                                     <select class="form-select" id="category" name="category">
                                         <option value="">-- Select Category --</option>
@@ -145,6 +145,19 @@
                                         </option>
                                         {% endfor %}
                                     </select>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="unit" class="form-label">Unit of Measurement</label>
+                                    <select class="form-select" id="unit" name="unit">
+                                        <option value="">-- No Unit --</option>
+                                        {% for u in units %}
+                                        <option value="{{ u.id }}" {% if product.unit.id == u.id %}selected{% endif %}>
+                                            {{ u.name }} ({{ u.abbreviation }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="form-text text-muted">e.g., kg, L, pcs</small>
                                 </div>
                             </div>
                             

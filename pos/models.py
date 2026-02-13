@@ -141,6 +141,47 @@ class Category(models.Model):
         return self.name
 
 
+class UnitOfMeasurement(models.Model):
+    """Units of measurement for products (kg, L, m, etc.)"""
+    UNIT_TYPE_CHOICES = [
+        ('weight', 'Weight'),
+        ('volume', 'Volume'),
+        ('length', 'Length'),
+        ('area', 'Area'),
+        ('count', 'Count/Pieces'),
+        ('other', 'Other'),
+    ]
+    
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='units')
+    name = models.CharField(max_length=50, help_text="Unit name (e.g., Kilogram, Liter)")
+    abbreviation = models.CharField(max_length=10, help_text="Short form (e.g., kg, L, m)")
+    unit_type = models.CharField(max_length=20, choices=UNIT_TYPE_CHOICES, default='count')
+    base_unit = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, 
+                                   help_text="Base unit for conversion (e.g., kg for g)")
+    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4, default=1,
+                                           help_text="Factor to convert to base unit (e.g., 0.001 for g to kg)")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['unit_type', 'name']
+        unique_together = [['business', 'abbreviation']]
+        verbose_name_plural = "Units of Measurement"
+    
+    def __str__(self):
+        return f"{self.name} ({self.abbreviation})"
+    
+    def convert_to_base(self, quantity):
+        """Convert quantity to base unit"""
+        return quantity * self.conversion_factor
+    
+    def convert_from_base(self, quantity):
+        """Convert quantity from base unit to this unit"""
+        if self.conversion_factor == 0:
+            return 0
+        return quantity / self.conversion_factor
+
+
 def product_image_path(instance, filename):
     """Generate upload path for product images"""
     from .image_utils import generate_upload_path
@@ -160,11 +201,13 @@ class Product(models.Model):
     product_code = models.CharField(max_length=50, blank=True, null=True, help_text="Internal product code or SKU")
     barcode = models.CharField(max_length=100, blank=True, help_text="Barcode for scanning (EAN, UPC, etc.)")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
+    unit = models.ForeignKey(UnitOfMeasurement, on_delete=models.SET_NULL, null=True, blank=True, 
+                            related_name='products', help_text="Unit of measurement (e.g., kg, L, pcs)")
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Cost price (what you pay to stock the product)")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price (what customers pay)")
     tax_class = models.CharField(max_length=20, choices=TAX_CLASS_CHOICES, default='standard', help_text="Tax classification for this product")
-    stock_quantity = models.IntegerField(default=0, help_text="Current stock quantity")
-    low_stock_threshold = models.IntegerField(default=10, help_text="Alert when stock falls below this level")
+    stock_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, help_text="Current stock quantity")
+    low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=3, default=10, help_text="Alert when stock falls below this level")
     expiry_date = models.DateField(blank=True, null=True, help_text="Product expiry date (optional)")
     expiry_alert_days = models.IntegerField(default=3, help_text="Alert X days before expiry")
     

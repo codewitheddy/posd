@@ -1,0 +1,134 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Units of Measurement{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-rulers"></i> Units of Measurement</h2>
+        <a href="{% url 'unit_create' slug=request.business.slug %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add New Unit
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            {% if units %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Abbreviation</th>
+                                <th>Type</th>
+                                <th>Base Unit</th>
+                                <th>Conversion Factor</th>
+                                <th>Products</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for unit in units %}
+                            <tr>
+                                <td><strong>{{ unit.name }}</strong></td>
+                                <td><span class="badge bg-secondary">{{ unit.abbreviation }}</span></td>
+                                <td>{{ unit.get_unit_type_display }}</td>
+                                <td>
+                                    {% if unit.base_unit %}
+                                        {{ unit.base_unit.name }} ({{ unit.base_unit.abbreviation }})
+                                    {% else %}
+                                        <span class="text-muted">Base Unit</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ unit.conversion_factor }}</td>
+                                <td>
+                                    <span class="badge bg-info">{{ unit.products.count }}</span>
+                                </td>
+                                <td>
+                                    {% if unit.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'unit_edit' slug=request.business.slug pk=unit.pk %}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                    <a href="{% url 'unit_delete' slug=request.business.slug pk=unit.pk %}" 
+                                       class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-rulers" style="font-size: 4rem; color: #ccc;"></i>
+                    <p class="text-muted mt-3">No units of measurement yet.</p>
+                    <a href="{% url 'unit_create' slug=request.business.slug %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Create Your First Unit
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5><i class="bi bi-info-circle"></i> Common Units</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <h6>Weight</h6>
+                    <ul class="list-unstyled">
+                        <li>Kilogram (kg)</li>
+                        <li>Gram (g) - 0.001 kg</li>
+                        <li>Ton (t) - 1000 kg</li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Volume</h6>
+                    <ul class="list-unstyled">
+                        <li>Liter (L)</li>
+                        <li>Milliliter (ml) - 0.001 L</li>
+                        <li>Gallon (gal) - 3.785 L</li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Length</h6>
+                    <ul class="list-unstyled">
+                        <li>Meter (m)</li>
+                        <li>Centimeter (cm) - 0.01 m</li>
+                        <li>Kilometer (km) - 1000 m</li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Count</h6>
+                    <ul class="list-unstyled">
+                        <li>Piece (pcs)</li>
+                        <li>Dozen (dz) - 12 pcs</li>
+                        <li>Box (box)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
