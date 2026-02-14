@@ -642,6 +642,9 @@
             <button onclick="window.print()" class="btn btn-primary" title="Print Receipt (P)">
                 <i class="bi bi-printer-fill"></i> Print Receipt
             </button>
+            <button onclick="showEmailModal()" class="btn btn-secondary" title="Email Receipt (E)">
+                <i class="bi bi-envelope-fill"></i> Email Receipt
+            </button>
             <a href="{% url 'pos_screen' slug=request.business.slug  %}" class="btn btn-success" title="New Sale (N)">
                 <i class="bi bi-cart-plus-fill"></i> New Sale
             </a>
@@ -650,15 +653,61 @@
             </a>
         </div>
         
+        <!-- Email Receipt Modal -->
+        <div id="emailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%;">
+                <h3 style="margin-bottom: 20px; color: #333;">
+                    <i class="bi bi-envelope"></i> Email Receipt
+                </h3>
+                <form method="POST">
+                    {% csrf_token %}
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; color: #666;">Customer Email:</label>
+                        <input type="email" name="customer_email" 
+                               value="{% if sale.customer and sale.customer.email %}{{ sale.customer.email }}{% endif %}"
+                               placeholder="customer@example.com" required
+                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;">
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" name="email_receipt" value="1" 
+                                style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+                            <i class="bi bi-send-fill"></i> Send Email
+                        </button>
+                        <button type="button" onclick="hideEmailModal()" 
+                                style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
         <div class="shortcuts-hint">
             <i class="bi bi-keyboard"></i> Keyboard shortcuts: 
             <kbd>P</kbd> Print · 
+            <kbd>E</kbd> Email · 
             <kbd>N</kbd> New Sale · 
             <kbd>D</kbd> Dashboard
         </div>
     </div>
     
     <script>
+        // Email modal functions
+        function showEmailModal() {
+            document.getElementById('emailModal').style.display = 'flex';
+        }
+        
+        function hideEmailModal() {
+            document.getElementById('emailModal').style.display = 'none';
+        }
+        
+        // Close modal on outside click
+        document.getElementById('emailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideEmailModal();
+            }
+        });
+        
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             // Press 'P' to print
@@ -666,6 +715,13 @@
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
                     window.print();
+                }
+            }
+            // Press 'E' to email
+            if (e.key === 'e' || e.key === 'E') {
+                if (!e.target.matches('input, textarea, select')) {
+                    e.preventDefault();
+                    showEmailModal();
                 }
             }
             // Press 'N' for new sale
@@ -681,6 +737,10 @@
                     e.preventDefault();
                     window.location.href = "{% url 'dashboard' slug=request.business.slug  %}";
                 }
+            }
+            // Press 'Esc' to close modal
+            if (e.key === 'Escape') {
+                hideEmailModal();
             }
         });
     </script>

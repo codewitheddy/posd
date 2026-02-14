@@ -35,7 +35,7 @@
 
                         <div class="mb-3">
                             <label class="form-label">Payment Date <span class="text-danger">*</span></label>
-                            <input type="date" name="payment_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                            <input type="date" name="payment_date" class="form-control" value="{{ today|date:'Y-m-d'|default:'' }}" required>
                         </div>
 
                         <div class="mb-3">

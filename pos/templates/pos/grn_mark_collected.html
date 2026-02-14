@@ -1,0 +1,47 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Mark GRN as Collected - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Mark Goods as Collected</h5>
+                </div>
+                <div class="card-body">
+                    <h6>{{ grn.grn_number }}</h6>
+                    <p class="text-muted">{{ grn.supplier.name }}</p>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Mark this GRN as collected when the supplier has physically picked up the returned goods.
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Collection Date <span class="text-danger">*</span></label>
+                            <input type="date" name="collection_date" class="form-control" required value="{{ today|date:'Y-m-d'|default:'' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Collection Notes</label>
+                            <textarea name="collection_notes" class="form-control" rows="3" placeholder="Any notes about the collection (driver name, vehicle, condition, etc.)"></textarea>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'grn_detail' slug=business_slug pk=grn.pk %}" class="btn btn-secondary flex-fill">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-warning flex-fill">
+                                <i class="bi bi-check-circle"></i> Mark as Collected
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

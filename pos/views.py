@@ -5,12 +5,14 @@ from django.db import models
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
+from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime, timedelta
 from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
-    SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings
+    SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
+    GoodsReturnedNote, GoodsReturnedNoteItem
 )
 from .decorators import business_required, business_permission_required
 from reportlab.lib.pagesizes import letter, A4
@@ -284,14 +286,30 @@ def can_manage_purchases(view_func):
 @login_required
 @business_required
 def dashboard(request, slug=None):
-    """Main dashboard with quick stats"""
+    """Main dashboard with quick stats - Optimized with caching"""
+    from django.core.cache import cache
+    from .cache_utils import get_cache_key
+    
     today = datetime.now().date()
     yesterday = today - timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
     
-    # Today's sales
-    today_sales = Sale.objects.filter(date__date=today, business=request.business)
+    # Try to get dashboard data from cache
+    cache_key = get_cache_key('dashboard', request.business.id, today)
+    cached_data = cache.get(cache_key)
+    
+    if cached_data:
+        # Return cached data
+        return render(request, 'pos/dashboard.html', cached_data)
+    
+    # Calculate dashboard data (cache miss)
+    # Today's sales - Optimized with select_related
+    today_sales = Sale.objects.filter(
+        date__date=today, 
+        business=request.business
+    ).select_related('cashier', 'customer')
+    
     today_sales_count = today_sales.count()
     today_revenue = today_sales.aggregate(Sum('total'))['total__sum'] or Decimal('0.00')
     today_vat = today_sales.aggregate(Sum('vat_amount'))['vat_amount__sum'] or Decimal('0.00')
@@ -321,7 +339,7 @@ def dashboard(request, slug=None):
     if yesterday_count > 0:
         sales_change = ((today_sales_count - yesterday_count) / yesterday_count) * 100
     
-    # Top selling products today
+    # Top selling products today - Optimized
     top_products_today = SaleItem.objects.filter(
         sale__business=request.business,
         sale__date__date=today
@@ -330,27 +348,32 @@ def dashboard(request, slug=None):
         total_revenue=Sum(models.F('quantity') * models.F('unit_price'))
     ).order_by('-total_quantity')[:5]
     
-    # Recent sales (last 10)
+    # Recent sales (last 10) - Optimized with select_related
     recent_sales = Sale.objects.filter(
         business=request.business
     ).select_related('cashier', 'customer').order_by('-date')[:10]
     
-    # Payment method breakdown for today
+    # Payment method breakdown for today - Optimized
     payment_breakdown = SalePayment.objects.filter(
         sale__business=request.business,
         sale__date__date=today
-    ).values('payment_method__name').annotate(
+    ).select_related('payment_method').values('payment_method__name').annotate(
         total=Sum('amount'),
         count=Count('id')
     ).order_by('-total')
     
-    # Stock statistics
+    # Stock statistics - Optimized queries
     low_stock_products = Product.objects.filter(
         business=request.business,
         stock_quantity__lte=models.F('low_stock_threshold'),
         stock_quantity__gt=0
     ).count()
-    out_of_stock_products = Product.objects.filter(business=request.business, stock_quantity=0).count()
+    
+    out_of_stock_products = Product.objects.filter(
+        business=request.business, 
+        stock_quantity=0
+    ).count()
+    
     total_stock_value = Product.objects.filter(
         business=request.business
     ).aggregate(
@@ -368,12 +391,13 @@ def dashboard(request, slug=None):
         created_at__date=today
     ).count()
     
-    # Expiry statistics
+    # Expiry statistics - Optimized
     expired_count = Product.objects.filter(
         business=request.business,
         expiry_date__lt=today,
         stock_quantity__gt=0
     ).count()
+    
     expiring_soon_count = 0
     products_with_expiry = Product.objects.filter(
         business=request.business,
@@ -384,7 +408,7 @@ def dashboard(request, slug=None):
         if product.is_expiring_soon():
             expiring_soon_count += 1
     
-    # Fetch actual products for display
+    # Fetch actual products for display - Optimized with select_related
     out_of_stock_list = Product.objects.filter(
         business=request.business,
         stock_quantity=0
@@ -460,6 +484,11 @@ def dashboard(request, slug=None):
         'payment_breakdown': payment_breakdown,
         'hourly_sales': list(hourly_sales),
     }
+    
+    # Cache the dashboard data for 5 minutes
+    cache_timeout = getattr(settings, 'CACHE_TTL', {}).get('dashboard', 300)
+    cache.set(cache_key, context, cache_timeout)
+    
     return render(request, 'pos/dashboard.html', context)
 
 
@@ -688,6 +717,13 @@ def product_create(request, slug=None):
             # Create initial stock adjustment record
             # Stock is 0 for new products - will be added through purchases
             
+            # Invalidate dashboard cache
+            from django.core.cache import cache
+            from .cache_utils import get_cache_key
+            from datetime import datetime
+            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+            cache.delete(cache_key)
+            
             messages.success(request, 'Product created successfully! Add stock through purchase orders.')
             return redirect('product_list', slug=request.business.slug)
         except Exception as e:
@@ -748,6 +784,14 @@ def product_edit(request, slug=None, pk=None):
             product.image = None
         
         product.save()
+        
+        # Invalidate dashboard cache
+        from django.core.cache import cache
+        from .cache_utils import get_cache_key
+        from datetime import datetime
+        cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+        cache.delete(cache_key)
+        
         messages.success(request, 'Product updated successfully!')
         return redirect('product_list', slug=request.business.slug)
     
@@ -1036,12 +1080,53 @@ def unit_delete(request, slug=None, pk=None):
 
 @business_required
 def pos_screen(request, slug=None):
-    """Main POS sales screen"""
+    """Main POS sales screen - Optimized for large catalogs"""
     from .models import PaymentMethod
-    products = Product.objects.filter(business=request.business).select_related('category').all()
+    from django.db.models import Q
+    
+    # Get search/filter parameters
+    search_query = request.GET.get('q', '').strip()
+    category_filter = request.GET.get('category', '')
+    
+    # Base product query with optimizations
+    products_query = Product.objects.filter(
+        business=request.business,
+        stock_quantity__gt=0  # Only show in-stock items
+    ).select_related('category', 'unit')
+    
+    # Apply search if provided
+    if search_query:
+        products_query = products_query.filter(
+            Q(name__icontains=search_query) |
+            Q(barcode__icontains=search_query) |
+            Q(product_code__icontains=search_query)
+        )
+        products = products_query[:100]  # Limit search results
+    elif category_filter:
+        # Filter by category
+        products_query = products_query.filter(category_id=category_filter)
+        products = products_query[:100]
+    else:
+        # Default: Show recently added/popular products only
+        # This prevents loading thousands of products
+        products = products_query.order_by('-created_at')[:50]
+    
+    # Get categories for filter
     categories = Category.objects.filter(business=request.business).all()
-    customers = Customer.objects.filter(business=request.business, is_active=True).order_by('name')
-    payment_methods = PaymentMethod.objects.filter(business=request.business, is_active=True)
+    
+    # Optimize customer query - only load when needed
+    # For large customer bases, use AJAX search instead
+    customers = Customer.objects.filter(
+        business=request.business, 
+        is_active=True
+    ).order_by('name')[:100]  # Limit to 100 most recent
+    
+    # Payment methods
+    payment_methods = PaymentMethod.objects.filter(
+        business=request.business, 
+        is_active=True
+    )
+    
     vat_rate = getattr(settings, 'VAT_RATE', 16)
     
     context = {
@@ -1050,6 +1135,9 @@ def pos_screen(request, slug=None):
         'customers': customers,
         'payment_methods': payment_methods,
         'vat_rate': vat_rate,
+        'search_query': search_query,
+        'category_filter': category_filter,
+        'total_products': Product.objects.filter(business=request.business).count(),
     }
     return render(request, 'pos/pos_screen.html', context)
 
@@ -1218,6 +1306,13 @@ def complete_sale(request, slug=None):
                 else:
                     messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}')
             
+            # Invalidate dashboard cache after sale
+            from django.core.cache import cache
+            from .cache_utils import get_cache_key
+            from datetime import datetime
+            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+            cache.delete(cache_key)
+            
             return redirect('thermal_receipt', slug=request.business.slug, pk=sale.pk)
             
         except Exception as e:
@@ -1238,6 +1333,20 @@ def thermal_receipt(request, slug, pk):
     """View thermal printer receipt"""
     from .models import BusinessSettings
     sale = get_object_or_404(Sale, pk=pk, business=request.business)
+    
+    # Handle email receipt request
+    if request.method == 'POST' and 'email_receipt' in request.POST:
+        customer_email = request.POST.get('customer_email')
+        if customer_email:
+            from .email_service import EmailService
+            success = EmailService.send_sale_receipt(sale, customer_email)
+            if success:
+                messages.success(request, f'Receipt emailed to {customer_email}')
+            else:
+                messages.error(request, 'Failed to send email. Check email settings.')
+        else:
+            messages.error(request, 'Please provide an email address')
+        return redirect('thermal_receipt', slug=slug, pk=pk)
     
     # Get business settings
     try:
@@ -1550,7 +1659,8 @@ def search_product_by_code(request, slug=None):
                 'price': float(product.unit_price),
                 'category': product.category.name if product.category else None,
                 'stock_quantity': product.stock_quantity,
-                'in_stock': not product.is_out_of_stock()
+                'in_stock': not product.is_out_of_stock(),
+                'tax_class': product.tax_class
             }
         })
     except Product.DoesNotExist:
@@ -1660,6 +1770,13 @@ def stock_adjust(request, slug=None, pk=None):
                 new_quantity=product.stock_quantity,
                 reason=reason
             )
+            
+            # Invalidate dashboard cache
+            from django.core.cache import cache
+            from .cache_utils import get_cache_key
+            from datetime import datetime
+            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+            cache.delete(cache_key)
             
             messages.success(request, f'Stock adjusted successfully! New quantity: {product.stock_quantity}')
             return redirect('stock_list', slug=request.business.slug)
@@ -1901,7 +2018,17 @@ def purchase_create(request, slug=None):
         purchase.total_amount = subtotal + purchase.tax_amount
         purchase.save()
         
-        messages.success(request, f'Purchase order {purchase.purchase_number} created successfully!')
+        # Send email to supplier
+        from .email_service import EmailService
+        email_sent = EmailService.send_purchase_order(purchase)
+        
+        if email_sent:
+            messages.success(request, f'Purchase order {purchase.purchase_number} created and emailed to supplier!')
+        else:
+            messages.success(request, f'Purchase order {purchase.purchase_number} created successfully!')
+            if purchase.supplier.email:
+                messages.info(request, 'Email notification could not be sent. Check email settings.')
+        
         return redirect('purchase_detail', slug=request.business.slug, pk=purchase.pk)
     
     # GET request
@@ -1974,6 +2101,13 @@ def purchase_receive(request, slug=None, pk=None):
             success = purchase.mark_as_received(receiving_data)
             
             if success:
+                # Invalidate dashboard cache
+                from django.core.cache import cache
+                from .cache_utils import get_cache_key
+                from datetime import datetime
+                cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+                cache.delete(cache_key)
+                
                 # Count discrepancies
                 total_damaged = sum(d['quantity_damaged'] for d in receiving_data['items'])
                 if total_damaged > 0:
@@ -3580,7 +3714,12 @@ def payment_detail(request, slug, payment_id):
     """View payment details"""
     from .models import SupplierPayment
     
-    payment = get_object_or_404(SupplierPayment, pk=payment_id)
+    # Get payment and verify it belongs to current business
+    payment = get_object_or_404(
+        SupplierPayment, 
+        pk=payment_id,
+        business=request.business
+    )
     allocations = payment.allocations.select_related('purchase').all()
     
     context = {
@@ -3757,10 +3896,13 @@ def z_report(request, slug=None):
     ).select_related('cashier')
 
     # Calculate cash drawer summary
+    # Look for cash payment method by code or name
+    from django.db.models import Q
     cash_payments = SalePayment.objects.filter(
         sale__business=request.business,
-        sale__date__date=report_date,
-        payment_method__code='CASH'
+        sale__date__date=report_date
+    ).filter(
+        Q(payment_method__code='CASH') | Q(payment_method__name__icontains='cash')
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     # Opening cash (from shifts)
@@ -3787,6 +3929,12 @@ def z_report(request, slug=None):
         total=Sum('total'),
         count=Count('id')
     ).order_by('hour')
+    
+    # Check if day is already closed (all shifts are closed)
+    day_is_closed = shifts.exists() and not shifts.filter(status='open').exists()
+    
+    # Check for auto-print flag (after closing)
+    auto_print = request.GET.get('auto_print', '0') == '1'
 
     context = {
         'report_date': report_date,
@@ -3805,6 +3953,8 @@ def z_report(request, slug=None):
         'cash_payments': cash_payments,
         'top_products': top_products,
         'hourly_sales': hourly_sales,
+        'day_is_closed': day_is_closed,
+        'auto_print': auto_print,
     }
 
     return render(request, 'pos/z_report.html', context)
@@ -3918,6 +4068,117 @@ def z_report_pdf(request, slug=None):
     response = HttpResponse(buffer, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="z-report-{report_date}.pdf"'
     return response
+
+
+@business_required
+@manager_required
+def close_day(request, slug=None):
+    """Close the day - closes all open shifts for the specified date"""
+    if request.method != 'POST':
+        messages.error(request, 'Invalid request method.')
+        return redirect('z_report', slug=request.business.slug)
+    
+    try:
+        # Get parameters
+        report_date_str = request.POST.get('report_date')
+        closing_cash = Decimal(request.POST.get('closing_cash', '0'))
+        
+        if not report_date_str:
+            messages.error(request, 'Report date is required.')
+            return redirect('z_report', slug=request.business.slug)
+        
+        # Parse date
+        report_date = datetime.strptime(report_date_str, '%Y-%m-%d').date()
+        
+        # Get all shifts for this date that belong to business members
+        business_cashiers = User.objects.filter(business_memberships__business=request.business)
+        shifts = Shift.objects.filter(
+            cashier__in=business_cashiers,
+            start_time__date=report_date,
+            status='open'
+        )
+        
+        if not shifts.exists():
+            messages.warning(request, f'No open shifts found for {report_date.strftime("%d %B %Y")}. Day may already be closed.')
+            return redirect('z_report', slug=request.business.slug)
+        
+        # Calculate expected cash for the day
+        from django.db.models import Q
+        cash_payments = SalePayment.objects.filter(
+            sale__business=request.business,
+            sale__date__date=report_date
+        ).filter(
+            Q(payment_method__code='CASH') | Q(payment_method__name__icontains='cash')
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        opening_cash = shifts.aggregate(total=Sum('opening_cash'))['total'] or Decimal('0.00')
+        expected_cash = opening_cash + cash_payments
+        cash_difference = closing_cash - expected_cash
+        
+        # Close all open shifts
+        closed_count = 0
+        for shift in shifts:
+            # Calculate this shift's portion of the closing cash
+            # For simplicity, we'll use the same closing_cash for all shifts
+            # In a more complex system, you might want to track per-shift closing
+            shift.end_time = timezone.now()
+            shift.closing_cash = closing_cash
+            shift.expected_cash = expected_cash
+            shift.cash_difference = cash_difference
+            
+            # Calculate shift summary
+            shift_sales = Sale.objects.filter(
+                business=request.business,
+                date__gte=shift.start_time,
+                date__date=report_date,
+                cashier=shift.cashier
+            )
+            shift.total_sales = shift_sales.count()
+            shift.total_revenue = shift_sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            shift.status = 'closed'
+            shift.notes = f'Closed by {request.user.username} on {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}'
+            shift.save()
+            
+            closed_count += 1
+        
+        # Log the activity
+        ActivityLog.objects.create(
+            business=request.business,
+            user=request.user,
+            action='close_day',
+            description=f'Closed day for {report_date.strftime("%d %B %Y")}. '
+                       f'Closed {closed_count} shift(s). '
+                       f'Expected: KES {expected_cash:.2f}, '
+                       f'Actual: KES {closing_cash:.2f}, '
+                       f'Variance: KES {cash_difference:.2f}'
+        )
+        
+        # Success message
+        variance_msg = ''
+        if cash_difference > 0:
+            variance_msg = f' Cash is over by KES {cash_difference:.2f}.'
+        elif cash_difference < 0:
+            variance_msg = f' Cash is short by KES {abs(cash_difference):.2f}.'
+        else:
+            variance_msg = ' Cash is balanced.'
+        
+        messages.success(
+            request, 
+            f'Day closed successfully for {report_date.strftime("%d %B %Y")}! '
+            f'Closed {closed_count} shift(s).{variance_msg} '
+            f'Printing Z-Report...'
+        )
+        
+        # Redirect to Z-report with auto-print flag
+        return redirect(f"{request.path.replace('/close-day/', '')}?date={report_date_str}&auto_print=1")
+        
+    except ValueError as e:
+        messages.error(request, f'Invalid data provided: {str(e)}')
+    except Exception as e:
+        messages.error(request, f'Error closing day: {str(e)}')
+    
+    return redirect('z_report', slug=request.business.slug)
 
 
 
@@ -4738,3 +4999,251 @@ def payment_method_delete(request, slug, pk):
         'payment_method': payment_method,
     }
     return render(request, 'pos/payment_method_confirm_delete.html', context)
+
+
+# ==================== GOODS RETURNED NOTE (GRN) VIEWS ====================
+
+@business_required
+@can_manage_purchases
+def grn_list(request, slug=None):
+    """List all GRNs"""
+    grns = GoodsReturnedNote.objects.filter(business=request.business).select_related('supplier', 'created_by')
+    
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        grns = grns.filter(status=status_filter)
+    
+    # Filter by supplier
+    supplier_filter = request.GET.get('supplier')
+    if supplier_filter:
+        grns = grns.filter(supplier_id=supplier_filter)
+    
+    context = {
+        'grns': grns,
+        'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
+        'status_filter': status_filter,
+        'supplier_filter': supplier_filter,
+    }
+    return render(request, 'pos/grn_list.html', context)
+
+
+@business_required
+@can_manage_purchases
+def grn_create(request, slug=None):
+    """Create new GRN"""
+    if request.method == 'POST':
+        supplier_id = request.POST.get('supplier')
+        purchase_id = request.POST.get('related_purchase')
+        return_reason = request.POST.get('return_reason')
+        reason_details = request.POST.get('reason_details')
+        return_date = request.POST.get('return_date')
+        
+        try:
+            supplier = Supplier.objects.get(id=supplier_id, business=request.business)
+            purchase = None
+            if purchase_id:
+                purchase = Purchase.objects.get(id=purchase_id, business=request.business)
+            
+            # Create GRN
+            grn = GoodsReturnedNote.objects.create(
+                business=request.business,
+                supplier=supplier,
+                related_purchase=purchase,
+                return_reason=return_reason,
+                reason_details=reason_details,
+                return_date=return_date if return_date else timezone.now().date(),
+                created_by=request.user
+            )
+            
+            # Add items
+            item_count = 0
+            for key in request.POST:
+                if key.startswith('item_product_'):
+                    index = key.split('_')[-1]
+                    product_id = request.POST.get(f'item_product_{index}')
+                    quantity = request.POST.get(f'item_quantity_{index}')
+                    unit_cost = request.POST.get(f'item_cost_{index}')
+                    batch = request.POST.get(f'item_batch_{index}', '')
+                    expiry = request.POST.get(f'item_expiry_{index}', '')
+                    notes = request.POST.get(f'item_notes_{index}', '')
+                    
+                    if product_id and quantity and unit_cost:
+                        product = Product.objects.get(id=product_id, business=request.business)
+                        
+                        GoodsReturnedNoteItem.objects.create(
+                            grn=grn,
+                            product=product,
+                            quantity=int(quantity),
+                            unit_cost=Decimal(unit_cost),
+                            batch_number=batch,
+                            expiry_date=expiry if expiry else None,
+                            item_notes=notes
+                        )
+                        
+                        # Create stock adjustment (deduct returned items)
+                        previous_qty = product.stock_quantity
+                        product.stock_quantity -= Decimal(quantity)
+                        product.save()
+                        
+                        StockAdjustment.objects.create(
+                            business=request.business,
+                            product=product,
+                            adjustment_type='return',
+                            quantity_change=-int(quantity),
+                            previous_quantity=int(previous_qty),
+                            new_quantity=int(product.stock_quantity),
+                            reason=f'Returned to supplier - {grn.grn_number}'
+                        )
+                        
+                        item_count += 1
+            
+            if item_count == 0:
+                grn.delete()
+                messages.error(request, 'Please add at least one item to the GRN.')
+                return redirect('grn_create', slug=slug)
+            
+            # Check if should submit immediately
+            if request.POST.get('submit_now') == 'yes':
+                grn.submit_to_supplier()
+                messages.success(request, f'GRN {grn.grn_number} created and submitted to supplier!')
+            else:
+                messages.success(request, f'GRN {grn.grn_number} created as draft.')
+            
+            return redirect('grn_detail', slug=slug, pk=grn.pk)
+            
+        except Exception as e:
+            messages.error(request, f'Error creating GRN: {str(e)}')
+    
+    # GET request
+    suppliers = Supplier.objects.filter(business=request.business, is_active=True)
+    purchases = Purchase.objects.filter(business=request.business, status='received').order_by('-date')[:50]
+    products = Product.objects.filter(business=request.business).order_by('name')
+    
+    context = {
+        'suppliers': suppliers,
+        'purchases': purchases,
+        'products': products,
+        'today': timezone.now().date(),
+    }
+    return render(request, 'pos/grn_form.html', context)
+
+
+@business_required
+@can_manage_purchases
+def grn_detail(request, slug=None, pk=None):
+    """View GRN details"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+    items = grn.items.select_related('product').all()
+    
+    context = {
+        'grn': grn,
+        'items': items,
+    }
+    return render(request, 'pos/grn_detail.html', context)
+
+
+@business_required
+@can_manage_purchases
+def grn_submit(request, slug=None, pk=None):
+    """Submit GRN to supplier"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        if grn.submit_to_supplier():
+            # Send email to supplier
+            from .email_service import EmailService
+            email_sent = EmailService.send_grn_notification(grn)
+            
+            if email_sent:
+                messages.success(request, f'GRN {grn.grn_number} submitted and emailed to supplier.')
+            else:
+                messages.success(request, f'GRN {grn.grn_number} submitted to supplier.')
+                if grn.purchase.supplier.email:
+                    messages.info(request, 'Email notification could not be sent. Check email settings.')
+        else:
+            messages.error(request, 'GRN cannot be submitted (already submitted or wrong status).')
+        return redirect('grn_detail', slug=slug, pk=pk)
+    
+    return render(request, 'pos/grn_submit_confirm.html', {'grn': grn})
+
+
+@business_required
+@can_manage_purchases
+def grn_mark_collected(request, slug=None, pk=None):
+    """Mark GRN as collected"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        collection_date = request.POST.get('collection_date')
+        collection_notes = request.POST.get('collection_notes', '')
+        
+        grn.mark_collected(
+            collection_date=collection_date if collection_date else None,
+            notes=collection_notes
+        )
+        messages.success(request, f'GRN {grn.grn_number} marked as collected.')
+        return redirect('grn_detail', slug=slug, pk=pk)
+    
+    return render(request, 'pos/grn_mark_collected.html', {
+        'grn': grn,
+        'today': timezone.now().date(),
+    })
+
+
+@business_required
+@can_manage_purchases
+def grn_apply_credit(request, slug=None, pk=None):
+    """Apply credit note to GRN"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        credit_note_number = request.POST.get('credit_note_number')
+        credit_note_amount = request.POST.get('credit_note_amount')
+        credit_note_date = request.POST.get('credit_note_date')
+        
+        grn.apply_credit_note(
+            credit_note_number=credit_note_number,
+            amount=Decimal(credit_note_amount),
+            date=credit_note_date if credit_note_date else None
+        )
+        messages.success(request, f'Credit note applied to GRN {grn.grn_number}.')
+        return redirect('grn_detail', slug=slug, pk=pk)
+    
+    return render(request, 'pos/grn_apply_credit.html', {
+        'grn': grn,
+        'today': timezone.now().date(),
+    })
+
+
+@business_required
+@can_manage_purchases
+def grn_cancel(request, slug=None, pk=None):
+    """Cancel GRN"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+    
+    if request.method == 'POST':
+        if grn.cancel():
+            # Reverse stock adjustments
+            for item in grn.items.all():
+                product = item.product
+                previous_qty = product.stock_quantity
+                product.stock_quantity += Decimal(item.quantity)
+                product.save()
+                
+                StockAdjustment.objects.create(
+                    business=request.business,
+                    product=product,
+                    adjustment_type='correction',
+                    quantity_change=item.quantity,
+                    previous_quantity=int(previous_qty),
+                    new_quantity=int(product.stock_quantity),
+                    reason=f'GRN {grn.grn_number} cancelled - stock restored'
+                )
+            
+            messages.success(request, f'GRN {grn.grn_number} cancelled and stock restored.')
+        else:
+            messages.error(request, 'GRN cannot be cancelled (already collected or credited).')
+        return redirect('grn_detail', slug=slug, pk=pk)
+    
+    return render(request, 'pos/grn_cancel_confirm.html', {'grn': grn})

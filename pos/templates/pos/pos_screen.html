@@ -88,7 +88,7 @@
                 <strong>Discount:</strong> <span id="mobile-discount">KES 0.00</span>
             </div>
             <div class="mb-2 d-flex justify-content-between">
-                <strong>VAT ({{ vat_rate }}%):</strong> <span id="mobile-vat">KES 0.00</span>
+                <strong id="mobile-vat-label">VAT ({{ vat_rate }}%):</strong> <span id="mobile-vat">KES 0.00</span>
             </div>
             <div class="mb-3 d-flex justify-content-between">
                 <h5>Total:</h5> <h5 class="text-primary" id="mobile-cart-total">KES 0.00</h5>
@@ -180,22 +180,67 @@
             </div>
         </div>
 
-        <div class="mb-3">
-            <input type="text" id="search" class="form-control" placeholder="Search products by name...">
+        <!-- Product Search and Filter Section -->
+        <div class="card mb-3 border-info">
+            <div class="card-body">
+                <form method="get" action="{% url 'pos_screen' slug=request.business.slug %}">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="bi bi-search"></i> Search Products</label>
+                            <input type="text" name="q" class="form-control" 
+                                   placeholder="Search by name, barcode, or code..." 
+                                   value="{{ search_query }}"
+                                   autofocus>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><i class="bi bi-funnel"></i> Filter by Category</label>
+                            <select name="category" class="form-select" onchange="this.form.submit()">
+                                <option value="">All Categories</option>
+                                {% for category in categories %}
+                                <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ category.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                {% if search_query or category_filter %}
+                <div class="mt-2">
+                    <a href="{% url 'pos_screen' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i> Clear Filters
+                    </a>
+                </div>
+                {% endif %}
+                
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="bi bi-lightbulb"></i> 
+                    <strong>Tip:</strong> 
+                    {% if search_query %}
+                        Showing search results for "{{ search_query }}"
+                    {% elif category_filter %}
+                        Showing products in selected category
+                    {% else %}
+                        Showing {{ products|length }} of {{ total_products }} products. 
+                        Use search or barcode scanner to find specific items quickly.
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        <div class="mb-3">
-            <select id="category-filter" class="form-select">
-                <option value="">All Categories</option>
-                {% for category in categories %}
-                <option value="{{ category.id }}">{{ category.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
+
+        <!-- Remove old search inputs -->
         <div class="row" id="products-grid">
             {% for product in products %}
             <div class="col-md-4 mb-3 product-item" data-category="{{ product.category.id|default:'' }}" data-name="{{ product.name|lower }}">
                 <div class="card product-card {% if product.is_out_of_stock %}border-danger{% elif product.is_low_stock %}border-warning{% endif %}" 
-                     onclick="{% if not product.is_out_of_stock %}addToCart({{ product.id }}, '{{ product.name }}', {{ product.unit_price }}, {{ product.stock_quantity }}){% else %}alert('This product is out of stock!'){% endif %}">
+                     onclick="{% if not product.is_out_of_stock %}{% if product.is_variable_price %}showWeightModal({{ product.id }}, '{{ product.name }}', {{ product.price_per_unit|default:product.unit_price }}, {{ product.pricing_unit_quantity|default:1 }}, {{ product.stock_quantity }}, '{{ product.tax_class }}', '{{ product.unit.abbreviation|default:"unit" }}'){% else %}addToCart({{ product.id }}, '{{ product.name }}', {{ product.unit_price }}, {{ product.stock_quantity }}, '{{ product.tax_class }}'){% endif %}{% else %}alert('This product is out of stock!'){% endif %}">
                     
                     <!-- Product Image -->
                     {% if product.image %}
@@ -213,11 +258,19 @@
                         {% endif %}
                         <p class="text-muted">{{ product.category.name|default:"Uncategorized" }}</p>
                         <h4 class="text-primary">
-                            KES {{ product.unit_price }}
-                            {% if product.unit %}
-                                <small class="text-muted">/ {{ product.unit.abbreviation }}</small>
+                            {% if product.is_variable_price %}
+                                KES {{ product.price_per_unit }}
+                                <small class="text-muted">/ {{ product.pricing_unit_quantity }}{{ product.unit.abbreviation|default:"unit" }}</small>
+                            {% else %}
+                                KES {{ product.unit_price }}
+                                {% if product.unit %}
+                                    <small class="text-muted">/ {{ product.unit.abbreviation }}</small>
+                                {% endif %}
                             {% endif %}
                         </h4>
+                        {% if product.is_variable_price %}
+                        <p class="text-info small"><i class="bi bi-calculator"></i> Variable Price</p>
+                        {% endif %}
                         <div class="mt-2">
                             {% if product.is_out_of_stock %}
                                 <span class="badge bg-danger">Out of Stock</span>
@@ -289,7 +342,7 @@
                     <strong>Discount:</strong> <span class="float-end" id="discount">KES 0.00</span>
                 </div>
                 <div class="mb-2">
-                    <strong>VAT ({{ vat_rate }}%):</strong> <span class="float-end" id="vat">KES 0.00</span>
+                    <strong id="vat-label">VAT ({{ vat_rate }}%):</strong> <span class="float-end" id="vat">KES 0.00</span>
                 </div>
                 <div class="mb-3">
                     <h4>Total (incl. VAT): <span class="float-end text-primary" id="cart-total">KES 0.00</span></h4>
@@ -327,6 +380,46 @@
     <div id="form-items"></div>
     <div id="form-payments"></div>
 </form>
+
+<!-- Weight/Quantity Modal for Variable Pricing -->
+<div class="modal fade" id="weightModal" tabindex="-1" aria-labelledby="weightModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="weightModalLabel">
+                    <i class="bi bi-calculator"></i> Enter Quantity
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <h6 id="weight-product-name" class="text-center"></h6>
+                    <p class="text-muted text-center" id="weight-pricing-info"></p>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Enter Quantity <span id="weight-unit-label"></span>:</label>
+                    <input type="number" class="form-control form-control-lg text-center" id="weight-input" 
+                           step="0.001" min="0.001" placeholder="0.000" autofocus>
+                    <small class="text-muted">Available: <span id="weight-available-stock"></span></small>
+                </div>
+                
+                <div class="alert alert-info">
+                    <div class="d-flex justify-content-between">
+                        <strong>Calculated Price:</strong>
+                        <h4 class="mb-0 text-primary" id="weight-calculated-price">KES 0.00</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addVariablePriceToCart()">
+                    <i class="bi bi-cart-plus"></i> Add to Cart
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Payment Method Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
@@ -840,8 +933,129 @@ function calculateLoyaltyPoints(amount) {
     return totalPoints;
 }
 
-function addToCart(id, name, price, availableStock) {
-    console.log('addToCart called:', {id, name, price, availableStock});
+// Variable Pricing Functions
+let variablePriceProduct = null;
+
+function showWeightModal(id, name, pricePerUnit, pricingUnitQty, availableStock, taxClass, unitName) {
+    variablePriceProduct = {
+        id: id,
+        name: name,
+        pricePerUnit: parseFloat(pricePerUnit),
+        pricingUnitQty: parseFloat(pricingUnitQty),
+        availableStock: parseFloat(availableStock),
+        taxClass: taxClass,
+        unitName: unitName
+    };
+    
+    // Update modal content
+    document.getElementById('weight-product-name').textContent = name;
+    document.getElementById('weight-pricing-info').textContent = 
+        `KES ${pricePerUnit} per ${pricingUnitQty}${unitName}`;
+    document.getElementById('weight-unit-label').textContent = `(${unitName})`;
+    document.getElementById('weight-available-stock').textContent = 
+        `${availableStock} ${unitName}`;
+    document.getElementById('weight-input').value = '';
+    document.getElementById('weight-calculated-price').textContent = 'KES 0.00';
+    
+    // Set max to available stock
+    document.getElementById('weight-input').max = availableStock;
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('weightModal'));
+    modal.show();
+    
+    // Focus on input after modal is shown
+    setTimeout(() => {
+        document.getElementById('weight-input').focus();
+    }, 500);
+}
+
+function calculateVariablePrice() {
+    if (!variablePriceProduct) return 0;
+    
+    const quantity = parseFloat(document.getElementById('weight-input').value) || 0;
+    
+    if (quantity <= 0) {
+        document.getElementById('weight-calculated-price').textContent = 'KES 0.00';
+        return 0;
+    }
+    
+    // Formula: (quantity / pricingUnitQty) * pricePerUnit
+    // Example: (110 / 100) * 200 = 220
+    const price = (quantity / variablePriceProduct.pricingUnitQty) * variablePriceProduct.pricePerUnit;
+    
+    document.getElementById('weight-calculated-price').textContent = 
+        `KES ${price.toFixed(2)}`;
+    
+    return price;
+}
+
+function addVariablePriceToCart() {
+    if (!variablePriceProduct) return;
+    
+    const quantity = parseFloat(document.getElementById('weight-input').value);
+    
+    if (!quantity || quantity <= 0) {
+        alert('Please enter a valid quantity');
+        return;
+    }
+    
+    if (quantity > variablePriceProduct.availableStock) {
+        alert(`Cannot add ${quantity}${variablePriceProduct.unitName}. Only ${variablePriceProduct.availableStock}${variablePriceProduct.unitName} in stock!`);
+        return;
+    }
+    
+    const price = calculateVariablePrice();
+    
+    // Add to cart with calculated price and quantity
+    // For variable pricing, we store the quantity and the total price
+    const existing = cart.find(item => item.id === variablePriceProduct.id);
+    
+    if (existing) {
+        // Update existing item
+        existing.quantity = parseFloat(existing.quantity) + quantity;
+        existing.price = ((existing.price * (existing.quantity - quantity)) + price) / existing.quantity;
+        existing.isVariable = true;
+        existing.unitName = variablePriceProduct.unitName;
+    } else {
+        // Add new item
+        cart.push({
+            id: variablePriceProduct.id,
+            name: variablePriceProduct.name,
+            price: price / quantity, // Store unit price for display
+            quantity: quantity,
+            availableStock: variablePriceProduct.availableStock,
+            taxClass: variablePriceProduct.taxClass,
+            isVariable: true,
+            unitName: variablePriceProduct.unitName
+        });
+    }
+    
+    updateCart();
+    saveCartToStorage();
+    
+    // Close modal
+    bootstrap.Modal.getInstance(document.getElementById('weightModal')).hide();
+    
+    showNotification(`Added ${quantity}${variablePriceProduct.unitName} of ${variablePriceProduct.name} to cart`, 'success');
+}
+
+// Add event listener for weight input to calculate price in real-time
+document.addEventListener('DOMContentLoaded', function() {
+    const weightInput = document.getElementById('weight-input');
+    if (weightInput) {
+        weightInput.addEventListener('input', calculateVariablePrice);
+        weightInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addVariablePriceToCart();
+            }
+        });
+    }
+});
+
+function addToCart(id, name, price, availableStock, taxClass = 'standard') {
+    console.log('addToCart called:', {id, name, price, availableStock, taxClass});
     
     const existing = cart.find(item => item.id === id);
     const currentQty = existing ? existing.quantity : 0;
@@ -855,7 +1069,7 @@ function addToCart(id, name, price, availableStock) {
     if (existing) {
         existing.quantity++;
     } else {
-        cart.push({ id, name, price, quantity: 1, availableStock });
+        cart.push({ id, name, price, quantity: 1, availableStock, taxClass });
     }
     
     console.log('Cart after adding:', cart);
@@ -903,21 +1117,33 @@ function updateCart() {
         let html = '';
         cart.forEach(item => {
             const total = item.price * item.quantity;
+            const qtyDisplay = item.isVariable ? 
+                `${item.quantity.toFixed(3)} ${item.unitName}` : 
+                item.quantity;
+            const priceDisplay = item.isVariable ?
+                `KES ${(item.price * item.quantity).toFixed(2)} total` :
+                `KES ${item.price.toFixed(2)} each`;
+            
             html += `
                 <div class="cart-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>${item.name}</strong><br>
-                            <small>KES ${item.price.toFixed(2)} each</small>
+                            <strong>${item.name}</strong>
+                            ${item.isVariable ? '<span class="badge bg-info ms-1">Variable</span>' : ''}
+                            <br>
+                            <small>${priceDisplay}</small>
                         </div>
                         <button class="btn btn-sm btn-danger" onclick="removeFromCart(${item.id})">
                             <i class="bi bi-x"></i>
                         </button>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mt-2">
-                        <input type="number" class="form-control form-control-sm" style="width: 80px;" 
-                               value="${item.quantity}" min="1" 
-                               onchange="updateQuantity(${item.id}, this.value)">
+                        ${item.isVariable ? 
+                            `<span class="text-muted">${qtyDisplay}</span>` :
+                            `<input type="number" class="form-control form-control-sm" style="width: 80px;" 
+                                   value="${item.quantity}" min="1" 
+                                   onchange="updateQuantity(${item.id}, this.value)">`
+                        }
                         <strong>KES ${total.toFixed(2)}</strong>
                     </div>
                 </div>
@@ -933,8 +1159,23 @@ function updateCart() {
 
 function calculateTotal() {
     try {
-        // Cart prices are now tax-inclusive (final prices)
-        const totalInclusive = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        // Calculate totals separately for taxable and non-taxable items
+        let taxableTotal = 0;
+        let nonTaxableTotal = 0;
+        
+        cart.forEach(item => {
+            const itemTotal = item.price * item.quantity;
+            const taxClass = item.taxClass || 'standard'; // Default to standard if not set
+            
+            if (taxClass === 'standard') {
+                taxableTotal += itemTotal;
+            } else {
+                // zero_rated or exempt - no tax
+                nonTaxableTotal += itemTotal;
+            }
+        });
+        
+        const totalInclusive = taxableTotal + nonTaxableTotal;
         
         const discountTypeEl = document.getElementById('discount-type');
         const discountValueEl = document.getElementById('discount-value');
@@ -982,10 +1223,33 @@ function calculateTotal() {
         
         const afterDiscount = totalInclusive - discountAmount;
         
-        // Extract VAT from the tax-inclusive price
+        // Apply discount proportionally to taxable and non-taxable items
+        const discountRatio = totalInclusive > 0 ? (afterDiscount / totalInclusive) : 1;
+        const taxableAfterDiscount = taxableTotal * discountRatio;
+        const nonTaxableAfterDiscount = nonTaxableTotal * discountRatio;
+        
+        // Extract VAT only from taxable items
         // Formula: VAT = (Price * VAT_RATE) / (100 + VAT_RATE)
-        const vatAmount = (afterDiscount * VAT_RATE) / (100 + VAT_RATE);
-        const subtotalExclusive = afterDiscount - vatAmount;
+        const vatAmount = (taxableAfterDiscount * VAT_RATE) / (100 + VAT_RATE);
+        const taxableSubtotal = taxableAfterDiscount - vatAmount;
+        
+        // Non-taxable items have no VAT to extract
+        const subtotalExclusive = taxableSubtotal + nonTaxableAfterDiscount;
+        
+        // Update VAT label based on cart composition
+        const vatLabelEl = document.getElementById('vat-label');
+        if (vatLabelEl) {
+            if (taxableTotal > 0 && nonTaxableTotal > 0) {
+                // Mixed cart
+                vatLabelEl.textContent = 'VAT (on taxable items):';
+            } else if (taxableTotal > 0) {
+                // All taxable
+                vatLabelEl.textContent = `VAT (${VAT_RATE}%):`;
+            } else {
+                // All non-taxable
+                vatLabelEl.textContent = 'VAT:';
+            }
+        }
         
         // Update display elements with null checks
         const subtotalEl = document.getElementById('subtotal');
@@ -1118,8 +1382,8 @@ function searchByBarcode() {
                     return;
                 }
                 
-                // Add product to cart
-                addToCart(data.product.id, data.product.name, data.product.price, data.product.stock_quantity);
+                // Add product to cart with tax_class
+                addToCart(data.product.id, data.product.name, data.product.price, data.product.stock_quantity, data.product.tax_class || 'standard');
                 
                 // Show success message
                 showNotification(`Added ${data.product.name} to cart`, 'success');
@@ -1572,7 +1836,23 @@ function updateMobileCart() {
 }
 
 function updateMobileTotals() {
-    const totalInclusive = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Calculate totals separately for taxable and non-taxable items
+    let taxableTotal = 0;
+    let nonTaxableTotal = 0;
+    
+    cart.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        const taxClass = item.taxClass || 'standard'; // Default to standard if not set
+        
+        if (taxClass === 'standard') {
+            taxableTotal += itemTotal;
+        } else {
+            // zero_rated or exempt - no tax
+            nonTaxableTotal += itemTotal;
+        }
+    });
+    
+    const totalInclusive = taxableTotal + nonTaxableTotal;
     
     const discountType = document.getElementById('discount-type').value;
     const discountValue = parseFloat(document.getElementById('discount-value').value) || 0;
@@ -1585,8 +1865,33 @@ function updateMobileTotals() {
     }
     
     const afterDiscount = totalInclusive - discountAmount;
-    const vatAmount = (afterDiscount * VAT_RATE) / (100 + VAT_RATE);
-    const subtotalExclusive = afterDiscount - vatAmount;
+    
+    // Apply discount proportionally to taxable and non-taxable items
+    const discountRatio = totalInclusive > 0 ? (afterDiscount / totalInclusive) : 1;
+    const taxableAfterDiscount = taxableTotal * discountRatio;
+    const nonTaxableAfterDiscount = nonTaxableTotal * discountRatio;
+    
+    // Extract VAT only from taxable items
+    const vatAmount = (taxableAfterDiscount * VAT_RATE) / (100 + VAT_RATE);
+    const taxableSubtotal = taxableAfterDiscount - vatAmount;
+    
+    // Non-taxable items have no VAT to extract
+    const subtotalExclusive = taxableSubtotal + nonTaxableAfterDiscount;
+    
+    // Update mobile VAT label based on cart composition
+    const mobileVatLabelEl = document.getElementById('mobile-vat-label');
+    if (mobileVatLabelEl) {
+        if (taxableTotal > 0 && nonTaxableTotal > 0) {
+            // Mixed cart
+            mobileVatLabelEl.textContent = 'VAT (on taxable items):';
+        } else if (taxableTotal > 0) {
+            // All taxable
+            mobileVatLabelEl.textContent = `VAT (${VAT_RATE}%):`;
+        } else {
+            // All non-taxable
+            mobileVatLabelEl.textContent = 'VAT:';
+        }
+    }
     
     // Update mobile display
     const mobileSubtotal = document.getElementById('mobile-subtotal');

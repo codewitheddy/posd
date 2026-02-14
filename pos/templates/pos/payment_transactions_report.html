@@ -85,11 +85,11 @@
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Start Date</label>
-                    <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}">
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d'|default:'' }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">End Date</label>
-                    <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}">
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d'|default:'' }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Payment Method</label>

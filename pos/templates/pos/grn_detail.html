@@ -1,0 +1,203 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}{{ grn.grn_number }} - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-arrow-return-left"></i> {{ grn.grn_number }}</h2>
+        <div>
+            <a href="{% url 'grn_list' slug=business_slug %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+            <button onclick="window.print()" class="btn btn-outline-primary">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">GRN Details</h5>
+                    <span class="badge 
+                        {% if grn.status == 'draft' %}bg-secondary
+                        {% elif grn.status == 'submitted' %}bg-info
+                        {% elif grn.status == 'collected' %}bg-warning
+                        {% elif grn.status == 'credited' %}bg-success
+                        {% elif grn.status == 'cancelled' %}bg-danger
+                        {% endif %} fs-6">
+                        {{ grn.get_status_display }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Supplier:</strong><br>{{ grn.supplier.name }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Return Date:</strong><br>{{ grn.return_date|date:"d M Y" }}</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Return Reason:</strong><br>
+                                <span class="badge bg-light text-dark">{{ grn.get_return_reason_display }}</span>
+                            </p>
+                        </div>
+                        {% if grn.related_purchase %}
+                        <div class="col-md-6">
+                            <p><strong>Related Purchase:</strong><br>
+                                <a href="{% url 'purchase_detail' slug=business_slug pk=grn.related_purchase.pk %}">
+                                    {{ grn.related_purchase.po_number }}
+                                </a>
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <p><strong>Reason Details:</strong></p>
+                        <p class="text-muted">{{ grn.reason_details }}</p>
+                    </div>
+
+                    {% if grn.collection_date %}
+                    <div class="alert alert-warning">
+                        <strong><i class="bi bi-check-circle"></i> Goods Collected</strong><br>
+                        Collection Date: {{ grn.collection_date|date:"d M Y" }}<br>
+                        {% if grn.collection_notes %}
+                        Notes: {{ grn.collection_notes }}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if grn.credit_note_number %}
+                    <div class="alert alert-success">
+                        <strong><i class="bi bi-check-circle"></i> Credit Note Received</strong><br>
+                        Credit Note #: {{ grn.credit_note_number }}<br>
+                        Amount: KES {{ grn.credit_note_amount|floatformat:2 }}<br>
+                        Date: {{ grn.credit_note_date|date:"d M Y" }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Items Returned</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Batch</th>
+                                    <th>Expiry</th>
+                                    <th class="text-end">Unit Cost</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in grn.items.all %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.product.name }}</strong>
+                                        {% if item.item_notes %}
+                                        <br><small class="text-muted">{{ item.item_notes }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>{{ item.batch_number|default:"-" }}</td>
+                                    <td>{{ item.expiry_date|date:"d/m/Y"|default:"-" }}</td>
+                                    <td class="text-end">KES {{ item.unit_cost|floatformat:2 }}</td>
+                                    <td class="text-end">KES {{ item.total_cost|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="5" class="text-end">Total Value:</th>
+                                    <th class="text-end">KES {{ grn.total_value|floatformat:2 }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Timeline</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-circle-fill text-primary"></i>
+                            <strong>{{ grn.created_at|date:"d M Y H:i" }}</strong> - GRN Created by {{ grn.created_by.get_full_name|default:grn.created_by.username }}
+                        </li>
+                        {% if grn.status != 'draft' %}
+                        <li class="mb-2">
+                            <i class="bi bi-circle-fill text-info"></i>
+                            <strong>{{ grn.updated_at|date:"d M Y H:i" }}</strong> - Submitted to Supplier
+                        </li>
+                        {% endif %}
+                        {% if grn.collection_date %}
+                        <li class="mb-2">
+                            <i class="bi bi-circle-fill text-warning"></i>
+                            <strong>{{ grn.collection_date|date:"d M Y" }}</strong> - Goods Collected
+                        </li>
+                        {% endif %}
+                        {% if grn.credit_note_date %}
+                        <li class="mb-2">
+                            <i class="bi bi-circle-fill text-success"></i>
+                            <strong>{{ grn.credit_note_date|date:"d M Y" }}</strong> - Credit Note Received
+                        </li>
+                        {% endif %}
+                        {% if grn.status == 'cancelled' %}
+                        <li class="mb-2">
+                            <i class="bi bi-circle-fill text-danger"></i>
+                            <strong>{{ grn.updated_at|date:"d M Y H:i" }}</strong> - GRN Cancelled
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="mb-0">Actions</h5>
+                </div>
+                <div class="card-body">
+                    {% if grn.status == 'draft' %}
+                    <a href="{% url 'grn_submit' slug=business_slug pk=grn.pk %}" class="btn btn-success w-100 mb-2">
+                        <i class="bi bi-send"></i> Submit to Supplier
+                    </a>
+                    <a href="{% url 'grn_cancel' slug=business_slug pk=grn.pk %}" class="btn btn-danger w-100">
+                        <i class="bi bi-x-circle"></i> Cancel GRN
+                    </a>
+                    {% elif grn.status == 'submitted' %}
+                    <a href="{% url 'grn_mark_collected' slug=business_slug pk=grn.pk %}" class="btn btn-warning w-100 mb-2">
+                        <i class="bi bi-check-circle"></i> Mark as Collected
+                    </a>
+                    <a href="{% url 'grn_apply_credit' slug=business_slug pk=grn.pk %}" class="btn btn-success w-100 mb-2">
+                        <i class="bi bi-receipt"></i> Apply Credit Note
+                    </a>
+                    <a href="{% url 'grn_cancel' slug=business_slug pk=grn.pk %}" class="btn btn-danger w-100">
+                        <i class="bi bi-x-circle"></i> Cancel GRN
+                    </a>
+                    {% elif grn.status == 'collected' %}
+                    <a href="{% url 'grn_apply_credit' slug=business_slug pk=grn.pk %}" class="btn btn-success w-100">
+                        <i class="bi bi-receipt"></i> Apply Credit Note
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

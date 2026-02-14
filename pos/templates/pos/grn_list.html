@@ -1,0 +1,125 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Goods Returned Notes - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-arrow-return-left"></i> Goods Returned Notes</h2>
+        <a href="{% url 'grn_create' slug=business_slug %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Create New GRN
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Draft</option>
+                        <option value="submitted" {% if request.GET.status == 'submitted' %}selected{% endif %}>Submitted</option>
+                        <option value="collected" {% if request.GET.status == 'collected' %}selected{% endif %}>Collected</option>
+                        <option value="credited" {% if request.GET.status == 'credited' %}selected{% endif %}>Credited</option>
+                        <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Supplier</label>
+                    <select name="supplier" class="form-select">
+                        <option value="">All Suppliers</option>
+                        {% for supplier in suppliers %}
+                        <option value="{{ supplier.id }}" {% if request.GET.supplier|stringformat:"s" == supplier.id|stringformat:"s" %}selected{% endif %}>
+                            {{ supplier.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ request.GET.from_date|default:'' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ request.GET.to_date|default:'' }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-secondary w-100">
+                        <i class="bi bi-funnel"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- GRN List -->
+    {% if grns %}
+    <div class="row">
+        {% for grn in grns %}
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">{{ grn.grn_number }}</h5>
+                        <span class="badge 
+                            {% if grn.status == 'draft' %}bg-secondary
+                            {% elif grn.status == 'submitted' %}bg-info
+                            {% elif grn.status == 'collected' %}bg-warning
+                            {% elif grn.status == 'credited' %}bg-success
+                            {% elif grn.status == 'cancelled' %}bg-danger
+                            {% endif %}">
+                            {{ grn.get_status_display }}
+                        </span>
+                    </div>
+                    <p class="text-muted mb-2">
+                        <i class="bi bi-truck"></i> {{ grn.supplier.name }}
+                    </p>
+                    <p class="mb-2">
+                        <small>
+                            <i class="bi bi-calendar"></i> {{ grn.return_date|date:"d M Y" }} •
+                            <i class="bi bi-box"></i> {{ grn.items.count }} item{{ grn.items.count|pluralize }} •
+                            <i class="bi bi-currency-exchange"></i> KES {{ grn.total_value|floatformat:2 }}
+                        </small>
+                    </p>
+                    <p class="mb-2">
+                        <span class="badge bg-light text-dark">
+                            <i class="bi bi-exclamation-triangle"></i> {{ grn.get_return_reason_display }}
+                        </span>
+                    </p>
+                    {% if grn.credit_note_number %}
+                    <p class="mb-2">
+                        <small class="text-success">
+                            <i class="bi bi-check-circle"></i> Credit Note: {{ grn.credit_note_number }}
+                        </small>
+                    </p>
+                    {% endif %}
+                    <div class="mt-3">
+                        <a href="{% url 'grn_detail' slug=business_slug pk=grn.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                        {% if grn.status == 'draft' %}
+                        <a href="{% url 'grn_submit' slug=business_slug pk=grn.pk %}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-send"></i> Submit
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> No Goods Returned Notes found.
+        {% if request.GET %}
+        Try adjusting your filters.
+        {% else %}
+        <a href="{% url 'grn_create' slug=business_slug %}">Create your first GRN</a> to track returns to suppliers.
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

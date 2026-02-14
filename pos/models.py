@@ -258,6 +258,13 @@ class Product(models.Model):
                                           validators=[MinValueValidator(Decimal('0'))],
                                           help_text="Selling price for one bulk unit")
     
+    # Variable pricing (for items sold by weight/volume)
+    is_variable_price = models.BooleanField(default=False, help_text="Enable variable pricing (price calculated by weight/quantity)")
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                         help_text="Price per unit (e.g., price per 100g, per kg, per liter)")
+    pricing_unit_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('1.000'),
+                                                help_text="Quantity for pricing unit (e.g., 100 for 'per 100g', 1 for 'per kg')")
+    
     # Image field with optimization
     image = models.ImageField(
         upload_to=product_image_path,
@@ -421,6 +428,26 @@ class Product(models.Model):
         """Check if there's enough stock for bulk unit sale"""
         base_quantity = self.convert_bulk_to_base(bulk_quantity)
         return self.has_sufficient_stock(base_quantity)
+    
+    # Variable pricing methods
+    def calculate_price_for_quantity(self, quantity):
+        """Calculate price for a given quantity (for variable pricing)"""
+        if not self.is_variable_price or not self.price_per_unit:
+            return self.unit_price
+        
+        # Calculate price based on quantity
+        # Formula: (quantity / pricing_unit_quantity) * price_per_unit
+        # Example: 110g / 100g * 200 = 220
+        price = (Decimal(str(quantity)) / self.pricing_unit_quantity) * self.price_per_unit
+        return price.quantize(Decimal('0.01'))
+    
+    def get_pricing_display(self):
+        """Get pricing display string for variable pricing products"""
+        if not self.is_variable_price or not self.price_per_unit:
+            return f"KES {self.unit_price}"
+        
+        unit_name = self.unit.abbreviation if self.unit else "unit"
+        return f"KES {self.price_per_unit} per {self.pricing_unit_quantity}{unit_name}"
 
 
 class Sale(models.Model):
@@ -1174,6 +1201,147 @@ class ActivityLog(models.Model):
         )
 
 
+# ==================== GOODS RETURNED NOTE (GRN) ====================
+
+class GoodsReturnedNote(models.Model):
+    """Formal document for returning goods to supplier"""
+    
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('submitted', 'Submitted to Supplier'),
+        ('acknowledged', 'Acknowledged by Supplier'),
+        ('collected', 'Goods Collected'),
+        ('credited', 'Credit Note Received'),
+        ('replaced', 'Replacement Received'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    RETURN_REASON_CHOICES = [
+        ('damaged', 'Damaged on Delivery'),
+        ('wrong_item', 'Wrong Item Delivered'),
+        ('expired', 'Expired Product'),
+        ('quality', 'Quality Issue'),
+        ('overstock', 'Overstock Return'),
+        ('recall', 'Product Recall'),
+        ('other', 'Other'),
+    ]
+    
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='goods_returned_notes')
+    grn_number = models.CharField(max_length=20, editable=False)
+    supplier = models.ForeignKey('Supplier', on_delete=models.PROTECT, related_name='goods_returned_notes')
+    related_purchase = models.ForeignKey('Purchase', null=True, blank=True, on_delete=models.SET_NULL, related_name='goods_returned_notes')
+    
+    return_date = models.DateField(default=timezone.now)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    return_reason = models.CharField(max_length=20, choices=RETURN_REASON_CHOICES)
+    reason_details = models.TextField(help_text='Detailed explanation of return reason')
+    
+    # Financial
+    total_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    credit_note_number = models.CharField(max_length=50, blank=True, help_text='Credit note number from supplier')
+    credit_note_date = models.DateField(null=True, blank=True)
+    credit_note_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # Tracking
+    collection_date = models.DateField(null=True, blank=True, help_text='Date goods were collected by supplier')
+    collection_notes = models.TextField(blank=True)
+    
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='grns_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-return_date', '-created_at']
+        unique_together = [['business', 'grn_number']]
+        verbose_name = 'Goods Returned Note'
+        verbose_name_plural = 'Goods Returned Notes'
+    
+    def __str__(self):
+        return f"{self.grn_number} - {self.supplier.name}"
+    
+    def save(self, *args, **kwargs):
+        if not self.grn_number:
+            # Generate GRN number: GRN-YYYYMMDD-XXXX
+            today = timezone.now()
+            date_str = today.strftime('%Y%m%d')
+            last_grn = GoodsReturnedNote.objects.filter(
+                business=self.business,
+                grn_number__startswith=f'GRN-{date_str}'
+            ).order_by('-grn_number').first()
+            if last_grn:
+                last_num = int(last_grn.grn_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            self.grn_number = f'GRN-{date_str}-{new_num:04d}'
+        
+        # Calculate total value from items
+        if self.pk:
+            self.total_value = self.items.aggregate(
+                total=models.Sum('total_cost')
+            )['total'] or Decimal('0.00')
+        
+        super().save(*args, **kwargs)
+    
+    def submit_to_supplier(self):
+        """Mark GRN as submitted to supplier"""
+        if self.status == 'draft':
+            self.status = 'submitted'
+            self.save()
+            return True
+        return False
+    
+    def mark_collected(self, collection_date=None, notes=''):
+        """Mark goods as collected by supplier"""
+        self.status = 'collected'
+        self.collection_date = collection_date or timezone.now().date()
+        self.collection_notes = notes
+        self.save()
+    
+    def apply_credit_note(self, credit_note_number, amount, date=None):
+        """Record credit note received from supplier"""
+        self.status = 'credited'
+        self.credit_note_number = credit_note_number
+        self.credit_note_amount = amount
+        self.credit_note_date = date or timezone.now().date()
+        self.save()
+    
+    def cancel(self):
+        """Cancel the GRN"""
+        if self.status in ['draft', 'submitted']:
+            self.status = 'cancelled'
+            self.save()
+            return True
+        return False
+
+
+class GoodsReturnedNoteItem(models.Model):
+    """Individual items in a GRN"""
+    
+    grn = models.ForeignKey(GoodsReturnedNote, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey('Product', on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Traceability
+    batch_number = models.CharField(max_length=100, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    
+    # Reason specific to this item
+    item_notes = models.TextField(blank=True, help_text='Specific notes about this item')
+    
+    def __str__(self):
+        return f"{self.product.name} x {self.quantity}"
+    
+    def save(self, *args, **kwargs):
+        self.total_cost = Decimal(self.quantity) * self.unit_cost
+        super().save(*args, **kwargs)
+        
+        # Update GRN total
+        if self.grn_id:
+            self.grn.save()
+
 
 # ==================== CUSTOMER MANAGEMENT ====================
 
@@ -1737,3 +1905,115 @@ class Expense(models.Model):
                 new_num = 1
             self.expense_number = f'EXP-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
+
+
+# ============================================
+# EMAIL NOTIFICATION MODELS
+# ============================================
+
+class BusinessEmailSettings(models.Model):
+    """Email settings and preferences per business"""
+    business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name='email_settings')
+    
+    # Custom SMTP Settings (optional - override global)
+    use_custom_smtp = models.BooleanField(default=False, help_text='Use custom SMTP settings instead of global')
+    smtp_host = models.CharField(max_length=200, blank=True)
+    smtp_port = models.IntegerField(default=587)
+    smtp_username = models.CharField(max_length=200, blank=True)
+    smtp_password = models.CharField(max_length=200, blank=True)
+    from_email = models.EmailField(blank=True)
+    
+    # Notification Preferences
+    send_purchase_orders = models.BooleanField(default=True, help_text='Send purchase orders to suppliers')
+    send_grn_notifications = models.BooleanField(default=True, help_text='Send GRN notifications to suppliers')
+    send_payment_confirmations = models.BooleanField(default=True, help_text='Send payment confirmations to suppliers')
+    send_license_reminders = models.BooleanField(default=True, help_text='Send license expiry reminders')
+    send_low_stock_alerts = models.BooleanField(default=True, help_text='Send low stock alerts')
+    send_daily_summaries = models.BooleanField(default=False, help_text='Send daily sales summaries')
+    
+    # Recipients
+    admin_emails = models.TextField(blank=True, help_text='Comma-separated admin emails')
+    manager_emails = models.TextField(blank=True, help_text='Comma-separated manager emails')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Business Email Settings'
+        verbose_name_plural = 'Business Email Settings'
+    
+    def __str__(self):
+        return f"Email Settings - {self.business.name}"
+    
+    def get_admin_emails(self):
+        """Return list of admin emails"""
+        if not self.admin_emails:
+            return []
+        return [email.strip() for email in self.admin_emails.split(',') if email.strip()]
+    
+    def get_manager_emails(self):
+        """Return list of manager emails"""
+        if not self.manager_emails:
+            return []
+        return [email.strip() for email in self.manager_emails.split(',') if email.strip()]
+
+
+class EmailTemplate(models.Model):
+    """Email templates for different notification types"""
+    TEMPLATE_TYPES = [
+        ('purchase_order', 'Purchase Order'),
+        ('grn', 'Goods Returned Note'),
+        ('payment_confirmation', 'Payment Confirmation'),
+        ('license_expiry', 'License Expiry'),
+        ('sale_receipt', 'Sale Receipt'),
+        ('low_stock', 'Low Stock Alert'),
+        ('daily_summary', 'Daily Summary'),
+    ]
+    
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='email_templates')
+    name = models.CharField(max_length=100)
+    template_type = models.CharField(max_length=50, choices=TEMPLATE_TYPES)
+    subject = models.CharField(max_length=200)
+    body_html = models.TextField(help_text='HTML email body with {variable} placeholders')
+    body_text = models.TextField(help_text='Plain text email body with {variable} placeholders')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Email Template'
+        verbose_name_plural = 'Email Templates'
+        ordering = ['template_type', 'name']
+    
+    def __str__(self):
+        return f"{self.get_template_type_display()} - {self.name}"
+
+
+class EmailLog(models.Model):
+    """Track all sent emails"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    ]
+    
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='email_logs', null=True, blank=True)
+    template_type = models.CharField(max_length=50)
+    recipient = models.EmailField()
+    subject = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    error_message = models.TextField(blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Email Log'
+        verbose_name_plural = 'Email Logs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', 'status', '-created_at']),
+            models.Index(fields=['template_type', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.template_type} to {self.recipient} - {self.status}"

@@ -8,6 +8,7 @@
     <!-- PWA Meta Tags -->
     <meta name="description" content="Point of Sale System for Retail Business">
     <meta name="theme-color" content="#4e73df">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="POS System">
@@ -455,6 +456,11 @@
             <li>
                 <a href="{% url 'purchase_list' slug=business_slug %}" class="{% if 'purchase' in request.path %}active{% endif %}">
                     <i class="bi bi-bag-check"></i> Purchase Orders
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'grn_list' slug=business_slug %}" class="{% if 'grn' in request.path %}active{% endif %}">
+                    <i class="bi bi-arrow-return-left"></i> Goods Returned Notes
                 </a>
             </li>
             {% endif %}

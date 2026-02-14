@@ -1,0 +1,56 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Apply Credit Note - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Apply Credit Note</h5>
+                </div>
+                <div class="card-body">
+                    <h6>{{ grn.grn_number }}</h6>
+                    <p class="text-muted">{{ grn.supplier.name }}</p>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Record the credit note received from the supplier for the returned goods.
+                    </div>
+
+                    <div class="mb-3">
+                        <p><strong>GRN Total Value: KES {{ grn.total_value|floatformat:2 }}</strong></p>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Credit Note Number <span class="text-danger">*</span></label>
+                            <input type="text" name="credit_note_number" class="form-control" required placeholder="e.g., CN-2024-001">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Credit Amount <span class="text-danger">*</span></label>
+                            <input type="number" name="credit_amount" class="form-control" step="0.01" required value="{{ grn.total_value }}" min="0">
+                            <small class="text-muted">Amount may differ from GRN value if supplier applies deductions</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Credit Note Date <span class="text-danger">*</span></label>
+                            <input type="date" name="credit_date" class="form-control" required value="{{ today|date:'Y-m-d'|default:'' }}">
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'grn_detail' slug=business_slug pk=grn.pk %}" class="btn btn-secondary flex-fill">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success flex-fill">
+                                <i class="bi bi-receipt"></i> Apply Credit Note
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

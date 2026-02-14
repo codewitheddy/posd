@@ -30,7 +30,7 @@
             <form method="get" class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Report Date</label>
-                    <input type="date" name="date" class="form-control" value="{{ report_date|date:'Y-m-d' }}">
+                    <input type="date" name="date" class="form-control" value="{{ report_date|date:'Y-m-d'|default:'' }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
@@ -165,7 +165,7 @@
                     <!-- Cash Count Form -->
                     <div class="mt-3 p-3 bg-light rounded">
                         <h6 class="mb-3"><i class="bi bi-calculator"></i> Count Cash Drawer</h6>
-                        <form id="cashCountForm">
+                        <div>
                             <div class="mb-2">
                                 <label class="form-label small">Actual Cash Counted:</label>
                                 <input type="number" id="actualCash" class="form-control" step="0.01" min="0" placeholder="Enter counted amount">
@@ -173,13 +173,128 @@
                             <button type="button" onclick="calculateDifference()" class="btn btn-sm btn-primary w-100">
                                 <i class="bi bi-calculator-fill"></i> Calculate Difference
                             </button>
-                        </form>
-                        <div id="differenceResult" class="mt-3" style="display: none;">
-                            <div class="alert mb-0" id="differenceAlert">
-                                <strong>Difference:</strong> <span id="differenceAmount"></span>
+                            
+                            <!-- Result Display -->
+                            <div id="differenceResult" class="mt-3" style="display: none;">
+                                <div id="differenceAlert" class="alert mb-0">
+                                    <strong>Difference:</strong> <span id="differenceAmount"></span>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Close Day Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-{% if day_is_closed %}success{% else %}danger{% endif %}">
+                <div class="card-header bg-{% if day_is_closed %}success{% else %}danger{% endif %} text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-{% if day_is_closed %}check-circle-fill{% else %}lock-fill{% endif %}"></i> 
+                        {% if day_is_closed %}DAY CLOSED{% else %}CLOSE DAY{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if day_is_closed %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <strong>Day Closed:</strong> This day has been closed. All shifts for {{ report_date|date:"d F Y" }} are locked.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Closed Shifts:</h6>
+                        <ul class="list-group">
+                            {% for shift in shifts %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>
+                                    <strong>{{ shift.shift_number }}</strong> - 
+                                    {{ shift.cashier.get_full_name|default:shift.cashier.username }}
+                                    <span class="badge bg-success ms-2">
+                                        {{ shift.get_status_display }}
+                                    </span>
+                                </span>
+                                <span>
+                                    Opening: KES {{ shift.opening_cash|floatformat:2 }}
+                                    | Closing: KES {{ shift.closing_cash|floatformat:2 }}
+                                    | Variance: 
+                                    <span class="{% if shift.cash_difference > 0 %}text-warning{% elif shift.cash_difference < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {% if shift.cash_difference > 0 %}+{% endif %}KES {{ shift.cash_difference|floatformat:2 }}
+                                    </span>
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    
+                    <div class="text-center">
+                        <a href="{% url 'z_report_pdf' slug=request.business.slug %}?date={{ report_date|date:'Y-m-d' }}" 
+                           class="btn btn-primary btn-lg" target="_blank">
+                            <i class="bi bi-file-pdf"></i> Download/Print Z-Report
+                        </a>
+                    </div>
+                    
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <strong>Important:</strong> Closing the day will lock all shifts for {{ report_date|date:"d F Y" }}. 
+                        Make sure you have counted the cash and verified all transactions before proceeding.
+                    </div>
+                    
+                    {% if shifts.exists %}
+                    <div class="mb-3">
+                        <h6>Shifts to be closed:</h6>
+                        <ul class="list-group">
+                            {% for shift in shifts %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>
+                                    <strong>{{ shift.shift_number }}</strong> - 
+                                    {{ shift.cashier.get_full_name|default:shift.cashier.username }}
+                                    <span class="badge bg-{% if shift.status == 'open' %}primary{% elif shift.status == 'closed' %}success{% endif %} ms-2">
+                                        {{ shift.get_status_display }}
+                                    </span>
+                                </span>
+                                <span>
+                                    Opening: KES {{ shift.opening_cash|floatformat:2 }}
+                                    {% if shift.status == 'closed' %}
+                                    | Closing: KES {{ shift.closing_cash|floatformat:2 }}
+                                    {% endif %}
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6>Expected Cash</h6>
+                                    <h4 class="text-primary">KES {{ expected_cash|floatformat:2 }}</h4>
+                                    <small class="text-muted">Opening + Cash Sales</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6>Actual Cash (from calculator above)</h6>
+                                    <h4 class="text-success" id="displayActualCash">KES 0.00</h4>
+                                    <small class="text-muted">Enter amount in calculator above</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 text-center">
+                        <button type="button" class="btn btn-danger btn-lg" onclick="confirmCloseDay()" id="closeDayBtn">
+                            <i class="bi bi-lock-fill"></i> Close Day - {{ report_date|date:"d F Y" }}
+                        </button>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -329,23 +444,69 @@
 </style>
 
 <script>
+// Store expected cash value from server
+const EXPECTED_CASH = parseFloat('{{ expected_cash }}') || 0;
+
+console.log('Expected Cash from server:', EXPECTED_CASH);
+
 function calculateDifference() {
     const actualCashInput = document.getElementById('actualCash');
     const actualCash = parseFloat(actualCashInput.value);
-    const expectedCash = parseFloat('{{ expected_cash|floatformat:2 }}'.replace(',', ''));
     
-    console.log('Actual Cash:', actualCash);
-    console.log('Expected Cash:', expectedCash);
+    console.log('=== Calculate Difference Called ===');
+    console.log('Actual Cash Input Value:', actualCashInput.value);
+    console.log('Actual Cash Parsed:', actualCash);
+    console.log('Expected Cash:', EXPECTED_CASH);
     
-    if (isNaN(actualCash) || actualCash < 0) {
-        alert('Please enter a valid cash amount');
+    if (!actualCashInput.value || actualCashInput.value.trim() === '') {
+        alert('Please enter the actual cash amount');
         return;
     }
     
-    const difference = actualCash - expectedCash;
-    const differenceResult = document.getElementById('differenceResult');
-    const differenceAlert = document.getElementById('differenceAlert');
-    const differenceAmount = document.getElementById('differenceAmount');
+    if (isNaN(actualCash) || actualCash < 0) {
+        alert('Please enter a valid cash amount (must be 0 or greater)');
+        return;
+    }
+    
+    const difference = actualCash - EXPECTED_CASH;
+    
+    console.log('Difference:', difference);
+    
+    // Get or create result elements
+    let differenceResult = document.getElementById('differenceResult');
+    let differenceAlert = document.getElementById('differenceAlert');
+    let differenceAmount = document.getElementById('differenceAmount');
+    
+    console.log('differenceResult element:', differenceResult);
+    console.log('differenceAlert element:', differenceAlert);
+    console.log('differenceAmount element:', differenceAmount);
+    
+    // If elements don't exist, create them
+    if (!differenceResult) {
+        console.log('Creating differenceResult element');
+        differenceResult = document.createElement('div');
+        differenceResult.id = 'differenceResult';
+        differenceResult.className = 'mt-3';
+        actualCashInput.parentElement.parentElement.appendChild(differenceResult);
+    }
+    
+    if (!differenceAlert) {
+        console.log('Creating differenceAlert element');
+        differenceAlert = document.createElement('div');
+        differenceAlert.id = 'differenceAlert';
+        differenceAlert.className = 'alert mb-0';
+        differenceResult.appendChild(differenceAlert);
+    }
+    
+    if (!differenceAmount) {
+        console.log('Creating differenceAmount element');
+        const strongEl = document.createElement('strong');
+        strongEl.textContent = 'Difference: ';
+        differenceAmount = document.createElement('span');
+        differenceAmount.id = 'differenceAmount';
+        differenceAlert.appendChild(strongEl);
+        differenceAlert.appendChild(differenceAmount);
+    }
     
     // Show result
     differenceResult.style.display = 'block';
@@ -364,16 +525,120 @@ function calculateDifference() {
         differenceAlert.className = 'alert alert-success mb-0';
         differenceAmount.innerHTML = '<strong class="text-success">' + formattedDiff + '</strong> (Balanced ✓)';
     }
+    
+    // Update display actual cash in close day section
+    const displayActualCash = document.getElementById('displayActualCash');
+    if (displayActualCash) {
+        displayActualCash.textContent = 'KES ' + actualCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+}
+
+function confirmCloseDay() {
+    const actualCashInput = document.getElementById('actualCash');
+    const actualCash = parseFloat(actualCashInput.value);
+    
+    if (!actualCashInput.value || actualCashInput.value.trim() === '' || isNaN(actualCash)) {
+        alert('Please count the cash and calculate the difference first!');
+        actualCashInput.focus();
+        return;
+    }
+    
+    const difference = actualCash - EXPECTED_CASH;
+    const reportDate = '{{ report_date|date:"d F Y" }}';
+    
+    let message = `Are you sure you want to close the day for ${reportDate}?\n\n`;
+    message += `Expected Cash: KES ${EXPECTED_CASH.toFixed(2)}\n`;
+    message += `Actual Cash: KES ${actualCash.toFixed(2)}\n`;
+    message += `Variance: KES ${Math.abs(difference).toFixed(2)} `;
+    
+    if (difference > 0) {
+        message += '(Over)';
+    } else if (difference < 0) {
+        message += '(Short)';
+    } else {
+        message += '(Balanced)';
+    }
+    
+    message += '\n\nThis action cannot be undone!';
+    
+    if (confirm(message)) {
+        // Disable button to prevent double submission
+        const btn = document.getElementById('closeDayBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Closing...';
+        
+        // Submit close day request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "close_day" slug=request.business.slug %}';
+        
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = '{{ csrf_token }}';
+        form.appendChild(csrfInput);
+        
+        // Add report date
+        const dateInput = document.createElement('input');
+        dateInput.type = 'hidden';
+        dateInput.name = 'report_date';
+        dateInput.value = '{{ report_date|date:"Y-m-d" }}';
+        form.appendChild(dateInput);
+        
+        // Add closing cash
+        const cashInput = document.createElement('input');
+        cashInput.type = 'hidden';
+        cashInput.name = 'closing_cash';
+        cashInput.value = actualCash;
+        form.appendChild(cashInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 
 // Allow Enter key to trigger calculation
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM Loaded - Setting up event listeners');
     const actualCashInput = document.getElementById('actualCash');
     if (actualCashInput) {
+        console.log('Actual cash input found');
         actualCashInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 calculateDifference();
+            }
+        });
+        
+        // Update display when value changes
+        actualCashInput.addEventListener('input', function() {
+            const actualCash = parseFloat(this.value);
+            const displayActualCash = document.getElementById('displayActualCash');
+            if (displayActualCash && !isNaN(actualCash)) {
+                displayActualCash.textContent = 'KES ' + actualCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            }
+        });
+    } else {
+        console.error('Actual cash input NOT found');
+    }
+    
+    // Auto-print after closing day
+    {% if auto_print %}
+    console.log('Auto-print triggered');
+    setTimeout(function() {
+        // Open PDF in new window for printing
+        const pdfUrl = '{% url "z_report_pdf" slug=request.business.slug %}?date={{ report_date|date:"Y-m-d" }}';
+        window.open(pdfUrl, '_blank');
+        
+        // Also trigger browser print dialog
+        setTimeout(function() {
+            window.print();
+        }, 500);
+    }, 1000);
+    {% endif %}
+});
+</script>
             }
         });
     }

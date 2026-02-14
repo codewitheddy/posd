@@ -62,11 +62,11 @@
             <form method="get" class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Start Date</label>
-                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d'|default:'' }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">End Date</label>
-                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d'|default:'' }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">&nbsp;</label>

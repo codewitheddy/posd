@@ -110,6 +110,15 @@ business_urlpatterns = [
     path('purchases/<int:pk>/receive/', views.purchase_receive, name='purchase_receive'),
     path('purchases/<int:pk>/cancel/', views.purchase_cancel, name='purchase_cancel'),
     
+    # Goods Returned Notes (GRN)
+    path('grn/', views.grn_list, name='grn_list'),
+    path('grn/create/', views.grn_create, name='grn_create'),
+    path('grn/<int:pk>/', views.grn_detail, name='grn_detail'),
+    path('grn/<int:pk>/submit/', views.grn_submit, name='grn_submit'),
+    path('grn/<int:pk>/mark-collected/', views.grn_mark_collected, name='grn_mark_collected'),
+    path('grn/<int:pk>/apply-credit/', views.grn_apply_credit, name='grn_apply_credit'),
+    path('grn/<int:pk>/cancel/', views.grn_cancel, name='grn_cancel'),
+    
     # POS
     path('pos/', views.pos_screen, name='pos_screen'),
     path('pos/complete/', views.complete_sale, name='complete_sale'),
@@ -130,6 +139,7 @@ business_urlpatterns = [
     path('reports/writeoff/', views.writeoff_report, name='writeoff_report'),
     path('reports/z-report/', views.z_report, name='z_report'),
     path('reports/z-report/pdf/', views.z_report_pdf, name='z_report_pdf'),
+    path('reports/z-report/close-day/', views.close_day, name='close_day'),
     path('reports/payment-transactions/', views.payment_transactions_report, name='payment_transactions_report'),
     path('reports/payment-transactions/export/', views.payment_transactions_export, name='payment_transactions_export'),
     path('reports/payment-transactions/csv/', views.payment_transactions_csv, name='payment_transactions_csv'),

@@ -99,6 +99,10 @@ class SupplierPaymentService:
             # Auto-allocate using FIFO if no allocations specified
             SupplierPaymentService._auto_allocate_payment(payment)
         
+        # Send email confirmation to supplier
+        from .email_service import EmailService
+        EmailService.send_payment_confirmation(payment)
+        
         # Log activity
         ActivityLog.log_activity(
             user=created_by,
@@ -172,7 +176,13 @@ class SupplierStatementService:
                 payment_date__lt=start_date
             ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             
-            opening_balance = opening_purchases - opening_payments
+            # Include GRNs with credit notes in opening balance
+            opening_grns = supplier.goods_returned_notes.filter(
+                status='credited',
+                credit_note_date__lt=start_date
+            ).aggregate(total=Sum('credit_note_amount'))['total'] or Decimal('0.00')
+            
+            opening_balance = opening_purchases - opening_payments - opening_grns
         
         # Get transactions in period
         if start_date:
@@ -186,6 +196,13 @@ class SupplierStatementService:
                 payment_date__gte=start_date,
                 payment_date__lte=end_date
             ).order_by('payment_date')
+            
+            # Include GRNs with credit notes in period
+            grns = supplier.goods_returned_notes.filter(
+                status='credited',
+                credit_note_date__gte=start_date,
+                credit_note_date__lte=end_date
+            ).order_by('credit_note_date')
         else:
             # No start date - get all transactions up to end_date
             purchases = supplier.purchases.filter(
@@ -196,6 +213,11 @@ class SupplierStatementService:
             payments = supplier.payments.filter(
                 payment_date__lte=end_date
             ).order_by('payment_date')
+            
+            grns = supplier.goods_returned_notes.filter(
+                status='credited',
+                credit_note_date__lte=end_date
+            ).order_by('credit_note_date')
         
         # Combine and sort transactions
         transactions = []
@@ -235,6 +257,20 @@ class SupplierStatementService:
                 'object': payment
             })
         
+        # Add GRNs (Goods Returned Notes) as credits
+        for grn in grns:
+            credit_amount = grn.credit_note_amount or grn.total_value
+            transactions.append({
+                'date': grn.credit_note_date,
+                'type': 'grn',
+                'reference': grn.grn_number,
+                'description': f'Goods Return: {grn.grn_number} - {grn.get_return_reason_display()}',
+                'debit': Decimal('0.00'),
+                'credit': credit_amount,
+                'object': grn,
+                'credit_note': grn.credit_note_number
+            })
+        
         # Sort by date
         transactions.sort(key=lambda x: x['date'])
         
@@ -254,7 +290,8 @@ class SupplierStatementService:
             'closing_balance': closing_balance,
             'transactions': transactions,
             'total_purchases': sum(t['debit'] for t in transactions),
-            'total_payments': sum(t['credit'] for t in transactions),
+            'total_payments': sum(t['credit'] for t in transactions if t['type'] == 'payment'),
+            'total_returns': sum(t['credit'] for t in transactions if t['type'] == 'grn'),
         }
     
     @staticmethod
