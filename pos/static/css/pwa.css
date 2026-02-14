@@ -1,59 +1,4 @@
-/* PWA Install Banner Styles */
-.pwa-install-banner {
-    position: fixed;
-    bottom: -100px;
-    left: 0;
-    right: 0;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 15px 20px;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
-    z-index: 9999;
-    transition: bottom 0.3s ease;
-}
-
-.pwa-install-banner.show {
-    bottom: 0;
-}
-
-.pwa-install-content {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.pwa-install-icon {
-    font-size: 2rem;
-    flex-shrink: 0;
-}
-
-.pwa-install-text {
-    flex: 1;
-}
-
-.pwa-install-text strong {
-    display: block;
-    font-size: 1.1rem;
-    margin-bottom: 2px;
-}
-
-.pwa-install-text p {
-    margin: 0;
-    font-size: 0.9rem;
-    opacity: 0.9;
-}
-
-.pwa-install-actions {
-    display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-}
-
-.pwa-install-actions .btn {
-    white-space: nowrap;
-}
+/* PWA Styles (Install banner removed) */
 
 /* Connection Status Indicator */
 .connection-status {
@@ -92,26 +37,6 @@
     }
 }
 
-/* PWA Installed Indicator */
-.pwa-installed .connection-status {
-    top: 50px;
-}
-
-.pwa-installed::before {
-    content: "📱 Installed App";
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    padding: 6px 12px;
-    background: #4e73df;
-    color: white;
-    border-radius: 15px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    z-index: 9998;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
 /* Offline Mode Styles */
 .offline-mode-banner {
     background: #fff3cd;
@@ -128,40 +53,11 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
-    .pwa-install-content {
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .pwa-install-text {
-        flex: 1 1 100%;
-    }
-
-    .pwa-install-actions {
-        flex: 1 1 100%;
-        justify-content: stretch;
-    }
-
-    .pwa-install-actions .btn {
-        flex: 1;
-    }
-
     .connection-status {
         top: 5px;
         right: 5px;
         font-size: 0.75rem;
         padding: 6px 12px;
-    }
-
-    .pwa-installed::before {
-        top: 5px;
-        right: 5px;
-        font-size: 0.7rem;
-        padding: 4px 10px;
-    }
-
-    .pwa-installed .connection-status {
-        top: 35px;
     }
 }
 
@@ -176,12 +72,5 @@
     /* Hide browser-specific elements */
     .browser-only {
         display: none !important;
-    }
-}
-
-/* iOS specific */
-@supports (-webkit-touch-callout: none) {
-    .pwa-install-banner {
-        padding-bottom: calc(15px + env(safe-area-inset-bottom));
     }
 }

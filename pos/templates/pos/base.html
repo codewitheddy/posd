@@ -73,6 +73,19 @@
             margin-bottom: 20px;
         }
 
+        .sidebar-brand a {
+            display: block;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-brand a:hover {
+            transform: scale(1.02);
+        }
+
+        .sidebar-brand a:hover h4 {
+            color: #4e73df;
+        }
+
         .sidebar-brand h4 {
             color: #fff;
             font-weight: 700;
@@ -375,8 +388,17 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
-            <small>POS System</small>
+            {% if user_permissions.can_make_sales %}
+            <a href="{% url 'pos_screen' slug=business_slug %}" style="text-decoration: none; color: inherit; cursor: pointer;">
+                <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
+                <small>POS System</small>
+            </a>
+            {% else %}
+            <a href="{% url 'dashboard' slug=business_slug %}" style="text-decoration: none; color: inherit; cursor: pointer;">
+                <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
+                <small>POS System</small>
+            </a>
+            {% endif %}
         </div>
 
         <ul class="sidebar-menu">
@@ -503,8 +525,13 @@
             <li class="nav-section">Administration</li>
             {% if user_permissions.can_manage_users %}
             <li>
-                <a href="{% url 'user_list' slug=business_slug %}" class="{% if 'users' in request.path %}active{% endif %}">
+                <a href="{% url 'user_list' slug=business_slug %}" class="{% if 'users' in request.path and 'roles' not in request.path %}active{% endif %}">
                     <i class="bi bi-people-fill"></i> User Management
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'roles_permissions' slug=business_slug %}" class="{% if 'roles-permissions' in request.path %}active{% endif %}">
+                    <i class="bi bi-shield-check"></i> Roles & Permissions
                 </a>
             </li>
             {% endif %}

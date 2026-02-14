@@ -16,6 +16,9 @@ def landing_page(request):
 def root_redirect(request):
     """Root URL - redirects logged-in users to business list, others to landing"""
     if request.user.is_authenticated:
+        # Redirect superusers to platform admin dashboard
+        if request.user.is_superuser:
+            return redirect('platform_admin_dashboard')
         return redirect('business_list')
     return redirect('landing')
 
@@ -30,6 +33,8 @@ public_urlpatterns = [
     
     # Platform Admin Dashboard (superuser only)
     path('platform-admin/', views.platform_admin_dashboard, name='platform_admin_dashboard'),
+    path('platform-admin/create-business/', views.admin_create_business, name='admin_create_business'),
+    path('platform-admin/extend-license/', views.extend_license, name='extend_license'),
     
     # Authentication
     path('login/', views.login_view, name='login'),
@@ -135,6 +140,7 @@ business_urlpatterns = [
     
     # User Management
     path('users/', views.user_list, name='user_list'),
+    path('users/roles-permissions/', views.roles_permissions, name='roles_permissions'),
     path('users/create/', views.user_create, name='user_create'),
     path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),

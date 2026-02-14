@@ -28,3 +28,16 @@ def business_url(context, url_name, *args, **kwargs):
     except:
         # Fallback to business list if URL fails
         return reverse('business_list')
+
+
+@register.filter
+def get_item(dictionary, key):
+    """
+    Get item from dictionary by key.
+    
+    Usage:
+        {{ my_dict|get_item:key_variable }}
+    """
+    if dictionary is None:
+        return None
+    return dictionary.get(key)

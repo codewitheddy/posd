@@ -209,6 +209,50 @@
                                 </div>
                             </div>
 
+                            <hr class="my-3">
+
+                            <!-- Multi-Unit Selling (Optional) -->
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> <strong>Multi-Unit Selling (Optional)</strong><br>
+                                <small>Configure bulk units for products sold in multiple quantities (e.g., by piece or by carton). Leave blank if not needed.</small>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="bulk_unit_name" class="form-label">Bulk Unit Name</label>
+                                    <input type="text" class="form-control" id="bulk_unit_name" name="bulk_unit_name" 
+                                           value="{{ product.bulk_unit_name|default:'' }}" 
+                                           placeholder="e.g., Carton, Box, Sack">
+                                    <small class="form-text text-muted">Name of the bulk unit</small>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="bulk_unit_quantity" class="form-label">Quantity in Bulk Unit</label>
+                                    <input type="number" class="form-control" id="bulk_unit_quantity" name="bulk_unit_quantity" 
+                                           value="{{ product.bulk_unit_quantity|default:'' }}" step="0.001" min="0.001"
+                                           placeholder="e.g., 12">
+                                    <small class="form-text text-muted">How many base units in one bulk unit</small>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="bulk_unit_price" class="form-label">Bulk Unit Price (KES)</label>
+                                    <input type="number" class="form-control" id="bulk_unit_price" name="bulk_unit_price" 
+                                           value="{{ product.bulk_unit_price|default:'' }}" step="0.01" min="0"
+                                           placeholder="e.g., 550">
+                                    <small class="form-text text-muted">Selling price for one bulk unit</small>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <div class="alert alert-success" id="bulk-unit-example" style="display: none;">
+                                        <small><strong>Example:</strong> <span id="bulk-example-text"></span></small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="stock_quantity" class="form-label">Stock Quantity</label>
@@ -296,7 +340,50 @@
     // Calculate profit on page load if values exist
     window.addEventListener('load', function() {
         calculateProfit();
+        updateBulkUnitExample();
     });
+    
+    // Update bulk unit example
+    function updateBulkUnitExample() {
+        const bulkName = document.getElementById('bulk_unit_name').value;
+        const bulkQty = parseFloat(document.getElementById('bulk_unit_quantity').value);
+        const bulkPrice = parseFloat(document.getElementById('bulk_unit_price').value);
+        const basePrice = parseFloat(document.getElementById('unit_price').value);
+        const unitName = document.getElementById('unit').selectedOptions[0]?.text || 'unit';
+        
+        const exampleDiv = document.getElementById('bulk-unit-example');
+        const exampleText = document.getElementById('bulk-example-text');
+        
+        if (bulkName && bulkQty > 0 && bulkPrice > 0 && basePrice > 0) {
+            const pricePerBase = bulkPrice / bulkQty;
+            const savings = basePrice - pricePerBase;
+            const savingsPercent = (savings / basePrice) * 100;
+            
+            let exampleHtml = `1 ${bulkName} = ${bulkQty} ${unitName} @ KES ${bulkPrice.toFixed(2)}`;
+            exampleHtml += ` (KES ${pricePerBase.toFixed(2)} per ${unitName})`;
+            
+            if (savings > 0) {
+                exampleHtml += ` - <span class="text-success">Save KES ${savings.toFixed(2)} (${savingsPercent.toFixed(1)}%) per ${unitName}</span>`;
+            } else if (savings < 0) {
+                exampleHtml += ` - <span class="text-danger">KES ${Math.abs(savings).toFixed(2)} more per ${unitName}</span>`;
+            }
+            
+            exampleText.innerHTML = exampleHtml;
+            exampleDiv.style.display = 'block';
+        } else {
+            exampleDiv.style.display = 'none';
+        }
+    }
+    
+    // Add event listeners for bulk unit fields
+    document.getElementById('bulk_unit_name').addEventListener('input', updateBulkUnitExample);
+    document.getElementById('bulk_unit_quantity').addEventListener('input', updateBulkUnitExample);
+    document.getElementById('bulk_unit_price').addEventListener('input', updateBulkUnitExample);
+    document.getElementById('unit_price').addEventListener('input', function() {
+        calculateProfit();
+        updateBulkUnitExample();
+    });
+    document.getElementById('unit').addEventListener('change', updateBulkUnitExample);
     
     function previewImage(event) {
         const file = event.target.files[0];

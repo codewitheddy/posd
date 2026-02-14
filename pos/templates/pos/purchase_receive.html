@@ -1,0 +1,279 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Receive Purchase{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4><i class="bi bi-box-seam"></i> Receive Purchase: {{ purchase.purchase_number }}</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-building"></i> Supplier:</strong> {{ purchase.supplier.name }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-calendar"></i> Order Date:</strong> {{ purchase.date|date:"d M Y" }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-truck"></i> Expected Delivery:</strong> 
+                        {% if purchase.expected_delivery %}
+                            {{ purchase.expected_delivery|date:"d M Y" }}
+                        {% else %}
+                            Not specified
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-warning">
+                <i class="bi bi-info-circle"></i> <strong>Instructions:</strong>
+                <ul class="mb-0 mt-2">
+                    <li>Enter the actual quantity of <strong>good items</strong> received for each product</li>
+                    <li>The system will automatically calculate damaged/missing items</li>
+                    <li>Only good items will be added to your stock</li>
+                    <li>Damage adjustments will be created automatically for damaged items</li>
+                </ul>
+            </div>
+
+            <form method="POST" id="receiveForm">
+                {% csrf_token %}
+                
+                <h5 class="mb-3 mt-4"><i class="bi bi-list-check"></i> Items to Receive:</h5>
+                
+                {% for item in purchase.items.all %}
+                <div class="card mb-3 border-primary">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <h6 class="mb-1">{{ item.product.name }}</h6>
+                                <p class="text-muted mb-0">
+                                    <small>
+                                        Ordered: <strong>{{ item.quantity }}</strong> units @ 
+                                        KES {{ item.unit_cost|floatformat:2 }} = 
+                                        <strong>KES {{ item.total_cost|floatformat:2 }}</strong>
+                                    </small>
+                                </p>
+                            </div>
+                            
+                            <div class="col-md-8">
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label fw-bold">
+                                            <i class="bi bi-check-circle text-success"></i> Received (Good Items)
+                                        </label>
+                                        <input type="number" class="form-control form-control-lg" 
+                                               name="received_{{ item.id }}" 
+                                               id="received_{{ item.id }}"
+                                               value="{{ item.quantity }}" 
+                                               min="0" max="{{ item.quantity }}"
+                                               onchange="updateDamaged({{ item.id }}, {{ item.quantity }})"
+                                               required>
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label fw-bold">
+                                            <i class="bi bi-exclamation-triangle text-danger"></i> Damaged/Missing
+                                        </label>
+                                        <input type="number" class="form-control form-control-lg bg-light" 
+                                               name="damaged_{{ item.id }}" 
+                                               id="damaged_{{ item.id }}"
+                                               value="0" 
+                                               min="0" max="{{ item.quantity }}"
+                                               readonly>
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label fw-bold">Status</label>
+                                        <div class="alert alert-success mb-0 py-2" id="status_{{ item.id }}">
+                                            <small><i class="bi bi-check-circle"></i> All items good</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-2">
+                                    <label class="form-label">
+                                        <i class="bi bi-pencil"></i> Notes (optional - describe damage if any)
+                                    </label>
+                                    <input type="text" class="form-control" 
+                                           name="notes_{{ item.id }}" 
+                                           id="notes_{{ item.id }}"
+                                           placeholder="e.g., Broken bottles, dented cans, wrong items...">
+                                </div>
+                                
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">
+                                            <i class="bi bi-calendar-event"></i> Expiry Date (optional)
+                                        </label>
+                                        <input type="date" class="form-control" 
+                                               name="expiry_{{ item.id }}" 
+                                               id="expiry_{{ item.id }}"
+                                               value="{{ item.expiry_date|date:'Y-m-d' }}">
+                                        <small class="text-muted">For batch tracking and expiry alerts</small>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <label class="form-label">
+                                            <i class="bi bi-upc"></i> Batch/Lot Number (optional)
+                                        </label>
+                                        <input type="text" class="form-control" 
+                                               name="batch_{{ item.id }}" 
+                                               id="batch_{{ item.id }}"
+                                               value="{{ item.batch_number }}"
+                                               placeholder="e.g., LOT-2024-001">
+                                        <small class="text-muted">For traceability and recalls</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div class="card bg-light mb-4">
+                    <div class="card-body">
+                        <h5 class="mb-3"><i class="bi bi-calculator"></i> Summary</h5>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-white rounded">
+                                    <div class="text-muted small">Total Ordered</div>
+                                    <div class="h4 mb-0" id="summary-ordered">{{ purchase.items.all|length }} items</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-white rounded">
+                                    <div class="text-muted small">Total Value</div>
+                                    <div class="h4 mb-0">KES {{ purchase.total_amount|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-success text-white rounded">
+                                    <div class="small">To Receive</div>
+                                    <div class="h4 mb-0" id="summary-received">-</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-danger text-white rounded">
+                                    <div class="small">Damaged</div>
+                                    <div class="h4 mb-0" id="summary-damaged">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-primary">
+                    <i class="bi bi-lightbulb"></i> <strong>What happens next:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Good items will be added to your stock immediately</li>
+                        <li>Damage adjustments will be created for damaged items</li>
+                        <li>You can view the receiving details in the purchase order</li>
+                        <li>Contact your supplier for credit notes on damaged items</li>
+                    </ul>
+                </div>
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.id %}" 
+                       class="btn btn-secondary btn-lg">
+                        <i class="bi bi-arrow-left"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                        <i class="bi bi-check-circle"></i> Receive Purchase
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateDamaged(itemId, orderedQty) {
+    const receivedInput = document.getElementById(`received_${itemId}`);
+    const damagedInput = document.getElementById(`damaged_${itemId}`);
+    const statusDiv = document.getElementById(`status_${itemId}`);
+    const notesInput = document.getElementById(`notes_${itemId}`);
+    
+    const received = parseInt(receivedInput.value) || 0;
+    const damaged = orderedQty - received;
+    
+    damagedInput.value = damaged;
+    
+    if (damaged > 0) {
+        statusDiv.className = 'alert alert-danger mb-0 py-2';
+        statusDiv.innerHTML = `<small><i class="bi bi-exclamation-triangle"></i> ${damaged} damaged/missing</small>`;
+        notesInput.required = true;
+        notesInput.classList.add('border-danger');
+    } else {
+        statusDiv.className = 'alert alert-success mb-0 py-2';
+        statusDiv.innerHTML = '<small><i class="bi bi-check-circle"></i> All items good</small>';
+        notesInput.required = false;
+        notesInput.classList.remove('border-danger');
+    }
+    
+    updateSummary();
+}
+
+function updateSummary() {
+    let totalReceived = 0;
+    let totalDamaged = 0;
+    
+    {% for item in purchase.items.all %}
+    const received_{{ item.id }} = parseInt(document.getElementById('received_{{ item.id }}').value) || 0;
+    const damaged_{{ item.id }} = parseInt(document.getElementById('damaged_{{ item.id }}').value) || 0;
+    totalReceived += received_{{ item.id }};
+    totalDamaged += damaged_{{ item.id }};
+    {% endfor %}
+    
+    document.getElementById('summary-received').textContent = totalReceived + ' units';
+    document.getElementById('summary-damaged').textContent = totalDamaged + ' units';
+}
+
+// Initialize summary on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateSummary();
+});
+
+// Form validation
+document.getElementById('receiveForm').addEventListener('submit', function(e) {
+    let hasErrors = false;
+    
+    {% for item in purchase.items.all %}
+    const damaged_{{ item.id }} = parseInt(document.getElementById('damaged_{{ item.id }}').value) || 0;
+    const notes_{{ item.id }} = document.getElementById('notes_{{ item.id }}').value.trim();
+    
+    if (damaged_{{ item.id }} > 0 && notes_{{ item.id }} === '') {
+        alert('Please add notes for {{ item.product.name }} - you have {{ item.quantity }} damaged/missing items.');
+        document.getElementById('notes_{{ item.id }}').focus();
+        hasErrors = true;
+        e.preventDefault();
+        return false;
+    }
+    {% endfor %}
+    
+    if (!hasErrors) {
+        // Disable submit button to prevent double submission
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('submitBtn').innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+    }
+});
+</script>
+
+<style>
+.card-body .row.align-items-center {
+    min-height: 100px;
+}
+
+.form-control-lg {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.border-danger {
+    border-color: #dc3545 !important;
+    border-width: 2px !important;
+}
+</style>
+{% endblock %}

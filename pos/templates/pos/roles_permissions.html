@@ -1,0 +1,196 @@
+{% extends 'pos/base.html' %}
+{% load business_tags %}
+
+{% block title %}Roles & Permissions - {{ request.business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .role-card {
+        border-radius: 12px;
+        border: 2px solid #e3e6f0;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    .role-card:hover {
+        border-color: #4e73df;
+        box-shadow: 0 4px 12px rgba(78, 115, 223, 0.2);
+        transform: translateY(-2px);
+    }
+    .role-card.selected {
+        border-color: #4e73df;
+        background: #f8f9fc;
+    }
+    .permission-item {
+        padding: 12px;
+        border-radius: 8px;
+        background: #f8f9fc;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .permission-item.granted {
+        background: #d4edda;
+        border-left: 4px solid #28a745;
+    }
+    .permission-item.denied {
+        background: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+    .role-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .role-owner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .role-admin { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+    .role-manager { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+    .role-stock_manager { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
+    .role-cashier { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
+    .role-sales { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white; }
+    .role-viewer { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-shield-check"></i> Roles & Permissions</h2>
+            <p class="text-muted">Manage user roles and their permissions</p>
+        </div>
+        <a href="{% url 'user_list' slug=business_slug %}" class="btn btn-primary">
+            <i class="bi bi-people"></i> Manage Users
+        </a>
+    </div>
+
+    <!-- Role Overview Cards -->
+    <div class="row mb-4">
+        {% for role_key, role_name in roles %}
+        <div class="col-md-4 col-lg-3 mb-3">
+            <div class="card role-card" onclick="showRoleDetails('{{ role_key }}')">
+                <div class="card-body text-center">
+                    <span class="role-badge role-{{ role_key }}">{{ role_name }}</span>
+                    <h3 class="mt-3">{{ role_counts|get_item:role_key|default:0 }}</h3>
+                    <small class="text-muted">Users with this role</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Permissions Matrix -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-table"></i> Permissions Matrix</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Permission</th>
+                            <th class="text-center">Owner</th>
+                            <th class="text-center">Admin</th>
+                            <th class="text-center">Manager</th>
+                            <th class="text-center">Stock Manager</th>
+                            <th class="text-center">Cashier</th>
+                            <th class="text-center">Sales</th>
+                            <th class="text-center">Viewer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for perm in permissions %}
+                        <tr>
+                            <td><strong>{{ perm.name }}</strong><br><small class="text-muted">{{ perm.description }}</small></td>
+                            {% for role in perm.roles %}
+                            <td class="text-center">
+                                {% if role %}
+                                <i class="bi bi-check-circle-fill text-success" style="font-size: 1.5rem;"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle text-muted" style="font-size: 1.5rem;"></i>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Role Details Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Role Descriptions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="roleAccordion">
+                        {% for role_key, role_name in roles %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#role{{ forloop.counter }}">
+                                    <span class="role-badge role-{{ role_key }} me-3">{{ role_name }}</span>
+                                    <span>{{ role_descriptions|get_item:role_key }}</span>
+                                </button>
+                            </h2>
+                            <div id="role{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#roleAccordion">
+                                <div class="accordion-body">
+                                    <h6>Permissions:</h6>
+                                    <ul>
+                                        {% for perm_name in role_permissions|get_item:role_key %}
+                                        <li>{{ perm_name }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    
+                                    <h6 class="mt-3">Users with this role:</h6>
+                                    {% if role_users|get_item:role_key %}
+                                    <div class="row">
+                                        {% for user in role_users|get_item:role_key %}
+                                        <div class="col-md-6 mb-2">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 40px; height: 40px;">
+                                                    {{ user.username|slice:":1"|upper }}
+                                                </div>
+                                                <div>
+                                                    <strong>{{ user.get_full_name|default:user.username }}</strong><br>
+                                                    <small class="text-muted">{{ user.email }}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted">No users with this role</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showRoleDetails(roleKey) {
+    // Find the accordion item for this role
+    const roles = {{ roles|safe }};
+    const index = roles.findIndex(r => r[0] === roleKey);
+    if (index >= 0) {
+        const accordionButton = document.querySelector(`#role${index + 1}`);
+        if (accordionButton) {
+            const bsCollapse = new bootstrap.Collapse(accordionButton, {
+                toggle: true
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

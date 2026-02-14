@@ -131,13 +131,33 @@
                         {% endif %}
                         
                         {% for trans in transactions %}
-                        <tr>
+                        <tr {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}class="table-warning"{% endif %}>
                             <td>{{ trans.date|date:"Y-m-d" }}</td>
-                            <td>{{ trans.reference }}</td>
-                            <td>{{ trans.description }}</td>
+                            <td>
+                                {{ trans.reference }}
+                                {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
+                                    <span class="badge bg-warning text-dark" title="Partial delivery">
+                                        <i class="bi bi-exclamation-triangle"></i> Partial
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ trans.description }}
+                                {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
+                                    <br><small class="text-muted">
+                                        Ordered: KES {{ trans.ordered_amount|floatformat:2 }} | 
+                                        Received: KES {{ trans.received_amount|floatformat:2 }}
+                                    </small>
+                                {% endif %}
+                            </td>
                             <td class="text-end">
                                 {% if trans.debit > 0 %}
                                     <span class="text-danger">KES {{ trans.debit|floatformat:2 }}</span>
+                                    {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
+                                        <br><small class="text-muted">
+                                            (Ordered: {{ trans.ordered_amount|floatformat:2 }})
+                                        </small>
+                                    {% endif %}
                                 {% else %}
                                     -
                                 {% endif %}

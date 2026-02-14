@@ -73,17 +73,38 @@
                             <tr>
                                 <th>Product</th>
                                 <th>Product Code</th>
-                                <th class="text-end">Quantity</th>
+                                <th class="text-end">Ordered</th>
+                                {% if purchase.status == 'received' %}
+                                <th class="text-end">Received</th>
+                                <th class="text-end">Damaged</th>
+                                {% endif %}
                                 <th class="text-end">Unit Cost</th>
                                 <th class="text-end">Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in items %}
-                            <tr>
-                                <td>{{ item.product.name }}</td>
+                            <tr {% if item.has_discrepancy and purchase.status == 'received' %}class="table-warning"{% endif %}>
+                                <td>
+                                    {{ item.product.name }}
+                                    {% if item.receiving_notes and purchase.status == 'received' %}
+                                        <br><small class="text-muted"><i class="bi bi-info-circle"></i> {{ item.receiving_notes }}</small>
+                                    {% endif %}
+                                </td>
                                 <td>{{ item.product.product_code|default:"-" }}</td>
                                 <td class="text-end">{{ item.quantity }}</td>
+                                {% if purchase.status == 'received' %}
+                                <td class="text-end">
+                                    <span class="badge bg-success">{{ item.quantity_received }}</span>
+                                </td>
+                                <td class="text-end">
+                                    {% if item.quantity_damaged > 0 %}
+                                        <span class="badge bg-danger">{{ item.quantity_damaged }}</span>
+                                    {% else %}
+                                        <span class="text-muted">0</span>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
                                 <td class="text-end">KES {{ item.unit_cost|floatformat:2 }}</td>
                                 <td class="text-end"><strong>KES {{ item.total_cost|floatformat:2 }}</strong></td>
                             </tr>
@@ -91,6 +112,32 @@
                         </tbody>
                     </table>
                 </div>
+                
+                {% if purchase.status == 'received' %}
+                    {% with total_damaged=items|length %}
+                    {% if total_damaged > 0 %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle"></i> <strong>Receiving Notes:</strong>
+                        <ul class="mb-0 mt-2">
+                            {% for item in items %}
+                                {% if item.quantity_damaged > 0 %}
+                                <li>
+                                    <strong>{{ item.product.name }}:</strong> 
+                                    {{ item.quantity_damaged }} damaged/missing
+                                    {% if item.receiving_notes %}
+                                        - {{ item.receiving_notes }}
+                                    {% endif %}
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="bi bi-lightbulb"></i> Contact supplier for credit note or replacement for damaged items.
+                        </small>
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                {% endif %}
             </div>
         </div>
     </div>

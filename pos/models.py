@@ -46,6 +46,19 @@ class Business(models.Model):
         ],
         default='free'
     )
+    
+    # License Management
+    license_expires_at = models.DateTimeField(null=True, blank=True, help_text='License expiration date')
+    license_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('active', 'Active'),
+            ('expired', 'Expired'),
+            ('suspended', 'Suspended'),
+        ],
+        default='active',
+        help_text='Current license status'
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -77,6 +90,31 @@ class Business(models.Model):
         if not self.is_trial or not self.trial_ends_at:
             return False
         return timezone.now() > self.trial_ends_at
+    
+    @property
+    def is_license_expired(self):
+        """Check if license has expired"""
+        if not self.license_expires_at:
+            return False
+        return timezone.now() > self.license_expires_at
+    
+    @property
+    def days_until_expiry(self):
+        """Get number of days until license expires"""
+        if not self.license_expires_at:
+            return None
+        delta = self.license_expires_at - timezone.now()
+        return delta.days
+    
+    def extend_license(self, days):
+        """Extend license by specified number of days"""
+        from datetime import timedelta
+        if self.license_expires_at:
+            self.license_expires_at += timedelta(days=days)
+        else:
+            self.license_expires_at = timezone.now() + timedelta(days=days)
+        self.license_status = 'active'
+        self.save()
 
 
 class BusinessMembership(models.Model):
@@ -210,6 +248,15 @@ class Product(models.Model):
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=3, default=10, help_text="Alert when stock falls below this level")
     expiry_date = models.DateField(blank=True, null=True, help_text="Product expiry date (optional)")
     expiry_alert_days = models.IntegerField(default=3, help_text="Alert X days before expiry")
+    
+    # Multi-unit selling (e.g., sell by piece or by carton)
+    bulk_unit_name = models.CharField(max_length=50, blank=True, help_text="Name of bulk unit (e.g., Carton, Box, Sack)")
+    bulk_unit_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True,
+                                             validators=[MinValueValidator(Decimal('0.001'))],
+                                             help_text="How many base units in one bulk unit (e.g., 12 pieces in a carton)")
+    bulk_unit_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                          validators=[MinValueValidator(Decimal('0'))],
+                                          help_text="Selling price for one bulk unit")
     
     # Image field with optimization
     image = models.ImageField(
@@ -346,6 +393,34 @@ class Product(models.Model):
             return 0
         profit = self.get_profit_per_unit()
         return (profit / self.cost_price) * 100
+    
+    # Multi-unit selling methods
+    def has_bulk_unit(self):
+        """Check if product has bulk unit configured"""
+        return bool(self.bulk_unit_name and self.bulk_unit_quantity and self.bulk_unit_price)
+    
+    def get_base_unit_name(self):
+        """Get base unit name for display"""
+        if self.unit:
+            return self.unit.abbreviation
+        return "unit"
+    
+    def get_bulk_units_available(self):
+        """Calculate how many bulk units are available in stock"""
+        if not self.has_bulk_unit():
+            return 0
+        return int(self.stock_quantity / self.bulk_unit_quantity)
+    
+    def convert_bulk_to_base(self, bulk_quantity):
+        """Convert bulk unit quantity to base units"""
+        if not self.has_bulk_unit():
+            return bulk_quantity
+        return bulk_quantity * self.bulk_unit_quantity
+    
+    def has_sufficient_stock_bulk(self, bulk_quantity):
+        """Check if there's enough stock for bulk unit sale"""
+        base_quantity = self.convert_bulk_to_base(bulk_quantity)
+        return self.has_sufficient_stock(base_quantity)
 
 
 class Sale(models.Model):
@@ -400,15 +475,27 @@ class Sale(models.Model):
 
 class SaleItem(models.Model):
     """Individual items in a sale"""
+    UNIT_TYPE_CHOICES = [
+        ('base', 'Base Unit'),
+        ('bulk', 'Bulk Unit'),
+    ]
+    
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sale_items')
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Multi-unit tracking
+    unit_type = models.CharField(max_length=10, choices=UNIT_TYPE_CHOICES, default='base',
+                                 help_text="Which unit was sold")
+    unit_name = models.CharField(max_length=50, blank=True,
+                                help_text="Name of unit sold (for display)")
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        unit_display = f" {self.unit_name}" if self.unit_name else ""
+        return f"{self.product.name} x {self.quantity}{unit_display}"
 
     def save(self, *args, **kwargs):
         self.total_price = Decimal(self.quantity) * self.unit_price
@@ -469,20 +556,45 @@ class Supplier(models.Model):
         return self.name
     
     def total_purchases(self):
-        """Calculate total amount of all purchases from this supplier"""
-        return self.purchases.filter(status='received').aggregate(
-            total=models.Sum('total_amount')
-        )['total'] or Decimal('0.00')
+        """Calculate total amount of all purchases from this supplier based on received quantities"""
+        total = Decimal('0.00')
+        for purchase in self.purchases.filter(status='received'):
+            # Calculate actual received amount
+            actual_amount = Decimal('0.00')
+            for item in purchase.items.all():
+                # Use quantity_received if available, otherwise use ordered quantity
+                qty = item.quantity_received if item.quantity_received > 0 else item.quantity
+                actual_amount += Decimal(qty) * item.unit_cost
+            
+            # If no items or all zero, fall back to total_amount
+            if actual_amount == Decimal('0.00'):
+                actual_amount = purchase.total_amount
+            
+            total += actual_amount
+        
+        return total
     
     def purchase_count(self):
         """Count number of purchases from this supplier"""
         return self.purchases.count()
     
     def outstanding_balance(self):
-        """Calculate current outstanding balance"""
-        total_purchases = self.purchases.filter(
-            status='received'
-        ).aggregate(total=models.Sum('total_amount'))['total'] or Decimal('0.00')
+        """Calculate current outstanding balance based on actual received amounts"""
+        # Calculate total based on actual received quantities
+        total_purchases = Decimal('0.00')
+        for purchase in self.purchases.filter(status='received'):
+            # Calculate actual received amount
+            actual_amount = Decimal('0.00')
+            for item in purchase.items.all():
+                # Use quantity_received if available, otherwise use ordered quantity
+                qty = item.quantity_received if item.quantity_received > 0 else item.quantity
+                actual_amount += Decimal(qty) * item.unit_cost
+            
+            # If no items or all zero, fall back to total_amount
+            if actual_amount == Decimal('0.00'):
+                actual_amount = purchase.total_amount
+            
+            total_purchases += actual_amount
         
         total_payments = self.payments.aggregate(
             total=models.Sum('amount')
@@ -544,32 +656,118 @@ class Purchase(models.Model):
             self.purchase_number = f'PO-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
     
-    def mark_as_received(self):
-        """Mark purchase as received and update stock"""
-        if self.status != 'received':
-            self.status = 'received'
-            self.received_date = timezone.now()
-            self.save()
-            
-            # Update stock for all items
-            for item in self.items.all():
-                product = item.product
-                previous_qty = product.stock_quantity
-                product.stock_quantity += item.quantity
-                product.save()
-                
-                # Create stock adjustment record
-                StockAdjustment.objects.create(
-                    product=product,
-                    adjustment_type='restock',
-                    quantity_change=item.quantity,
-                    previous_quantity=previous_qty,
-                    new_quantity=product.stock_quantity,
-                    reason=f'Purchase received: {self.purchase_number}'
+    def mark_as_received(self, receiving_data=None):
+        """
+        Mark purchase as received and update stock
+        
+        Args:
+            receiving_data: Optional dict with item-level receiving details
+                Format: {
+                    'items': [
+                        {
+                            'item_id': 1,
+                            'quantity_received': 95,
+                            'quantity_damaged': 5,
+                            'notes': 'Broken bottles'
+                        },
+                        ...
+                    ]
+                }
+        """
+        if self.status == 'received':
+            return False
+        
+        self.status = 'received'
+        self.received_date = timezone.now()
+        self.save()
+        
+        # Update stock for all items
+        for item in self.items.all():
+            # Get receiving data for this item if provided
+            item_data = None
+            if receiving_data and 'items' in receiving_data:
+                item_data = next(
+                    (d for d in receiving_data['items'] if d['item_id'] == item.id),
+                    None
                 )
             
-            return True
-        return False
+            if item_data:
+                # Use actual received quantities
+                qty_received = item_data['quantity_received']
+                qty_damaged = item_data['quantity_damaged']
+                notes = item_data.get('notes', '')
+                expiry_date = item_data.get('expiry_date')
+                batch_number = item_data.get('batch_number', '')
+                
+                # Update item receiving details
+                item.quantity_received = qty_received
+                item.quantity_damaged = qty_damaged
+                item.receiving_notes = notes
+                
+                # Update expiry and batch if provided
+                if expiry_date:
+                    from datetime import datetime
+                    try:
+                        item.expiry_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                    except:
+                        pass  # Invalid date format, skip
+                
+                if batch_number:
+                    item.batch_number = batch_number
+                
+                item.save()
+                
+                # Update stock with received quantity only
+                product = item.product
+                previous_qty = product.stock_quantity
+                product.stock_quantity += Decimal(qty_received)
+                product.save()
+                
+                # Create restock adjustment
+                StockAdjustment.objects.create(
+                    business=self.business,
+                    product=product,
+                    adjustment_type='restock',
+                    quantity_change=qty_received,
+                    previous_quantity=int(previous_qty),
+                    new_quantity=int(product.stock_quantity),
+                    reason=f'Received from {self.purchase_number} ({qty_received} of {item.quantity} ordered)'
+                )
+                
+                # Create damage adjustment if needed
+                if qty_damaged > 0:
+                    StockAdjustment.objects.create(
+                        business=self.business,
+                        product=product,
+                        adjustment_type='damage',
+                        quantity_change=-qty_damaged,
+                        previous_quantity=0,
+                        new_quantity=0,
+                        reason=f'Damaged on delivery - {self.purchase_number}: {notes}'
+                    )
+            else:
+                # No receiving data - use full ordered quantity (backward compatibility)
+                qty_received = item.quantity
+                item.quantity_received = qty_received
+                item.quantity_damaged = 0
+                item.save()
+                
+                product = item.product
+                previous_qty = product.stock_quantity
+                product.stock_quantity += Decimal(qty_received)
+                product.save()
+                
+                StockAdjustment.objects.create(
+                    business=self.business,
+                    product=product,
+                    adjustment_type='restock',
+                    quantity_change=qty_received,
+                    previous_quantity=int(previous_qty),
+                    new_quantity=int(product.stock_quantity),
+                    reason=f'Received from {self.purchase_number}'
+                )
+        
+        return True
     
     def total_allocated(self):
         """Returns total amount allocated from payments"""
@@ -609,11 +807,16 @@ class PurchaseItem(models.Model):
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='purchase_items')
     purchase = models.ForeignKey(Purchase, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.PositiveIntegerField(help_text='Quantity ordered')
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     expiry_date = models.DateField(blank=True, null=True, help_text='Expiry date for this batch of products')
     batch_number = models.CharField(max_length=100, blank=True, help_text='Batch or lot number for tracking')
+    
+    # Receiving details
+    quantity_received = models.PositiveIntegerField(default=0, help_text='Actual quantity received (good items)')
+    quantity_damaged = models.PositiveIntegerField(default=0, help_text='Quantity damaged or missing')
+    receiving_notes = models.TextField(blank=True, help_text='Notes about receiving (damage details, etc.)')
     
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
@@ -623,6 +826,16 @@ class PurchaseItem(models.Model):
         if not self.business_id and self.purchase:
             self.business = self.purchase.business
         super().save(*args, **kwargs)
+    
+    @property
+    def is_fully_received(self):
+        """Check if all ordered items were received"""
+        return self.quantity_received + self.quantity_damaged >= self.quantity
+    
+    @property
+    def has_discrepancy(self):
+        """Check if there's a discrepancy in receiving"""
+        return self.quantity_damaged > 0 or (self.quantity_received + self.quantity_damaged) < self.quantity
     
     def is_expired(self):
         """Check if this batch has expired"""

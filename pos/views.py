@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
-    SalePayment, Shift, Business, BusinessMembership, PaymentMethod
+    SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings
 )
 from .decorators import business_required, business_permission_required
 from reportlab.lib.pagesizes import letter, A4
@@ -81,6 +81,125 @@ def platform_admin_dashboard(request):
     }
     
     return render(request, 'pos/platform_admin_dashboard.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def admin_create_business(request):
+    """Create a new business from platform admin dashboard"""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        owner_email = request.POST.get('owner_email', '').strip()
+        owner_name = request.POST.get('owner_name', '').strip()
+        
+        if not name or not owner_email:
+            messages.error(request, 'Business name and owner email are required.')
+            return redirect('platform_admin_dashboard')
+        
+        try:
+            # Check if user exists, create if not
+            try:
+                owner = User.objects.get(email=owner_email)
+            except User.DoesNotExist:
+                # Create new user
+                username = owner_email.split('@')[0]
+                # Ensure unique username
+                base_username = username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                owner = User.objects.create_user(
+                    username=username,
+                    email=owner_email,
+                    password=User.objects.make_random_password(length=12)
+                )
+                
+                if owner_name:
+                    name_parts = owner_name.split(' ', 1)
+                    owner.first_name = name_parts[0]
+                    if len(name_parts) > 1:
+                        owner.last_name = name_parts[1]
+                    owner.save()
+                
+                messages.info(request, f'New user account created for {owner_email}. Password reset email should be sent.')
+            
+            # Create business
+            slug = name.lower().replace(' ', '-')
+            # Ensure unique slug
+            base_slug = slug
+            counter = 1
+            while Business.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            
+            business = Business.objects.create(
+                name=name,
+                slug=slug,
+                owner=owner,
+                is_active=True
+            )
+            
+            # Create business membership for owner
+            BusinessMembership.objects.create(
+                business=business,
+                user=owner,
+                role='owner'
+            )
+            
+            # Create default business settings
+            BusinessSettings.objects.create(
+                business=business,
+                currency='KES',
+                tax_rate=Decimal('16.00'),
+                low_stock_threshold=10
+            )
+            
+            messages.success(request, f'Business "{name}" created successfully! Owner: {owner.email}')
+            
+        except Exception as e:
+            messages.error(request, f'Error creating business: {str(e)}')
+    
+    return redirect('platform_admin_dashboard')
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def extend_license(request):
+    """Extend business license"""
+    if request.method == 'POST':
+        business_id = request.POST.get('business_id')
+        days = request.POST.get('days')
+        
+        if not business_id or not days:
+            messages.error(request, 'Business ID and days are required.')
+            return redirect('platform_admin_dashboard')
+        
+        try:
+            business = Business.objects.get(id=business_id)
+            days = int(days)
+            
+            if days <= 0:
+                messages.error(request, 'Days must be a positive number.')
+                return redirect('platform_admin_dashboard')
+            
+            # Extend the license
+            business.extend_license(days)
+            
+            messages.success(
+                request, 
+                f'License for "{business.name}" extended by {days} days. New expiry: {business.license_expires_at.strftime("%B %d, %Y")}'
+            )
+            
+        except Business.DoesNotExist:
+            messages.error(request, 'Business not found.')
+        except ValueError:
+            messages.error(request, 'Invalid number of days.')
+        except Exception as e:
+            messages.error(request, f'Error extending license: {str(e)}')
+    
+    return redirect('platform_admin_dashboard')
 
 
 # ==================== LEGACY DECORATORS ====================
@@ -535,6 +654,11 @@ def product_create(request, slug=None):
         low_stock_threshold = request.POST.get('low_stock_threshold', 10)
         image = request.FILES.get('image')  # Get uploaded image
         
+        # Bulk unit fields
+        bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
+        bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
+        bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
+        
         try:
             category = Category.objects.get(id=category_id, business=request.business) if category_id else None
             unit = UnitOfMeasurement.objects.get(id=unit_id, business=request.business) if unit_id else None
@@ -555,7 +679,10 @@ def product_create(request, slug=None):
                 tax_class=tax_class,
                 stock_quantity=0,  # Always 0 for new products
                 low_stock_threshold=low_stock,
-                image=image if image else None  # Add image
+                image=image if image else None,  # Add image
+                bulk_unit_name=bulk_unit_name if bulk_unit_name else '',
+                bulk_unit_quantity=Decimal(bulk_unit_quantity) if bulk_unit_quantity else None,
+                bulk_unit_price=Decimal(bulk_unit_price) if bulk_unit_price else None,
             )
             
             # Create initial stock adjustment record
@@ -600,6 +727,15 @@ def product_edit(request, slug=None, pk=None):
         # Convert empty strings to default values
         low_stock = request.POST.get('low_stock_threshold')
         product.low_stock_threshold = Decimal(low_stock) if low_stock else Decimal('10')
+        
+        # Update bulk unit fields
+        bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
+        bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
+        bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
+        
+        product.bulk_unit_name = bulk_unit_name if bulk_unit_name else ''
+        product.bulk_unit_quantity = Decimal(bulk_unit_quantity) if bulk_unit_quantity else None
+        product.bulk_unit_price = Decimal(bulk_unit_price) if bulk_unit_price else None
         
         # Handle image upload
         image = request.FILES.get('image')
@@ -1794,24 +1930,64 @@ def purchase_detail(request, slug=None, pk=None):
 
 @business_required
 def purchase_receive(request, slug=None, pk=None):
-    """Mark purchase as received and update stock"""
+    """Enhanced purchase receiving with item-level details"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     
-    if request.method == 'POST':
-        if purchase.status == 'received':
-            messages.warning(request, 'This purchase has already been received!')
-        else:
-            success = purchase.mark_as_received()
-            if success:
-                messages.success(request, f'Purchase {purchase.purchase_number} marked as received! Stock updated.')
-            else:
-                messages.error(request, 'Failed to mark purchase as received!')
-        
+    if purchase.status == 'received':
+        messages.warning(request, 'This purchase has already been received!')
         return redirect('purchase_detail', slug=request.business.slug, pk=pk)
+    
+    if request.method == 'POST':
+        # Collect receiving data
+        receiving_data = {'items': []}
+        has_errors = False
+        
+        for item in purchase.items.all():
+            qty_received = int(request.POST.get(f'received_{item.id}', item.quantity))
+            qty_damaged = int(request.POST.get(f'damaged_{item.id}', 0))
+            notes = request.POST.get(f'notes_{item.id}', '').strip()
+            expiry_date = request.POST.get(f'expiry_{item.id}', '').strip()
+            batch_number = request.POST.get(f'batch_{item.id}', '').strip()
+            
+            # Validate
+            if qty_received < 0 or qty_damaged < 0:
+                messages.error(request, f'{item.product.name}: Quantities cannot be negative!')
+                has_errors = True
+                break
+            
+            if qty_received + qty_damaged > item.quantity:
+                messages.error(request, f'{item.product.name}: Received + Damaged ({qty_received + qty_damaged}) cannot exceed ordered quantity ({item.quantity})!')
+                has_errors = True
+                break
+            
+            receiving_data['items'].append({
+                'item_id': item.id,
+                'quantity_received': qty_received,
+                'quantity_damaged': qty_damaged,
+                'notes': notes,
+                'expiry_date': expiry_date if expiry_date else None,
+                'batch_number': batch_number
+            })
+        
+        if not has_errors:
+            # Mark as received with details
+            success = purchase.mark_as_received(receiving_data)
+            
+            if success:
+                # Count discrepancies
+                total_damaged = sum(d['quantity_damaged'] for d in receiving_data['items'])
+                if total_damaged > 0:
+                    messages.warning(request, f'Purchase {purchase.purchase_number} received with {total_damaged} damaged/missing items. Damage adjustments created.')
+                else:
+                    messages.success(request, f'Purchase {purchase.purchase_number} received successfully! Stock updated.')
+                return redirect('purchase_detail', slug=request.business.slug, pk=pk)
+            else:
+                messages.error(request, 'Failed to receive purchase!')
     
     context = {
         'purchase': purchase,
     }
+    return render(request, 'pos/purchase_receive.html', context)
     return render(request, 'pos/purchase_receive_confirm.html', context)
 
 
@@ -1946,6 +2122,9 @@ def login_view(request):
         return redirect('business_list')
     
     if request.user.is_authenticated:
+        # Redirect superusers to platform admin dashboard
+        if request.user.is_superuser:
+            return redirect('platform_admin_dashboard')
         return redirect('business_list')
     
     if request.method == 'POST':
@@ -1974,6 +2153,11 @@ def login_view(request):
                 description=f'User logged in: {user.username}',
                 request=request
             )
+            
+            # Redirect superusers to platform admin dashboard
+            if user.is_superuser:
+                messages.success(request, f'Welcome back, {user.username}!')
+                return redirect('platform_admin_dashboard')
             
             next_url = request.GET.get('next', 'business_list')
             messages.success(request, f'Welcome back, {user.username}!')
@@ -2204,6 +2388,127 @@ def user_list(request, slug):
         'users': users,
     }
     return render(request, 'pos/user_list.html', context)
+
+
+@login_required
+@business_required
+@manager_required
+def roles_permissions(request, slug):
+    """Display roles and permissions matrix"""
+    from collections import defaultdict
+    
+    # Define all roles
+    roles = [
+        ('owner', 'Owner'),
+        ('admin', 'Administrator'),
+        ('manager', 'Manager'),
+        ('stock_manager', 'Stock Manager'),
+        ('cashier', 'Cashier'),
+        ('sales', 'Sales Associate'),
+        ('viewer', 'Viewer'),
+    ]
+    
+    # Role descriptions
+    role_descriptions = {
+        'owner': 'Full control over the business including deletion and ownership transfer',
+        'admin': 'Full administrative access to all features and settings',
+        'manager': 'Can manage users, view reports, and configure business settings',
+        'stock_manager': 'Manages inventory, products, suppliers, and stock levels',
+        'cashier': 'Can make sales and process transactions at POS',
+        'sales': 'Can make sales and view customer information',
+        'viewer': 'Read-only access to view data and reports',
+    }
+    
+    # Define permissions matrix
+    permissions = [
+        {
+            'name': 'Make Sales',
+            'description': 'Process sales transactions at POS',
+            'roles': [True, True, True, False, True, True, False]
+        },
+        {
+            'name': 'View Reports',
+            'description': 'Access sales reports and analytics',
+            'roles': [True, True, True, False, False, False, True]
+        },
+        {
+            'name': 'Manage Products',
+            'description': 'Create, edit, and delete products',
+            'roles': [True, True, True, True, False, False, False]
+        },
+        {
+            'name': 'Manage Stock',
+            'description': 'Adjust stock levels and manage inventory',
+            'roles': [True, True, True, True, False, False, False]
+        },
+        {
+            'name': 'Manage Suppliers',
+            'description': 'Add and manage supplier information',
+            'roles': [True, True, True, True, False, False, False]
+        },
+        {
+            'name': 'Manage Customers',
+            'description': 'Add and edit customer information',
+            'roles': [True, True, True, False, True, True, False]
+        },
+        {
+            'name': 'Manage Users',
+            'description': 'Add, edit, and remove business users',
+            'roles': [True, True, True, False, False, False, False]
+        },
+        {
+            'name': 'Business Settings',
+            'description': 'Configure business settings and preferences',
+            'roles': [True, True, True, False, False, False, False]
+        },
+        {
+            'name': 'View Activity Log',
+            'description': 'View system activity and audit logs',
+            'roles': [True, True, True, False, False, False, False]
+        },
+        {
+            'name': 'Delete Records',
+            'description': 'Delete sales, products, and other records',
+            'roles': [True, True, False, False, False, False, False]
+        },
+    ]
+    
+    # Get role counts
+    role_counts = {}
+    for role_key, role_name in roles:
+        count = request.business.memberships.filter(role=role_key, is_active=True).count()
+        role_counts[role_key] = count
+    
+    # Get users by role
+    role_users = {}
+    for role_key, role_name in roles:
+        users = User.objects.filter(
+            business_memberships__business=request.business,
+            business_memberships__role=role_key,
+            business_memberships__is_active=True
+        ).distinct()
+        role_users[role_key] = users
+    
+    # Define role permissions list
+    role_permissions = {
+        'owner': ['All Permissions'],
+        'admin': ['All Permissions'],
+        'manager': ['Make Sales', 'View Reports', 'Manage Products', 'Manage Stock', 'Manage Suppliers', 'Manage Customers', 'Manage Users', 'Business Settings', 'View Activity Log'],
+        'stock_manager': ['Manage Products', 'Manage Stock', 'Manage Suppliers'],
+        'cashier': ['Make Sales', 'Manage Customers'],
+        'sales': ['Make Sales', 'Manage Customers'],
+        'viewer': ['View Reports'],
+    }
+    
+    context = {
+        'roles': roles,
+        'role_descriptions': role_descriptions,
+        'permissions': permissions,
+        'role_counts': role_counts,
+        'role_users': role_users,
+        'role_permissions': role_permissions,
+    }
+    return render(request, 'pos/roles_permissions.html', context)
 
 
 @login_required
