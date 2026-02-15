@@ -162,8 +162,8 @@ class EmailService:
             <tr>
                 <td>{item.product.name}</td>
                 <td style="text-align: right;">{item.quantity}</td>
-                <td style="text-align: right;">KES {item.unit_price:,.2f}</td>
-                <td style="text-align: right;">KES {item.total_price:,.2f}</td>
+                <td style="text-align: right;">KES {item.unit_cost:,.2f}</td>
+                <td style="text-align: right;">KES {item.total_cost:,.2f}</td>
             </tr>
             """
         
@@ -171,8 +171,8 @@ class EmailService:
             'purchase_number': purchase.purchase_number,
             'supplier_name': purchase.supplier.name,
             'business_name': purchase.business.name,
-            'order_date': purchase.order_date.strftime('%d/%m/%Y'),
-            'expected_date': purchase.expected_delivery_date.strftime('%d/%m/%Y') if purchase.expected_delivery_date else 'TBD',
+            'order_date': purchase.date.strftime('%d/%m/%Y') if hasattr(purchase.date, 'strftime') else str(purchase.date),
+            'expected_date': purchase.expected_delivery.strftime('%d/%m/%Y') if purchase.expected_delivery and hasattr(purchase.expected_delivery, 'strftime') else (str(purchase.expected_delivery) if purchase.expected_delivery else 'TBD'),
             'total_amount': f'KES {purchase.total_amount:,.2f}',
             'items_html': items_html,
         }
@@ -377,7 +377,7 @@ Best regards,
         from .models import BusinessEmailSettings
         
         # Check if supplier has email
-        if not grn.purchase.supplier.email:
+        if not grn.supplier.email:
             logger.warning(f"GRN {grn.grn_number}: Supplier has no email")
             return False
         
@@ -395,21 +395,25 @@ Best regards,
             items_html += f"""
             <tr>
                 <td>{item.product.name}</td>
-                <td style="text-align: right;">{item.quantity_returned}</td>
-                <td style="text-align: right;">KES {item.unit_price:,.2f}</td>
-                <td style="text-align: right;">KES {item.total_amount:,.2f}</td>
-                <td>{item.reason}</td>
+                <td style="text-align: right;">{item.quantity}</td>
+                <td style="text-align: right;">KES {item.unit_cost:,.2f}</td>
+                <td style="text-align: right;">KES {item.total_cost:,.2f}</td>
+                <td>{item.item_notes if item.item_notes else '-'}</td>
             </tr>
             """
         
+        # Get purchase number if related purchase exists
+        purchase_number = grn.related_purchase.purchase_number if grn.related_purchase else 'N/A'
+        
         context = {
             'grn_number': grn.grn_number,
-            'supplier_name': grn.purchase.supplier.name,
+            'supplier_name': grn.supplier.name,
             'business_name': grn.business.name,
-            'purchase_number': grn.purchase.purchase_number,
-            'return_date': grn.return_date.strftime('%d/%m/%Y'),
-            'total_amount': f'KES {grn.total_amount:,.2f}',
-            'reason': grn.reason,
+            'purchase_number': purchase_number,
+            'return_date': grn.return_date.strftime('%d/%m/%Y') if hasattr(grn.return_date, 'strftime') else str(grn.return_date),
+            'total_amount': f'KES {grn.total_value:,.2f}',
+            'reason': grn.get_return_reason_display(),
+            'reason_details': grn.reason_details,
             'items_html': items_html,
             'status': grn.get_status_display(),
         }
@@ -494,7 +498,7 @@ Best regards,
         
         return EmailService.send_email(
             template_type='grn',
-            recipient=grn.purchase.supplier.email,
+            recipient=grn.supplier.email,
             context=context,
             business=grn.business,
             subject=subject,

@@ -306,12 +306,16 @@
 <script>
     // Calculate selling price from cost price and markup percentage
     function calculateFromMarkup() {
+        console.log('calculateFromMarkup called');
         const costPrice = parseFloat(document.getElementById('cost_price').value) || 0;
         const markupPercentage = parseFloat(document.getElementById('markup_percentage').value);
+        
+        console.log('Cost Price:', costPrice, 'Markup:', markupPercentage);
         
         if (costPrice > 0 && markupPercentage >= 0 && !isNaN(markupPercentage)) {
             const sellingPrice = costPrice * (1 + markupPercentage / 100);
             document.getElementById('unit_price').value = sellingPrice.toFixed(2);
+            console.log('Calculated Selling Price:', sellingPrice);
         }
         
         calculateProfit();

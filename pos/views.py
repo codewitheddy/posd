@@ -5215,12 +5215,26 @@ def grn_apply_credit(request, slug=None, pk=None):
     
     if request.method == 'POST':
         credit_note_number = request.POST.get('credit_note_number')
-        credit_note_amount = request.POST.get('credit_note_amount')
-        credit_note_date = request.POST.get('credit_note_date')
+        credit_note_amount = request.POST.get('credit_amount')  # Form uses 'credit_amount'
+        credit_note_date = request.POST.get('credit_date')  # Form uses 'credit_date'
+        
+        # Validate required fields
+        if not credit_note_number or not credit_note_amount:
+            messages.error(request, 'Credit note number and amount are required.')
+            return redirect('grn_apply_credit', slug=slug, pk=pk)
+        
+        try:
+            amount = Decimal(credit_note_amount)
+            if amount <= 0:
+                messages.error(request, 'Credit note amount must be greater than zero.')
+                return redirect('grn_apply_credit', slug=slug, pk=pk)
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid credit note amount.')
+            return redirect('grn_apply_credit', slug=slug, pk=pk)
         
         grn.apply_credit_note(
             credit_note_number=credit_note_number,
-            amount=Decimal(credit_note_amount),
+            amount=amount,
             date=credit_note_date if credit_note_date else None
         )
         messages.success(request, f'Credit note applied to GRN {grn.grn_number}.')

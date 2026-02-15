@@ -234,12 +234,12 @@ function updateDisplay() {
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
-            <input type="hidden" name="items[${index}][product_id]" value="${item.product_id}">
-            <input type="hidden" name="items[${index}][quantity]" value="${item.quantity}">
-            <input type="hidden" name="items[${index}][unit_cost]" value="${item.unit_cost}">
-            <input type="hidden" name="items[${index}][batch_number]" value="${item.batch_number}">
-            <input type="hidden" name="items[${index}][expiry_date]" value="${item.expiry_date}">
-            <input type="hidden" name="items[${index}][item_notes]" value="${item.item_notes}">
+            <input type="hidden" name="item_product_${index}" value="${item.product_id}">
+            <input type="hidden" name="item_quantity_${index}" value="${item.quantity}">
+            <input type="hidden" name="item_cost_${index}" value="${item.unit_cost}">
+            <input type="hidden" name="item_batch_${index}" value="${item.batch_number}">
+            <input type="hidden" name="item_expiry_${index}" value="${item.expiry_date}">
+            <input type="hidden" name="item_notes_${index}" value="${item.item_notes}">
         </div>
     `).join('');
     
