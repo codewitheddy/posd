@@ -205,8 +205,8 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = BusinessSettings
         fields = [
-            'id', 'business_name', 'address', 'phone', 'email', 'tax_id',
-            'currency', 'tax_rate', 'receipt_footer', 'logo', 'created_at', 'updated_at'
+            'id', 'business_name', 'business_address', 'business_phone', 'business_email', 'tax_id',
+            'vat_rate', 'receipt_footer', 'logo', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

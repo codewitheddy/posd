@@ -6,6 +6,14 @@
 {% load static %}
 <link rel="stylesheet" href="{% static 'css/pos-mobile.css' %}">
 <style>
+    /* Custom 5-column grid for large screens */
+    @media (min-width: 992px) {
+        .col-lg-2-4 {
+            flex: 0 0 auto;
+            width: 20%; /* 100% / 5 = 20% */
+        }
+    }
+    
     .product-card { 
         cursor: pointer; 
         transition: transform 0.2s, box-shadow 0.2s;
@@ -17,24 +25,24 @@
     }
     .product-image {
         width: 100%;
-        height: 150px;
+        height: 120px;
         object-fit: contain;
         border-radius: 8px 8px 0 0;
-        padding: 15px;
+        padding: 10px;
         background: #f8f9fa;
     }
     .product-placeholder {
         width: 100%;
-        height: 150px;
+        height: 120px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 8px 8px 0 0;
-        padding: 15px;
+        padding: 10px;
     }
     .product-placeholder i {
-        font-size: 3rem;
+        font-size: 2.5rem;
         color: rgba(255,255,255,0.7);
     }
     .cart-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
@@ -109,8 +117,11 @@
             <button class="btn btn-success btn-lg w-100 mb-2" onclick="completeSale()" id="mobile-complete-btn" disabled>
                 <i class="bi bi-check-circle"></i> Complete Sale
             </button>
-            <button class="btn btn-danger w-100" onclick="clearCart()">
+            <button class="btn btn-danger w-100 mb-2" onclick="clearCart()">
                 <i class="bi bi-trash"></i> Clear Cart
+            </button>
+            <button class="btn btn-outline-primary w-100" onclick="refreshCartPrices()" title="Update cart items with current product prices">
+                <i class="bi bi-arrow-clockwise"></i> Refresh Prices
             </button>
         </div>
     </div>
@@ -164,17 +175,17 @@
                     <!-- Barcode Scanner -->
                     <div class="col-md-6">
                         <label for="barcode-input" class="form-label">
-                            <i class="bi bi-upc-scan"></i> <strong>Scan Barcode or Enter Product Code</strong>
+                            <i class="bi bi-upc-scan"></i> <strong>Barcode Scanner</strong>
                         </label>
                         <div class="input-group">
                             <input type="text" id="barcode-input" class="form-control" 
-                                   placeholder="Scan or type code..." 
+                                   placeholder="Scan barcode here..." 
                                    autocomplete="off">
                             <button class="btn btn-primary" type="button" onclick="searchByBarcode()">
                                 <i class="bi bi-search"></i>
                             </button>
                         </div>
-                        <small class="text-muted">Focus and scan with barcode scanner</small>
+                        <small class="text-muted">Focus here and scan with barcode scanner</small>
                     </div>
                 </div>
             </div>
@@ -238,8 +249,8 @@
         <!-- Remove old search inputs -->
         <div class="row" id="products-grid">
             {% for product in products %}
-            <div class="col-md-4 mb-3 product-item" data-category="{{ product.category.id|default:'' }}" data-name="{{ product.name|lower }}">
-                <div class="card product-card {% if product.is_out_of_stock %}border-danger{% elif product.is_low_stock %}border-warning{% endif %}" 
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3 product-item" data-category="{{ product.category.id|default:'' }}" data-name="{{ product.name|lower }}">
+                <div class="card product-card h-100 {% if product.is_out_of_stock %}border-danger{% elif product.is_low_stock %}border-warning{% endif %}" 
                      onclick="{% if not product.is_out_of_stock %}{% if product.is_variable_price %}showWeightModal({{ product.id }}, '{{ product.name }}', {{ product.price_per_unit|default:product.unit_price }}, {{ product.pricing_unit_quantity|default:1 }}, {{ product.stock_quantity }}, '{{ product.tax_class }}', '{{ product.unit.abbreviation|default:"unit" }}'){% else %}addToCart({{ product.id }}, '{{ product.name }}', {{ product.unit_price }}, {{ product.stock_quantity }}, '{{ product.tax_class }}'){% endif %}{% else %}alert('This product is out of stock!'){% endif %}">
                     
                     <!-- Product Image -->
@@ -251,13 +262,13 @@
                         </div>
                     {% endif %}
                     
-                    <div class="card-body text-center">
-                        <h5 class="card-title">{{ product.name }}</h5>
+                    <div class="card-body text-center p-2">
+                        <h6 class="card-title mb-1">{{ product.name }}</h6>
                         {% if product.product_code %}
-                        <p class="text-muted small"><i class="bi bi-upc"></i> {{ product.product_code }}</p>
+                        <p class="text-muted small mb-1"><i class="bi bi-upc"></i> {{ product.product_code }}</p>
                         {% endif %}
-                        <p class="text-muted">{{ product.category.name|default:"Uncategorized" }}</p>
-                        <h4 class="text-primary">
+                        <p class="text-muted small mb-1">{{ product.category.name|default:"Uncategorized" }}</p>
+                        <h5 class="text-primary mb-1">
                             {% if product.is_variable_price %}
                                 KES {{ product.price_per_unit }}
                                 <small class="text-muted">/ {{ product.pricing_unit_quantity }}{{ product.unit.abbreviation|default:"unit" }}</small>
@@ -267,11 +278,11 @@
                                     <small class="text-muted">/ {{ product.unit.abbreviation }}</small>
                                 {% endif %}
                             {% endif %}
-                        </h4>
+                        </h5>
                         {% if product.is_variable_price %}
-                        <p class="text-info small"><i class="bi bi-calculator"></i> Variable Price</p>
+                        <p class="text-info small mb-1"><i class="bi bi-calculator"></i> Variable Price</p>
                         {% endif %}
-                        <div class="mt-2">
+                        <div class="mt-1">
                             {% if product.is_out_of_stock %}
                                 <span class="badge bg-danger">Out of Stock</span>
                             {% elif product.is_low_stock %}
@@ -366,6 +377,9 @@
                 </button>
                 <button class="btn btn-danger w-100 mt-2" onclick="clearCart()">
                     <i class="bi bi-trash"></i> Clear Cart
+                </button>
+                <button class="btn btn-outline-primary w-100 mt-2" onclick="refreshCartPrices()" title="Update cart items with current product prices">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh Prices
                 </button>
             </div>
         </div>
@@ -1357,6 +1371,57 @@ function clearCart() {
         updateCart();
         clearCartStorage(); // Clear storage when cart is cleared
     }
+}
+
+// Refresh cart prices with current product prices
+function refreshCartPrices() {
+    if (cart.length === 0) {
+        alert('Cart is empty');
+        return;
+    }
+    
+    if (!confirm('Update all cart items with current product prices?')) {
+        return;
+    }
+    
+    // Collect all product IDs in cart
+    const productIds = cart.map(item => item.id);
+    
+    // Fetch current prices from server
+    fetch(`{% url 'pos_screen' slug=request.business.slug %}?get_prices=1&ids=${productIds.join(',')}`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.prices) {
+            let updatedCount = 0;
+            
+            // Update prices in cart
+            cart.forEach(item => {
+                const currentPrice = data.prices[item.id];
+                if (currentPrice !== undefined && currentPrice !== item.price) {
+                    item.price = parseFloat(currentPrice);
+                    updatedCount++;
+                }
+            });
+            
+            if (updatedCount > 0) {
+                updateCart();
+                saveCartToStorage();
+                showNotification(`Updated prices for ${updatedCount} item(s)`, 'success');
+            } else {
+                showNotification('All prices are already up to date', 'info');
+            }
+        } else {
+            showNotification('Failed to refresh prices', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error refreshing prices:', error);
+        showNotification('Error refreshing prices', 'error');
+    });
 }
 
 // Barcode scanning functionality

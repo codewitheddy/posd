@@ -1083,6 +1083,22 @@ def pos_screen(request, slug=None):
     """Main POS sales screen - Optimized for large catalogs"""
     from .models import PaymentMethod
     from django.db.models import Q
+    from django.http import JsonResponse
+    
+    # Handle AJAX request for price refresh
+    if request.GET.get('get_prices') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        product_ids = request.GET.get('ids', '').split(',')
+        try:
+            product_ids = [int(pid) for pid in product_ids if pid]
+            products = Product.objects.filter(
+                business=request.business,
+                id__in=product_ids
+            ).values('id', 'unit_price')
+            
+            prices = {str(p['id']): float(p['unit_price']) for p in products}
+            return JsonResponse({'success': True, 'prices': prices})
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Invalid product IDs'})
     
     # Get search/filter parameters
     search_query = request.GET.get('q', '').strip()
@@ -3658,16 +3674,23 @@ def create_payment(request, slug, supplier_id):
     """Create a new supplier payment"""
     from .services import SupplierPaymentService
     from .models import PaymentMethod
+    from datetime import datetime
     
     supplier = get_object_or_404(Supplier, pk=supplier_id)
     
     if request.method == 'POST':
         try:
             amount = Decimal(request.POST.get('amount'))
-            payment_date = request.POST.get('payment_date')
+            payment_date_str = request.POST.get('payment_date')
             payment_method_id = request.POST.get('payment_method')
             reference_number = request.POST.get('reference_number', '')
             notes = request.POST.get('notes', '')
+            
+            # Parse date string to date object
+            if payment_date_str:
+                payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
+            else:
+                payment_date = timezone.now().date()
             
             payment_method = PaymentMethod.objects.get(id=payment_method_id)
             

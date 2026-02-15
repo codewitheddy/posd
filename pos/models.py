@@ -293,6 +293,25 @@ class Product(models.Model):
         return tax_rates.get(self.tax_class, Decimal('16.00'))
     
     def save(self, *args, **kwargs):
+        # Auto-generate product_code if not provided
+        if not self.product_code:
+            # Generate format: PRD-XXXX (sequential number per business)
+            last_product = Product.objects.filter(
+                business=self.business,
+                product_code__startswith='PRD-'
+            ).order_by('-product_code').first()
+            
+            if last_product and last_product.product_code:
+                try:
+                    last_num = int(last_product.product_code.split('-')[-1])
+                    new_num = last_num + 1
+                except (ValueError, IndexError):
+                    new_num = 1
+            else:
+                new_num = 1
+            
+            self.product_code = f'PRD-{new_num:04d}'
+        
         # Optimize image on upload
         if self.image and hasattr(self.image, 'file'):
             # Validate image
