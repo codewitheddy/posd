@@ -3709,24 +3709,32 @@ def create_payment(request, slug, supplier_id):
 
 
 @login_required
+@login_required
 @can_manage_purchases
 def payment_detail(request, slug, payment_id):
     """View payment details"""
     from .models import SupplierPayment
     
-    # Get payment and verify it belongs to current business
-    payment = get_object_or_404(
-        SupplierPayment, 
-        pk=payment_id,
-        business=request.business
-    )
-    allocations = payment.allocations.select_related('purchase').all()
-    
-    context = {
-        'payment': payment,
-        'allocations': allocations,
-    }
-    return render(request, 'pos/payment_detail.html', context)
+    try:
+        # Get payment and verify it belongs to current business
+        payment = get_object_or_404(
+            SupplierPayment, 
+            pk=payment_id,
+            business=request.business
+        )
+        allocations = payment.allocations.select_related('purchase').all()
+        
+        context = {
+            'payment': payment,
+            'allocations': allocations,
+        }
+        return render(request, 'pos/payment_detail_simple.html', context)
+    except Exception as e:
+        import traceback
+        print(f"Error in payment_detail: {str(e)}")
+        print(traceback.format_exc())
+        messages.error(request, f"Error loading payment details: {str(e)}")
+        return redirect('dashboard', slug=request.business.slug)
 
 
 @login_required
@@ -4556,79 +4564,87 @@ def analytics_export_pdf(request, slug=None):
 def payment_transactions_report(request, slug=None):
     """Detailed payment transactions report with filters"""
     from django.core.paginator import Paginator
-    from django.db.models import Q
+    from django.db.models import Q, Sum
     
-    # Get filter parameters
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-    payment_method = request.GET.get('payment_method')
-    search = request.GET.get('search', '').strip()
+    try:
+        # Get filter parameters
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        payment_method = request.GET.get('payment_method')
+        search = request.GET.get('search', '').strip()
+        
+        # Default date range (current month)
+        today = datetime.now().date()
+        if not start_date:
+            start_date = today.replace(day=1)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        
+        if not end_date:
+            end_date = today
+        else:
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        
+        # Base query - filter by business
+        payments = SalePayment.objects.filter(
+            business=request.business,
+            sale__date__date__gte=start_date,
+            sale__date__date__lte=end_date
+        ).select_related('sale', 'payment_method', 'sale__customer', 'sale__cashier')
+        
+        # Apply filters
+        if payment_method:
+            payments = payments.filter(payment_method_id=payment_method)
+        
+        if search:
+            payments = payments.filter(
+                Q(sale__invoice_number__icontains=search) |
+                Q(reference_number__icontains=search) |
+                Q(sale__customer__name__icontains=search)
+            )
+        
+        # Order by date (newest first)
+        payments = payments.order_by('-sale__date')
+        
+        # Calculate summary
+        total_transactions = payments.count()
+        total_amount = payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        cash_total = payments.filter(payment_method__code='CASH').aggregate(
+            total=Sum('amount'))['total'] or Decimal('0.00')
+        non_cash_total = total_amount - cash_total
+        
+        # Pagination
+        paginator = Paginator(payments, 50)  # 50 transactions per page
+        page_number = request.GET.get('page')
+        payments_page = paginator.get_page(page_number)
+        
+        # Get all payment methods for filter dropdown
+        payment_methods_list = PaymentMethod.objects.filter(business=request.business, is_active=True).order_by('name')
+        
+        context = {
+            'payments': payments_page,
+            'start_date': start_date,
+            'end_date': end_date,
+            'payment_method': payment_method,
+            'search': search,
+            'total_transactions': total_transactions,
+            'total_amount': total_amount,
+            'cash_total': cash_total,
+            'non_cash_total': non_cash_total,
+            'payment_methods_list': payment_methods_list,
+        }
+        
+        return render(request, 'pos/payment_transactions_report.html', context)
     
-    # Default date range (current month)
-    today = datetime.now().date()
-    if not start_date:
-        start_date = today.replace(day=1)
-    else:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-    
-    if not end_date:
-        end_date = today
-    else:
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    
-    # Base query - filter by business
-    payments = SalePayment.objects.filter(
-        business=request.business,
-        sale__date__date__gte=start_date,
-        sale__date__date__lte=end_date
-    ).select_related('sale', 'payment_method', 'sale__customer', 'sale__cashier')
-    
-    # Apply filters
-    if payment_method:
-        payments = payments.filter(payment_method_id=payment_method)
-    
-    if search:
-        payments = payments.filter(
-            Q(sale__invoice_number__icontains=search) |
-            Q(reference_number__icontains=search) |
-            Q(sale__customer__name__icontains=search)
-        )
-    
-    # Order by date (newest first)
-    payments = payments.order_by('-sale__date')
-    
-    # Calculate summary
-    from django.db.models import Sum
-    total_transactions = payments.count()
-    total_amount = payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    cash_total = payments.filter(payment_method__code='CASH').aggregate(
-        total=Sum('amount'))['total'] or Decimal('0.00')
-    non_cash_total = total_amount - cash_total
-    
-    # Pagination
-    paginator = Paginator(payments, 50)  # 50 transactions per page
-    page_number = request.GET.get('page')
-    payments_page = paginator.get_page(page_number)
-    
-    # Get all payment methods for filter dropdown
-    from .models import PaymentMethod
-    payment_methods_list = PaymentMethod.objects.filter(business=request.business, is_active=True).order_by('name')
-    
-    context = {
-        'payments': payments_page,
-        'start_date': start_date,
-        'end_date': end_date,
-        'payment_method': payment_method,
-        'search': search,
-        'total_transactions': total_transactions,
-        'total_amount': total_amount,
-        'cash_total': cash_total,
-        'non_cash_total': non_cash_total,
-        'payment_methods_list': payment_methods_list,
-    }
-    
-    return render(request, 'pos/payment_transactions_report.html', context)
+    except Exception as e:
+        # Log the error and show a user-friendly message
+        import traceback
+        print(f"Error in payment_transactions_report: {str(e)}")
+        print(traceback.format_exc())
+        messages.error(request, f"Error loading payment transactions: {str(e)}")
+        return redirect('dashboard', slug=request.business.slug)
+
 
 
 @business_required

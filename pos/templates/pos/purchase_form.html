@@ -101,7 +101,7 @@ const productsData = [
         id: {{ product.pk }},
         name: "{{ product.name|escapejs }}",
         code: "{{ product.product_code|default:''|escapejs }}",
-        price: {{ product.unit_price }}
+        price: {{ product.cost_price|default:0 }}
     }{% if not forloop.last %},{% endif %}
     {% endfor %}
 ];
