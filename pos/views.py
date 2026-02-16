@@ -677,8 +677,8 @@ def product_create(request, slug=None):
         barcode = request.POST.get('barcode')
         category_id = request.POST.get('category')
         unit_id = request.POST.get('unit')
-        cost_price = request.POST.get('cost_price', 0)
-        unit_price = request.POST.get('unit_price')
+        cost_price = request.POST.get('cost_price', '').strip()
+        unit_price = request.POST.get('unit_price', '').strip()
         tax_class = request.POST.get('tax_class', 'standard')
         low_stock_threshold = request.POST.get('low_stock_threshold', 10)
         image = request.FILES.get('image')  # Get uploaded image
@@ -689,12 +689,39 @@ def product_create(request, slug=None):
         bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
         
         try:
+            # Validate cost_price is provided and greater than 0
+            if not cost_price:
+                messages.error(request, 'Cost Price is required. This is needed for profit tracking and financial reporting.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+            
+            cost = Decimal(cost_price)
+            if cost <= 0:
+                messages.error(request, 'Cost Price must be greater than 0.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+            
+            # Validate unit_price
+            if not unit_price:
+                messages.error(request, 'Selling Price is required.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+            
+            selling_price = Decimal(unit_price)
+            if selling_price <= 0:
+                messages.error(request, 'Selling Price must be greater than 0.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+            
             category = Category.objects.get(id=category_id, business=request.business) if category_id else None
             unit = UnitOfMeasurement.objects.get(id=unit_id, business=request.business) if unit_id else None
             
             # Convert empty strings to default values
             low_stock = Decimal(low_stock_threshold) if low_stock_threshold else Decimal('10')
-            cost = Decimal(cost_price) if cost_price else Decimal('0.00')
             
             product = Product.objects.create(
                 business=request.business,
@@ -704,7 +731,7 @@ def product_create(request, slug=None):
                 category=category,
                 unit=unit,
                 cost_price=cost,
-                unit_price=unit_price,
+                unit_price=selling_price,
                 tax_class=tax_class,
                 stock_quantity=0,  # Always 0 for new products
                 low_stock_threshold=low_stock,
@@ -726,6 +753,8 @@ def product_create(request, slug=None):
             
             messages.success(request, 'Product created successfully! Add stock through purchase orders.')
             return redirect('product_list', slug=request.business.slug)
+        except ValueError as e:
+            messages.error(request, f'Invalid price value: {str(e)}')
         except Exception as e:
             messages.error(request, f'Error creating product: {str(e)}')
     
@@ -742,58 +771,92 @@ def product_edit(request, slug=None, pk=None):
     product = get_object_or_404(Product, business=request.business, pk=pk)
     
     if request.method == 'POST':
-        product.name = request.POST.get('name')
-        product.product_code = request.POST.get('product_code') if request.POST.get('product_code') else None
-        product.barcode = request.POST.get('barcode', '')
-        category_id = request.POST.get('category')
-        product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
-        
-        # Update unit
-        unit_id = request.POST.get('unit')
-        product.unit = UnitOfMeasurement.objects.get(business=request.business, id=unit_id) if unit_id else None
-        
-        # Update cost price and selling price
-        cost_price = request.POST.get('cost_price', 0)
-        product.cost_price = Decimal(cost_price) if cost_price else Decimal('0.00')
-        product.unit_price = request.POST.get('unit_price')
-        
-        # Update tax class
-        product.tax_class = request.POST.get('tax_class', 'standard')
-        
-        # Convert empty strings to default values
-        low_stock = request.POST.get('low_stock_threshold')
-        product.low_stock_threshold = Decimal(low_stock) if low_stock else Decimal('10')
-        
-        # Update bulk unit fields
-        bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
-        bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
-        bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
-        
-        product.bulk_unit_name = bulk_unit_name if bulk_unit_name else ''
-        product.bulk_unit_quantity = Decimal(bulk_unit_quantity) if bulk_unit_quantity else None
-        product.bulk_unit_price = Decimal(bulk_unit_price) if bulk_unit_price else None
-        
-        # Handle image upload
-        image = request.FILES.get('image')
-        if image:
-            product.image = image
-        
-        # Handle image removal
-        remove_image = request.POST.get('remove_image')
-        if remove_image == 'true':
-            product.image = None
-        
-        product.save()
-        
-        # Invalidate dashboard cache
-        from django.core.cache import cache
-        from .cache_utils import get_cache_key
-        from datetime import datetime
-        cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
-        cache.delete(cache_key)
-        
-        messages.success(request, 'Product updated successfully!')
-        return redirect('product_list', slug=request.business.slug)
+        try:
+            # Validate cost_price
+            cost_price = request.POST.get('cost_price', '').strip()
+            if not cost_price:
+                messages.error(request, 'Cost Price is required. This is needed for profit tracking and financial reporting.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+            
+            cost = Decimal(cost_price)
+            if cost <= 0:
+                messages.error(request, 'Cost Price must be greater than 0.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+            
+            # Validate unit_price
+            unit_price = request.POST.get('unit_price', '').strip()
+            if not unit_price:
+                messages.error(request, 'Selling Price is required.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+            
+            selling_price = Decimal(unit_price)
+            if selling_price <= 0:
+                messages.error(request, 'Selling Price must be greater than 0.')
+                categories = Category.objects.filter(business=request.business).all()
+                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
+                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+            
+            product.name = request.POST.get('name')
+            product.product_code = request.POST.get('product_code') if request.POST.get('product_code') else None
+            product.barcode = request.POST.get('barcode', '')
+            category_id = request.POST.get('category')
+            product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
+            
+            # Update unit
+            unit_id = request.POST.get('unit')
+            product.unit = UnitOfMeasurement.objects.get(business=request.business, id=unit_id) if unit_id else None
+            
+            # Update cost price and selling price
+            product.cost_price = cost
+            product.unit_price = selling_price
+            
+            # Update tax class
+            product.tax_class = request.POST.get('tax_class', 'standard')
+            
+            # Convert empty strings to default values
+            low_stock = request.POST.get('low_stock_threshold')
+            product.low_stock_threshold = Decimal(low_stock) if low_stock else Decimal('10')
+            
+            # Update bulk unit fields
+            bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
+            bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
+            bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
+            
+            product.bulk_unit_name = bulk_unit_name if bulk_unit_name else ''
+            product.bulk_unit_quantity = Decimal(bulk_unit_quantity) if bulk_unit_quantity else None
+            product.bulk_unit_price = Decimal(bulk_unit_price) if bulk_unit_price else None
+            
+            # Handle image upload
+            image = request.FILES.get('image')
+            if image:
+                product.image = image
+            
+            # Handle image removal
+            remove_image = request.POST.get('remove_image')
+            if remove_image == 'true':
+                product.image = None
+            
+            product.save()
+            
+            # Invalidate dashboard cache
+            from django.core.cache import cache
+            from .cache_utils import get_cache_key
+            from datetime import datetime
+            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+            cache.delete(cache_key)
+            
+            messages.success(request, 'Product updated successfully!')
+            return redirect('product_list', slug=request.business.slug)
+        except ValueError as e:
+            messages.error(request, f'Invalid price value: {str(e)}')
+        except Exception as e:
+            messages.error(request, f'Error updating product: {str(e)}')
     
     categories = Category.objects.filter(business=request.business).all()
     units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()

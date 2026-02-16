@@ -1,0 +1,192 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Payment {{ payment.payment_number }} - {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-cash-coin"></i> Payment {{ payment.payment_number }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug %}">Suppliers</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=payment.supplier.id %}">{{ payment.supplier.name }}</a></li>
+                    <li class="breadcrumb-item active">{{ payment.payment_number }}</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=payment.supplier.id %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Payments
+            </a>
+            <button onclick="window.print()" class="btn btn-outline-primary">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Payment Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Payment Number:</strong><br>{{ payment.payment_number }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Payment Date:</strong><br>{{ payment.payment_date|date:"d M Y" }}</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Supplier:</strong><br>
+                                <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=payment.supplier.id %}">
+                                    {{ payment.supplier.name }}
+                                </a>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Amount:</strong><br>
+                                <span class="badge bg-success fs-6">KES {{ payment.amount|floatformat:2 }}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Payment Method:</strong><br>{{ payment.payment_method.name }}</p>
+                        </div>
+                        {% if payment.reference_number %}
+                        <div class="col-md-6">
+                            <p><strong>Reference Number:</strong><br>{{ payment.reference_number }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if payment.notes %}
+                    <div class="mb-3">
+                        <p><strong>Notes:</strong></p>
+                        <p class="text-muted">{{ payment.notes }}</p>
+                    </div>
+                    {% endif %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><small class="text-muted">Created: {{ payment.created_at|date:"d M Y H:i" }}</small></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><small class="text-muted">Created by: {{ payment.created_by.get_full_name|default:payment.created_by.username }}</small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Payment Allocations</h5>
+                </div>
+                <div class="card-body">
+                    {% if allocations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Purchase Order</th>
+                                    <th>PO Date</th>
+                                    <th>PO Total</th>
+                                    <th class="text-end">Allocated Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for allocation in allocations %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'purchase_detail' slug=request.business.slug pk=allocation.purchase.pk %}">
+                                            {{ allocation.purchase.po_number }}
+                                        </a>
+                                    </td>
+                                    <td>{{ allocation.purchase.date|date:"d M Y" }}</td>
+                                    <td>KES {{ allocation.purchase.total_amount|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        <strong>KES {{ allocation.amount|floatformat:2 }}</strong>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="3" class="text-end">Total Allocated:</th>
+                                    <th class="text-end">KES {{ payment.amount|floatformat:2 }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> 
+                        This payment was automatically allocated to the oldest unpaid purchases first (FIFO method).
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        This payment has no allocations.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Supplier Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Name:</strong><br>{{ payment.supplier.name }}</p>
+                    {% if payment.supplier.contact_person %}
+                    <p><strong>Contact:</strong><br>{{ payment.supplier.contact_person }}</p>
+                    {% endif %}
+                    {% if payment.supplier.phone %}
+                    <p><strong>Phone:</strong><br>{{ payment.supplier.phone }}</p>
+                    {% endif %}
+                    {% if payment.supplier.email %}
+                    <p><strong>Email:</strong><br>{{ payment.supplier.email }}</p>
+                    {% endif %}
+                    <hr>
+                    <p><strong>Current Balance:</strong><br>
+                        <span class="badge {% if payment.supplier.outstanding_balance > 0 %}bg-danger{% else %}bg-success{% endif %} fs-6">
+                            KES {{ payment.supplier.outstanding_balance|floatformat:2 }}
+                        </span>
+                    </p>
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=payment.supplier.id %}" class="btn btn-primary">
+                            <i class="bi bi-list"></i> View All Payments
+                        </a>
+                        <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=payment.supplier.id %}" class="btn btn-outline-primary">
+                            <i class="bi bi-file-text"></i> View Statement
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Actions</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'delete_payment' slug=request.business.slug payment_id=payment.id %}" onsubmit="return confirm('Are you sure you want to delete this payment? This will reverse all allocations.');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger w-100">
+                            <i class="bi bi-trash"></i> Delete Payment
+                        </button>
+                    </form>
+                    <p class="text-muted small mt-2 mb-0">
+                        <i class="bi bi-exclamation-triangle"></i> Deleting this payment will reverse all allocations and restore the outstanding balance.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

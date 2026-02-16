@@ -241,7 +241,12 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
     unit = models.ForeignKey(UnitOfMeasurement, on_delete=models.SET_NULL, null=True, blank=True, 
                             related_name='products', help_text="Unit of measurement (e.g., kg, L, pcs)")
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Cost price (what you pay to stock the product)")
+    cost_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text="Cost price (what you pay to stock the product) - REQUIRED"
+    )
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price (what customers pay)")
     tax_class = models.CharField(max_length=20, choices=TAX_CLASS_CHOICES, default='standard', help_text="Tax classification for this product")
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, help_text="Current stock quantity")
@@ -293,6 +298,14 @@ class Product(models.Model):
         return tax_rates.get(self.tax_class, Decimal('16.00'))
     
     def save(self, *args, **kwargs):
+        # Validate cost_price is provided and greater than 0
+        if self.cost_price is None or self.cost_price <= 0:
+            raise ValueError("Cost price is required and must be greater than 0")
+        
+        # Validate unit_price is greater than 0
+        if self.unit_price is None or self.unit_price <= 0:
+            raise ValueError("Selling price is required and must be greater than 0")
+        
         # Auto-generate product_code if not provided
         if not self.product_code:
             # Generate format: PRD-XXXX (sequential number per business)
