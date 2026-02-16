@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Sum, Count, Q, F
 from django.db import models
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, TruncHour, ExtractHour
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils import timezone
@@ -427,9 +427,9 @@ def dashboard(request, slug=None):
             if len(expiring_soon_list) >= 5:  # Limit to 5
                 break
     
-    # Sales by hour today (for chart)
-    hourly_sales = today_sales.extra(
-        select={'hour': 'CAST(strftime("%%H", date) AS INTEGER)'}
+    # Sales by hour today (for chart) - Database agnostic
+    hourly_sales = today_sales.annotate(
+        hour=ExtractHour('date')
     ).values('hour').annotate(
         count=Count('id'),
         revenue=Sum('total')
@@ -4016,9 +4016,9 @@ def z_report(request, slug=None):
         revenue=Sum('total_price')
     ).order_by('-revenue')[:10]
 
-    # Hourly sales breakdown
-    hourly_sales = sales.extra(
-        select={'hour': 'CAST(strftime("%%H", date) AS INTEGER)'}
+    # Hourly sales breakdown - Database agnostic
+    hourly_sales = sales.annotate(
+        hour=ExtractHour('date')
     ).values('hour').annotate(
         total=Sum('total'),
         count=Count('id')
