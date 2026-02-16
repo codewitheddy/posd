@@ -293,7 +293,7 @@ class BusinessAdmin(admin.ModelAdmin):
     list_display = ['name', 'slug', 'owner', 'subscription_plan', 'is_active', 'is_trial', 'created_at']
     list_filter = ['is_active', 'is_trial', 'subscription_plan', 'created_at']
     search_fields = ['name', 'slug', 'owner__username', 'owner__email']
-    readonly_fields = ['slug', 'created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at']  # Removed 'slug' from readonly
     inlines = [BusinessMembershipInline]
     prepopulated_fields = {'slug': ('name',)}  # Auto-generate slug from name
     

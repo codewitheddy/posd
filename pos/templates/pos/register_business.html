@@ -175,6 +175,17 @@
                 </div>
                 
                 <div class="mb-3">
+                    <label for="username" class="form-label">
+                        <i class="fas fa-user-circle"></i> Username
+                    </label>
+                    <input type="text" class="form-control" id="username" name="username" 
+                           placeholder="john123" required minlength="4" maxlength="20" 
+                           pattern="[a-zA-Z0-9_]+" 
+                           title="Username must be 4-20 characters, letters, numbers and underscore only">
+                    <small class="text-muted">4-20 characters, letters, numbers and underscore only</small>
+                </div>
+                
+                <div class="mb-3">
                     <label for="password" class="form-label">
                         <i class="fas fa-lock"></i> Password
                     </label>

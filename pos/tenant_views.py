@@ -30,14 +30,21 @@ def register_business(request):
         # Get form data
         business_name = request.POST.get('business_name', '').strip()
         user_email = request.POST.get('email', '').strip()
+        user_username = request.POST.get('username', '').strip()
         user_password = request.POST.get('password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
         user_first_name = request.POST.get('first_name', '').strip()
         user_last_name = request.POST.get('last_name', '').strip()
         
         # Validation
-        if not all([business_name, user_email, user_password, confirm_password, user_first_name, user_last_name]):
+        if not all([business_name, user_email, user_username, user_password, confirm_password, user_first_name, user_last_name]):
             messages.error(request, 'All fields are required.')
+            return render(request, 'pos/register_business.html')
+        
+        # Username validation
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]{4,20}$', user_username):
+            messages.error(request, 'Username must be 4-20 characters and contain only letters, numbers, and underscores.')
             return render(request, 'pos/register_business.html')
         
         # Password validation
@@ -49,6 +56,11 @@ def register_business(request):
             messages.error(request, 'Password must be at least 8 characters long.')
             return render(request, 'pos/register_business.html')
         
+        # Check if username already exists
+        if User.objects.filter(username=user_username).exists():
+            messages.error(request, 'Username already taken. Please choose a different username.')
+            return render(request, 'pos/register_business.html')
+        
         # Check if email already exists
         if User.objects.filter(email=user_email).exists():
             messages.error(request, 'Email already registered. Please login instead.')
@@ -56,18 +68,9 @@ def register_business(request):
         
         try:
             with transaction.atomic():
-                # Create user
-                username = user_email.split('@')[0]
-                # Ensure unique username
-                base_username = username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}{counter}"
-                    counter += 1
-                
-                # Create user without password first
+                # Create user with the provided username
                 user = User.objects.create_user(
-                    username=username,
+                    username=user_username,
                     email=user_email,
                     first_name=user_first_name,
                     last_name=user_last_name
@@ -96,7 +99,7 @@ def register_business(request):
                 
                 # Store credentials in session for display on next page
                 request.session['new_user_credentials'] = {
-                    'username': username,
+                    'username': user_username,
                     'email': user_email,
                     'business_name': business_name
                 }
