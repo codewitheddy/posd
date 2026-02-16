@@ -140,6 +140,100 @@ else:
     }
 
 
+# Cache Configuration
+# https://docs.djangoproject.com/en/4.2/ref/settings/#caches
+
+# Redis cache configuration
+# Falls back to local memory cache if Redis is not available
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')
+
+# Try to import django_redis to check if it's available
+try:
+    import django_redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
+if REDIS_AVAILABLE:
+    # Use Redis if available
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+                'RETRY_ON_TIMEOUT': True,
+                'MAX_CONNECTIONS': 50,
+                'PARSER_CLASS': 'redis.connection.HiredisParser',
+                'CONNECTION_POOL_CLASS_KWARGS': {
+                    'max_connections': 50,
+                    'retry_on_timeout': True,
+                },
+            },
+            'KEY_PREFIX': 'pos',
+            'TIMEOUT': 300,  # 5 minutes default
+        }
+    }
+else:
+    # Fallback to local memory cache if Redis is not available
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
+
+# Cache time settings (in seconds)
+CACHE_TTL = {
+    'dashboard': 300,  # 5 minutes
+    'reports': 600,  # 10 minutes
+    'products': 1800,  # 30 minutes
+    'categories': 3600,  # 1 hour
+    'customers': 900,  # 15 minutes
+}
+
+
+# ============================================
+# EMAIL CONFIGURATION
+# ============================================
+
+# Email backend
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend'  # Console for development
+)
+
+# SMTP Configuration
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yourpos.com')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Email settings
+EMAIL_TIMEOUT = 10
+EMAIL_USE_LOCALTIME = True
+
+# For Gmail, you need to:
+# 1. Enable 2-factor authentication
+# 2. Generate an app password
+# 3. Use the app password as EMAIL_HOST_PASSWORD
+#
+# Example .env configuration:
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# EMAIL_HOST=smtp.gmail.com
+# EMAIL_PORT=587
+# EMAIL_USE_TLS=True
+# EMAIL_HOST_USER=your-email@gmail.com
+# EMAIL_HOST_PASSWORD=your-app-password
+# DEFAULT_FROM_EMAIL=your-email@gmail.com
+
+
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
