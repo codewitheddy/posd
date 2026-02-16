@@ -104,16 +104,6 @@ def register_business(request):
                 # Log the user in
                 login(request, user)
                 
-                # Log registration activity
-                ActivityLog.log_activity(
-                    user=user,
-                    action_type='create',
-                    description=f'New business registered: {business_name}',
-                    model_name='Business',
-                    object_id=business.id,
-                    request=request
-                )
-                
                 messages.success(request, f'Welcome! Your business "{business_name}" has been created successfully.')
                 return redirect('business_setup', slug=business.slug)
                 
