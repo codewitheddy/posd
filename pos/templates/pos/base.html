@@ -1,4 +1,5 @@
 {% load static %}
+{% load business_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -472,12 +473,11 @@
                 </a>
             </li>
             {% if user_permissions.is_manager %}
-            <li>
-                <a href="{% url 'loyalty_rewards_list' slug=business_slug %}" class="{% if 'loyalty/rewards' in request.path %}active{% endif %}">
-                    <i class="bi bi-gift"></i> Rewards Catalog
-                    <span class="badge bg-warning text-dark">New</span>
-                </a>
-            </li>
+                <li>
+                    <a href="{% url 'loyalty_rewards_list' slug=business_slug %}" class="{% if 'loyalty/rewards' in request.path %}active{% endif %}">
+                        <i class="bi bi-gift"></i> Rewards Catalog
+                    </a>
+                </li>
             {% endif %}
 
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
@@ -543,10 +543,25 @@
             {% endif %}
             {% if user_permissions.can_manage_settings %}
             <li>
-                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'settings' in request.path and 'payment' not in request.path %}active{% endif %}">
+                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'settings' in request.path and 'payment' not in request.path and 'backup' not in request.path %}active{% endif %}">
                     <i class="bi bi-gear"></i> Business Settings
                 </a>
             </li>
+            <li>
+                <a href="{% url 'backup_data' slug=business_slug %}" class="{% if 'backup' in request.path %}active{% endif %}">
+                    <i class="bi bi-database"></i> Data Backup
+                </a>
+            </li>
+            {% if not user.is_superuser %}
+            <li>
+                <a href="{% url 'subscription' slug=business_slug %}" class="{% if 'subscription' in request.path %}active{% endif %}">
+                    <i class="bi bi-credit-card"></i> Subscription & Billing
+                    {% if business.days_until_expiry != None and business.days_until_expiry <= 7 %}
+                    <span class="badge bg-warning text-dark">{{ business.days_until_expiry }}d</span>
+                    {% endif %}
+                </a>
+            </li>
+            {% endif %}
             <li>
                 <a href="{% url 'payment_method_list' slug=business_slug %}" class="{% if 'payment-method' in request.path %}active{% endif %}">
                     <i class="bi bi-credit-card"></i> Payment Methods

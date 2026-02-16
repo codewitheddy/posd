@@ -13,6 +13,21 @@ def landing_page(request):
     return render(request, 'pos/landing.html')
 
 
+def terms_page(request):
+    """Terms of Service page"""
+    return render(request, 'pos/terms.html')
+
+
+def privacy_page(request):
+    """Privacy Policy page"""
+    return render(request, 'pos/privacy.html')
+
+
+def refund_page(request):
+    """Refund Policy page"""
+    return render(request, 'pos/refund.html')
+
+
 def root_redirect(request):
     """Root URL - redirects logged-in users to business list, others to landing"""
     if request.user.is_authenticated:
@@ -30,6 +45,11 @@ public_urlpatterns = [
     
     # Landing page - always accessible
     path('home/', landing_page, name='landing'),
+    
+    # Legal pages
+    path('terms/', terms_page, name='terms'),
+    path('privacy/', privacy_page, name='privacy'),
+    path('refund/', refund_page, name='refund'),
     
     # Platform Admin Dashboard (superuser only)
     path('platform-admin/', views.platform_admin_dashboard, name='platform_admin_dashboard'),
@@ -52,12 +72,19 @@ business_urlpatterns = [
     # Dashboard
     path('', views.dashboard, name='dashboard'),
     
+    # Subscription & Billing
+    path('subscription/', views.subscription, name='subscription'),
+    
     # Business Setup & Settings
     path('setup/', tenant_views.business_setup, name='business_setup'),
     path('settings/', tenant_views.business_settings, name='business_settings_tenant'),
     path('members/', tenant_views.business_members, name='business_members'),
     path('members/invite/', tenant_views.invite_member, name='invite_member'),
     path('members/<int:member_id>/remove/', tenant_views.remove_member, name='remove_member'),
+    
+    # Data Backup
+    path('backup/', tenant_views.backup_data, name='backup_data'),
+    path('backup/download/', tenant_views.download_backup, name='download_backup'),
     
     # Products
     path('products/', views.product_list, name='product_list'),

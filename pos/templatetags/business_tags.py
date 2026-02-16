@@ -41,3 +41,17 @@ def get_item(dictionary, key):
     if dictionary is None:
         return None
     return dictionary.get(key)
+
+
+@register.filter
+def has_feature(business, feature_name):
+    """
+    Check if business has access to a specific feature.
+    
+    Usage:
+        {% if business|has_feature:"loyalty" %}
+        {% if business|has_feature:"grn" %}
+    """
+    if business is None:
+        return False
+    return business.has_feature(feature_name)

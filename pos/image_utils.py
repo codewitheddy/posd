@@ -71,7 +71,9 @@ class ImageOptimizer:
             return optimized_file
             
         except Exception as e:
-            print(f"Error optimizing image: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error optimizing image: {e}")
             return image_file
     
     @staticmethod
@@ -99,7 +101,9 @@ class ImageOptimizer:
             return img
             
         except Exception as e:
-            print(f"Error creating thumbnail: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating thumbnail: {e}")
             return None
     
     @staticmethod
@@ -126,7 +130,7 @@ class ImageOptimizer:
         try:
             img = Image.open(image_file)
             return img.size
-        except:
+        except Exception:
             return None, None
 
 

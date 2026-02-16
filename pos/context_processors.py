@@ -11,12 +11,14 @@ def business_context(request):
     }
     
     if context['has_business']:
+        context['business'] = request.business  # Add business object to context
         context['business_slug'] = request.business.slug
         
         # Add user permissions
         if hasattr(request, 'business_membership') and request.business_membership:
             membership = request.business_membership
             context['user_permissions'] = {
+                'user_role': membership.get_role_display(),  # Add display name
                 'role': membership.role,
                 'is_owner': membership.role == 'owner',
                 'is_admin': membership.role in ['owner', 'admin'],
@@ -37,6 +39,7 @@ def business_context(request):
         elif request.user.is_superuser:
             # Superusers have all permissions
             context['user_permissions'] = {
+                'user_role': 'Superuser',  # Add display name
                 'role': 'superuser',
                 'is_owner': True,
                 'is_admin': True,
@@ -57,6 +60,7 @@ def business_context(request):
         else:
             # No permissions
             context['user_permissions'] = {
+                'user_role': 'No Access',  # Add display name
                 'role': 'none',
                 'is_owner': False,
                 'is_admin': False,
@@ -77,6 +81,7 @@ def business_context(request):
     else:
         # No business context - no permissions
         context['user_permissions'] = {
+            'user_role': 'No Access',  # Add display name
             'role': 'none',
             'is_owner': False,
             'is_admin': False,

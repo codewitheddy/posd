@@ -3,6 +3,52 @@
 
 {% block title %}Business Settings - {{ business.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .nav-tabs .nav-link {
+        color: #495057;
+    }
+    .nav-tabs .nav-link.active {
+        font-weight: 600;
+    }
+    .settings-section {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
+    }
+    .settings-section h5 {
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    .help-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 4px;
+    }
+    .tier-config {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    .tier-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .tier-regular { background: #e9ecef; color: #495057; }
+    .tier-silver { background: #c0c0c0; color: #fff; }
+    .tier-gold { background: #ffd700; color: #000; }
+    .tier-platinum { background: #e5e4e2; color: #000; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
     <div class="row mb-4">
@@ -21,99 +67,343 @@
         {% endfor %}
     {% endif %}
     
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-building"></i> Business Information</h5>
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="business-tab" data-bs-toggle="tab" data-bs-target="#business" type="button">
+                <i class="fas fa-building"></i> Business Info
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="loyalty-tab" data-bs-toggle="tab" data-bs-target="#loyalty" type="button">
+                <i class="fas fa-gift"></i> Loyalty Program
+            </button>
+        </li>
+    </ul>
+    
+    <div class="tab-content" id="settingsTabContent">
+        <!-- Business Info Tab -->
+        <div class="tab-pane fade show active" id="business" role="tabpanel">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="settings-section">
+                        <h5><i class="fas fa-building"></i> Business Information</h5>
+                        <form method="post" action="{% url 'business_settings' slug=business.slug %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="business_info">
+                            
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Business Name</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{{ business.name }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <textarea class="form-control" id="description" name="description" 
+                                          rows="3">{{ business.description }}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="address" class="form-label">Address</label>
+                                <textarea class="form-control" id="address" name="address" 
+                                          rows="3">{{ business.address }}</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="phone" class="form-label">Phone</label>
+                                    <input type="text" class="form-control" id="phone" name="phone" 
+                                           value="{{ business.phone }}">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email" name="email" 
+                                           value="{{ business.email }}">
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="website" class="form-label">Website</label>
+                                    <input type="url" class="form-control" id="website" name="website" 
+                                           value="{{ business.website }}" placeholder="https://example.com">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="tax_id" class="form-label">Tax ID / VAT Number</label>
+                                    <input type="text" class="form-control" id="tax_id" name="tax_id" 
+                                           value="{{ business.tax_id }}">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </form>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <form method="post">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Business Name</label>
-                            <input type="text" class="form-control" id="name" name="name" 
-                                   value="{{ business.name }}" required>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <textarea class="form-control" id="description" name="description" 
-                                      rows="3">{{ business.description }}</textarea>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="address" class="form-label">Address</label>
-                            <textarea class="form-control" id="address" name="address" 
-                                      rows="3">{{ business.address }}</textarea>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="phone" class="form-label">Phone</label>
-                                <input type="text" class="form-control" id="phone" name="phone" 
-                                       value="{{ business.phone }}">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" 
-                                       value="{{ business.email }}">
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="website" class="form-label">Website</label>
-                                <input type="url" class="form-control" id="website" name="website" 
-                                       value="{{ business.website }}" placeholder="https://example.com">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="tax_id" class="form-label">Tax ID / VAT Number</label>
-                                <input type="text" class="form-control" id="tax_id" name="tax_id" 
-                                       value="{{ business.tax_id }}">
-                            </div>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Save Changes
-                        </button>
-                    </form>
+                
+                <div class="col-md-4">
+                    <div class="settings-section">
+                        <h6><i class="fas fa-info-circle"></i> Business Details</h6>
+                        <p><strong>Business Slug:</strong><br>{{ business.slug }}</p>
+                        <p><strong>Your URL:</strong><br>
+                            <code>/b/{{ business.slug }}/</code>
+                        </p>
+                        <p><strong>Owner:</strong><br>{{ business.owner.get_full_name|default:business.owner.username }}</p>
+                        <p><strong>Created:</strong><br>{{ business.created_at|date:"M d, Y" }}</p>
+                        <p class="mb-0"><strong>Plan:</strong><br>
+                            <span class="badge bg-primary">{{ business.get_subscription_plan_display }}</span>
+                        </p>
+                    </div>
+                    
+                    {% if business.is_trial and not user.is_superuser %}
+                    <div class="settings-section border-warning">
+                        <h6><i class="fas fa-clock"></i> Trial Period</h6>
+                        <p class="mb-0">
+                            Your trial expires on:<br>
+                            <strong>{{ business.trial_ends_at|date:"M d, Y" }}</strong>
+                        </p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
         
-        <div class="col-md-4">
-            <div class="card shadow-sm mb-3">
-                <div class="card-header bg-info text-white">
-                    <h6 class="mb-0"><i class="fas fa-info-circle"></i> Business Details</h6>
+        <!-- Loyalty Program Tab -->
+        <div class="tab-pane fade" id="loyalty" role="tabpanel">
+            <div class="row">
+                <div class="col-md-8">
+                    <form method="post" action="{% url 'business_settings' slug=business.slug %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="loyalty_settings">
+                        
+                        <!-- Enable/Disable -->
+                        <div class="settings-section">
+                            <h5><i class="fas fa-toggle-on"></i> Loyalty Program Status</h5>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="loyalty_enabled" name="loyalty_enabled" 
+                                       {% if settings.loyalty_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="loyalty_enabled">
+                                    <strong>Enable Loyalty Program</strong>
+                                </label>
+                            </div>
+                            <p class="help-text">Turn on/off the loyalty rewards program for your customers</p>
+                        </div>
+                        
+                        <!-- Points Earning -->
+                        <div class="settings-section">
+                            <h5><i class="fas fa-coins"></i> Points Earning Rate</h5>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="loyalty_points_per_currency" class="form-label">Amount to Earn 1 Point</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">{{ settings.currency_symbol }}</span>
+                                        <input type="number" class="form-control" id="loyalty_points_per_currency" 
+                                               name="loyalty_points_per_currency" value="{{ settings.loyalty_points_per_currency }}" 
+                                               step="0.01" min="0.01" required>
+                                    </div>
+                                    <p class="help-text">Example: 100 means customers earn 1 point for every KES 100 spent</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tier Multipliers -->
+                        <div class="settings-section">
+                            <h5><i class="fas fa-layer-group"></i> Tier Multipliers</h5>
+                            <p class="help-text mb-3">Set how many bonus points each tier earns (1.0 = normal rate, 2.0 = double points)</p>
+                            
+                            <div class="tier-config">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <span class="tier-badge tier-regular">Regular</span>
+                                        <span class="ms-2">Base tier for all customers</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" name="loyalty_regular_multiplier" 
+                                           value="{{ settings.loyalty_regular_multiplier }}" step="0.1" min="0.1" required>
+                                    <span class="input-group-text">x points</span>
+                                </div>
+                            </div>
+                            
+                            <div class="tier-config">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <span class="tier-badge tier-silver">Silver</span>
+                                        <span class="ms-2">Spend {{ settings.currency_symbol }} {{ settings.loyalty_silver_threshold }}</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" name="loyalty_silver_multiplier" 
+                                           value="{{ settings.loyalty_silver_multiplier }}" step="0.1" min="0.1" required>
+                                    <span class="input-group-text">x points</span>
+                                </div>
+                            </div>
+                            
+                            <div class="tier-config">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <span class="tier-badge tier-gold">Gold</span>
+                                        <span class="ms-2">Spend {{ settings.currency_symbol }} {{ settings.loyalty_gold_threshold }}</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" name="loyalty_gold_multiplier" 
+                                           value="{{ settings.loyalty_gold_multiplier }}" step="0.1" min="0.1" required>
+                                    <span class="input-group-text">x points</span>
+                                </div>
+                            </div>
+                            
+                            <div class="tier-config">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <span class="tier-badge tier-platinum">Platinum</span>
+                                        <span class="ms-2">Spend {{ settings.currency_symbol }} {{ settings.loyalty_platinum_threshold }}</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" name="loyalty_platinum_multiplier" 
+                                           value="{{ settings.loyalty_platinum_multiplier }}" step="0.1" min="0.1" required>
+                                    <span class="input-group-text">x points</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tier Thresholds -->
+                        <div class="settings-section">
+                            <h5><i class="fas fa-trophy"></i> Tier Thresholds</h5>
+                            <p class="help-text mb-3">Set lifetime spending required to reach each tier</p>
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">
+                                        <span class="tier-badge tier-silver">Silver</span> Threshold
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">{{ settings.currency_symbol }}</span>
+                                        <input type="number" class="form-control" name="loyalty_silver_threshold" 
+                                               value="{{ settings.loyalty_silver_threshold }}" step="100" min="0" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">
+                                        <span class="tier-badge tier-gold">Gold</span> Threshold
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">{{ settings.currency_symbol }}</span>
+                                        <input type="number" class="form-control" name="loyalty_gold_threshold" 
+                                               value="{{ settings.loyalty_gold_threshold }}" step="100" min="0" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">
+                                        <span class="tier-badge tier-platinum">Platinum</span> Threshold
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">{{ settings.currency_symbol }}</span>
+                                        <input type="number" class="form-control" name="loyalty_platinum_threshold" 
+                                               value="{{ settings.loyalty_platinum_threshold }}" step="100" min="0" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Points Redemption -->
+                        <div class="settings-section">
+                            <h5><i class="fas fa-hand-holding-usd"></i> Points Redemption</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="loyalty_points_value" class="form-label">Point Value</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">1 point =</span>
+                                        <input type="number" class="form-control" id="loyalty_points_value" 
+                                               name="loyalty_points_value" value="{{ settings.loyalty_points_value }}" 
+                                               step="0.01" min="0.01" required>
+                                        <span class="input-group-text">{{ settings.currency_symbol }}</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="loyalty_min_points_redeem" class="form-label">Minimum Points</label>
+                                    <input type="number" class="form-control" id="loyalty_min_points_redeem" 
+                                           name="loyalty_min_points_redeem" value="{{ settings.loyalty_min_points_redeem }}" 
+                                           min="1" required>
+                                    <p class="help-text">Minimum points needed to redeem</p>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="loyalty_max_redeem_percentage" class="form-label">Max Redeem %</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="loyalty_max_redeem_percentage" 
+                                               name="loyalty_max_redeem_percentage" value="{{ settings.loyalty_max_redeem_percentage }}" 
+                                               step="1" min="1" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <p class="help-text">Max % of sale payable with points</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Points Expiry -->
+                        <div class="settings-section">
+                            <h5><i class="fas fa-calendar-times"></i> Points Expiry</h5>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="loyalty_points_expire" 
+                                       name="loyalty_points_expire" {% if settings.loyalty_points_expire %}checked{% endif %}>
+                                <label class="form-check-label" for="loyalty_points_expire">
+                                    Enable points expiry
+                                </label>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="loyalty_points_expiry_months" class="form-label">Expiry Period</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="loyalty_points_expiry_months" 
+                                               name="loyalty_points_expiry_months" value="{{ settings.loyalty_points_expiry_months }}" 
+                                               min="1" required>
+                                        <span class="input-group-text">months</span>
+                                    </div>
+                                    <p class="help-text">Points expire after this many months (if expiry enabled)</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save"></i> Save Loyalty Settings
+                        </button>
+                    </form>
                 </div>
-                <div class="card-body">
-                    <p><strong>Business Slug:</strong><br>{{ business.slug }}</p>
-                    <p><strong>Your URL:</strong><br>
-                        <code>/b/{{ business.slug }}/</code>
-                    </p>
-                    <p><strong>Owner:</strong><br>{{ business.owner.get_full_name|default:business.owner.username }}</p>
-                    <p><strong>Created:</strong><br>{{ business.created_at|date:"M d, Y" }}</p>
-                    <p class="mb-0"><strong>Plan:</strong><br>
-                        <span class="badge bg-primary">{{ business.get_subscription_plan_display }}</span>
-                    </p>
+                
+                <div class="col-md-4">
+                    <div class="settings-section bg-light">
+                        <h6><i class="fas fa-calculator"></i> Current Configuration</h6>
+                        <p><strong>Earning Rate:</strong><br>{{ settings.currency_symbol }} {{ settings.loyalty_points_per_currency }} = 1 point</p>
+                        <p><strong>Point Value:</strong><br>1 point = {{ settings.currency_symbol }} {{ settings.loyalty_points_value }}</p>
+                        <p><strong>Min Redeem:</strong><br>{{ settings.loyalty_min_points_redeem }} points</p>
+                        <p><strong>Max Redeem:</strong><br>{{ settings.loyalty_max_redeem_percentage }}% of sale</p>
+                        <p class="mb-0"><strong>Expiry:</strong><br>
+                            {% if settings.loyalty_points_expire %}
+                            {{ settings.loyalty_points_expiry_months }} months
+                            {% else %}
+                            No expiry
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div class="settings-section bg-info text-white">
+                        <h6><i class="fas fa-lightbulb"></i> Example</h6>
+                        <p class="mb-2"><strong>Regular Customer:</strong></p>
+                        <p class="small">Spends {{ settings.currency_symbol }} 500<br>
+                        Earns: {{ settings.calculate_points_earned|default:"5" }} points</p>
+                        
+                        <p class="mb-2"><strong>Silver Customer:</strong></p>
+                        <p class="small mb-0">Spends {{ settings.currency_symbol }} 500<br>
+                        Earns: {{ settings.calculate_points_earned|default:"7" }} points ({{ settings.loyalty_silver_multiplier }}x bonus)</p>
+                    </div>
                 </div>
             </div>
-            
-            {% if business.is_trial %}
-            <div class="card shadow-sm border-warning">
-                <div class="card-header bg-warning">
-                    <h6 class="mb-0"><i class="fas fa-clock"></i> Trial Period</h6>
-                </div>
-                <div class="card-body">
-                    <p class="mb-0">
-                        Your trial expires on:<br>
-                        <strong>{{ business.trial_ends_at|date:"M d, Y" }}</strong>
-                    </p>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>

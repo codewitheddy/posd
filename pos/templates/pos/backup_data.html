@@ -1,0 +1,237 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Data Backup - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="bi bi-database"></i> Data Backup & Export</h2>
+            <p class="text-muted">Download and secure your business data</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'download_backup' slug=business.slug %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-download"></i> Download Backup Now
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Data Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="bi bi-box-seam" style="font-size: 2rem; color: #4e73df;"></i>
+                    <h3 class="mt-2">{{ stats.products }}</h3>
+                    <p class="text-muted mb-0">Products</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="bi bi-receipt" style="font-size: 2rem; color: #1cc88a;"></i>
+                    <h3 class="mt-2">{{ stats.sales }}</h3>
+                    <p class="text-muted mb-0">Sales</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="bi bi-people" style="font-size: 2rem; color: #36b9cc;"></i>
+                    <h3 class="mt-2">{{ stats.customers }}</h3>
+                    <p class="text-muted mb-0">Customers</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="bi bi-truck" style="font-size: 2rem; color: #f6c23e;"></i>
+                    <h3 class="mt-2">{{ stats.suppliers }}</h3>
+                    <p class="text-muted mb-0">Suppliers</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Info Cards -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> What's Included in Backup</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> All products and inventory data</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Complete sales history</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Customer information</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Supplier details</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Purchase orders</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Categories and settings</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> User accounts</li>
+                    </ul>
+                    <div class="alert alert-info mb-0">
+                        <small><i class="bi bi-info-circle"></i> Backup format: JSON (can be imported back if needed)</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100 bg-light">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-shield-check"></i> Data Security</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Automated daily backups by platform</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 30-day retention period</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Secure encrypted storage</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Download anytime you need</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Your data, your control</li>
+                    </ul>
+                    <div class="alert alert-success mb-0">
+                        <small><i class="bi bi-shield-check"></i> We take data security seriously. Your data is backed up daily and stored securely.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How to Use -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-question-circle"></i> How to Use Your Backup</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="text-center mb-3">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <h3 class="mb-0">1</h3>
+                        </div>
+                    </div>
+                    <h6 class="text-center">Download Backup</h6>
+                    <p class="text-center text-muted">Click the "Download Backup Now" button above to get your data file</p>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center mb-3">
+                        <div class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <h3 class="mb-0">2</h3>
+                        </div>
+                    </div>
+                    <h6 class="text-center">Store Safely</h6>
+                    <p class="text-center text-muted">Save the file to your computer, external drive, or cloud storage</p>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center mb-3">
+                        <div class="bg-info text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <h3 class="mb-0">3</h3>
+                        </div>
+                    </div>
+                    <h6 class="text-center">Restore if Needed</h6>
+                    <p class="text-center text-muted">Contact support if you need to restore data from your backup</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup History -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Backup Activity</h5>
+        </div>
+        <div class="card-body">
+            {% if backups %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Downloaded By</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in backups %}
+                        <tr>
+                            <td>
+                                <i class="bi bi-calendar3"></i>
+                                {{ backup.created_at|date:"M d, Y" }} at {{ backup.created_at|date:"H:i" }}
+                            </td>
+                            <td>
+                                <i class="bi bi-person"></i>
+                                {{ backup.user.get_full_name|default:backup.user.username }}
+                            </td>
+                            <td>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> Completed
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                <p class="text-muted mt-3">No backup history yet</p>
+                <p class="text-muted">Download your first backup using the button above</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="card mt-4">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0"><i class="bi bi-life-preserver"></i> Need Help?</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3">If you need assistance with backups, data restoration, or have any questions:</p>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-envelope text-primary me-2" style="font-size: 1.5rem;"></i>
+                        <div>
+                            <strong>Email</strong><br>
+                            <a href="mailto:ropenixkenya@gmail.com">ropenixkenya@gmail.com</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-whatsapp text-success me-2" style="font-size: 1.5rem;"></i>
+                        <div>
+                            <strong>WhatsApp</strong><br>
+                            <a href="https://wa.me/254717147007" target="_blank">+254 717 147 007</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-telephone text-info me-2" style="font-size: 1.5rem;"></i>
+                        <div>
+                            <strong>Phone</strong><br>
+                            <a href="tel:0717147007">0717147007</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

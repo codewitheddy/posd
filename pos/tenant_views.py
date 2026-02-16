@@ -199,8 +199,11 @@ def business_setup(request, slug):
 @login_required
 def business_settings(request, slug):
     """
-    Business settings page
+    Business settings page - handles business info and loyalty program settings
     """
+    from decimal import Decimal
+    from .models import BusinessSettings, ActivityLog
+    
     business = get_object_or_404(Business, slug=slug)
     
     # Verify user has access
@@ -215,24 +218,92 @@ def business_settings(request, slug):
             messages.error(request, 'You do not have permission to manage business settings.')
             return redirect('dashboard', slug=business.slug)
     
+    # Get or create BusinessSettings
+    settings = BusinessSettings.get_settings(business)
+    
     if request.method == 'POST':
-        # Update business details
-        business.name = request.POST.get('name', business.name)
-        business.description = request.POST.get('description', '')
-        business.address = request.POST.get('address', '')
-        business.phone = request.POST.get('phone', '')
-        business.email = request.POST.get('email', '')
-        business.website = request.POST.get('website', '')
-        business.tax_id = request.POST.get('tax_id', '')
-        business.save()
+        form_type = request.POST.get('form_type', 'business_info')
         
-        messages.success(request, 'Business settings updated successfully!')
-        return redirect('business_settings', slug=business.slug)
+        if form_type == 'business_info':
+            # Update business details
+            business.name = request.POST.get('name', business.name)
+            business.description = request.POST.get('description', '')
+            business.address = request.POST.get('address', '')
+            business.phone = request.POST.get('phone', '')
+            business.email = request.POST.get('email', '')
+            business.website = request.POST.get('website', '')
+            business.tax_id = request.POST.get('tax_id', '')
+            
+            try:
+                business.save()
+                
+                # Log activity
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='update',
+                    model_name='Business',
+                    object_id=business.id,
+                    description='Updated business information',
+                    request=request
+                )
+                
+                messages.success(request, 'Business information updated successfully!')
+                return redirect('business_settings', slug=business.slug)
+            except Exception as e:
+                messages.error(request, f'Error updating business info: {str(e)}')
+        
+        elif form_type == 'loyalty_settings':
+            # Loyalty Program Settings
+            try:
+                settings.loyalty_enabled = request.POST.get('loyalty_enabled') == 'on'
+                
+                # Points Earning
+                settings.loyalty_points_per_currency = Decimal(request.POST.get('loyalty_points_per_currency', 100))
+                
+                # Tier Multipliers
+                settings.loyalty_regular_multiplier = Decimal(request.POST.get('loyalty_regular_multiplier', 1.0))
+                settings.loyalty_silver_multiplier = Decimal(request.POST.get('loyalty_silver_multiplier', 1.5))
+                settings.loyalty_gold_multiplier = Decimal(request.POST.get('loyalty_gold_multiplier', 2.0))
+                settings.loyalty_platinum_multiplier = Decimal(request.POST.get('loyalty_platinum_multiplier', 3.0))
+                
+                # Tier Thresholds
+                settings.loyalty_silver_threshold = Decimal(request.POST.get('loyalty_silver_threshold', 10000))
+                settings.loyalty_gold_threshold = Decimal(request.POST.get('loyalty_gold_threshold', 50000))
+                settings.loyalty_platinum_threshold = Decimal(request.POST.get('loyalty_platinum_threshold', 100000))
+                
+                # Points Redemption
+                settings.loyalty_points_value = Decimal(request.POST.get('loyalty_points_value', 1))
+                settings.loyalty_min_points_redeem = int(request.POST.get('loyalty_min_points_redeem', 100))
+                settings.loyalty_max_redeem_percentage = Decimal(request.POST.get('loyalty_max_redeem_percentage', 50))
+                
+                # Points Expiry
+                settings.loyalty_points_expire = request.POST.get('loyalty_points_expire') == 'on'
+                settings.loyalty_points_expiry_months = int(request.POST.get('loyalty_points_expiry_months', 12))
+                
+                settings.updated_by = request.user
+                settings.save()
+                
+                # Log activity
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='settings',
+                    model_name='BusinessSettings',
+                    object_id=settings.id,
+                    description='Updated loyalty program settings',
+                    request=request
+                )
+                
+                messages.success(request, 'Loyalty program settings updated successfully!')
+                return redirect('business_settings', slug=business.slug)
+                
+            except Exception as e:
+                messages.error(request, f'Error updating loyalty settings: {str(e)}')
     
     context = {
         'business': business,
+        'settings': settings,
     }
-    return render(request, 'pos/business_settings.html', context)
+    return render(request, 'pos/business_settings_tenant.html', context)
 
 
 @login_required
@@ -356,3 +427,120 @@ def remove_member(request, slug, member_id):
     messages.success(request, f'{member.user.get_full_name() or member.user.username} has been removed from your business.')
     
     return redirect('business_members', slug=business.slug)
+
+
+# ==================== DATA BACKUP VIEWS ====================
+
+@login_required
+def backup_data(request, slug):
+    """
+    Data backup page - allows business owners to download their data
+    """
+    business = get_object_or_404(Business, slug=slug)
+    
+    # Verify user has access
+    if not request.user.is_superuser:
+        membership = get_object_or_404(
+            BusinessMembership,
+            user=request.user,
+            business=business,
+            is_active=True
+        )
+        if membership.role not in ['owner', 'admin']:
+            messages.error(request, 'You do not have permission to access backup data.')
+            return redirect('dashboard', slug=business.slug)
+    
+    # Get backup history from activity log
+    backups = ActivityLog.objects.filter(
+        action_type='backup',
+        description__icontains=business.name
+    ).order_by('-timestamp')[:20]
+    
+    # Calculate data statistics
+    stats = {
+        'products': business.products.count(),
+        'categories': business.categories.count(),
+        'customers': business.customers.count(),
+        'suppliers': business.suppliers.count(),
+        'sales': business.sales.count(),
+        'purchases': business.purchases.count(),
+    }
+    
+    context = {
+        'business': business,
+        'backups': backups,
+        'stats': stats,
+    }
+    return render(request, 'pos/backup_data.html', context)
+
+
+@login_required
+def download_backup(request, slug):
+    """
+    Generate and download business data backup
+    """
+    from django.http import HttpResponse, JsonResponse
+    from django.core.management import call_command
+    import os
+    import tempfile
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    business = get_object_or_404(Business, slug=slug)
+    
+    # Verify user has access
+    if not request.user.is_superuser:
+        membership = get_object_or_404(
+            BusinessMembership,
+            user=request.user,
+            business=business,
+            is_active=True
+        )
+        if membership.role not in ['owner', 'admin']:
+            messages.error(request, 'You do not have permission to download backup.')
+            return redirect('dashboard', slug=business.slug)
+    
+    try:
+        # Generate backup file
+        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Create temp directory
+        temp_dir = tempfile.mkdtemp()
+        backup_file = os.path.join(temp_dir, f'{business.slug}_backup_{timestamp}.json')
+        
+        # Call backup command
+        call_command('backup_business', business.id, output=backup_file)
+        
+        # Read file and serve for download
+        if os.path.exists(backup_file):
+            with open(backup_file, 'rb') as f:
+                response = HttpResponse(f.read(), content_type='application/json')
+                response['Content-Disposition'] = f'attachment; filename="{business.slug}_backup_{timestamp}.json"'
+            
+            # Log activity
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='backup',
+                model_name='Business',
+                object_id=business.id,
+                description=f'Downloaded backup for {business.name}',
+                request=request
+            )
+            
+            # Clean up temp file
+            try:
+                os.remove(backup_file)
+                os.rmdir(temp_dir)
+            except Exception:
+                pass
+            
+            return response
+        else:
+            messages.error(request, 'Backup file generation failed. Please try again.')
+            return redirect('backup_data', slug=slug)
+    
+    except Exception as e:
+        logger.error(f'Backup download failed for {business.name}: {e}')
+        messages.error(request, f'Backup failed: {str(e)}. Please contact support if this persists.')
+        return redirect('backup_data', slug=slug)

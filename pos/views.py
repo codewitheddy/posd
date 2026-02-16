@@ -6,7 +6,7 @@ from django.db.models.functions import Coalesce, TruncHour, ExtractHour
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta
 from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
@@ -14,7 +14,7 @@ from .models import (
     SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
     GoodsReturnedNote, GoodsReturnedNoteItem
 )
-from .decorators import business_required, business_permission_required
+from .decorators import business_required, business_permission_required, feature_required
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -1430,13 +1430,13 @@ def thermal_receipt(request, slug, pk):
     # Get business settings
     try:
         business_settings = BusinessSettings.get_settings(request.business)
-    except:
+    except Exception:
         business_settings = None
     
     return render(request, 'pos/receipt_thermal.html', {
         'sale': sale, 
         'shop_name': request.business.name,
-        'business_settings': business_settings
+        'business_settings': business_settings,
     })
 
 
@@ -1550,7 +1550,7 @@ def sales_report(request, slug=None):
     if date_str:
         try:
             filter_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except:
+        except ValueError:
             filter_date = datetime.now().date()
     else:
         filter_date = datetime.now().date()
@@ -1655,7 +1655,7 @@ def sales_list(request, slug=None):
     if min_amount:
         try:
             sales = sales.filter(total__gte=Decimal(min_amount))
-        except:
+        except (ValueError, InvalidOperation):
             pass
     
     # Maximum amount filter
@@ -1663,7 +1663,7 @@ def sales_list(request, slug=None):
     if max_amount:
         try:
             sales = sales.filter(total__lte=Decimal(max_amount))
-        except:
+        except (ValueError, InvalidOperation):
             pass
     
     # Order by
@@ -1686,7 +1686,7 @@ def sales_list(request, slug=None):
         per_page = int(per_page)
         if per_page not in [25, 50, 100, 200]:
             per_page = 50
-    except:
+    except (ValueError, TypeError):
         per_page = 50
     
     paginator = Paginator(sales, per_page)
@@ -3187,15 +3187,6 @@ def customer_list(request, slug=None):
     if customer_type:
         customers = customers.filter(customer_type=customer_type)
     
-    # Debug: Log the filter parameters and results
-    print(f"DEBUG - Customer List Filter:")
-    print(f"  Search: '{search}'")
-    print(f"  Customer Type Filter: '{customer_type}'")
-    print(f"  Total Results: {customers.count()}")
-    if customers.exists():
-        for c in customers[:5]:
-            print(f"    - {c.name} ({c.customer_type})")
-    
     context = {
         'customers': customers,
         'search': search,
@@ -3356,6 +3347,7 @@ def customer_delete(request, slug=None, pk=None):
 
 # ==================== LOYALTY PROGRAM ====================
 
+@login_required
 @business_required
 def loyalty_dashboard(request, slug=None, pk=None):
     """Customer loyalty dashboard showing points, tier, and transaction history"""
@@ -3392,6 +3384,7 @@ def loyalty_dashboard(request, slug=None, pk=None):
     return render(request, 'pos/loyalty_dashboard.html', context)
 
 
+@login_required
 @business_required
 def loyalty_transactions(request, slug=None, pk=None):
     """View all loyalty transactions for a customer"""
@@ -3413,6 +3406,7 @@ def loyalty_transactions(request, slug=None, pk=None):
     return render(request, 'pos/loyalty_transactions.html', context)
 
 
+@login_required
 @business_required
 def loyalty_redeem(request, slug=None, pk=None):
     """Redeem loyalty points for discount"""
@@ -3444,6 +3438,7 @@ def loyalty_redeem(request, slug=None, pk=None):
     return render(request, 'pos/loyalty_redeem.html', context)
 
 
+@login_required
 @business_required
 def loyalty_adjust(request, slug=None, pk=None):
     """Manually adjust customer loyalty points (admin only)"""
@@ -3495,6 +3490,7 @@ def loyalty_adjust(request, slug=None, pk=None):
     return render(request, 'pos/loyalty_adjust.html', context)
 
 
+@login_required
 @business_required
 def loyalty_rewards_list(request, slug=None):
     """List all available loyalty rewards"""
@@ -3509,6 +3505,7 @@ def loyalty_rewards_list(request, slug=None):
     return render(request, 'pos/loyalty_rewards_list.html', context)
 
 
+@login_required
 @business_required
 def loyalty_reward_create(request, slug=None):
     """Create a new loyalty reward"""
@@ -3541,6 +3538,7 @@ def loyalty_reward_create(request, slug=None):
     return render(request, 'pos/loyalty_reward_form.html')
 
 
+@login_required
 @business_required
 def loyalty_reward_edit(request, slug=None, pk=None):
     """Edit an existing loyalty reward"""
@@ -3817,8 +3815,10 @@ def payment_detail(request, slug, payment_id):
         return render(request, 'pos/payment_detail_simple.html', context)
     except Exception as e:
         import traceback
-        print(f"Error in payment_detail: {str(e)}")
-        print(traceback.format_exc())
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in payment_detail: {str(e)}")
+        logger.error(traceback.format_exc())
         messages.error(request, f"Error loading payment details: {str(e)}")
         return redirect('dashboard', slug=request.business.slug)
 
@@ -4422,8 +4422,10 @@ def analytics_api(request, slug=None):
         
     except Exception as e:
         import traceback
+        import logging
+        logger = logging.getLogger(__name__)
         error_trace = traceback.format_exc()
-        print("Analytics API Error:", error_trace)  # Log to console
+        logger.error(f"Analytics API Error: {error_trace}")
         return JsonResponse({
             'error': str(e),
             'traceback': error_trace
@@ -4726,8 +4728,10 @@ def payment_transactions_report(request, slug=None):
     except Exception as e:
         # Log the error and show a user-friendly message
         import traceback
-        print(f"Error in payment_transactions_report: {str(e)}")
-        print(traceback.format_exc())
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in payment_transactions_report: {str(e)}")
+        logger.error(traceback.format_exc())
         messages.error(request, f"Error loading payment transactions: {str(e)}")
         return redirect('dashboard', slug=request.business.slug)
 
@@ -5105,6 +5109,7 @@ def payment_method_delete(request, slug, pk):
 
 # ==================== GOODS RETURNED NOTE (GRN) VIEWS ====================
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_list(request, slug=None):
@@ -5130,6 +5135,7 @@ def grn_list(request, slug=None):
     return render(request, 'pos/grn_list.html', context)
 
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_create(request, slug=None):
@@ -5231,6 +5237,7 @@ def grn_create(request, slug=None):
     return render(request, 'pos/grn_form.html', context)
 
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_detail(request, slug=None, pk=None):
@@ -5245,6 +5252,7 @@ def grn_detail(request, slug=None, pk=None):
     return render(request, 'pos/grn_detail.html', context)
 
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_submit(request, slug=None, pk=None):
@@ -5270,6 +5278,7 @@ def grn_submit(request, slug=None, pk=None):
     return render(request, 'pos/grn_submit_confirm.html', {'grn': grn})
 
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_mark_collected(request, slug=None, pk=None):
@@ -5293,6 +5302,7 @@ def grn_mark_collected(request, slug=None, pk=None):
     })
 
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_apply_credit(request, slug=None, pk=None):
@@ -5332,6 +5342,7 @@ def grn_apply_credit(request, slug=None, pk=None):
     })
 
 
+@login_required
 @business_required
 @can_manage_purchases
 def grn_cancel(request, slug=None, pk=None):
@@ -5363,3 +5374,25 @@ def grn_cancel(request, slug=None, pk=None):
         return redirect('grn_detail', slug=slug, pk=pk)
     
     return render(request, 'pos/grn_cancel_confirm.html', {'grn': grn})
+
+
+@login_required
+@business_required
+def subscription(request, slug=None):
+    """Subscription and billing page for businesses"""
+    # Superusers have lifetime access, no subscription needed
+    if request.user.is_superuser:
+        messages.info(request, 'As the app owner, you have lifetime access to all features. No subscription required!')
+        return redirect('dashboard', slug=slug)
+    
+    business = request.business
+    
+    # Get payment history for this business
+    payments = business.subscription_payments.all().order_by('-payment_date')[:10]
+    
+    context = {
+        'business': business,
+        'payments': payments,
+    }
+    
+    return render(request, 'pos/subscription.html', context)

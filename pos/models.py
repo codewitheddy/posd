@@ -39,12 +39,10 @@ class Business(models.Model):
     subscription_plan = models.CharField(
         max_length=50,
         choices=[
-            ('free', 'Free'),
-            ('basic', 'Basic'),
-            ('professional', 'Professional'),
-            ('enterprise', 'Enterprise'),
+            ('trial', 'Free Trial (30 Days)'),
+            ('paid', 'Annual Subscription'),
         ],
-        default='free'
+        default='trial'
     )
     
     # License Management
@@ -72,6 +70,8 @@ class Business(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        
         if not self.slug:
             self.slug = slugify(self.name)
             # Ensure unique slug
@@ -80,7 +80,12 @@ class Business(models.Model):
             while Business.objects.filter(slug=self.slug).exists():
                 self.slug = f"{original_slug}-{counter}"
                 counter += 1
+        
         super().save(*args, **kwargs)
+        
+        # Create default data for new business
+        if is_new:
+            self._create_defaults()
 
     def get_absolute_url(self):
         return f"/b/{self.slug}/"
@@ -115,6 +120,46 @@ class Business(models.Model):
             self.license_expires_at = timezone.now() + timedelta(days=days)
         self.license_status = 'active'
         self.save()
+    
+    @property
+    def plan_display_name(self):
+        """Get user-friendly plan name"""
+        plan_names = {
+            'trial': 'Free Trial (30 Days)',
+            'paid': 'Annual Subscription',
+        }
+        return plan_names.get(self.subscription_plan, self.subscription_plan.title())
+    
+    def _create_defaults(self):
+        """Create default payment method, unit, and category for new business"""
+        # Import here to avoid circular imports
+        from pos.models import PaymentMethod, UnitOfMeasurement, Category
+        
+        # Create default payment method: CASH
+        PaymentMethod.objects.get_or_create(
+            business=self,
+            name='CASH',
+            defaults={
+                'is_active': True,
+                'requires_reference': False,
+            }
+        )
+        
+        # Create default unit: Pieces
+        UnitOfMeasurement.objects.get_or_create(
+            business=self,
+            name='Pieces',
+            defaults={
+                'abbreviation': 'pcs',
+                'is_active': True,
+            }
+        )
+        
+        # Create default category: GENERAL
+        Category.objects.get_or_create(
+            business=self,
+            name='GENERAL',
+        )
 
 
 class BusinessMembership(models.Model):
@@ -162,6 +207,75 @@ class BusinessMembership(models.Model):
         perms = role_permissions.get(self.role, [])
         return 'all' in perms or permission in perms
 
+
+class SubscriptionPayment(models.Model):
+    """
+    Track subscription payments from businesses
+    """
+    PAYMENT_METHOD_CHOICES = [
+        ('mpesa', 'M-Pesa'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('paypal', 'PayPal'),
+        ('other', 'Other'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    ]
+    
+    PLAN_CHOICES = [
+        ('trial', 'Free Trial'),
+        ('paid', 'Annual Subscription'),
+    ]
+    
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='subscription_payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text='Payment amount')
+    currency = models.CharField(max_length=10, default='KES')
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, default='mpesa')
+    payment_reference = models.CharField(max_length=200, blank=True, help_text='Transaction ID or reference number')
+    payment_date = models.DateTimeField(help_text='Date payment was received')
+    
+    # Subscription period
+    period_start = models.DateField(help_text='Subscription period start date')
+    period_end = models.DateField(help_text='Subscription period end date')
+    plan = models.CharField(max_length=50, choices=PLAN_CHOICES)
+    
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
+    notes = models.TextField(blank=True, help_text='Additional notes about this payment')
+    
+    # Audit
+    recorded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='recorded_payments')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Subscription Payment'
+        verbose_name_plural = 'Subscription Payments'
+        ordering = ['-payment_date']
+        indexes = [
+            models.Index(fields=['business', '-payment_date']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.business.name} - {self.currency} {self.amount} ({self.payment_date.strftime('%Y-%m-%d')})"
+    
+    def save(self, *args, **kwargs):
+        # Auto-update business license expiry when payment is completed
+        if self.status == 'completed' and self.period_end:
+            self.business.license_expires_at = timezone.make_aware(
+                timezone.datetime.combine(self.period_end, timezone.datetime.max.time())
+            )
+            self.business.license_status = 'active'
+            self.business.subscription_plan = self.plan
+            self.business.save()
+        super().save(*args, **kwargs)
 
 
 class Category(models.Model):
@@ -768,7 +882,7 @@ class Purchase(models.Model):
                     from datetime import datetime
                     try:
                         item.expiry_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
-                    except:
+                    except ValueError:
                         pass  # Invalid date format, skip
                 
                 if batch_number:
@@ -1123,6 +1237,92 @@ class BusinessSettings(models.Model):
     default_expiry_alert_days = models.IntegerField(default=3)
     enable_expiry_alerts = models.BooleanField(default=True)
     
+    # Loyalty Program Settings
+    loyalty_enabled = models.BooleanField(default=True, help_text="Enable loyalty program")
+    
+    # Points Earning Rules
+    loyalty_points_per_currency = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=100,
+        help_text="Amount spent to earn 1 point (e.g., KES 100 = 1 point)"
+    )
+    
+    # Tier-specific earning rates (multipliers)
+    loyalty_regular_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=1.0,
+        help_text="Points multiplier for Regular customers (1.0 = normal rate)"
+    )
+    loyalty_silver_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=1.5,
+        help_text="Points multiplier for Silver customers (1.5 = 50% bonus)"
+    )
+    loyalty_gold_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=2.0,
+        help_text="Points multiplier for Gold customers (2.0 = double points)"
+    )
+    loyalty_platinum_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=3.0,
+        help_text="Points multiplier for Platinum customers (3.0 = triple points)"
+    )
+    
+    # Points Redemption
+    loyalty_points_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=1,
+        help_text="Value of 1 point in currency (e.g., 1 point = KES 1)"
+    )
+    loyalty_min_points_redeem = models.IntegerField(
+        default=100,
+        help_text="Minimum points required to redeem"
+    )
+    loyalty_max_redeem_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=50,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Maximum percentage of sale that can be paid with points"
+    )
+    
+    # Points Expiry
+    loyalty_points_expire = models.BooleanField(
+        default=False,
+        help_text="Enable points expiry"
+    )
+    loyalty_points_expiry_months = models.IntegerField(
+        default=12,
+        help_text="Months until points expire (if expiry enabled)"
+    )
+    
+    # Tier Thresholds (lifetime spending)
+    loyalty_silver_threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=10000,
+        help_text="Lifetime spending to reach Silver tier"
+    )
+    loyalty_gold_threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=50000,
+        help_text="Lifetime spending to reach Gold tier"
+    )
+    loyalty_platinum_threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=100000,
+        help_text="Lifetime spending to reach Platinum tier"
+    )
+    
     # System Settings
     allow_negative_stock = models.BooleanField(default=False, help_text="Allow sales when stock is 0")
     require_product_code = models.BooleanField(default=False, help_text="Make product code mandatory")
@@ -1175,6 +1375,118 @@ class BusinessSettings(models.Model):
             return f"{self.currency_symbol} {formatted_amount}"
         else:
             return f"{formatted_amount} {self.currency_symbol}"
+    
+    # Loyalty Program Helper Methods
+    def calculate_points_earned(self, amount_spent, customer_tier='regular'):
+        """
+        Calculate loyalty points earned for a purchase
+        
+        Args:
+            amount_spent: Amount spent in currency
+            customer_tier: Customer tier (regular, silver, gold, platinum)
+        
+        Returns:
+            Number of points earned (integer)
+        """
+        if not self.loyalty_enabled or amount_spent <= 0:
+            return 0
+        
+        # Get tier multiplier
+        multipliers = {
+            'regular': self.loyalty_regular_multiplier,
+            'silver': self.loyalty_silver_multiplier,
+            'gold': self.loyalty_gold_multiplier,
+            'platinum': self.loyalty_platinum_multiplier,
+        }
+        multiplier = multipliers.get(customer_tier, Decimal('1.0'))
+        
+        # Calculate base points
+        base_points = amount_spent / self.loyalty_points_per_currency
+        
+        # Apply tier multiplier
+        total_points = base_points * multiplier
+        
+        # Return as integer
+        return int(total_points)
+    
+    def calculate_points_value(self, points):
+        """
+        Calculate currency value of loyalty points
+        
+        Args:
+            points: Number of points
+        
+        Returns:
+            Currency value of points
+        """
+        return Decimal(points) * self.loyalty_points_value
+    
+    def can_redeem_points(self, points, sale_total):
+        """
+        Check if points can be redeemed for a sale
+        
+        Args:
+            points: Number of points to redeem
+            sale_total: Total sale amount
+        
+        Returns:
+            (can_redeem: bool, reason: str)
+        """
+        if not self.loyalty_enabled:
+            return False, "Loyalty program is disabled"
+        
+        if points < self.loyalty_min_points_redeem:
+            return False, f"Minimum {self.loyalty_min_points_redeem} points required"
+        
+        # Calculate maximum redeemable amount
+        max_redeem_amount = (sale_total * self.loyalty_max_redeem_percentage) / 100
+        points_value = self.calculate_points_value(points)
+        
+        if points_value > max_redeem_amount:
+            return False, f"Can only redeem up to {self.loyalty_max_redeem_percentage}% of sale total"
+        
+        return True, "OK"
+    
+    def get_tier_for_spending(self, lifetime_spending):
+        """
+        Determine customer tier based on lifetime spending
+        
+        Args:
+            lifetime_spending: Total lifetime spending amount
+        
+        Returns:
+            Tier name (regular, silver, gold, platinum)
+        """
+        if lifetime_spending >= self.loyalty_platinum_threshold:
+            return 'platinum'
+        elif lifetime_spending >= self.loyalty_gold_threshold:
+            return 'gold'
+        elif lifetime_spending >= self.loyalty_silver_threshold:
+            return 'silver'
+        else:
+            return 'regular'
+    
+    def get_loyalty_summary(self):
+        """Get a summary of loyalty program settings"""
+        return {
+            'enabled': self.loyalty_enabled,
+            'earning_rate': f"{self.currency_symbol} {self.loyalty_points_per_currency} = 1 point",
+            'tier_multipliers': {
+                'regular': f"{self.loyalty_regular_multiplier}x",
+                'silver': f"{self.loyalty_silver_multiplier}x",
+                'gold': f"{self.loyalty_gold_multiplier}x",
+                'platinum': f"{self.loyalty_platinum_multiplier}x",
+            },
+            'point_value': f"1 point = {self.format_currency(self.loyalty_points_value)}",
+            'min_redeem': f"{self.loyalty_min_points_redeem} points",
+            'max_redeem': f"{self.loyalty_max_redeem_percentage}% of sale",
+            'expiry': f"{self.loyalty_points_expiry_months} months" if self.loyalty_points_expire else "No expiry",
+            'tier_thresholds': {
+                'silver': self.format_currency(self.loyalty_silver_threshold),
+                'gold': self.format_currency(self.loyalty_gold_threshold),
+                'platinum': self.format_currency(self.loyalty_platinum_threshold),
+            }
+        }
 
 
 # ==================== ACTIVITY LOG ====================
@@ -1191,6 +1503,7 @@ class ActivityLog(models.Model):
         ('stock_adjust', 'Stock Adjustment'),
         ('purchase', 'Purchase'),
         ('settings', 'Settings Change'),
+        ('backup', 'Data Backup'),
     ]
     
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='activity_logs')

@@ -1,0 +1,279 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Refund Policy - Ropenix POS{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm">
+                <div class="card-body p-5">
+                    <h1 class="mb-4">Refund Policy</h1>
+                    <p class="text-muted mb-4"><strong>Last Updated:</strong> February 17, 2026</p>
+                    
+                    <div class="legal-content">
+                        <p class="lead">We want you to be completely satisfied with Ropenix POS. This Refund Policy explains our refund and cancellation terms.</p>
+                        
+                        <h2>1. Free Trial Period</h2>
+                        
+                        <h3>1.1 30-Day Free Trial</h3>
+                        <p>All new users receive a 30-day free trial with full access to all features. No payment is required during the trial period.</p>
+                        
+                        <h3>1.2 Trial Cancellation</h3>
+                        <p>You can cancel your account at any time during the trial period with no charges. Simply:</p>
+                        <ul>
+                            <li>Go to your account settings</li>
+                            <li>Click "Cancel Account"</li>
+                            <li>Or contact our support team</li>
+                        </ul>
+                        
+                        <h3>1.3 Trial to Paid Conversion</h3>
+                        <p>Your trial does not automatically convert to a paid subscription. You must manually subscribe to continue using the Service after the trial ends.</p>
+                        
+                        <h2>2. Annual Subscription</h2>
+                        
+                        <h3>2.1 Subscription Fee</h3>
+                        <p>The annual subscription costs KES 15,000 per year, payable in advance.</p>
+                        
+                        <h3>2.2 Payment Terms</h3>
+                        <ul>
+                            <li>Payment is due at the start of each subscription period</li>
+                            <li>Subscriptions are valid for 365 days from the payment date</li>
+                            <li>We accept payment via M-Pesa</li>
+                            <li>A receipt will be provided for all payments</li>
+                        </ul>
+                        
+                        <h2>3. Refund Eligibility</h2>
+                        
+                        <h3>3.1 7-Day Money-Back Guarantee</h3>
+                        <p>If you're not satisfied with the Service, you can request a full refund within 7 days of your first paid subscription payment.</p>
+                        
+                        <p><strong>To qualify for a refund:</strong></p>
+                        <ul>
+                            <li>Request must be made within 7 days of payment</li>
+                            <li>This applies only to your first subscription payment</li>
+                            <li>You must provide a reason for the refund request</li>
+                            <li>Your account must not have violated our Terms of Service</li>
+                        </ul>
+                        
+                        <h3>3.2 Service Issues</h3>
+                        <p>If you experience significant service disruptions or technical issues that we cannot resolve, you may be eligible for a prorated refund. This is evaluated on a case-by-case basis.</p>
+                        
+                        <h3>3.3 Non-Refundable Situations</h3>
+                        <p>Refunds will NOT be provided in the following cases:</p>
+                        <ul>
+                            <li>After the 7-day refund period has passed</li>
+                            <li>For subscription renewals (only first payment is eligible)</li>
+                            <li>If your account was terminated for Terms of Service violations</li>
+                            <li>If you simply changed your mind after the refund period</li>
+                            <li>For partial months or unused time (except in service disruption cases)</li>
+                            <li>If you failed to cancel before renewal</li>
+                        </ul>
+                        
+                        <h2>4. How to Request a Refund</h2>
+                        
+                        <h3>4.1 Refund Request Process</h3>
+                        <p>To request a refund:</p>
+                        <ol>
+                            <li>Contact us within the eligible refund period</li>
+                            <li>Provide your account email and payment transaction details</li>
+                            <li>Explain the reason for your refund request</li>
+                            <li>We will review your request within 2 business days</li>
+                        </ol>
+                        
+                        <h3>4.2 Contact Information</h3>
+                        <ul>
+                            <li><strong>Email:</strong> ropenixkenya@gmail.com</li>
+                            <li><strong>Phone:</strong> +254 717 147 007</li>
+                            <li><strong>WhatsApp:</strong> +254 717 147 007</li>
+                        </ul>
+                        
+                        <h3>4.3 Refund Processing Time</h3>
+                        <p>Once approved, refunds will be processed within:</p>
+                        <ul>
+                            <li><strong>M-Pesa:</strong> 1-3 business days</li>
+                            <li>You will receive a confirmation email when the refund is processed</li>
+                            <li>The refund will be sent to the same M-Pesa number used for payment</li>
+                        </ul>
+                        
+                        <h2>5. Cancellation Policy</h2>
+                        
+                        <h3>5.1 How to Cancel</h3>
+                        <p>You can cancel your subscription at any time:</p>
+                        <ul>
+                            <li>Through your account settings</li>
+                            <li>By contacting our support team</li>
+                            <li>Via email, phone, or WhatsApp</li>
+                        </ul>
+                        
+                        <h3>5.2 Effect of Cancellation</h3>
+                        <ul>
+                            <li>Your account will remain active until the end of your paid period</li>
+                            <li>You will not be charged for the next period</li>
+                            <li>You can continue using the Service until your subscription expires</li>
+                            <li>After expiration, your account will be deactivated</li>
+                        </ul>
+                        
+                        <h3>5.3 Data After Cancellation</h3>
+                        <ul>
+                            <li>You can download your data before cancellation</li>
+                            <li>We retain your data for 30 days after cancellation</li>
+                            <li>You can reactivate your account within 30 days</li>
+                            <li>After 30 days, your data will be permanently deleted</li>
+                        </ul>
+                        
+                        <h2>6. Subscription Renewal</h2>
+                        
+                        <h3>6.1 No Automatic Renewal</h3>
+                        <p>Subscriptions do NOT automatically renew. You must manually renew your subscription before it expires.</p>
+                        
+                        <h3>6.2 Renewal Reminders</h3>
+                        <p>We will send you reminder emails:</p>
+                        <ul>
+                            <li>30 days before expiration</li>
+                            <li>14 days before expiration</li>
+                            <li>7 days before expiration</li>
+                            <li>On the day of expiration</li>
+                        </ul>
+                        
+                        <h3>6.3 Grace Period</h3>
+                        <p>After your subscription expires, you have a 7-day grace period to renew without losing access to your data. After 7 days, your account will be deactivated.</p>
+                        
+                        <h2>7. Price Changes</h2>
+                        
+                        <h3>7.1 Notification of Changes</h3>
+                        <p>If we change our subscription prices, we will:</p>
+                        <ul>
+                            <li>Notify you at least 30 days in advance</li>
+                            <li>Honor your current price until your subscription expires</li>
+                            <li>Give you the option to cancel before the new price takes effect</li>
+                        </ul>
+                        
+                        <h3>7.2 Grandfathered Pricing</h3>
+                        <p>Existing customers may be offered grandfathered pricing at our discretion.</p>
+                        
+                        <h2>8. Promotional Offers and Discounts</h2>
+                        
+                        <h3>8.1 Promotional Terms</h3>
+                        <ul>
+                            <li>Promotional offers are subject to specific terms and conditions</li>
+                            <li>Discounts cannot be combined unless explicitly stated</li>
+                            <li>Promotional pricing may not be eligible for refunds</li>
+                            <li>We reserve the right to modify or cancel promotions at any time</li>
+                        </ul>
+                        
+                        <h2>9. Disputes and Chargebacks</h2>
+                        
+                        <h3>9.1 Contact Us First</h3>
+                        <p>Before initiating a chargeback or payment dispute, please contact us. We're committed to resolving any issues fairly and quickly.</p>
+                        
+                        <h3>9.2 Chargeback Policy</h3>
+                        <ul>
+                            <li>Unauthorized chargebacks may result in account suspension</li>
+                            <li>We will provide documentation to payment processors for legitimate charges</li>
+                            <li>Chargeback fees may be charged to your account</li>
+                        </ul>
+                        
+                        <h2>10. Special Circumstances</h2>
+                        
+                        <h3>10.1 Technical Issues</h3>
+                        <p>If you experience significant technical problems that prevent you from using the Service, contact us immediately. We may offer:</p>
+                        <ul>
+                            <li>Extended subscription time</li>
+                            <li>Prorated refund</li>
+                            <li>Service credits</li>
+                        </ul>
+                        
+                        <h3>10.2 Business Closure</h3>
+                        <p>If your business closes, you can cancel your subscription. Refunds for unused time are not provided except within the 7-day money-back guarantee period.</p>
+                        
+                        <h2>11. Fair Use Policy</h2>
+                        <p>We reserve the right to deny refunds if we detect:</p>
+                        <ul>
+                            <li>Abuse of the refund policy</li>
+                            <li>Fraudulent refund requests</li>
+                            <li>Pattern of repeated refund requests</li>
+                            <li>Use of the Service with intent to request refund</li>
+                        </ul>
+                        
+                        <h2>12. Changes to This Policy</h2>
+                        <p>We may update this Refund Policy from time to time. Changes will be posted on this page with an updated "Last Updated" date. Significant changes will be communicated via email.</p>
+                        
+                        <h2>13. Questions and Support</h2>
+                        <p>If you have questions about refunds, cancellations, or billing, please contact us:</p>
+                        <ul>
+                            <li><strong>Email:</strong> ropenixkenya@gmail.com</li>
+                            <li><strong>Phone:</strong> +254 717 147 007</li>
+                            <li><strong>WhatsApp:</strong> +254 717 147 007</li>
+                            <li><strong>Support Hours:</strong> Monday-Friday, 8 AM - 6 PM EAT</li>
+                        </ul>
+                        
+                        <hr class="my-5">
+                        
+                        <div class="alert alert-success">
+                            <h5><i class="fas fa-check-circle"></i> Our Commitment</h5>
+                            <p class="mb-0">We're committed to your satisfaction. If you're not happy with Ropenix POS, we'll work with you to make it right or provide a refund within the eligible period.</p>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <h5><i class="fas fa-info-circle"></i> Summary</h5>
+                            <ul class="mb-0">
+                                <li><strong>30-day free trial</strong> - No payment required</li>
+                                <li><strong>7-day money-back guarantee</strong> - Full refund on first payment</li>
+                                <li><strong>No automatic renewal</strong> - You control when to renew</li>
+                                <li><strong>Cancel anytime</strong> - Keep access until subscription ends</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-5 text-center">
+                        <a href="{% url 'landing' %}" class="btn btn-primary">Back to Home</a>
+                        <a href="{% url 'terms' %}" class="btn btn-outline-secondary">Terms of Service</a>
+                        <a href="{% url 'privacy' %}" class="btn btn-outline-secondary">Privacy Policy</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.legal-content h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #2c3e50;
+}
+
+.legal-content h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: #34495e;
+}
+
+.legal-content p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+    color: #555;
+}
+
+.legal-content ul, .legal-content ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+.legal-content li {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+}
+
+.legal-content .lead {
+    font-size: 1.1rem;
+    color: #666;
+}
+</style>
+{% endblock %}

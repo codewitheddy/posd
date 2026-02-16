@@ -6,7 +6,7 @@ from .models import (
     SalePayment, Shift, SaleReturn, SaleReturnItem, Promotion,
     ExpenseCategory, Expense, LoyaltyTransaction, LoyaltyReward,
     LoyaltyRedemption, SupplierPayment, PaymentAllocation,
-    Business, BusinessMembership
+    Business, BusinessMembership, SubscriptionPayment
 )
 
 
@@ -106,12 +106,12 @@ class BusinessSettingsAdmin(admin.ModelAdmin):
     readonly_fields = ['updated_at']
     
     def has_add_permission(self, request):
-        # Only allow one instance
-        return not BusinessSettings.objects.exists()
+        # Only allow one instance per business (handled by OneToOne relationship)
+        return True
     
     def has_delete_permission(self, request, obj=None):
-        # Don't allow deletion
-        return False
+        # Allow deletion (will cascade when business is deleted)
+        return request.user.is_superuser
 
 
 @admin.register(ActivityLog)
@@ -293,9 +293,9 @@ class BusinessAdmin(admin.ModelAdmin):
     list_display = ['name', 'slug', 'owner', 'subscription_plan', 'is_active', 'is_trial', 'created_at']
     list_filter = ['is_active', 'is_trial', 'subscription_plan', 'created_at']
     search_fields = ['name', 'slug', 'owner__username', 'owner__email']
-    readonly_fields = ['created_at', 'updated_at']  # Removed 'slug' from readonly
+    readonly_fields = ['created_at', 'updated_at']
     inlines = [BusinessMembershipInline]
-    prepopulated_fields = {'slug': ('name',)}  # Auto-generate slug from name
+    actions = ['deactivate_businesses', 'activate_businesses']
     
     fieldsets = (
         ('Basic Information', {
@@ -315,6 +315,12 @@ class BusinessAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def get_prepopulated_fields(self, request, obj=None):
+        """Only prepopulate slug when creating new business"""
+        if obj is None:  # Creating new object
+            return {'slug': ('name',)}
+        return {}  # Editing existing object - no prepopulation
     
     def get_readonly_fields(self, request, obj=None):
         """Make slug readonly only when editing existing business"""
@@ -337,6 +343,18 @@ class BusinessAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('owner')
+    
+    def deactivate_businesses(self, request, queryset):
+        """Deactivate selected businesses (soft delete)"""
+        count = queryset.update(is_active=False)
+        self.message_user(request, f'{count} business(es) have been deactivated.')
+    deactivate_businesses.short_description = "Deactivate selected businesses (soft delete)"
+    
+    def activate_businesses(self, request, queryset):
+        """Activate selected businesses"""
+        count = queryset.update(is_active=True)
+        self.message_user(request, f'{count} business(es) have been activated.')
+    activate_businesses.short_description = "Activate selected businesses"
 
 
 @admin.register(BusinessMembership)
@@ -360,3 +378,99 @@ class BusinessMembershipAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('user', 'business')
+
+
+@admin.register(SubscriptionPayment)
+class SubscriptionPaymentAdmin(admin.ModelAdmin):
+    list_display = ['business', 'amount_display', 'payment_method', 'payment_date', 'period_display', 'plan', 'status']
+    list_filter = ['status', 'payment_method', 'plan', 'payment_date', 'created_at']
+    search_fields = ['business__name', 'business__slug', 'payment_reference', 'notes']
+    readonly_fields = ['created_at', 'updated_at', 'recorded_by']
+    date_hierarchy = 'payment_date'
+    
+    fieldsets = (
+        ('Business', {
+            'fields': ('business',)
+        }),
+        ('Payment Details', {
+            'fields': ('amount', 'currency', 'payment_method', 'payment_reference', 'payment_date', 'status')
+        }),
+        ('Subscription Period', {
+            'fields': ('plan', 'period_start', 'period_end')
+        }),
+        ('Additional Information', {
+            'fields': ('notes',)
+        }),
+        ('Audit', {
+            'fields': ('recorded_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def amount_display(self, obj):
+        return f"{obj.currency} {obj.amount:,.2f}"
+    amount_display.short_description = 'Amount'
+    amount_display.admin_order_field = 'amount'
+    
+    def period_display(self, obj):
+        return f"{obj.period_start} to {obj.period_end}"
+    period_display.short_description = 'Period'
+    
+    def save_model(self, request, obj, form, change):
+        """Auto-set recorded_by to current user"""
+        if not change:  # Only on creation
+            obj.recorded_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('business', 'recorded_by')
+    
+    actions = ['mark_as_completed', 'mark_as_pending', 'export_payments']
+    
+    def mark_as_completed(self, request, queryset):
+        """Mark selected payments as completed and update business license"""
+        count = 0
+        for payment in queryset:
+            payment.status = 'completed'
+            payment.save()  # This will trigger the save() method which updates license
+            count += 1
+        self.message_user(request, f'{count} payment(s) marked as completed and licenses updated.')
+    mark_as_completed.short_description = "Mark as Completed (updates license)"
+    
+    def mark_as_pending(self, request, queryset):
+        """Mark selected payments as pending"""
+        count = queryset.update(status='pending')
+        self.message_user(request, f'{count} payment(s) marked as pending.')
+    mark_as_pending.short_description = "Mark as Pending"
+    
+    def export_payments(self, request, queryset):
+        """Export selected payments to CSV"""
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="subscription_payments.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Business', 'Amount', 'Currency', 'Payment Method', 'Reference', 'Payment Date', 
+                        'Period Start', 'Period End', 'Plan', 'Status', 'Notes', 'Recorded By'])
+        
+        for payment in queryset:
+            writer.writerow([
+                payment.business.name,
+                payment.amount,
+                payment.currency,
+                payment.get_payment_method_display(),
+                payment.payment_reference,
+                payment.payment_date.strftime('%Y-%m-%d %H:%M'),
+                payment.period_start,
+                payment.period_end,
+                payment.get_plan_display(),
+                payment.get_status_display(),
+                payment.notes,
+                payment.recorded_by.username if payment.recorded_by else ''
+            ])
+        
+        return response
+    export_payments.short_description = "Export to CSV"

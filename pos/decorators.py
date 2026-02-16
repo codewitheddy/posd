@@ -101,3 +101,41 @@ def get_business_queryset(request, model):
     if hasattr(request, 'business') and request.business:
         return model.objects.filter(business=request.business)
     return model.objects.none()
+
+
+def feature_required(feature_name, upgrade_message=None):
+    """
+    Decorator to check if business has access to a specific feature based on subscription plan.
+    
+    Args:
+        feature_name: Feature name (e.g., 'loyalty', 'grn')
+        upgrade_message: Custom message to show when feature is restricted
+    
+    Feature restrictions:
+    - FREE: All features, expires in 30 days
+    - BASIC: No Loyalty Program, No GRN
+    - PROFESSIONAL: All features, lifetime access
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        @business_required
+        def wrapper(request, *args, **kwargs):
+            # Superusers bypass feature restrictions
+            if request.user.is_superuser:
+                return view_func(request, *args, **kwargs)
+            
+            # Check if business has access to this feature
+            if not request.business.has_feature(feature_name):
+                if upgrade_message:
+                    messages.warning(request, upgrade_message)
+                else:
+                    messages.warning(
+                        request,
+                        f'This feature is not available in your current plan ({request.business.plan_display_name}). '
+                        f'Please upgrade to Professional plan to access this feature.'
+                    )
+                return redirect('subscription', slug=request.business.slug)
+            
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
