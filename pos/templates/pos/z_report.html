@@ -136,9 +136,22 @@
                 <div class="card-body">
                     <table class="table table-borderless">
                         <tr>
-                            <td><strong>Opening Cash:</strong></td>
+                            <td><strong>Opening Cash/Floats:</strong></td>
                             <td class="text-end">KES {{ opening_cash|floatformat:2 }}</td>
                         </tr>
+                        {% if cash_floats.exists %}
+                        <tr class="table-light">
+                            <td colspan="2">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle"></i> 
+                                    Opening Floats: KES {{ opening_floats|floatformat:2 }}
+                                    {% if additional_floats > 0 %}
+                                    | Additional: KES {{ additional_floats|floatformat:2 }}
+                                    {% endif %}
+                                </small>
+                            </td>
+                        </tr>
+                        {% endif %}
                         <tr>
                             <td><strong>Cash Sales:</strong></td>
                             <td class="text-end">+ KES {{ cash_payments|floatformat:2 }}</td>
@@ -161,6 +174,35 @@
                             </td>
                         </tr>
                     </table>
+                    
+                    <!-- Cash Floats Details -->
+                    {% if cash_floats.exists %}
+                    <div class="mt-3 p-2 bg-light rounded">
+                        <h6 class="mb-2"><i class="bi bi-cash-stack"></i> Cash Floats for Today</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-borderless mb-0">
+                                {% for float in cash_floats %}
+                                <tr>
+                                    <td class="small">
+                                        <span class="badge bg-{% if float.status == 'active' %}primary{% elif float.status == 'returned' %}warning{% else %}success{% endif %}">
+                                            {{ float.get_status_display }}
+                                        </span>
+                                        {{ float.cashier.get_full_name|default:float.cashier.username }}
+                                    </td>
+                                    <td class="small text-end">
+                                        KES {{ float.amount|floatformat:2 }}
+                                        {% if float.variance %}
+                                        <span class="{% if float.variance > 0 %}text-warning{% elif float.variance < 0 %}text-danger{% else %}text-success{% endif %}">
+                                            ({% if float.variance > 0 %}+{% endif %}{{ float.variance|floatformat:2 }})
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     <!-- Cash Count Form -->
                     <div class="mt-3 p-3 bg-light rounded">

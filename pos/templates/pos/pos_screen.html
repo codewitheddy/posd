@@ -1106,13 +1106,17 @@ function updateQuantity(id, quantity) {
         
         // Check stock availability
         if (newQty > item.availableStock) {
-            showNotification(`Cannot set quantity to ${newQty}. Only ${item.availableStock} in stock!`, 'error');
-            // Reset to available stock
-            document.querySelector(`input[onchange*="updateQuantity(${id}"]`).value = item.availableStock;
-            item.quantity = item.availableStock;
-        } else {
-            item.quantity = newQty;
+            showNotification(`Cannot set quantity to ${newQty}. Only ${item.availableStock} available in stock!`, 'error');
+            // Reset to previous quantity (don't auto-cap to available stock)
+            const inputField = document.querySelector(`input[onchange*="updateQuantity(${id}"]`);
+            if (inputField) {
+                inputField.value = item.quantity;
+            }
+            // Don't update the cart quantity - keep it at the previous valid value
+            return;
         }
+        
+        item.quantity = newQty;
         updateCart();
         saveCartToStorage(); // Save after quantity update
     }
@@ -1154,9 +1158,12 @@ function updateCart() {
                     <div class="d-flex justify-content-between align-items-center mt-2">
                         ${item.isVariable ? 
                             `<span class="text-muted">${qtyDisplay}</span>` :
-                            `<input type="number" class="form-control form-control-sm" style="width: 80px;" 
-                                   value="${item.quantity}" min="1" 
-                                   onchange="updateQuantity(${item.id}, this.value)">`
+                            `<div class="d-flex align-items-center gap-2">
+                                <input type="number" class="form-control form-control-sm" style="width: 80px;" 
+                                       value="${item.quantity}" min="1" max="${item.availableStock}"
+                                       onchange="updateQuantity(${item.id}, this.value)">
+                                <small class="text-muted">(${item.availableStock} avail.)</small>
+                            </div>`
                         }
                         <strong>KES ${total.toFixed(2)}</strong>
                     </div>
@@ -1884,9 +1891,12 @@ function updateMobileCart() {
                         </button>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mt-2">
-                        <input type="number" class="form-control form-control-sm" style="width: 80px;" 
-                               value="${item.quantity}" min="1" 
-                               onchange="updateQuantity(${item.id}, this.value)">
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="number" class="form-control form-control-sm" style="width: 80px;" 
+                                   value="${item.quantity}" min="1" max="${item.availableStock}"
+                                   onchange="updateQuantity(${item.id}, this.value)">
+                            <small class="text-muted">(${item.availableStock} avail.)</small>
+                        </div>
                         <strong>KES ${total.toFixed(2)}</strong>
                     </div>
                 </div>

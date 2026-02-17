@@ -1,0 +1,160 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Cash Float Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-cash-stack"></i> Cash Float Management</h2>
+        <a href="{% url 'cash_float_give' slug=request.business.slug %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Give Float
+        </a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">Active Floats</h5>
+                    <h3>KES {{ total_active|floatformat:2 }}</h3>
+                    <small class="text-muted">Currently with cashiers</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">Returned Today</h5>
+                    <h3>KES {{ total_returned|floatformat:2 }}</h3>
+                    <small class="text-muted">Returned floats</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                        <option value="returned" {% if status_filter == 'returned' %}selected{% endif %}>Returned</option>
+                        <option value="reconciled" {% if status_filter == 'reconciled' %}selected{% endif %}>Reconciled</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cashier</label>
+                    <select name="cashier" class="form-select" onchange="this.form.submit()">
+                        <option value="all">All Cashiers</option>
+                        {% for cashier in cashiers %}
+                        <option value="{{ cashier.id }}" {% if cashier_filter == cashier.id|stringformat:"s" %}selected{% endif %}>
+                            {{ cashier.username }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Period</label>
+                    <select name="date" class="form-select" onchange="this.form.submit()">
+                        <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Today</option>
+                        <option value="week" {% if date_filter == 'week' %}selected{% endif %}>Last 7 Days</option>
+                        <option value="month" {% if date_filter == 'month' %}selected{% endif %}>Last 30 Days</option>
+                        <option value="all" {% if date_filter == 'all' %}selected{% endif %}>All Time</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <a href="{% url 'cash_float_list' slug=request.business.slug %}" class="btn btn-secondary w-100">
+                        <i class="bi bi-arrow-clockwise"></i> Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Floats Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Float #</th>
+                            <th>Cashier</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Given At</th>
+                            <th>Status</th>
+                            <th>Variance</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for float in floats %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'cash_float_detail' slug=request.business.slug pk=float.pk %}">
+                                    {{ float.float_number }}
+                                </a>
+                            </td>
+                            <td>{{ float.cashier.username }}</td>
+                            <td>
+                                <span class="badge bg-{% if float.float_type == 'opening' %}primary{% else %}info{% endif %}">
+                                    {{ float.get_float_type_display }}
+                                </span>
+                            </td>
+                            <td>KES {{ float.amount|floatformat:2 }}</td>
+                            <td>{{ float.given_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                {% if float.status == 'active' %}
+                                <span class="badge bg-warning">Active</span>
+                                {% elif float.status == 'returned' %}
+                                <span class="badge bg-info">Returned</span>
+                                {% else %}
+                                <span class="badge bg-success">Reconciled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if float.variance is not None %}
+                                    {% if float.variance == 0 %}
+                                    <span class="text-success">KES 0.00</span>
+                                    {% elif float.variance > 0 %}
+                                    <span class="text-primary">+KES {{ float.variance|floatformat:2 }}</span>
+                                    {% else %}
+                                    <span class="text-danger">KES {{ float.variance|floatformat:2 }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'cash_float_detail' slug=request.business.slug pk=float.pk %}" 
+                                   class="btn btn-sm btn-info">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if float.status == 'active' %}
+                                <a href="{% url 'cash_float_return' slug=request.business.slug pk=float.pk %}" 
+                                   class="btn btn-sm btn-success">
+                                    <i class="bi bi-arrow-return-left"></i> Return
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No cash floats found. <a href="{% url 'cash_float_give' slug=request.business.slug %}">Give a float</a> to get started.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

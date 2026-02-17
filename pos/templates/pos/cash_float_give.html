@@ -1,0 +1,84 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Give Cash Float{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-cash-stack"></i> Give Cash Float</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="cashier" class="form-label">Cashier <span class="text-danger">*</span></label>
+                            <select name="cashier" id="cashier" class="form-select" required>
+                                <option value="">Select Cashier</option>
+                                {% for cashier in cashiers %}
+                                <option value="{{ cashier.id }}">{{ cashier.username }} - {{ cashier.get_full_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Select the cashier receiving the float</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="float_type" class="form-label">Float Type <span class="text-danger">*</span></label>
+                            <select name="float_type" id="float_type" class="form-select" required>
+                                <option value="opening">Opening Float</option>
+                                <option value="additional">Additional Float</option>
+                            </select>
+                            <small class="text-muted">Opening float is given at start of shift, additional during the day</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Amount (KES) <span class="text-danger">*</span></label>
+                            <input type="number" name="amount" id="amount" class="form-control" 
+                                   step="0.01" min="0.01" required placeholder="e.g., 5000.00">
+                            <small class="text-muted">Enter the float amount in Kenyan Shillings</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes (Optional)</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="3" 
+                                      placeholder="Any additional notes about this float..."></textarea>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Note:</strong> The cashier will be responsible for returning this float plus any cash sales minus change given.
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Give Float
+                            </button>
+                            <a href="{% url 'cash_float_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Tips -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-lightbulb"></i> Quick Tips</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li><strong>Opening Float:</strong> Given at the start of a shift for making change</li>
+                        <li><strong>Additional Float:</strong> Extra cash given during the day if needed</li>
+                        <li><strong>Typical Amount:</strong> KES 2,000 - 10,000 depending on business volume</li>
+                        <li><strong>Reconciliation:</strong> Float should be returned at end of shift</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

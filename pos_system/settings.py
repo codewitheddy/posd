@@ -46,6 +46,14 @@ if not CSRF_TRUSTED_ORIGINS:
         'https://*.onrender.com',
         'https://*.herokuapp.com',
     ]
+    # Add localhost for development
+    if DEBUG:
+        CSRF_TRUSTED_ORIGINS.extend([
+            'http://localhost:8000',
+            'http://127.0.0.1:8000',
+            'http://localhost',
+            'http://127.0.0.1',
+        ])
     # Add current host if available
     import socket
     try:

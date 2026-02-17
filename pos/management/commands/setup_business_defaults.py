@@ -26,6 +26,7 @@ class Command(BaseCommand):
             business=business,
             name='CASH',
             defaults={
+                'code': 'CASH',
                 'is_active': True,
                 'requires_reference': False,
             }
@@ -33,7 +34,13 @@ class Command(BaseCommand):
         if created:
             self.stdout.write(self.style.SUCCESS(f'✓ Created default payment method: CASH'))
         else:
-            self.stdout.write(self.style.WARNING(f'Payment method CASH already exists'))
+            # Update code if it's missing
+            if not cash_method.code:
+                cash_method.code = 'CASH'
+                cash_method.save()
+                self.stdout.write(self.style.SUCCESS(f'✓ Updated CASH payment method code'))
+            else:
+                self.stdout.write(self.style.WARNING(f'Payment method CASH already exists'))
         
         # Create default unit: Pieces
         pieces_unit, created = UnitOfMeasurement.objects.get_or_create(

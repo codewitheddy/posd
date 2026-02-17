@@ -509,6 +509,11 @@
                     <i class="bi bi-person-badge"></i> Cashier Report
                 </a>
             </li>
+            <li>
+                <a href="{% url 'cash_float_list' slug=business_slug %}" class="{% if 'cash-float' in request.path %}active{% endif %}">
+                    <i class="bi bi-cash-stack"></i> Cash Float
+                </a>
+            </li>
             {% endif %}
             <li>
                 <a href="{% url 'writeoff_report' slug=business_slug %}" class="{% if 'writeoff' in request.path %}active{% endif %}">
@@ -531,7 +536,7 @@
             <li class="nav-section">Administration</li>
             {% if user_permissions.can_manage_users %}
             <li>
-                <a href="{% url 'user_list' slug=business_slug %}" class="{% if 'users' in request.path and 'roles' not in request.path %}active{% endif %}">
+                <a href="{% url 'user_management_list' slug=business_slug %}" class="{% if 'users' in request.path and 'roles' not in request.path %}active{% endif %}">
                     <i class="bi bi-people-fill"></i> User Management
                 </a>
             </li>

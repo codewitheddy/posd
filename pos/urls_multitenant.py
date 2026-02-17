@@ -5,7 +5,7 @@ Wraps existing URLs with business slug prefix
 
 from django.urls import path, include
 from django.shortcuts import render, redirect
-from . import views, tenant_views
+from . import views, tenant_views, cash_float_views, user_management_views
 
 
 def landing_page(request):
@@ -160,6 +160,15 @@ business_urlpatterns = [
     # Sales
     path('sales/', views.sales_list, name='sales_list'),
     
+    # Cash Float Management
+    path('cash-float/', include([
+        path('', cash_float_views.cash_float_list, name='cash_float_list'),
+        path('give/', cash_float_views.cash_float_give, name='cash_float_give'),
+        path('<int:pk>/', cash_float_views.cash_float_detail, name='cash_float_detail'),
+        path('<int:pk>/return/', cash_float_views.cash_float_return, name='cash_float_return'),
+        path('<int:pk>/reconcile/', cash_float_views.cash_float_reconcile, name='cash_float_reconcile'),
+    ])),
+    
     # Reports
     path('reports/sales/', views.sales_report, name='sales_report'),
     path('reports/cashier/', views.cashier_report, name='cashier_report'),
@@ -176,7 +185,13 @@ business_urlpatterns = [
     path('analytics/export/', views.analytics_export_pdf, name='analytics_export_pdf'),
     
     # User Management
-    path('users/', views.user_list, name='user_list'),
+    path('users/', include([
+        path('', user_management_views.user_list_view, name='user_management_list'),
+        path('create/', user_management_views.user_create_view, name='user_management_create'),
+        path('<int:pk>/edit/', user_management_views.user_edit_view, name='user_management_edit'),
+        path('<int:pk>/delete/', user_management_views.user_delete_view, name='user_management_delete'),
+        path('<int:pk>/change-role/', user_management_views.user_change_role_view, name='user_management_change_role'),
+    ])),
     path('users/roles-permissions/', views.roles_permissions, name='roles_permissions'),
     path('users/create/', views.user_create, name='user_create'),
     path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),

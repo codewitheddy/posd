@@ -1,0 +1,79 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Reconcile Float{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-check2-circle"></i> Reconcile Float</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-info-circle"></i> Confirm Reconciliation</h5>
+                        <p>You are about to reconcile float <strong>{{ cash_float.float_number }}</strong>.</p>
+                    </div>
+
+                    <table class="table">
+                        <tr>
+                            <td><strong>Float Number:</strong></td>
+                            <td>{{ cash_float.float_number }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cashier:</strong></td>
+                            <td>{{ cash_float.cashier.username }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Float Amount:</strong></td>
+                            <td>KES {{ cash_float.amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Returned Amount:</strong></td>
+                            <td>KES {{ cash_float.returned_amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr class="table-{% if cash_float.variance == 0 %}success{% elif cash_float.variance > 0 %}primary{% else %}danger{% endif %}">
+                            <td><strong>Variance:</strong></td>
+                            <td>
+                                {% if cash_float.variance == 0 %}
+                                <strong>KES 0.00 (No Variance)</strong>
+                                {% elif cash_float.variance > 0 %}
+                                <strong>+KES {{ cash_float.variance|floatformat:2 }} (Surplus)</strong>
+                                {% else %}
+                                <strong>KES {{ cash_float.variance|floatformat:2 }} (Shortage)</strong>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+
+                    {% if cash_float.notes %}
+                    <div class="mb-3">
+                        <strong>Notes:</strong>
+                        <p class="text-muted">{{ cash_float.notes }}</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> Once reconciled, this float cannot be modified. Make sure all information is correct.
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Confirm Reconciliation
+                            </button>
+                            <a href="{% url 'cash_float_detail' slug=request.business.slug pk=cash_float.pk %}" 
+                               class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

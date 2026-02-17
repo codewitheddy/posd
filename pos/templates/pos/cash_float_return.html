@@ -1,0 +1,131 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Return Cash Float{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-arrow-return-left"></i> Return Cash Float</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Float Details -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>Float Details</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Float Number:</strong></td>
+                                    <td>{{ cash_float.float_number }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Cashier:</strong></td>
+                                    <td>{{ cash_float.cashier.username }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Type:</strong></td>
+                                    <td>{{ cash_float.get_float_type_display }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Given At:</strong></td>
+                                    <td>{{ cash_float.given_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Calculation</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Opening Float:</strong></td>
+                                    <td class="text-end">KES {{ cash_float.amount|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Cash Sales:</strong></td>
+                                    <td class="text-end text-success">+ KES {{ cash_received|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Change Given:</strong></td>
+                                    <td class="text-end text-danger">- KES {{ total_change|floatformat:2 }}</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td><strong>Expected Return:</strong></td>
+                                    <td class="text-end"><strong>KES {{ expected_return|floatformat:2 }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2"><small class="text-muted">Based on {{ sales_count }} sale(s)</small></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Return Form -->
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="returned_amount" class="form-label">
+                                Actual Amount Returned (KES) <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" name="returned_amount" id="returned_amount" 
+                                   class="form-control form-control-lg" 
+                                   step="0.01" min="0" required 
+                                   value="{{ expected_return }}"
+                                   placeholder="Enter actual cash returned">
+                            <small class="text-muted">Count all cash and enter the total amount</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes (Optional)</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="3" 
+                                      placeholder="Any notes about variances or issues..."></textarea>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Important:</strong> Please count the cash carefully. Any variance will be recorded and may require explanation.
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-check-circle"></i> Confirm Return
+                            </button>
+                            <a href="{% url 'cash_float_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Variance Guide -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-info-circle"></i> Understanding Variances</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li><strong>No Variance (0):</strong> Returned amount matches expected - Perfect!</li>
+                        <li><strong>Surplus (+):</strong> More cash than expected - Investigate source</li>
+                        <li><strong>Shortage (-):</strong> Less cash than expected - Requires explanation</li>
+                        <li><strong>Common Causes:</strong> Incorrect change, unrecorded sales, counting errors</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Calculate variance in real-time
+document.getElementById('returned_amount').addEventListener('input', function() {
+    const returned = parseFloat(this.value) || 0;
+    const expected = {{ expected_return }};
+    const variance = returned - expected;
+    
+    // You could add a live variance display here
+    console.log('Variance:', variance);
+});
+</script>
+{% endblock %}

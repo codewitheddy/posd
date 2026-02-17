@@ -3996,11 +3996,31 @@ def z_report(request, slug=None):
         sale__business=request.business,
         sale__date__date=report_date
     ).filter(
-        Q(payment_method__code='CASH') | Q(payment_method__name__icontains='cash')
+        Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-    # Opening cash (from shifts)
+    # Get cash floats for the day
+    from pos.models import CashFloat
+    cash_floats = CashFloat.objects.filter(
+        business=request.business,
+        given_at__date=report_date
+    ).select_related('cashier', 'given_by')
+    
+    # Calculate total opening floats
+    opening_floats = cash_floats.filter(float_type='opening').aggregate(
+        total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    # Calculate total additional floats
+    additional_floats = cash_floats.filter(float_type='additional').aggregate(
+        total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    total_floats = opening_floats + additional_floats
+
+    # Opening cash (from shifts or floats, whichever is higher)
     opening_cash = shifts.aggregate(total=Sum('opening_cash'))['total'] or Decimal('0.00')
+    if total_floats > opening_cash:
+        opening_cash = total_floats
+    
     expected_cash = opening_cash + cash_payments
 
     # Closing cash (from closed shifts)
@@ -4049,6 +4069,10 @@ def z_report(request, slug=None):
         'hourly_sales': hourly_sales,
         'day_is_closed': day_is_closed,
         'auto_print': auto_print,
+        'cash_floats': cash_floats,
+        'opening_floats': opening_floats,
+        'additional_floats': additional_floats,
+        'total_floats': total_floats,
     }
 
     return render(request, 'pos/z_report.html', context)
@@ -4167,7 +4191,7 @@ def z_report_pdf(request, slug=None):
 @business_required
 @manager_required
 def close_day(request, slug=None):
-    """Close the day - closes all open shifts for the specified date"""
+    """Close the day - closes all open shifts for the specified date and reconciles cash floats"""
     if request.method != 'POST':
         messages.error(request, 'Invalid request method.')
         return redirect('z_report', slug=request.business.slug)
@@ -4198,16 +4222,60 @@ def close_day(request, slug=None):
         
         # Calculate expected cash for the day
         from django.db.models import Q
+        from pos.models import CashFloat
+        
         cash_payments = SalePayment.objects.filter(
             sale__business=request.business,
             sale__date__date=report_date
         ).filter(
-            Q(payment_method__code='CASH') | Q(payment_method__name__icontains='cash')
+            Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
+        # Get cash floats for the day
+        cash_floats = CashFloat.objects.filter(
+            business=request.business,
+            given_at__date=report_date,
+            status='active'
+        )
+        
+        # Calculate total floats
+        total_floats = cash_floats.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
         opening_cash = shifts.aggregate(total=Sum('opening_cash'))['total'] or Decimal('0.00')
+        # Use floats if higher than shift opening cash
+        if total_floats > opening_cash:
+            opening_cash = total_floats
+        
         expected_cash = opening_cash + cash_payments
         cash_difference = closing_cash - expected_cash
+        
+        # Reconcile cash floats
+        floats_reconciled = 0
+        for cash_float in cash_floats:
+            # Calculate expected return for this float
+            # Float amount + cash sales made by this cashier
+            cashier_cash_sales = SalePayment.objects.filter(
+                sale__business=request.business,
+                sale__date__date=report_date,
+                sale__cashier=cash_float.cashier
+            ).filter(
+                Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
+            expected_return = cash_float.amount + cashier_cash_sales
+            
+            # Mark as returned with the closing cash
+            # Note: In a multi-cashier setup, you'd need to split closing_cash
+            # For now, we'll mark it as reconciled with a note
+            cash_float.status = 'reconciled'
+            cash_float.returned_at = timezone.now()
+            cash_float.notes = (
+                f"Reconciled during day close by {request.user.username}. "
+                f"Expected return: KES {expected_return:.2f}. "
+                f"Day closing variance: KES {cash_difference:.2f}"
+            )
+            cash_float.save()
+            floats_reconciled += 1
         
         # Close all open shifts
         closed_count = 0
@@ -4243,6 +4311,7 @@ def close_day(request, slug=None):
             action='close_day',
             description=f'Closed day for {report_date.strftime("%d %B %Y")}. '
                        f'Closed {closed_count} shift(s). '
+                       f'Reconciled {floats_reconciled} cash float(s). '
                        f'Expected: KES {expected_cash:.2f}, '
                        f'Actual: KES {closing_cash:.2f}, '
                        f'Variance: KES {cash_difference:.2f}'
@@ -4257,10 +4326,12 @@ def close_day(request, slug=None):
         else:
             variance_msg = ' Cash is balanced.'
         
+        float_msg = f' Reconciled {floats_reconciled} cash float(s).' if floats_reconciled > 0 else ''
+        
         messages.success(
             request, 
             f'Day closed successfully for {report_date.strftime("%d %B %Y")}! '
-            f'Closed {closed_count} shift(s).{variance_msg} '
+            f'Closed {closed_count} shift(s).{float_msg}{variance_msg} '
             f'Printing Z-Report...'
         )
         
@@ -4698,8 +4769,10 @@ def payment_transactions_report(request, slug=None):
         total_transactions = payments.count()
         total_amount = payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        cash_total = payments.filter(payment_method__code='CASH').aggregate(
-            total=Sum('amount'))['total'] or Decimal('0.00')
+        # Calculate cash total - check both code and name for backward compatibility
+        cash_total = payments.filter(
+            Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         non_cash_total = total_amount - cash_total
         
         # Pagination

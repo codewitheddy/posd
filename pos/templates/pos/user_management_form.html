@@ -1,0 +1,176 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}{% if is_edit %}Edit User{% else %}Add New User{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-{% if is_edit %}pencil-square{% else %}person-plus-fill{% endif %}"></i>
+                        {% if is_edit %}Edit User{% else %}Add New User{% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
+                                <input type="text" name="username" id="username" class="form-control" 
+                                       value="{% if is_edit %}{{ user.username }}{% endif %}"
+                                       {% if is_edit %}readonly{% else %}required{% endif %}>
+                                <small class="text-muted">Used for login{% if is_edit %} (cannot be changed){% endif %}</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" name="email" id="email" class="form-control" 
+                                       value="{% if is_edit %}{{ user.email }}{% endif %}"
+                                       placeholder="user@example.com">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="first_name" class="form-label">First Name</label>
+                                <input type="text" name="first_name" id="first_name" class="form-control" 
+                                       value="{% if is_edit %}{{ user.first_name }}{% endif %}">
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="last_name" class="form-label">Last Name</label>
+                                <input type="text" name="last_name" id="last_name" class="form-control" 
+                                       value="{% if is_edit %}{{ user.last_name }}{% endif %}">
+                            </div>
+                        </div>
+
+                        {% if not is_edit %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                                <input type="password" name="password" id="password" class="form-control" required>
+                                <small class="text-muted">Minimum 8 characters</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="password_confirm" class="form-label">Confirm Password <span class="text-danger">*</span></label>
+                                <input type="password" name="password_confirm" id="password_confirm" class="form-control" required>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
+                                <select name="role" id="role" class="form-select" required 
+                                        {% if is_edit and membership.role == 'owner' %}disabled{% endif %}>
+                                    <option value="">Select Role</option>
+                                    {% for role_key, role_name in roles %}
+                                    {% if role_key != 'owner' %}
+                                    <option value="{{ role_key }}" 
+                                            {% if is_edit and membership.role == role_key %}selected{% endif %}>
+                                        {{ role_name }}
+                                    </option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                                {% if is_edit and membership.role == 'owner' %}
+                                <small class="text-muted">Owner role cannot be changed</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="phone" class="form-label">Phone Number</label>
+                                <input type="tel" name="phone" id="phone" class="form-control" 
+                                       value="{% if is_edit %}{{ user.profile.phone }}{% endif %}"
+                                       placeholder="+254 712 345 678">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="employee_id" class="form-label">Employee ID</label>
+                                <input type="text" name="employee_id" id="employee_id" class="form-control" 
+                                       value="{% if is_edit %}{{ user.profile.employee_id }}{% endif %}"
+                                       placeholder="EMP001">
+                            </div>
+
+                            {% if is_edit %}
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Status</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
+                                           {% if user.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        Active (user can login)
+                                    </label>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Role Description -->
+                        <div class="alert alert-info">
+                            <h6><i class="bi bi-info-circle"></i> Role Permissions</h6>
+                            <div id="roleDescription">
+                                <p class="mb-0">Select a role to see its permissions</p>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> {% if is_edit %}Update User{% else %}Create User{% endif %}
+                            </button>
+                            <a href="{% url 'user_management_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Role descriptions
+const roleDescriptions = {
+    'admin': '<strong>Administrator:</strong> Full access to all features including user management, reports, and settings.',
+    'manager': '<strong>Manager:</strong> Can manage users, products, stock, suppliers, customers, and view reports.',
+    'stock_manager': '<strong>Stock Manager:</strong> Manages inventory, products, suppliers, and stock levels only.',
+    'cashier': '<strong>Cashier:</strong> Can make sales, process transactions, and manage customers.',
+    'sales': '<strong>Sales Associate:</strong> Can make sales and view customer information.',
+    'viewer': '<strong>Viewer:</strong> Read-only access to view reports and data.'
+};
+
+// Update role description when role is selected
+document.getElementById('role').addEventListener('change', function() {
+    const roleDesc = document.getElementById('roleDescription');
+    const selectedRole = this.value;
+    
+    if (selectedRole && roleDescriptions[selectedRole]) {
+        roleDesc.innerHTML = '<p class="mb-0">' + roleDescriptions[selectedRole] + '</p>';
+    } else {
+        roleDesc.innerHTML = '<p class="mb-0">Select a role to see its permissions</p>';
+    }
+});
+
+// Password confirmation validation
+{% if not is_edit %}
+document.getElementById('password_confirm').addEventListener('input', function() {
+    const password = document.getElementById('password').value;
+    const confirm = this.value;
+    
+    if (password !== confirm) {
+        this.setCustomValidity('Passwords do not match');
+    } else {
+        this.setCustomValidity('');
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

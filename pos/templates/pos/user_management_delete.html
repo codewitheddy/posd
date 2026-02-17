@@ -1,0 +1,79 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Remove User{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Remove User</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5><i class="bi bi-exclamation-triangle-fill"></i> Confirm User Removal</h5>
+                        <p>You are about to remove the following user from your business:</p>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                     style="width: 60px; height: 60px; font-size: 1.5rem;">
+                                    {{ user.username|slice:":1"|upper }}
+                                </div>
+                                <div>
+                                    <h5 class="mb-0">{{ user.get_full_name|default:user.username }}</h5>
+                                    <small class="text-muted">@{{ user.username }}</small>
+                                </div>
+                            </div>
+
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Email:</strong></td>
+                                    <td>{{ user.email|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Phone:</strong></td>
+                                    <td>{{ user.profile.phone|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Role:</strong></td>
+                                    <td><span class="badge bg-primary">{{ membership.get_role_display }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Employee ID:</strong></td>
+                                    <td>{{ user.profile.employee_id|default:"-" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-danger">
+                        <h6><i class="bi bi-info-circle"></i> What happens when you remove a user?</h6>
+                        <ul class="mb-0">
+                            <li>User will no longer have access to this business</li>
+                            <li>User's past sales and activities will remain in the system</li>
+                            <li>User account is not deleted, only removed from this business</li>
+                            <li>User can be re-added later if needed</li>
+                        </ul>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-danger btn-lg">
+                                <i class="bi bi-trash"></i> Yes, Remove User
+                            </button>
+                            <a href="{% url 'user_management_list' slug=request.business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

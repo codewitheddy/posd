@@ -614,38 +614,65 @@
     <div class="quick-actions-container">
         <h5 class="section-title text-center mb-3">Quick Actions</h5>
         <div class="quick-actions-grid">
+            {% if user_permissions.can_make_sales %}
             <a href="{% url 'pos_screen' slug=request.business.slug %}" class="quick-action-btn btn btn-primary">
                 <i class="bi bi-cart-plus"></i> New Sale
             </a>
+            {% endif %}
+            
+            {% if user_permissions.can_make_sales %}
             <a href="{% url 'sales_list' slug=request.business.slug %}" class="quick-action-btn btn btn-outline-primary">
                 <i class="bi bi-receipt"></i> All Sales
             </a>
+            {% endif %}
+            
+            {% if user_permissions.can_manage_products %}
             <a href="{% url 'product_create' slug=request.business.slug %}" class="quick-action-btn btn btn-success">
                 <i class="bi bi-plus-circle"></i> Add Product
             </a>
+            {% endif %}
+            
+            {% if user_permissions.can_manage_suppliers %}
             <a href="{% url 'purchase_create' slug=request.business.slug %}" class="quick-action-btn btn btn-info">
                 <i class="bi bi-bag-plus"></i> New Purchase
             </a>
+            {% endif %}
+            
+            {% if user_permissions.can_adjust_stock %}
             <a href="{% url 'stock_list' slug=request.business.slug %}" class="quick-action-btn btn btn-secondary">
                 <i class="bi bi-boxes"></i> Manage Stock
             </a>
+            {% endif %}
+            
+            {% if user_permissions.can_view_reports %}
             <button type="button" class="quick-action-btn btn btn-purple" data-bs-toggle="modal" data-bs-target="#analyticsModal" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                 <i class="bi bi-graph-up"></i> Analytics
             </button>
+            {% endif %}
+            
+            {% if user_permissions.can_make_sales %}
             <a href="{% url 'payment_transactions_report' slug=request.business.slug %}" class="quick-action-btn btn btn-dark">
                 <i class="bi bi-credit-card-2-front"></i> Transactions
             </a>
+            {% endif %}
+            
             {% if user_permissions.can_manage_settings %}
             <a href="{% url 'payment_method_list' slug=request.business.slug %}" class="quick-action-btn btn btn-outline-primary">
                 <i class="bi bi-credit-card"></i> Payment Methods
             </a>
             {% endif %}
+            
+            {% if user_permissions.can_view_reports %}
             <a href="{% url 'sales_report' slug=request.business.slug %}" class="quick-action-btn btn btn-warning">
                 <i class="bi bi-file-earmark-text"></i> Reports
             </a>
+            {% endif %}
+            
+            {% if user_permissions.can_view_reports %}
             <a href="{% url 'z_report' slug=request.business.slug %}" class="quick-action-btn btn btn-danger">
                 <i class="bi bi-calculator-fill"></i> Z-Report
             </a>
+            {% endif %}
         </div>
     </div>
 </div>

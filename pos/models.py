@@ -2362,3 +2362,93 @@ class EmailLog(models.Model):
     
     def __str__(self):
         return f"{self.template_type} to {self.recipient} - {self.status}"
+
+
+# ==================== CASH FLOAT MANAGEMENT ====================
+
+class CashFloat(models.Model):
+    """Track cash floats given to cashiers for making change"""
+    FLOAT_TYPES = [
+        ('opening', 'Opening Float'),
+        ('additional', 'Additional Float'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('returned', 'Returned'),
+        ('reconciled', 'Reconciled'),
+    ]
+    
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='cash_floats')
+    float_number = models.CharField(max_length=50, unique=True)
+    cashier = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cash_floats')
+    given_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='floats_given')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    float_type = models.CharField(max_length=20, choices=FLOAT_TYPES, default='opening')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    given_at = models.DateTimeField(auto_now_add=True)
+    returned_at = models.DateTimeField(null=True, blank=True)
+    returned_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    variance = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text='Difference between expected and returned amount'
+    )
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-given_at']
+        indexes = [
+            models.Index(fields=['business', 'cashier', '-given_at']),
+            models.Index(fields=['business', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.float_number} - {self.cashier.username} - KES {self.amount}"
+    
+    def save(self, *args, **kwargs):
+        if not self.float_number:
+            # Generate float number: FLT-YYYYMMDD-XXXX
+            from django.utils import timezone
+            today = timezone.now().strftime('%Y%m%d')
+            last_float = CashFloat.objects.filter(
+                float_number__startswith=f'FLT-{today}'
+            ).order_by('-float_number').first()
+            
+            if last_float:
+                last_num = int(last_float.float_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            
+            self.float_number = f'FLT-{today}-{new_num:04d}'
+        
+        super().save(*args, **kwargs)
+    
+    def return_float(self, returned_amount, notes=''):
+        """Mark float as returned and calculate variance"""
+        from django.utils import timezone
+        self.returned_at = timezone.now()
+        self.returned_amount = returned_amount
+        self.variance = returned_amount - self.amount
+        self.status = 'returned'
+        if notes:
+            self.notes = notes
+        self.save()
+    
+    def reconcile(self):
+        """Mark float as reconciled"""
+        self.status = 'reconciled'
+        self.save()
+    
+    @property
+    def is_active(self):
+        return self.status == 'active'
+    
+    @property
+    def expected_return(self):
+        """Calculate expected return amount (float + sales - change given)"""
+        # This would need to be calculated based on sales made during the float period
+        return self.amount

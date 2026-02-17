@@ -131,7 +131,7 @@
             {% if user_permissions.is_manager %}
             {% if user_permissions.can_manage_users %}
             <li>
-                <a href="{% url 'user_list' slug=business_slug %}" class="touch-target">
+                <a href="{% url 'user_management_list' slug=business_slug %}" class="touch-target">
                     <i class="bi bi-people-fill"></i> User Management
                 </a>
             </li>
