@@ -255,7 +255,10 @@
                     
                     <!-- Product Image -->
                     {% if product.image %}
-                        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image" loading="lazy">
+                        <img src="{{ product.image.url }}" 
+                             alt="{{ product.name }}" 
+                             class="product-image" 
+                             loading="lazy">
                     {% else %}
                         <div class="product-placeholder">
                             <i class="bi bi-box-seam"></i>
