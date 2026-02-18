@@ -16,6 +16,9 @@
             </nav>
         </div>
         <div class="col-auto">
+            <button onclick="location.reload(true)" class="btn btn-secondary me-2" title="Refresh statement">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
             <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
                 <i class="bi bi-cash-coin"></i> View Payments
             </a>

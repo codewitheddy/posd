@@ -3917,10 +3917,11 @@ def delete_payment(request, slug, payment_id):
 @login_required
 @can_manage_purchases
 def supplier_statement(request, slug, supplier_id):
-    """Generate supplier statement"""
+    """Generate supplier statement - Always fresh, no caching"""
+    from django.views.decorators.cache import never_cache
     from .services import SupplierStatementService
     
-    supplier = get_object_or_404(Supplier, pk=supplier_id)
+    supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
     
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
@@ -3930,6 +3931,7 @@ def supplier_statement(request, slug, supplier_id):
     if end_date:
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     
+    # Generate fresh statement (no caching)
     statement = SupplierStatementService.generate_statement(
         supplier=supplier,
         start_date=start_date,
@@ -3937,7 +3939,14 @@ def supplier_statement(request, slug, supplier_id):
     )
     
     context = statement
-    return render(request, 'pos/supplier_statement.html', context)
+    response = render(request, 'pos/supplier_statement.html', context)
+    
+    # Add cache-control headers to prevent browser caching
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    
+    return response
 
 
 @login_required
