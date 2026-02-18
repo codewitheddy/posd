@@ -1618,9 +1618,20 @@ function addPaymentMethod() {
     }
     
     // Check if this is a cash payment (case-insensitive)
-    const isCash = methodCode && (methodCode.toUpperCase() === 'CASH' || methodName.toUpperCase().includes('CASH'));
+    // Check both code and name to be more robust
+    const isCash = (methodCode && methodCode.toUpperCase() === 'CASH') || 
+                   (methodName && methodName.toUpperCase().includes('CASH'));
     
-    // Require reference number for non-cash payments
+    // Debug log to help troubleshoot
+    console.log('Payment validation:', {
+        methodCode: methodCode,
+        methodName: methodName,
+        isCash: isCash,
+        reference: reference,
+        requiresRef: requiresRef
+    });
+    
+    // Require reference number for non-cash payments only
     if (!isCash && !reference) {
         alert('Reference number is required for ' + methodName + ' payments (e.g., M-Pesa code, transaction ID)');
         referenceInput.focus();
