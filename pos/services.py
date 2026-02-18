@@ -223,16 +223,9 @@ class SupplierStatementService:
         transactions = []
         
         for purchase in purchases:
-            # Calculate actual received amount (not ordered amount)
-            actual_amount = Decimal('0.00')
-            for item in purchase.items.all():
-                # Use quantity_received if available, otherwise use ordered quantity
-                qty = item.quantity_received if item.quantity_received > 0 else item.quantity
-                actual_amount += Decimal(qty) * item.unit_cost
-            
-            # If no items or all zero, fall back to total_amount
-            if actual_amount == Decimal('0.00'):
-                actual_amount = purchase.total_amount
+            # Use the purchase total_amount directly
+            # This is the correct amount that was invoiced/received
+            actual_amount = purchase.total_amount
             
             transactions.append({
                 'date': purchase.date.date(),
@@ -241,9 +234,7 @@ class SupplierStatementService:
                 'description': f'Purchase: {purchase.purchase_number}',
                 'debit': actual_amount,
                 'credit': Decimal('0.00'),
-                'object': purchase,
-                'ordered_amount': purchase.total_amount,  # Keep for reference
-                'received_amount': actual_amount
+                'object': purchase
             })
         
         for payment in payments:
