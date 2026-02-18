@@ -439,22 +439,32 @@ class Product(models.Model):
             
             self.product_code = f'PRD-{new_num:04d}'
         
-        # Optimize image on upload
+        # Optimize image on upload (with error handling for missing files)
         if self.image and hasattr(self.image, 'file'):
-            # Validate image
-            is_valid, error = ImageOptimizer.validate_image(self.image)
-            if not is_valid:
-                raise ValueError(error)
-            
-            # Optimize image
-            self.image = ImageOptimizer.optimize_image(self.image)
+            try:
+                # Validate image
+                is_valid, error = ImageOptimizer.validate_image(self.image)
+                if not is_valid:
+                    raise ValueError(error)
+                
+                # Optimize image
+                self.image = ImageOptimizer.optimize_image(self.image)
+            except (FileNotFoundError, IOError, OSError):
+                # Image file doesn't exist (e.g., on Heroku ephemeral filesystem)
+                # Skip optimization and continue
+                pass
         
         super().save(*args, **kwargs)
     
     def get_image_url(self):
-        """Get image URL or placeholder"""
+        """Get image URL or placeholder (handles missing files gracefully)"""
         if self.image:
-            return self.image.url
+            try:
+                # Try to get the URL
+                return self.image.url
+            except (ValueError, FileNotFoundError, IOError, OSError):
+                # File doesn't exist, return placeholder
+                pass
         return '/static/images/no-image.png'  # Placeholder
     
     def is_low_stock(self):
