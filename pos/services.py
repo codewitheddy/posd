@@ -190,7 +190,7 @@ class SupplierStatementService:
                 status='received',
                 date__gte=start_date,
                 date__lte=timezone.datetime.combine(end_date, timezone.datetime.max.time())
-            ).order_by('date')
+            ).prefetch_related('items').order_by('date')  # Added prefetch_related
             
             payments = supplier.payments.filter(
                 payment_date__gte=start_date,
@@ -208,7 +208,7 @@ class SupplierStatementService:
             purchases = supplier.purchases.filter(
                 status='received',
                 date__lte=timezone.datetime.combine(end_date, timezone.datetime.max.time())
-            ).order_by('date')
+            ).prefetch_related('items').order_by('date')  # Added prefetch_related
             
             payments = supplier.payments.filter(
                 payment_date__lte=end_date
