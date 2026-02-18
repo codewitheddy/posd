@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Receipt {{ sale.invoice_number }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -46,6 +45,7 @@
             display: block;
             color: #4ade80;
             text-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
+            font-style: normal;
         }
         
         .success-message h2 {
@@ -590,7 +590,7 @@
                 {% for transaction in transactions %}
                     {% if transaction.transaction_type == 'redeem' %}
                     <div style="font-size: 11px; color: #dc3545; margin-bottom: 3px;">
-                        <i class="bi bi-dash-circle"></i> {% if transaction.points < 0 %}{{ transaction.points|slice:"1:" }}{% else %}{{ transaction.points }}{% endif %} Points Redeemed
+                        ➖ {% if transaction.points < 0 %}{{ transaction.points|slice:"1:" }}{% else %}{{ transaction.points }}{% endif %} Points Redeemed
                     </div>
                     {% elif transaction.transaction_type == 'earn' %}
                     <div class="loyalty-points">+{{ transaction.points }} Points Earned!</div>
@@ -633,23 +633,23 @@
     <!-- Success Message & Action Buttons Below Receipt -->
     <div class="page-footer">
         <div class="success-message">
-            <i class="bi bi-check-circle-fill"></i>
+            <i>✓</i>
             <h2>Sale Completed Successfully!</h2>
             <p>Receipt #{{ sale.invoice_number }} · {{ sale.date|date:"d/m/Y H:i" }}</p>
         </div>
         
         <div class="action-bar">
             <button onclick="window.print()" class="btn btn-primary" title="Print Receipt (P)">
-                <i class="bi bi-printer-fill"></i> Print Receipt
+                🖨️ Print Receipt
             </button>
             <button onclick="showEmailModal()" class="btn btn-secondary" title="Email Receipt (E)">
-                <i class="bi bi-envelope-fill"></i> Email Receipt
+                ✉️ Email Receipt
             </button>
             <a href="{% url 'pos_screen' slug=request.business.slug  %}" class="btn btn-success" title="New Sale (N)">
-                <i class="bi bi-cart-plus-fill"></i> New Sale
+                🛒 New Sale
             </a>
             <a href="{% url 'dashboard' slug=request.business.slug  %}" class="btn btn-info" title="Dashboard (D)">
-                <i class="bi bi-house-door-fill"></i> Dashboard
+                🏠 Dashboard
             </a>
         </div>
         
@@ -657,7 +657,7 @@
         <div id="emailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
             <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%;">
                 <h3 style="margin-bottom: 20px; color: #333;">
-                    <i class="bi bi-envelope"></i> Email Receipt
+                    ✉️ Email Receipt
                 </h3>
                 <form method="POST">
                     {% csrf_token %}
@@ -671,7 +671,7 @@
                     <div style="display: flex; gap: 10px;">
                         <button type="submit" name="email_receipt" value="1" 
                                 style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                            <i class="bi bi-send-fill"></i> Send Email
+                            📧 Send Email
                         </button>
                         <button type="button" onclick="hideEmailModal()" 
                                 style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
@@ -683,7 +683,7 @@
         </div>
         
         <div class="shortcuts-hint">
-            <i class="bi bi-keyboard"></i> Keyboard shortcuts: 
+            ⌨️ Keyboard shortcuts: 
             <kbd>P</kbd> Print · 
             <kbd>E</kbd> Email · 
             <kbd>N</kbd> New Sale · 

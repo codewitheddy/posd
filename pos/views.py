@@ -1459,9 +1459,23 @@ def invoice_view(request, slug, pk):
     return render(request, 'pos/invoice.html', {'sale': sale, 'shop_name': shop_name})
 @login_required
 def thermal_receipt(request, slug, pk):
-    """View thermal printer receipt"""
+    """View thermal printer receipt - Optimized for fast loading"""
     from .models import BusinessSettings
-    sale = get_object_or_404(Sale, pk=pk, business=request.business)
+    
+    # Optimize query with select_related and prefetch_related to avoid N+1 queries
+    sale = get_object_or_404(
+        Sale.objects.select_related(
+            'customer',
+            'cashier',
+            'business'
+        ).prefetch_related(
+            'items__product__unit',  # Prefetch items with product and unit
+            'payments__payment_method',  # Prefetch payments with payment method
+            'loyalty_transactions'  # Prefetch loyalty transactions
+        ),
+        pk=pk,
+        business=request.business
+    )
     
     # Handle email receipt request
     if request.method == 'POST' and 'email_receipt' in request.POST:
@@ -1477,7 +1491,7 @@ def thermal_receipt(request, slug, pk):
             messages.error(request, 'Please provide an email address')
         return redirect('thermal_receipt', slug=slug, pk=pk)
     
-    # Get business settings
+    # Get business settings (cached)
     try:
         business_settings = BusinessSettings.get_settings(request.business)
     except Exception:
