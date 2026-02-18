@@ -1363,16 +1363,31 @@ def complete_sale(request, slug=None):
             # Process payment methods
             from .models import PaymentMethod
             if payments_data:
+                total_payment_allocated = Decimal('0.00')
+                
                 for payment_str in payments_data:
                     method_id, amount, reference = payment_str.split(',')
                     payment_method = PaymentMethod.objects.get(id=method_id, business=request.business)
+                    payment_amount = Decimal(amount)
                     
-                    SalePayment.objects.create(
-                        sale=sale,
-                        payment_method=payment_method,
-                        amount=Decimal(amount),
-                        reference_number=reference
-                    )
+                    # For cash payments, don't record more than the remaining sale amount
+                    # (customer might give 1000 for a 600 sale, but we only record 600)
+                    is_cash = payment_method.code == 'CASH' or payment_method.name.upper() == 'CASH'
+                    remaining_amount = sale.total - total_payment_allocated
+                    
+                    if is_cash and payment_amount > remaining_amount:
+                        # Record only the sale amount, not the cash tendered
+                        # Change is given but not recorded as a payment
+                        payment_amount = remaining_amount
+                    
+                    if payment_amount > 0:
+                        SalePayment.objects.create(
+                            sale=sale,
+                            payment_method=payment_method,
+                            amount=payment_amount,
+                            reference_number=reference
+                        )
+                        total_payment_allocated += payment_amount
             
             # Handle loyalty points
             if customer:
