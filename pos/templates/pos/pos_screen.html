@@ -247,61 +247,28 @@
         </div>
 
         <!-- Remove old search inputs -->
-        <div class="row" id="products-grid">
-            {% for product in products %}
-            <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3 product-item" data-category="{{ product.category.id|default:'' }}" data-name="{{ product.name|lower }}">
-                <div class="card product-card h-100 {% if product.is_out_of_stock %}border-danger{% elif product.is_low_stock %}border-warning{% endif %}" 
-                     onclick="{% if not product.is_out_of_stock %}{% if product.is_variable_price %}showWeightModal({{ product.id }}, '{{ product.name }}', {{ product.price_per_unit|default:product.unit_price }}, {{ product.pricing_unit_quantity|default:1 }}, {{ product.stock_quantity }}, '{{ product.tax_class }}', '{{ product.unit.abbreviation|default:"unit" }}'){% else %}addToCart({{ product.id }}, '{{ product.name }}', {{ product.unit_price }}, {{ product.stock_quantity }}, '{{ product.tax_class }}'){% endif %}{% else %}alert('This product is out of stock!'){% endif %}">
-                    
-                    <!-- Product Image -->
-                    {% if product.image %}
-                        <img src="{{ product.image.url }}" 
-                             alt="{{ product.name }}" 
-                             class="product-image" 
-                             loading="lazy">
-                    {% else %}
-                        <div class="product-placeholder">
-                            <i class="bi bi-box-seam"></i>
-                        </div>
-                    {% endif %}
-                    
-                    <div class="card-body text-center p-2">
-                        <h6 class="card-title mb-1">{{ product.name }}</h6>
-                        {% if product.product_code %}
-                        <p class="text-muted small mb-1"><i class="bi bi-upc"></i> {{ product.product_code }}</p>
-                        {% endif %}
-                        <p class="text-muted small mb-1">{{ product.category.name|default:"Uncategorized" }}</p>
-                        <h5 class="text-primary mb-1">
-                            {% if product.is_variable_price %}
-                                KES {{ product.price_per_unit }}
-                                <small class="text-muted">/ {{ product.pricing_unit_quantity }}{{ product.unit.abbreviation|default:"unit" }}</small>
-                            {% else %}
-                                KES {{ product.unit_price }}
-                                {% if product.unit %}
-                                    <small class="text-muted">/ {{ product.unit.abbreviation }}</small>
-                                {% endif %}
-                            {% endif %}
-                        </h5>
-                        {% if product.is_variable_price %}
-                        <p class="text-info small mb-1"><i class="bi bi-calculator"></i> Variable Price</p>
-                        {% endif %}
-                        <div class="mt-1">
-                            {% if product.is_out_of_stock %}
-                                <span class="badge bg-danger">Out of Stock</span>
-                            {% elif product.is_low_stock %}
-                                <span class="badge bg-warning text-dark">Low Stock: {{ product.stock_quantity }}{% if product.unit %} {{ product.unit.abbreviation }}{% endif %}</span>
-                            {% else %}
-                                <span class="badge bg-success">In Stock: {{ product.stock_quantity }}{% if product.unit %} {{ product.unit.abbreviation }}{% endif %}</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+        <!-- Products Grid with Lazy Loading -->
+        <div id="products-loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading products...</span>
             </div>
-            {% empty %}
-            <div class="col-12">
-                <p class="text-center">No products available. <a href="{% url 'product_create' slug=request.business.slug %}">Add products</a></p>
-            </div>
-            {% endfor %}
+            <p class="mt-2 text-muted">Loading products...</p>
+        </div>
+        
+        <div class="row" id="products-grid" style="display: none;">
+            <!-- Products will be loaded here via AJAX -->
+        </div>
+        
+        <div id="products-empty" class="col-12 text-center py-5" style="display: none;">
+            <i class="bi bi-box-seam" style="font-size: 3rem; color: #ccc;"></i>
+            <p class="text-muted mt-2">No products found</p>
+            <a href="{% url 'product_create' slug=request.business.slug %}" class="btn btn-primary">Add Products</a>
+        </div>
+        
+        <div id="load-more-container" class="text-center my-3" style="display: none;">
+            <button id="load-more-btn" class="btn btn-outline-primary" onclick="loadMoreProducts()">
+                Load More Products
+            </button>
         </div>
     </div>
 
@@ -528,10 +495,151 @@ let selectedCustomer = null;
 let paymentMethods = [];
 let totalDue = 0;
 
-// Initialize product stock data
+// Lazy loading state
+let productsOffset = 0;
+const productsLimit = 30;
+let productsLoading = false;
+let productsHasMore = true;
+let currentSearchQuery = '';
+let currentCategoryFilter = '';
+
+// Initialize product stock data (will be populated via AJAX)
+{% if not lazy_load %}
 {% for product in products %}
 productStock[{{ product.id }}] = {{ product.stock_quantity }};
 {% endfor %}
+{% endif %}
+
+// ==================== LAZY LOADING PRODUCTS ====================
+
+function loadProducts(reset = false) {
+    if (productsLoading) return;
+    
+    if (reset) {
+        productsOffset = 0;
+        productsHasMore = true;
+        document.getElementById('products-grid').innerHTML = '';
+    }
+    
+    productsLoading = true;
+    document.getElementById('products-loading').style.display = 'block';
+    document.getElementById('load-more-btn').disabled = true;
+    
+    const url = new URL(window.location.href);
+    url.searchParams.set('load_products', '1');
+    url.searchParams.set('offset', productsOffset);
+    url.searchParams.set('limit', productsLimit);
+    if (currentSearchQuery) url.searchParams.set('q', currentSearchQuery);
+    if (currentCategoryFilter) url.searchParams.set('category', currentCategoryFilter);
+    
+    fetch(url, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            renderProducts(data.products);
+            productsOffset += data.products.length;
+            productsHasMore = data.has_more;
+            
+            // Update UI
+            document.getElementById('products-loading').style.display = 'none';
+            document.getElementById('products-grid').style.display = 'flex';
+            
+            if (data.products.length === 0 && productsOffset === 0) {
+                document.getElementById('products-empty').style.display = 'block';
+                document.getElementById('load-more-container').style.display = 'none';
+            } else {
+                document.getElementById('products-empty').style.display = 'none';
+                document.getElementById('load-more-container').style.display = productsHasMore ? 'block' : 'none';
+            }
+        }
+        productsLoading = false;
+        document.getElementById('load-more-btn').disabled = false;
+    })
+    .catch(error => {
+        console.error('Error loading products:', error);
+        document.getElementById('products-loading').innerHTML = 
+            '<p class="text-danger">Error loading products. Please refresh the page.</p>';
+        productsLoading = false;
+    });
+}
+
+function renderProducts(products) {
+    const grid = document.getElementById('products-grid');
+    
+    products.forEach(product => {
+        // Store stock quantity
+        productStock[product.id] = product.stock_quantity;
+        
+        // Determine stock status
+        const isOutOfStock = product.stock_quantity <= 0;
+        const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= 10;
+        
+        // Create product card
+        const col = document.createElement('div');
+        col.className = 'col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3 product-item';
+        col.setAttribute('data-category', product.category_name);
+        col.setAttribute('data-name', product.name.toLowerCase());
+        
+        let borderClass = '';
+        if (isOutOfStock) borderClass = 'border-danger';
+        else if (isLowStock) borderClass = 'border-warning';
+        
+        let stockBadge = '';
+        if (isOutOfStock) {
+            stockBadge = '<span class="badge bg-danger">Out of Stock</span>';
+        } else if (isLowStock) {
+            stockBadge = `<span class="badge bg-warning text-dark">Low Stock: ${product.stock_quantity} ${product.unit_name}</span>`;
+        } else {
+            stockBadge = `<span class="badge bg-success">In Stock: ${product.stock_quantity} ${product.unit_name}</span>`;
+        }
+        
+        const onclick = isOutOfStock ? 
+            `alert('This product is out of stock!')` :
+            `addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, 'standard')`;
+        
+        col.innerHTML = `
+            <div class="card product-card h-100 ${borderClass}" onclick="${onclick}">
+                <div class="product-placeholder">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="card-body text-center p-2">
+                    <h6 class="card-title mb-1">${product.name}</h6>
+                    ${product.product_code ? `<p class="text-muted small mb-1"><i class="bi bi-upc"></i> ${product.product_code}</p>` : ''}
+                    <p class="text-muted small mb-1">${product.category_name || 'Uncategorized'}</p>
+                    <h5 class="text-primary mb-1">
+                        KES ${product.unit_price.toFixed(2)}
+                        <small class="text-muted">/ ${product.unit_name}</small>
+                    </h5>
+                    ${product.has_bulk ? `<p class="text-info small mb-1"><i class="bi bi-box"></i> Bulk: ${product.bulk_unit_name}</p>` : ''}
+                    <div class="mt-1">
+                        ${stockBadge}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        grid.appendChild(col);
+    });
+}
+
+function loadMoreProducts() {
+    loadProducts(false);
+}
+
+function searchProducts() {
+    const searchInput = document.getElementById('search-input');
+    currentSearchQuery = searchInput ? searchInput.value : '';
+    loadProducts(true);
+}
+
+function filterByCategory(categoryId) {
+    currentCategoryFilter = categoryId;
+    loadProducts(true);
+}
 
 // ==================== CART PERSISTENCE ====================
 
@@ -1059,6 +1167,11 @@ function addVariablePriceToCart() {
 
 // Add event listener for weight input to calculate price in real-time
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize lazy loading
+    {% if lazy_load %}
+    loadProducts(true);
+    {% endif %}
+    
     const weightInput = document.getElementById('weight-input');
     if (weightInput) {
         weightInput.addEventListener('input', calculateVariablePrice);

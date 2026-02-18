@@ -1143,7 +1143,7 @@ def unit_delete(request, slug=None, pk=None):
 
 @business_required
 def pos_screen(request, slug=None):
-    """Main POS sales screen - Optimized for large catalogs"""
+    """Main POS sales screen - Optimized for fast loading"""
     from .models import PaymentMethod
     from django.db.models import Q
     from django.http import JsonResponse
@@ -1163,60 +1163,95 @@ def pos_screen(request, slug=None):
         except (ValueError, TypeError):
             return JsonResponse({'success': False, 'error': 'Invalid product IDs'})
     
-    # Get search/filter parameters
-    search_query = request.GET.get('q', '').strip()
-    category_filter = request.GET.get('category', '')
-    
-    # Base product query with optimizations
-    products_query = Product.objects.filter(
-        business=request.business,
-        stock_quantity__gt=0  # Only show in-stock items
-    ).select_related('category', 'unit')
-    
-    # Apply search if provided
-    if search_query:
-        products_query = products_query.filter(
-            Q(name__icontains=search_query) |
-            Q(barcode__icontains=search_query) |
-            Q(product_code__icontains=search_query)
+    # Handle AJAX request for lazy loading products
+    if request.GET.get('load_products') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        search_query = request.GET.get('q', '').strip()
+        category_filter = request.GET.get('category', '')
+        offset = int(request.GET.get('offset', 0))
+        limit = int(request.GET.get('limit', 30))
+        
+        # Base product query with optimizations
+        products_query = Product.objects.filter(
+            business=request.business,
+            stock_quantity__gt=0
+        ).select_related('category', 'unit').only(
+            'id', 'name', 'unit_price', 'stock_quantity', 'barcode',
+            'product_code', 'category__name', 'unit__name', 'unit__abbreviation',
+            'bulk_unit_name', 'bulk_unit_price', 'bulk_unit_quantity'
         )
-        products = products_query[:100]  # Limit search results
-    elif category_filter:
-        # Filter by category
-        products_query = products_query.filter(category_id=category_filter)
-        products = products_query[:100]
-    else:
-        # Default: Show recently added/popular products only
-        # This prevents loading thousands of products
-        products = products_query.order_by('-created_at')[:50]
+        
+        # Apply filters
+        if search_query:
+            products_query = products_query.filter(
+                Q(name__icontains=search_query) |
+                Q(barcode__icontains=search_query) |
+                Q(product_code__icontains=search_query)
+            )
+        elif category_filter:
+            products_query = products_query.filter(category_id=category_filter)
+        else:
+            products_query = products_query.order_by('-created_at')
+        
+        # Paginate
+        products = products_query[offset:offset + limit]
+        total_count = products_query.count()
+        
+        # Serialize products
+        products_data = []
+        for product in products:
+            products_data.append({
+                'id': product.id,
+                'name': product.name,
+                'unit_price': float(product.unit_price),
+                'stock_quantity': product.stock_quantity,
+                'barcode': product.barcode or '',
+                'product_code': product.product_code,
+                'category_name': product.category.name if product.category else '',
+                'unit_name': product.unit.abbreviation if product.unit else 'pcs',
+                'has_bulk': bool(product.bulk_unit_name and product.bulk_unit_price),
+                'bulk_unit_name': product.bulk_unit_name or '',
+                'bulk_unit_price': float(product.bulk_unit_price) if product.bulk_unit_price else 0,
+                'bulk_unit_quantity': product.bulk_unit_quantity or 1,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'products': products_data,
+            'total': total_count,
+            'has_more': (offset + limit) < total_count
+        })
     
+    # Initial page load - minimal data for fast rendering
     # Get categories for filter
-    categories = Category.objects.filter(business=request.business).all()
+    categories = Category.objects.filter(business=request.business).only('id', 'name')
     
     # Optimize customer query - only load when needed
-    # For large customer bases, use AJAX search instead
     customers = Customer.objects.filter(
         business=request.business, 
         is_active=True
-    ).order_by('name')[:100]  # Limit to 100 most recent
+    ).only('id', 'name', 'phone').order_by('name')[:100]
     
     # Payment methods
     payment_methods = PaymentMethod.objects.filter(
         business=request.business, 
         is_active=True
-    )
+    ).only('id', 'name', 'code', 'requires_reference')
     
     vat_rate = getattr(settings, 'VAT_RATE', 16)
     
+    # Get total product count for display
+    total_products = Product.objects.filter(
+        business=request.business,
+        stock_quantity__gt=0
+    ).count()
+    
     context = {
-        'products': products,
         'categories': categories,
         'customers': customers,
         'payment_methods': payment_methods,
         'vat_rate': vat_rate,
-        'search_query': search_query,
-        'category_filter': category_filter,
-        'total_products': Product.objects.filter(business=request.business).count(),
+        'total_products': total_products,
+        'lazy_load': True,  # Flag to enable lazy loading in template
     }
     return render(request, 'pos/pos_screen.html', context)
 
