@@ -189,6 +189,38 @@ function calculateTotal() {
     document.getElementById('total').textContent = `KES ${total.toFixed(2)}`;
 }
 
+// Validate form before submission
+document.getElementById('purchaseForm').addEventListener('submit', function(e) {
+    const quantities = document.getElementsByName('quantity[]');
+    const costs = document.getElementsByName('unit_cost[]');
+    let subtotal = 0;
+    let hasItems = false;
+    
+    for (let i = 0; i < quantities.length; i++) {
+        const qty = parseFloat(quantities[i].value) || 0;
+        const cost = parseFloat(costs[i].value) || 0;
+        
+        if (qty > 0 && cost > 0) {
+            hasItems = true;
+            subtotal += qty * cost;
+        }
+    }
+    
+    if (!hasItems) {
+        e.preventDefault();
+        alert('Please add at least one item with quantity and cost greater than zero!');
+        return false;
+    }
+    
+    if (subtotal <= 0) {
+        e.preventDefault();
+        alert('Purchase total must be greater than zero! Please check your quantities and costs.');
+        return false;
+    }
+    
+    return true;
+});
+
 // Add first item on page load
 document.addEventListener('DOMContentLoaded', function() {
     addItem();

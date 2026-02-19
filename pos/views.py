@@ -2140,11 +2140,18 @@ def purchase_create(request, slug=None):
         
         # Add purchase items and calculate totals
         subtotal = Decimal('0.00')
+        items_added = 0
         for i, product_id in enumerate(product_ids):
             if product_id and quantities[i] and unit_costs[i]:
                 product = get_object_or_404(Product, pk=product_id, business=request.business)
                 quantity = int(quantities[i])
                 unit_cost = Decimal(unit_costs[i])
+                
+                # Validate quantity and cost are positive
+                if quantity <= 0 or unit_cost < 0:
+                    purchase.delete()
+                    messages.error(request, 'All quantities must be greater than zero and costs cannot be negative!')
+                    return redirect('purchase_create', slug=request.business.slug)
                 
                 PurchaseItem.objects.create(
                     purchase=purchase,
@@ -2154,6 +2161,18 @@ def purchase_create(request, slug=None):
                 )
                 
                 subtotal += quantity * unit_cost
+                items_added += 1
+        
+        # Validate that we have items and non-zero total
+        if items_added == 0:
+            purchase.delete()
+            messages.error(request, 'Please add at least one valid item to the purchase!')
+            return redirect('purchase_create', slug=request.business.slug)
+        
+        if subtotal <= 0:
+            purchase.delete()
+            messages.error(request, 'Purchase total must be greater than zero!')
+            return redirect('purchase_create', slug=request.business.slug)
         
         # Update purchase totals
         purchase.subtotal = subtotal

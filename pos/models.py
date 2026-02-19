@@ -837,6 +837,12 @@ class Purchase(models.Model):
             else:
                 new_num = 1
             self.purchase_number = f'PO-{date_str}-{new_num:04d}'
+        
+        # Validate amounts are not negative
+        if self.subtotal < 0 or self.tax_amount < 0 or self.total_amount < 0:
+            from django.core.exceptions import ValidationError
+            raise ValidationError('Purchase amounts cannot be negative!')
+        
         super().save(*args, **kwargs)
     
     def mark_as_received(self, receiving_data=None):
