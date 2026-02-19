@@ -221,54 +221,46 @@
         <!-- Product Search and Filter Section -->
         <div class="card mb-3 border-info">
             <div class="card-body">
-                <form method="get" action="{% url 'pos_screen' slug=request.business.slug %}">
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label"><i class="bi bi-search"></i> Search Products</label>
-                            <input type="text" name="q" class="form-control" 
-                                   placeholder="Search by name, barcode, or code..." 
-                                   value="{{ search_query }}"
-                                   autofocus>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label"><i class="bi bi-funnel"></i> Filter by Category</label>
-                            <select name="category" class="form-select" onchange="this.form.submit()">
-                                <option value="">All Categories</option>
-                                {% for category in categories %}
-                                <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ category.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">&nbsp;</label>
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-search"></i> Search
-                            </button>
-                        </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label"><i class="bi bi-search"></i> Search Products</label>
+                        <input type="text" id="search-input" class="form-control" 
+                               placeholder="Search by name, barcode, or code..." 
+                               value="{{ search_query }}"
+                               oninput="handleSearchInput()"
+                               autofocus>
                     </div>
-                </form>
-                
-                {% if search_query or category_filter %}
-                <div class="mt-2">
-                    <a href="{% url 'pos_screen' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-x-circle"></i> Clear Filters
-                    </a>
+                    <div class="col-md-4">
+                        <label class="form-label"><i class="bi bi-funnel"></i> Filter by Category</label>
+                        <select id="category-filter" class="form-select" onchange="handleCategoryChange()">
+                            <option value="">All Categories</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>
+                                {{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-outline-secondary w-100" onclick="clearFilters()" id="clear-filters-btn" style="display: none;">
+                            <i class="bi bi-x-circle"></i> Clear
+                        </button>
+                    </div>
                 </div>
-                {% endif %}
                 
-                <div class="alert alert-info mt-3 mb-0">
+                <div class="alert alert-info mt-3 mb-0" id="filter-info">
                     <i class="bi bi-lightbulb"></i> 
                     <strong>Tip:</strong> 
-                    {% if search_query %}
-                        Showing search results for "{{ search_query }}"
-                    {% elif category_filter %}
-                        Showing products in selected category
-                    {% else %}
-                        Showing {{ products|length }} of {{ total_products }} products. 
-                        Use search or barcode scanner to find specific items quickly.
-                    {% endif %}
+                    <span id="filter-info-text">
+                        {% if search_query %}
+                            Showing search results for "{{ search_query }}"
+                        {% elif category_filter %}
+                            Showing products in selected category
+                        {% else %}
+                            Showing {{ products|length }} of {{ total_products }} products. 
+                            Use search or barcode scanner to find specific items quickly.
+                        {% endif %}
+                    </span>
                 </div>
             </div>
         </div>
@@ -781,14 +773,80 @@ function loadMoreProducts() {
     loadProducts(false);
 }
 
+// ==================== SEARCH AND FILTER ====================
+let searchTimeout;
+
+function handleSearchInput() {
+    const searchInput = document.getElementById('search-input');
+    currentSearchQuery = searchInput.value.trim();
+    
+    // Clear existing timeout
+    clearTimeout(searchTimeout);
+    
+    // Debounce search - wait 500ms after user stops typing
+    searchTimeout = setTimeout(() => {
+        updateFilterInfo();
+        loadProducts(true);
+    }, 500);
+}
+
+function handleCategoryChange() {
+    const categorySelect = document.getElementById('category-filter');
+    currentCategoryFilter = categorySelect.value;
+    
+    updateFilterInfo();
+    loadProducts(true);
+}
+
+function clearFilters() {
+    // Clear search input
+    document.getElementById('search-input').value = '';
+    currentSearchQuery = '';
+    
+    // Reset category filter
+    document.getElementById('category-filter').value = '';
+    currentCategoryFilter = '';
+    
+    updateFilterInfo();
+    loadProducts(true);
+}
+
+function updateFilterInfo() {
+    const clearBtn = document.getElementById('clear-filters-btn');
+    const infoText = document.getElementById('filter-info-text');
+    
+    // Show/hide clear button
+    if (currentSearchQuery || currentCategoryFilter) {
+        clearBtn.style.display = 'block';
+    } else {
+        clearBtn.style.display = 'none';
+    }
+    
+    // Update info text
+    if (currentSearchQuery && currentCategoryFilter) {
+        const categoryName = document.getElementById('category-filter').selectedOptions[0].text;
+        infoText.innerHTML = `Showing results for "<strong>${currentSearchQuery}</strong>" in category "<strong>${categoryName}</strong>"`;
+    } else if (currentSearchQuery) {
+        infoText.innerHTML = `Showing search results for "<strong>${currentSearchQuery}</strong>"`;
+    } else if (currentCategoryFilter) {
+        const categoryName = document.getElementById('category-filter').selectedOptions[0].text;
+        infoText.innerHTML = `Showing products in category "<strong>${categoryName}</strong>"`;
+    } else {
+        infoText.innerHTML = 'Use search or barcode scanner to find specific items quickly.';
+    }
+}
+
 function searchProducts() {
     const searchInput = document.getElementById('search-input');
     currentSearchQuery = searchInput ? searchInput.value : '';
+    updateFilterInfo();
     loadProducts(true);
 }
 
 function filterByCategory(categoryId) {
     currentCategoryFilter = categoryId;
+    document.getElementById('category-filter').value = categoryId;
+    updateFilterInfo();
     loadProducts(true);
 }
 
