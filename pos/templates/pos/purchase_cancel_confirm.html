@@ -1,36 +1,193 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Cancel Purchase - POS System{% endblock %}
+{% block title %}Cancel Purchase Order - POS System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card border-danger">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Confirm Cancellation</h5>
-            </div>
-            <div class="card-body">
-                <p>Are you sure you want to cancel this purchase order?</p>
-                <h4 class="text-danger">{{ purchase.purchase_number }}</h4>
-                <p><strong>Supplier:</strong> {{ purchase.supplier.name }}</p>
-                <p><strong>Total Amount:</strong> KES {{ purchase.total_amount|floatformat:2 }}</p>
-                
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    <strong>Warning:</strong> This action cannot be undone. The purchase order will be marked as cancelled.
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        Cancel Purchase Order
+                    </h5>
                 </div>
-                
-                <form method="post" class="mt-4">
-                    {% csrf_token %}
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-x-circle"></i> Yes, Cancel Purchase
-                        </button>
-                        <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left"></i> Go Back
-                        </a>
+                <div class="card-body">
+                    <h6>{{ purchase.purchase_number }}</h6>
+                    <p class="text-muted">{{ purchase.supplier.name }}</p>
+                    
+                    <!-- Status-specific warnings -->
+                    {% if purchase.status == 'received' %}
+                    <div class="alert alert-danger">
+                        <i class="bi bi-x-circle"></i>
+                        <strong>Cannot Cancel Received Purchase Order</strong>
+                        <p class="mb-0">
+                            This purchase has already been received and stock has been updated.
+                            To return items, please create a 
+                            <a href="{% url 'grn_create' slug=request.business.slug %}" class="alert-link">
+                                Goods Returned Note (GRN)
+                            </a>.
+                        </p>
                     </div>
-                </form>
+                    <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" 
+                       class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Purchase
+                    </a>
+                    
+                    {% elif purchase.status == 'cancelled' %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Already Cancelled</strong>
+                        <p class="mb-0">
+                            This purchase order has already been cancelled.
+                        </p>
+                        {% if purchase.cancellation_reason %}
+                        <hr>
+                        <p class="mb-0"><strong>Reason:</strong> {{ purchase.cancellation_reason }}</p>
+                        {% endif %}
+                        {% if purchase.cancelled_by %}
+                        <p class="mb-0"><strong>Cancelled by:</strong> {{ purchase.cancelled_by.get_full_name|default:purchase.cancelled_by.username }}</p>
+                        {% endif %}
+                        {% if purchase.cancelled_at %}
+                        <p class="mb-0"><strong>Cancelled on:</strong> {{ purchase.cancelled_at|date:"d/m/Y H:i" }}</p>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" 
+                       class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Purchase
+                    </a>
+                    
+                    {% else %}
+                    
+                    <!-- Warnings for ordered status -->
+                    {% if is_ordered %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Important Notice</strong>
+                        <p class="mb-0">
+                            This purchase order has been sent to the supplier.
+                            Cancelling may:
+                        </p>
+                        <ul class="mb-0 mt-2">
+                            <li>Affect your relationship with the supplier</li>
+                            <li>Incur cancellation fees</li>
+                            <li>Require you to notify the supplier directly</li>
+                        </ul>
+                        {% if purchase.supplier.email %}
+                        <p class="mb-0 mt-2">
+                            <i class="bi bi-envelope"></i> 
+                            An email notification will be sent to: <strong>{{ purchase.supplier.email }}</strong>
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Payment warning -->
+                    {% if has_payments %}
+                    <div class="alert alert-danger">
+                        <i class="bi bi-cash-stack"></i>
+                        <strong>Payments Detected</strong>
+                        <p class="mb-0">
+                            This purchase order has payments allocated to it.
+                            Please handle payments before cancelling.
+                        </p>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Purchase details -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6>Purchase Order Details</h6>
+                            <table class="table table-sm mb-0">
+                                <tr>
+                                    <th width="40%">PO Number:</th>
+                                    <td>{{ purchase.purchase_number }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Supplier:</th>
+                                    <td>{{ purchase.supplier.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Date:</th>
+                                    <td>{{ purchase.date|date:"d/m/Y" }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Total Amount:</th>
+                                    <td>KES {{ purchase.total_amount|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        {% if purchase.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending</span>
+                                        {% elif purchase.status == 'ordered' %}
+                                        <span class="badge bg-info">Ordered</span>
+                                        {% elif purchase.status == 'received' %}
+                                        <span class="badge bg-success">Received</span>
+                                        {% elif purchase.status == 'cancelled' %}
+                                        <span class="badge bg-secondary">Cancelled</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Cancellation form -->
+                    {% if can_cancel %}
+                    <form method="post" id="cancelForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <strong>Cancellation Reason</strong> 
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="cancellation_reason" 
+                                      class="form-control" 
+                                      rows="3" 
+                                      required
+                                      placeholder="Please explain why this purchase order is being cancelled..."></textarea>
+                            <small class="text-muted">
+                                This will be recorded in the audit log and shown in purchase history.
+                            </small>
+                        </div>
+                        
+                        {% if is_ordered %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Supplier Notification</strong>
+                            <p class="mb-0">
+                                {% if purchase.supplier.email %}
+                                The supplier will be automatically notified via email at <strong>{{ purchase.supplier.email }}</strong>.
+                                {% else %}
+                                <span class="text-warning">No email address on file for this supplier.</span> 
+                                You will need to notify them manually.
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" 
+                               class="btn btn-secondary flex-fill">
+                                <i class="bi bi-arrow-left"></i> Keep Purchase Order
+                            </a>
+                            <button type="submit" class="btn btn-danger flex-fill">
+                                <i class="bi bi-x-circle"></i> Cancel Purchase Order
+                            </button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" 
+                       class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Purchase
+                    </a>
+                    {% endif %}
+                    
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

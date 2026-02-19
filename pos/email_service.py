@@ -260,6 +260,141 @@ Best regards,
             text_body=text_body
         )
     
+    @staticmethod
+    def send_purchase_cancellation(purchase):
+        """Send purchase order cancellation notification to supplier"""
+        from .models import BusinessEmailSettings
+        
+        # Check if supplier has email
+        if not purchase.supplier.email:
+            logger.warning(f"Purchase {purchase.purchase_number}: Supplier has no email for cancellation")
+            return False
+        
+        # Build items table
+        items_html = ""
+        for item in purchase.items.all():
+            items_html += f"""
+            <tr>
+                <td>{item.product.name}</td>
+                <td style="text-align: right;">{item.quantity}</td>
+                <td style="text-align: right;">KES {item.unit_cost:,.2f}</td>
+                <td style="text-align: right;">KES {item.total_cost:,.2f}</td>
+            </tr>
+            """
+        
+        context = {
+            'purchase_number': purchase.purchase_number,
+            'supplier_name': purchase.supplier.name,
+            'business_name': purchase.business.name,
+            'order_date': purchase.date.strftime('%d/%m/%Y') if hasattr(purchase.date, 'strftime') else str(purchase.date),
+            'cancelled_date': purchase.cancelled_at.strftime('%d/%m/%Y %H:%M') if purchase.cancelled_at and hasattr(purchase.cancelled_at, 'strftime') else str(purchase.cancelled_at) if purchase.cancelled_at else timezone.now().strftime('%d/%m/%Y %H:%M'),
+            'cancellation_reason': purchase.cancellation_reason or 'No reason provided',
+            'total_amount': f'KES {purchase.total_amount:,.2f}',
+            'items_html': items_html,
+        }
+        
+        subject = f"CANCELLED: Purchase Order {purchase.purchase_number} from {purchase.business.name}"
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .header {{ background: #dc3545; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 20px; }}
+                .alert {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }}
+                table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+                th, td {{ padding: 12px; border: 1px solid #ddd; text-align: left; }}
+                th {{ background: #f8f9fa; font-weight: bold; }}
+                .footer {{ padding: 20px; background: #f8f9fa; text-align: center; font-size: 12px; color: #666; }}
+                .cancelled {{ text-decoration: line-through; color: #999; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>⚠️ PURCHASE ORDER CANCELLED</h2>
+                <p>PO Number: {context['purchase_number']}</p>
+            </div>
+            <div class="content">
+                <p>Dear {context['supplier_name']},</p>
+                
+                <div class="alert">
+                    <strong>⚠️ IMPORTANT NOTICE:</strong><br>
+                    This purchase order has been cancelled. Please do not proceed with delivery.
+                </div>
+                
+                <p><strong>Cancellation Details:</strong></p>
+                <ul>
+                    <li><strong>Original Order Date:</strong> {context['order_date']}</li>
+                    <li><strong>Cancelled On:</strong> {context['cancelled_date']}</li>
+                    <li><strong>Reason:</strong> {context['cancellation_reason']}</li>
+                </ul>
+                
+                <p><strong>Cancelled Order Details:</strong></p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th style="text-align: right;">Quantity</th>
+                            <th style="text-align: right;">Unit Price</th>
+                            <th style="text-align: right;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="cancelled">
+                        {context['items_html']}
+                    </tbody>
+                </table>
+                
+                <p class="cancelled"><strong>Total Amount: {context['total_amount']}</strong></p>
+                
+                <p>If you have already shipped this order or incurred any costs, please contact us immediately.</p>
+                
+                <p>We apologize for any inconvenience this may cause.</p>
+                
+                <p>Best regards,<br><strong>{context['business_name']}</strong></p>
+            </div>
+            <div class="footer">
+                <p>This is an automated cancellation notice from {context['business_name']} POS System</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+⚠️ PURCHASE ORDER CANCELLED ⚠️
+
+PO Number: {context['purchase_number']}
+
+Dear {context['supplier_name']},
+
+IMPORTANT NOTICE: This purchase order has been cancelled. Please do not proceed with delivery.
+
+Cancellation Details:
+- Original Order Date: {context['order_date']}
+- Cancelled On: {context['cancelled_date']}
+- Reason: {context['cancellation_reason']}
+
+Total Amount: {context['total_amount']}
+
+If you have already shipped this order or incurred any costs, please contact us immediately.
+
+We apologize for any inconvenience this may cause.
+
+Best regards,
+{context['business_name']}
+        """
+        
+        return EmailService.send_email(
+            template_type='purchase_cancellation',
+            recipient=purchase.supplier.email,
+            context=context,
+            business=purchase.business,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body
+        )
+    
     # ============================================
     # PAYMENT CONFIRMATION EMAILS
     # ============================================

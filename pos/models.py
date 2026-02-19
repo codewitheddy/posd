@@ -815,6 +815,18 @@ class Purchase(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Cancellation tracking
+    cancellation_reason = models.TextField(blank=True, help_text='Reason for cancelling this purchase order')
+    cancelled_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='cancelled_purchases',
+        help_text='User who cancelled this purchase order'
+    )
+    cancelled_at = models.DateTimeField(blank=True, null=True, help_text='When this purchase order was cancelled')
+    
     class Meta:
         ordering = ['-date']
         unique_together = [['business', 'purchase_number']]

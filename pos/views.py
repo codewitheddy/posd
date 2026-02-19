@@ -2289,21 +2289,71 @@ def purchase_receive(request, slug=None, pk=None):
 
 @business_required
 def purchase_cancel(request, slug=None, pk=None):
-    """Cancel a purchase order"""
+    """Cancel a purchase order with proper validation and audit trail"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     
     if request.method == 'POST':
+        # Check 1: Cannot cancel if received
         if purchase.status == 'received':
-            messages.error(request, 'Cannot cancel a received purchase!')
-        else:
-            purchase.status = 'cancelled'
-            purchase.save()
-            messages.success(request, f'Purchase {purchase.purchase_number} cancelled!')
+            messages.error(
+                request, 
+                'Cannot cancel a received purchase! Please create a Goods Returned Note (GRN) to return items.'
+            )
+            return redirect('purchase_detail', slug=request.business.slug, pk=pk)
         
+        # Check 2: Cannot cancel if already cancelled
+        if purchase.status == 'cancelled':
+            messages.info(request, 'This purchase order is already cancelled.')
+            return redirect('purchase_detail', slug=request.business.slug, pk=pk)
+        
+        # Check 3: Get cancellation reason (required)
+        cancellation_reason = request.POST.get('cancellation_reason', '').strip()
+        if not cancellation_reason:
+            messages.error(request, 'Please provide a reason for cancellation.')
+            return redirect('purchase_cancel', slug=request.business.slug, pk=pk)
+        
+        # Check 4: Check for related payments
+        from .models import SupplierPaymentAllocation
+        has_payments = SupplierPaymentAllocation.objects.filter(purchase=purchase).exists()
+        if has_payments:
+            messages.error(
+                request,
+                'This purchase order has payments allocated to it. Please handle payments before cancelling.'
+            )
+            return redirect('purchase_detail', slug=request.business.slug, pk=pk)
+        
+        # Perform cancellation
+        old_status = purchase.status
+        purchase.status = 'cancelled'
+        purchase.cancellation_reason = cancellation_reason
+        purchase.cancelled_by = request.user
+        purchase.cancelled_at = timezone.now()
+        purchase.save()
+        
+        # Send notification email to supplier if it was ordered
+        if old_status == 'ordered' and purchase.supplier.email:
+            try:
+                from .email_service import EmailService
+                EmailService.send_purchase_cancellation(purchase)
+            except Exception as e:
+                # Don't fail the cancellation if email fails
+                messages.warning(request, 'Purchase cancelled but email notification to supplier failed.')
+        
+        messages.success(
+            request, 
+            f'Purchase Order {purchase.purchase_number} has been cancelled successfully.'
+        )
         return redirect('purchase_detail', slug=request.business.slug, pk=pk)
+    
+    # GET request - show confirmation form
+    from .models import SupplierPaymentAllocation
+    has_payments = SupplierPaymentAllocation.objects.filter(purchase=purchase).exists()
     
     context = {
         'purchase': purchase,
+        'has_payments': has_payments,
+        'is_ordered': purchase.status == 'ordered',
+        'can_cancel': purchase.status in ['pending', 'ordered'] and not has_payments,
     }
     return render(request, 'pos/purchase_cancel_confirm.html', context)
 
