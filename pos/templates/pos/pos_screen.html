@@ -49,6 +49,33 @@
     #cart-total { font-size: 1.5rem; font-weight: bold; }
     #barcode-input { font-size: 1.1rem; border: 2px solid #0d6efd; }
     .barcode-section { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    
+    /* List View Styles */
+    .product-row {
+        transition: background-color 0.2s;
+    }
+    .product-row:hover {
+        background-color: #f8f9fa;
+    }
+    #products-list {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    #products-list .table {
+        margin-bottom: 0;
+    }
+    #products-list thead th {
+        background-color: white;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    /* View Toggle Buttons */
+    .btn-group .btn.active {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+
 </style>
 {% endblock %}
 
@@ -246,8 +273,26 @@
             </div>
         </div>
 
-        <!-- Remove old search inputs -->
-        <!-- Products Grid with Lazy Loading -->
+        <!-- View Toggle -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>View:</strong>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary" id="grid-view-btn" onclick="switchView('grid')">
+                            <i class="bi bi-grid-3x3"></i> Grid
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="list-view-btn" onclick="switchView('list')">
+                            <i class="bi bi-list-ul"></i> List
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Loading -->
         <div id="products-loading" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading products...</span>
@@ -255,16 +300,40 @@
             <p class="mt-2 text-muted">Loading products...</p>
         </div>
         
+        <!-- Products Grid View -->
         <div class="row" id="products-grid" style="display: none;">
             <!-- Products will be loaded here via AJAX -->
         </div>
         
+        <!-- Products List View -->
+        <div id="products-list" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-light sticky-top" style="top: 0; z-index: 10;">
+                        <tr>
+                            <th width="12%">Code</th>
+                            <th width="35%">Product</th>
+                            <th width="15%">Category</th>
+                            <th width="12%">Stock</th>
+                            <th width="13%">Price</th>
+                            <th width="13%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products-list-body">
+                        <!-- Products will be loaded here via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Empty State -->
         <div id="products-empty" class="col-12 text-center py-5" style="display: none;">
             <i class="bi bi-box-seam" style="font-size: 3rem; color: #ccc;"></i>
             <p class="text-muted mt-2">No products found</p>
             <a href="{% url 'product_create' slug=request.business.slug %}" class="btn btn-primary">Add Products</a>
         </div>
         
+        <!-- Load More Button -->
         <div id="load-more-container" class="text-center my-3" style="display: none;">
             <button id="load-more-btn" class="btn btn-outline-primary" onclick="loadMoreProducts()">
                 Load More Products
@@ -510,6 +579,33 @@ productStock[{{ product.id }}] = {{ product.stock_quantity }};
 {% endfor %}
 {% endif %}
 
+// ==================== VIEW SWITCHING ====================
+let currentView = localStorage.getItem('pos_view') || 'grid';
+
+function switchView(view) {
+    currentView = view;
+    localStorage.setItem('pos_view', view);
+    
+    // Update button states
+    document.getElementById('grid-view-btn').classList.toggle('active', view === 'grid');
+    document.getElementById('list-view-btn').classList.toggle('active', view === 'list');
+    
+    // Show/hide appropriate view
+    if (view === 'grid') {
+        document.getElementById('products-grid').style.display = 'flex';
+        document.getElementById('products-list').style.display = 'none';
+    } else {
+        document.getElementById('products-grid').style.display = 'none';
+        document.getElementById('products-list').style.display = 'block';
+    }
+}
+
+// Initialize view on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Set initial view
+    switchView(currentView);
+});
+
 // ==================== LAZY LOADING PRODUCTS ====================
 
 function loadProducts(reset = false) {
@@ -519,6 +615,7 @@ function loadProducts(reset = false) {
         productsOffset = 0;
         productsHasMore = true;
         document.getElementById('products-grid').innerHTML = '';
+        document.getElementById('products-list-body').innerHTML = '';
     }
     
     productsLoading = true;
@@ -546,7 +643,13 @@ function loadProducts(reset = false) {
             
             // Update UI
             document.getElementById('products-loading').style.display = 'none';
-            document.getElementById('products-grid').style.display = 'flex';
+            
+            // Show appropriate view
+            if (currentView === 'grid') {
+                document.getElementById('products-grid').style.display = 'flex';
+            } else {
+                document.getElementById('products-list').style.display = 'block';
+            }
             
             if (data.products.length === 0 && productsOffset === 0) {
                 document.getElementById('products-empty').style.display = 'block';
@@ -569,6 +672,7 @@ function loadProducts(reset = false) {
 
 function renderProducts(products) {
     const grid = document.getElementById('products-grid');
+    const listBody = document.getElementById('products-list-body');
     
     products.forEach(product => {
         // Store stock quantity
@@ -578,7 +682,7 @@ function renderProducts(products) {
         const isOutOfStock = product.stock_quantity <= 0;
         const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= 10;
         
-        // Create product card
+        // Render Grid View Card
         const col = document.createElement('div');
         col.className = 'col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3 product-item';
         col.setAttribute('data-category', product.category_name);
@@ -621,8 +725,55 @@ function renderProducts(products) {
                 </div>
             </div>
         `;
-        
         grid.appendChild(col);
+        
+        // Render List View Row
+        const row = document.createElement('tr');
+        row.className = 'product-row';
+        row.style.cursor = isOutOfStock ? 'not-allowed' : 'pointer';
+        
+        if (!isOutOfStock) {
+            row.onclick = function() {
+                addToCart(product.id, product.name, product.unit_price, product.stock_quantity, 'standard');
+            };
+        }
+        
+        let stockBadgeList = '';
+        if (isOutOfStock) {
+            stockBadgeList = '<span class="badge bg-danger">Out</span>';
+        } else if (isLowStock) {
+            stockBadgeList = `<span class="badge bg-warning text-dark">${product.stock_quantity}</span>`;
+        } else {
+            stockBadgeList = `<span class="badge bg-success">${product.stock_quantity}</span>`;
+        }
+        
+        row.innerHTML = `
+            <td>
+                <small class="text-muted">${product.product_code || '-'}</small>
+            </td>
+            <td>
+                <strong>${product.name}</strong>
+                ${product.has_bulk ? '<br><small class="text-info"><i class="bi bi-box"></i> Has bulk pricing</small>' : ''}
+            </td>
+            <td>
+                <small class="text-muted">${product.category_name || 'Uncategorized'}</small>
+            </td>
+            <td>
+                ${stockBadgeList}
+                <small class="text-muted">${product.unit_name}</small>
+            </td>
+            <td>
+                <strong class="text-primary">KES ${product.unit_price.toFixed(2)}</strong>
+            </td>
+            <td>
+                ${isOutOfStock ? 
+                    '<button class="btn btn-sm btn-secondary" disabled><i class="bi bi-x-circle"></i> Out</button>' :
+                    `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, 'standard');"><i class="bi bi-plus-circle"></i> Add</button>`
+                }
+            </td>
+        `;
+        
+        listBody.appendChild(row);
     });
 }
 
