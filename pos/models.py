@@ -1356,6 +1356,28 @@ class BusinessSettings(models.Model):
     require_product_code = models.BooleanField(default=False, help_text="Make product code mandatory")
     auto_generate_product_code = models.BooleanField(default=False)
     
+    # Theme Customization
+    theme_primary = models.CharField(
+        max_length=7,
+        default='#224195',
+        help_text="Primary brand color (hex code, e.g., #224195)"
+    )
+    theme_dark = models.CharField(
+        max_length=7,
+        default='#1a1514',
+        help_text="Dark color for sidebar/headers (hex code, e.g., #1a1514)"
+    )
+    theme_light = models.CharField(
+        max_length=7,
+        default='#d5d3d4',
+        help_text="Light color for text/backgrounds (hex code, e.g., #d5d3d4)"
+    )
+    theme_accent = models.CharField(
+        max_length=7,
+        default='#cd8a4c',
+        help_text="Accent color for highlights (hex code, e.g., #cd8a4c)"
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1515,6 +1537,30 @@ class BusinessSettings(models.Model):
                 'platinum': self.format_currency(self.loyalty_platinum_threshold),
             }
         }
+
+    # Theme Customization
+    theme_primary = models.CharField(
+        max_length=7,
+        default='#224195',
+        help_text="Primary brand color (hex code, e.g., #224195)"
+    )
+    theme_dark = models.CharField(
+        max_length=7,
+        default='#1a1514',
+        help_text="Dark color for sidebar/headers (hex code, e.g., #1a1514)"
+    )
+    theme_light = models.CharField(
+        max_length=7,
+        default='#d5d3d4',
+        help_text="Light color for text/backgrounds (hex code, e.g., #d5d3d4)"
+    )
+    theme_accent = models.CharField(
+        max_length=7,
+        default='#cd8a4c',
+        help_text="Accent color for highlights (hex code, e.g., #cd8a4c)"
+    )
+
+
 
 
 # ==================== ACTIVITY LOG ====================

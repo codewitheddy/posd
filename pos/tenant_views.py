@@ -298,6 +298,33 @@ def business_settings(request, slug):
                 
             except Exception as e:
                 messages.error(request, f'Error updating loyalty settings: {str(e)}')
+        
+        elif form_type == 'theme_colors':
+            # Theme Color Settings
+            try:
+                settings.theme_primary = request.POST.get('theme_primary', '#224195')
+                settings.theme_dark = request.POST.get('theme_dark', '#1a1514')
+                settings.theme_light = request.POST.get('theme_light', '#d5d3d4')
+                settings.theme_accent = request.POST.get('theme_accent', '#cd8a4c')
+                
+                settings.updated_by = request.user
+                settings.save()
+                
+                # Log activity
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='settings',
+                    model_name='BusinessSettings',
+                    object_id=settings.id,
+                    description='Updated theme colors',
+                    request=request
+                )
+                
+                messages.success(request, 'Theme colors updated successfully! Refresh the page to see changes.')
+                return redirect('business_settings', slug=business.slug)
+                
+            except Exception as e:
+                messages.error(request, f'Error updating theme colors: {str(e)}')
     
     context = {
         'business': business,

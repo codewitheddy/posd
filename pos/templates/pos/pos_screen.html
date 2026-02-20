@@ -91,9 +91,14 @@
     <div class="card border-0">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="bi bi-cart3"></i> Cart</h5>
-            <button class="btn btn-sm btn-light" onclick="toggleMobileCart()">
-                <i class="bi bi-x-lg"></i>
-            </button>
+            <div>
+                <button class="btn btn-sm btn-light me-1" onclick="refreshCartPrices()" title="Refresh cart prices">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <button class="btn btn-sm btn-light" onclick="toggleMobileCart()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <div id="mobile-cart-items" style="max-height: 200px; overflow-y: auto;">
@@ -141,15 +146,24 @@
                 </div>
             </div>
 
-            <button class="btn btn-success btn-lg w-100 mb-2" onclick="completeSale()" id="mobile-complete-btn" disabled>
-                <i class="bi bi-check-circle"></i> Complete Sale
-            </button>
-            <button class="btn btn-danger w-100 mb-2" onclick="clearCart()">
-                <i class="bi bi-trash"></i> Clear Cart
-            </button>
-            <button class="btn btn-outline-primary w-100" onclick="refreshCartPrices()" title="Update cart items with current product prices">
-                <i class="bi bi-arrow-clockwise"></i> Refresh Prices
-            </button>
+            <!-- Action Buttons -->
+            <div class="row g-2">
+                <div class="col-12">
+                    <button class="btn btn-success btn-lg w-100" onclick="completeSale()" id="mobile-complete-btn" disabled>
+                        <i class="bi bi-check-circle"></i> Complete Sale
+                    </button>
+                </div>
+                <div class="col-6">
+                    <button class="btn btn-danger w-100" onclick="clearCart()">
+                        <i class="bi bi-trash"></i> Clear Cart
+                    </button>
+                </div>
+                <div class="col-6">
+                    <button class="btn btn-warning w-100" onclick="holdOrder()" id="mobile-hold-order-btn" disabled>
+                        <i class="bi bi-pause-circle"></i> Hold Order
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -222,13 +236,19 @@
         <div class="card mb-3 border-info">
             <div class="card-body">
                 <div class="row g-2">
-                    <div class="col-md-6">
+                    <div class="col-md-5">
                         <label class="form-label"><i class="bi bi-search"></i> Search Products</label>
-                        <input type="text" id="search-input" class="form-control" 
-                               placeholder="Search by name, barcode, or code..." 
-                               value="{{ search_query }}"
-                               oninput="handleSearchInput()"
-                               autofocus>
+                        <div class="input-group">
+                            <input type="text" id="search-input" class="form-control" 
+                                   placeholder="Search by name, barcode, or code..." 
+                                   value="{{ search_query }}"
+                                   oninput="handleSearchInput()"
+                                   onkeypress="if(event.key === 'Enter') searchProducts()"
+                                   autofocus>
+                            <button class="btn btn-primary" type="button" onclick="searchProducts()">
+                                <i class="bi bi-search"></i> Search
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label"><i class="bi bi-funnel"></i> Filter by Category</label>
@@ -241,7 +261,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
+                    <div class="col-md-3 d-flex align-items-end">
                         <button type="button" class="btn btn-outline-secondary w-100" onclick="clearFilters()" id="clear-filters-btn" style="display: none;">
                             <i class="bi bi-x-circle"></i> Clear
                         </button>
@@ -335,8 +355,11 @@
 
     <div class="col-md-4 d-none d-md-block desktop-cart">
         <div class="card sticky-top" style="top: 80px;">
-            <div class="card-header bg-primary text-white">
-                <h4>Cart</h4>
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Cart</h4>
+                <button class="btn btn-sm btn-light" onclick="refreshCartPrices()" title="Refresh cart prices">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
             </div>
             <div class="card-body">
                 <div id="cart-items" style="max-height: 300px; overflow-y: auto;">
@@ -403,15 +426,24 @@
                     <small class="text-muted">1 point per KES 100 spent (with tier multiplier)</small>
                 </div>
 
-                <button class="btn btn-success btn-lg w-100" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
-                    <i class="bi bi-check-circle"></i> Complete Sale
-                </button>
-                <button class="btn btn-danger w-100 mt-2" onclick="clearCart()">
-                    <i class="bi bi-trash"></i> Clear Cart
-                </button>
-                <button class="btn btn-outline-primary w-100 mt-2" onclick="refreshCartPrices()" title="Update cart items with current product prices">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh Prices
-                </button>
+                <!-- Action Buttons Row -->
+                <div class="row g-2">
+                    <div class="col-12">
+                        <button class="btn btn-success btn-lg w-100" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
+                            <i class="bi bi-check-circle"></i> Complete Sale
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-danger w-100" onclick="clearCart()">
+                            <i class="bi bi-trash"></i> Clear Cart
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-warning w-100" onclick="holdOrder()" id="hold-order-btn" disabled>
+                            <i class="bi bi-pause-circle"></i> Hold Order
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -561,8 +593,8 @@ let productsOffset = 0;
 const productsLimit = 30;
 let productsLoading = false;
 let productsHasMore = true;
-let currentSearchQuery = '';
-let currentCategoryFilter = '';
+let currentSearchQuery = '{{ search_query|default:"" }}';
+let currentCategoryFilter = '{{ category_filter|default:"" }}';
 
 // Initialize product stock data (will be populated via AJAX)
 {% if not lazy_load %}
@@ -596,6 +628,12 @@ function switchView(view) {
 document.addEventListener('DOMContentLoaded', function() {
     // Set initial view
     switchView(currentView);
+    
+    // Update filter info on page load
+    updateFilterInfo();
+    
+    // Load products
+    loadProducts(true);
 });
 
 // ==================== LAZY LOADING PRODUCTS ====================
@@ -606,8 +644,12 @@ function loadProducts(reset = false) {
     if (reset) {
         productsOffset = 0;
         productsHasMore = true;
-        document.getElementById('products-grid').innerHTML = '';
-        document.getElementById('products-list-body').innerHTML = '';
+        // Clear both views
+        const grid = document.getElementById('products-grid');
+        const listBody = document.getElementById('products-list-body');
+        if (grid) grid.innerHTML = '';
+        if (listBody) listBody.innerHTML = '';
+        console.log('Products cleared for reset');
     }
     
     productsLoading = true;
@@ -621,6 +663,13 @@ function loadProducts(reset = false) {
     if (currentSearchQuery) url.searchParams.set('q', currentSearchQuery);
     if (currentCategoryFilter) url.searchParams.set('category', currentCategoryFilter);
     
+    console.log('Loading products:', {
+        reset: reset,
+        search: currentSearchQuery,
+        category: currentCategoryFilter,
+        offset: productsOffset
+    });
+    
     fetch(url, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
@@ -628,6 +677,9 @@ function loadProducts(reset = false) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Products loaded:', data.products.length, 'total:', data.total);
+        console.log('Backend received:', data.debug);
+        
         if (data.success) {
             renderProducts(data.products);
             productsOffset += data.products.length;
@@ -644,11 +696,16 @@ function loadProducts(reset = false) {
             }
             
             if (data.products.length === 0 && productsOffset === 0) {
+                // No products found
                 document.getElementById('products-empty').style.display = 'block';
                 document.getElementById('load-more-container').style.display = 'none';
+                document.getElementById('products-grid').style.display = 'none';
+                document.getElementById('products-list').style.display = 'none';
+                console.log('No products found for current filters');
             } else {
                 document.getElementById('products-empty').style.display = 'none';
                 document.getElementById('load-more-container').style.display = productsHasMore ? 'block' : 'none';
+                console.log('Products displayed:', data.products.length, 'Has more:', productsHasMore);
             }
         }
         productsLoading = false;
@@ -780,6 +837,11 @@ function handleSearchInput() {
     const searchInput = document.getElementById('search-input');
     currentSearchQuery = searchInput.value.trim();
     
+    console.log('Search input changed:', {
+        search: currentSearchQuery,
+        category: currentCategoryFilter
+    });
+    
     // Clear existing timeout
     clearTimeout(searchTimeout);
     
@@ -794,7 +856,14 @@ function handleCategoryChange() {
     const categorySelect = document.getElementById('category-filter');
     currentCategoryFilter = categorySelect.value;
     
-    updateFilterInfo();
+    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+    console.log('===== CATEGORY CHANGED =====');
+    console.log('Selected value:', currentCategoryFilter);
+    console.log('Selected text:', selectedOption.text);
+    console.log('Current search:', currentSearchQuery);
+    console.log('============================');
+    
+    // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
 
@@ -807,13 +876,19 @@ function clearFilters() {
     document.getElementById('category-filter').value = '';
     currentCategoryFilter = '';
     
-    updateFilterInfo();
+    // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
 
 function updateFilterInfo() {
     const clearBtn = document.getElementById('clear-filters-btn');
     const infoText = document.getElementById('filter-info-text');
+    
+    // Check if elements exist
+    if (!clearBtn || !infoText) {
+        console.warn('Filter info elements not found');
+        return;
+    }
     
     // Show/hide clear button
     if (currentSearchQuery || currentCategoryFilter) {
@@ -824,12 +899,14 @@ function updateFilterInfo() {
     
     // Update info text
     if (currentSearchQuery && currentCategoryFilter) {
-        const categoryName = document.getElementById('category-filter').selectedOptions[0].text;
+        const categorySelect = document.getElementById('category-filter');
+        const categoryName = categorySelect ? categorySelect.options[categorySelect.selectedIndex].text : 'selected category';
         infoText.innerHTML = `Showing results for "<strong>${currentSearchQuery}</strong>" in category "<strong>${categoryName}</strong>"`;
     } else if (currentSearchQuery) {
         infoText.innerHTML = `Showing search results for "<strong>${currentSearchQuery}</strong>"`;
     } else if (currentCategoryFilter) {
-        const categoryName = document.getElementById('category-filter').selectedOptions[0].text;
+        const categorySelect = document.getElementById('category-filter');
+        const categoryName = categorySelect ? categorySelect.options[categorySelect.selectedIndex].text : 'selected category';
         infoText.innerHTML = `Showing products in category "<strong>${categoryName}</strong>"`;
     } else {
         infoText.innerHTML = 'Use search or barcode scanner to find specific items quickly.';
@@ -838,8 +915,16 @@ function updateFilterInfo() {
 
 function searchProducts() {
     const searchInput = document.getElementById('search-input');
-    currentSearchQuery = searchInput ? searchInput.value : '';
-    updateFilterInfo();
+    const categorySelect = document.getElementById('category-filter');
+    currentSearchQuery = searchInput ? searchInput.value.trim() : '';
+    currentCategoryFilter = categorySelect ? categorySelect.value : '';
+    
+    console.log('===== MANUAL SEARCH =====');
+    console.log('Search query:', currentSearchQuery);
+    console.log('Category filter:', currentCategoryFilter);
+    console.log('=========================');
+    
+    // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
 
@@ -1497,7 +1582,8 @@ function updateCart() {
         });
         cartItems.innerHTML = html;
         document.getElementById('complete-btn').disabled = false;
-        console.log('Cart has items, button enabled');
+        document.getElementById('hold-order-btn').disabled = false;
+        console.log('Cart has items, buttons enabled');
     }
     
     calculateTotal();
@@ -1703,6 +1789,68 @@ function clearCart() {
         updateCart();
         clearCartStorage(); // Clear storage when cart is cleared
     }
+}
+
+// Hold current order
+function holdOrder() {
+    if (cart.length === 0) {
+        alert('Cart is empty. Add items before holding order.');
+        return;
+    }
+    
+    const orderName = prompt('Enter a name for this held order:', `Order ${new Date().toLocaleTimeString()}`);
+    if (!orderName) return;
+    
+    // Calculate current total
+    calculateTotal();
+    const currentTotal = parseFloat(document.getElementById('cart-total').textContent.replace('KES ', '').replace(',', '')) || 0;
+    
+    // Get held orders from localStorage
+    let heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
+    
+    // Create held order object
+    const heldOrder = {
+        id: Date.now(),
+        name: orderName,
+        cart: JSON.parse(JSON.stringify(cart)), // Deep copy
+        customer: selectedCustomer ? JSON.parse(JSON.stringify(selectedCustomer)) : null,
+        discountType: document.getElementById('discount-type').value,
+        discountValue: parseFloat(document.getElementById('discount-value').value) || 0,
+        timestamp: new Date().toISOString(),
+        total: currentTotal
+    };
+    
+    // Add to held orders
+    heldOrders.push(heldOrder);
+    localStorage.setItem('pos_held_orders', JSON.stringify(heldOrders));
+    
+    // Clear current cart
+    cart = [];
+    selectedCustomer = null;
+    document.getElementById('discount-type').value = 'percentage';
+    document.getElementById('discount-value').value = '0';
+    
+    // Clear customer selection UI
+    const customerSelect = document.getElementById('customer-select');
+    if (customerSelect) customerSelect.value = '';
+    const customerInfo = document.getElementById('customer-info');
+    if (customerInfo) customerInfo.style.display = 'none';
+    
+    updateCart();
+    updateMobileCart();
+    clearCartStorage();
+    
+    alert(`Order "${orderName}" has been held successfully!\n\nTotal: KES ${currentTotal.toFixed(2)}\nYou can retrieve it later from held orders.`);
+    
+    // Update held orders count
+    updateHeldOrdersCount();
+}
+
+// Update held orders count (you can add a badge to show count)
+function updateHeldOrdersCount() {
+    const heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
+    console.log(`${heldOrders.length} order(s) on hold`);
+    // You can add UI element to display this count
 }
 
 // Refresh cart prices with current product prices
@@ -2198,6 +2346,7 @@ function updateMobileCart() {
     const mobileCartItems = document.getElementById('mobile-cart-items');
     const cartBadge = document.getElementById('cartBadge');
     const mobileCompleteBtn = document.getElementById('mobile-complete-btn');
+    const mobileHoldBtn = document.getElementById('mobile-hold-order-btn');
     
     // Update badge
     if (cart.length > 0) {
@@ -2211,6 +2360,7 @@ function updateMobileCart() {
     if (cart.length === 0) {
         mobileCartItems.innerHTML = '<p class="text-muted text-center">Cart is empty</p>';
         if (mobileCompleteBtn) mobileCompleteBtn.disabled = true;
+        if (mobileHoldBtn) mobileHoldBtn.disabled = true;
     } else {
         let html = '';
         cart.forEach(item => {
@@ -2240,6 +2390,7 @@ function updateMobileCart() {
         });
         mobileCartItems.innerHTML = html;
         if (mobileCompleteBtn) mobileCompleteBtn.disabled = false;
+        if (mobileHoldBtn) mobileHoldBtn.disabled = false;
     }
     
     // Update mobile totals

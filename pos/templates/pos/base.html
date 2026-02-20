@@ -27,12 +27,28 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'css/mobile-first.css' %}">
     <link rel="stylesheet" href="{% static 'css/pwa.css' %}">
+    <link rel="stylesheet" href="{% static 'css/custom-theme.css' %}">
+    
+    <!-- Dynamic Theme Colors -->
+    {% if request.business.settings %}
+    <style>
+        :root {
+            --brand-primary: {{ request.business.settings.theme_primary }};
+            --brand-dark: {{ request.business.settings.theme_dark }};
+            --brand-light: {{ request.business.settings.theme_light }};
+            --brand-accent: {{ request.business.settings.theme_accent }};
+            --primary-color: {{ request.business.settings.theme_primary }};
+            --sidebar-bg: {{ request.business.settings.theme_dark }};
+        }
+    </style>
+    {% endif %}
+    
     <style>
         :root {
             --sidebar-width: 260px;
             --topbar-height: 60px;
-            --primary-color: #4e73df;
-            --sidebar-bg: #1a1d29;
+            --primary-color: #224195;
+            --sidebar-bg: #1a1514;
             --sidebar-hover: #2a2d3a;
         }
 

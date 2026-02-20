@@ -57,6 +57,9 @@
                         <a href="#stock" class="list-group-item list-group-item-action">
                             <i class="bi bi-boxes"></i> Stock Management
                         </a>
+                        <a href="#theme" class="list-group-item list-group-item-action">
+                            <i class="bi bi-palette"></i> Theme Colors
+                        </a>
                         <a href="#system" class="list-group-item list-group-item-action">
                             <i class="bi bi-sliders"></i> System Settings
                         </a>
@@ -370,6 +373,88 @@
                     </div>
                 </div>
 
+                <!-- Theme Colors -->
+                <div id="theme" class="card mb-4 settings-section">
+                    <div class="card-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                        <h5 class="mb-0"><i class="bi bi-palette"></i> Theme Colors</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-4">Customize your business theme colors. Changes will apply across the entire system after saving.</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label for="theme_primary" class="form-label">Primary Color</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_primary" 
+                                           name="theme_primary" value="{{ settings.theme_primary }}" 
+                                           title="Choose primary color" style="max-width: 60px;">
+                                    <input type="text" class="form-control" id="theme_primary_text" 
+                                           value="{{ settings.theme_primary }}" readonly>
+                                </div>
+                                <small class="text-muted">Used for buttons, links, and primary actions</small>
+                                <div class="mt-2 p-3 rounded text-white text-center" style="background-color: {{ settings.theme_primary }};">
+                                    Preview
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-4">
+                                <label for="theme_dark" class="form-label">Dark Color</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_dark" 
+                                           name="theme_dark" value="{{ settings.theme_dark }}" 
+                                           title="Choose dark color" style="max-width: 60px;">
+                                    <input type="text" class="form-control" id="theme_dark_text" 
+                                           value="{{ settings.theme_dark }}" readonly>
+                                </div>
+                                <small class="text-muted">Used for sidebar and headers</small>
+                                <div class="mt-2 p-3 rounded text-white text-center" style="background-color: {{ settings.theme_dark }};">
+                                    Preview
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-4">
+                                <label for="theme_light" class="form-label">Light Color</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_light" 
+                                           name="theme_light" value="{{ settings.theme_light }}" 
+                                           title="Choose light color" style="max-width: 60px;">
+                                    <input type="text" class="form-control" id="theme_light_text" 
+                                           value="{{ settings.theme_light }}" readonly>
+                                </div>
+                                <small class="text-muted">Used for text and light backgrounds</small>
+                                <div class="mt-2 p-3 rounded text-center" style="background-color: {{ settings.theme_light }}; color: #333;">
+                                    Preview
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-4">
+                                <label for="theme_accent" class="form-label">Accent Color</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_accent" 
+                                           name="theme_accent" value="{{ settings.theme_accent }}" 
+                                           title="Choose accent color" style="max-width: 60px;">
+                                    <input type="text" class="form-control" id="theme_accent_text" 
+                                           value="{{ settings.theme_accent }}" readonly>
+                                </div>
+                                <small class="text-muted">Used for highlights and special elements</small>
+                                <div class="mt-2 p-3 rounded text-white text-center" style="background-color: {{ settings.theme_accent }};">
+                                    Preview
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> 
+                            <strong>Tip:</strong> Choose colors that provide good contrast for readability. 
+                            Refresh the page after saving to see your theme applied.
+                        </div>
+                        
+                        <button type="button" class="btn btn-outline-secondary" onclick="resetThemeColors()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reset to Defaults
+                        </button>
+                    </div>
+                </div>
+
                 <!-- System Settings -->
                 <div id="system" class="card mb-4 settings-section">
                     <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
@@ -455,5 +540,47 @@ document.querySelectorAll('.settings-nav a').forEach(anchor => {
         }
     });
 });
+
+// Theme color picker sync
+const colorInputs = [
+    { picker: 'theme_primary', text: 'theme_primary_text' },
+    { picker: 'theme_dark', text: 'theme_dark_text' },
+    { picker: 'theme_light', text: 'theme_light_text' },
+    { picker: 'theme_accent', text: 'theme_accent_text' }
+];
+
+colorInputs.forEach(function(input) {
+    const colorPicker = document.getElementById(input.picker);
+    const textInput = document.getElementById(input.text);
+    
+    if (colorPicker && textInput) {
+        colorPicker.addEventListener('input', function() {
+            textInput.value = this.value.toUpperCase();
+            // Update preview
+            const preview = colorPicker.closest('.col-md-6').querySelector('.rounded');
+            if (preview) {
+                preview.style.backgroundColor = this.value;
+            }
+        });
+    }
+});
+
+// Reset theme colors to defaults
+function resetThemeColors() {
+    if (confirm('Reset all theme colors to default values?')) {
+        document.getElementById('theme_primary').value = '#224195';
+        document.getElementById('theme_dark').value = '#1a1514';
+        document.getElementById('theme_light').value = '#d5d3d4';
+        document.getElementById('theme_accent').value = '#cd8a4c';
+        
+        // Trigger input events to update displays
+        ['theme_primary', 'theme_dark', 'theme_light', 'theme_accent'].forEach(function(id) {
+            const input = document.getElementById(id);
+            if (input) {
+                input.dispatchEvent(new Event('input'));
+            }
+        });
+    }
+}
 </script>
 {% endblock %}

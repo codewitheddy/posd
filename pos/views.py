@@ -1170,6 +1170,11 @@ def pos_screen(request, slug=None):
         offset = int(request.GET.get('offset', 0))
         limit = int(request.GET.get('limit', 30))
         
+        # Debug logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Product load request - Search: '{search_query}', Category: '{category_filter}', Offset: {offset}")
+        
         # Base product query with optimizations
         products_query = Product.objects.filter(
             business=request.business,
@@ -1187,9 +1192,14 @@ def pos_screen(request, slug=None):
                 Q(barcode__icontains=search_query) |
                 Q(product_code__icontains=search_query)
             )
-        elif category_filter:
+            logger.info(f"Applied search filter: {search_query}")
+        
+        if category_filter:
             products_query = products_query.filter(category_id=category_filter)
-        else:
+            logger.info(f"Applied category filter: {category_filter}")
+        
+        # Order by most recent if no search query
+        if not search_query:
             products_query = products_query.order_by('-created_at')
         
         # Paginate
@@ -1218,7 +1228,13 @@ def pos_screen(request, slug=None):
             'success': True,
             'products': products_data,
             'total': total_count,
-            'has_more': (offset + limit) < total_count
+            'has_more': (offset + limit) < total_count,
+            'debug': {
+                'search_query': search_query,
+                'category_filter': category_filter,
+                'offset': offset,
+                'limit': limit
+            }
         })
     
     # Initial page load - minimal data for fast rendering
@@ -3206,6 +3222,12 @@ def business_settings(request, slug=None):
         settings.allow_negative_stock = request.POST.get('allow_negative_stock') == 'on'
         settings.require_product_code = request.POST.get('require_product_code') == 'on'
         settings.auto_generate_product_code = request.POST.get('auto_generate_product_code') == 'on'
+        
+        # Theme Colors
+        settings.theme_primary = request.POST.get('theme_primary', '#224195')
+        settings.theme_dark = request.POST.get('theme_dark', '#1a1514')
+        settings.theme_light = request.POST.get('theme_light', '#d5d3d4')
+        settings.theme_accent = request.POST.get('theme_accent', '#cd8a4c')
         
         settings.updated_by = request.user
         
