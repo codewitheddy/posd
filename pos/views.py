@@ -2246,15 +2246,20 @@ def purchase_receive(request, slug=None, pk=None):
         # Collect receiving data
         receiving_data = {'items': []}
         has_errors = False
+        expiry_warnings = []
+        
+        from datetime import datetime, timedelta
+        today = timezone.now().date()
+        one_week_later = today + timedelta(days=7)
         
         for item in purchase.items.all():
             qty_received = int(request.POST.get(f'received_{item.id}', item.quantity))
             qty_damaged = int(request.POST.get(f'damaged_{item.id}', 0))
             notes = request.POST.get(f'notes_{item.id}', '').strip()
-            expiry_date = request.POST.get(f'expiry_{item.id}', '').strip()
+            expiry_date_str = request.POST.get(f'expiry_{item.id}', '').strip()
             batch_number = request.POST.get(f'batch_{item.id}', '').strip()
             
-            # Validate
+            # Validate quantities
             if qty_received < 0 or qty_damaged < 0:
                 messages.error(request, f'{item.product.name}: Quantities cannot be negative!')
                 has_errors = True
@@ -2265,16 +2270,44 @@ def purchase_receive(request, slug=None, pk=None):
                 has_errors = True
                 break
             
+            # Validate expiry date
+            expiry_date_obj = None
+            if expiry_date_str:
+                try:
+                    expiry_date_obj = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                    
+                    # Check if already expired
+                    if expiry_date_obj < today:
+                        days_overdue = (today - expiry_date_obj).days
+                        expiry_warnings.append(
+                            f'⚠️ {item.product.name}: Already expired {days_overdue} day{"s" if days_overdue != 1 else ""} ago!'
+                        )
+                    # Check if expiring within 7 days
+                    elif expiry_date_obj <= one_week_later:
+                        days_until = (expiry_date_obj - today).days
+                        expiry_warnings.append(
+                            f'⚠️ {item.product.name}: Expires in {days_until} day{"s" if days_until != 1 else ""}!'
+                        )
+                except ValueError:
+                    messages.error(request, f'{item.product.name}: Invalid expiry date format!')
+                    has_errors = True
+                    break
+            
             receiving_data['items'].append({
                 'item_id': item.id,
                 'quantity_received': qty_received,
                 'quantity_damaged': qty_damaged,
                 'notes': notes,
-                'expiry_date': expiry_date if expiry_date else None,
+                'expiry_date': expiry_date_str if expiry_date_str else None,
                 'batch_number': batch_number
             })
         
         if not has_errors:
+            # Show expiry warnings if any
+            if expiry_warnings:
+                for warning in expiry_warnings:
+                    messages.warning(request, warning)
+            
             # Mark as received with details
             success = purchase.mark_as_received(receiving_data)
             
@@ -2390,7 +2423,7 @@ def expiry_alert(request, slug=None):
         business=request.business,
         expiry_date__lt=today,
         stock_quantity__gt=0
-    ).select_related('category')
+    ).select_related('category').order_by('expiry_date')
     
     # Get expiring soon products for current business
     expiring_soon = []
@@ -2398,15 +2431,29 @@ def expiry_alert(request, slug=None):
         business=request.business,
         expiry_date__gte=today,
         stock_quantity__gt=0
-    ).select_related('category')
+    ).select_related('category').order_by('expiry_date')
     
     for product in products_with_expiry:
         if product.is_expiring_soon():
             expiring_soon.append(product)
     
+    # Diagnostic info - products with expiry dates
+    total_products_with_expiry = Product.objects.filter(
+        business=request.business,
+        expiry_date__isnull=False
+    ).count()
+    
+    products_with_expiry_in_stock = Product.objects.filter(
+        business=request.business,
+        expiry_date__isnull=False,
+        stock_quantity__gt=0
+    ).count()
+    
     context = {
         'expired_products': expired_products,
         'expiring_soon_products': expiring_soon,
+        'total_products_with_expiry': total_products_with_expiry,
+        'products_with_expiry_in_stock': products_with_expiry_in_stock,
     }
     return render(request, 'pos/expiry_alert.html', context)
 
@@ -2419,7 +2466,7 @@ def update_expiry(request, slug=None, pk=None):
     
     if request.method == 'POST':
         expiry_date_str = request.POST.get('expiry_date')
-        expiry_alert_days = request.POST.get('expiry_alert_days', 3)
+        expiry_alert_days = request.POST.get('expiry_alert_days', 7)
         
         # Store old values for comparison
         old_expiry = product.expiry_date
@@ -3215,7 +3262,7 @@ def business_settings(request, slug=None):
         settings.enable_low_stock_alerts = request.POST.get('enable_low_stock_alerts') == 'on'
         
         # Expiry Settings
-        settings.default_expiry_alert_days = int(request.POST.get('default_expiry_alert_days', 3))
+        settings.default_expiry_alert_days = int(request.POST.get('default_expiry_alert_days', 7))
         settings.enable_expiry_alerts = request.POST.get('enable_expiry_alerts') == 'on'
         
         # System Settings

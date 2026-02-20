@@ -111,8 +111,10 @@
                                         <input type="date" class="form-control" 
                                                name="expiry_{{ item.id }}" 
                                                id="expiry_{{ item.id }}"
-                                               value="{{ item.expiry_date|date:'Y-m-d' }}">
+                                               onchange="validateExpiry({{ item.id }}, '{{ item.product.name|escapejs }}')"
+                                               {% if item.expiry_date %}value="{{ item.expiry_date|date:'Y-m-d' }}"{% endif %}>
                                         <small class="text-muted">For batch tracking and expiry alerts</small>
+                                        <div id="expiry_warning_{{ item.id }}" class="mt-1"></div>
                                     </div>
                                     
                                     <div class="col-md-6">
@@ -190,6 +192,42 @@
 </div>
 
 <script>
+function validateExpiry(itemId, productName) {
+    const expiryInput = document.getElementById(`expiry_${itemId}`);
+    const warningDiv = document.getElementById(`expiry_warning_${itemId}`);
+    const expiryDate = expiryInput.value;
+    
+    if (!expiryDate) {
+        warningDiv.innerHTML = '';
+        expiryInput.classList.remove('border-warning', 'border-danger');
+        return;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    const oneWeekLater = new Date(today);
+    oneWeekLater.setDate(oneWeekLater.getDate() + 7);
+    
+    if (expiry < today) {
+        // Already expired
+        const daysOverdue = Math.floor((today - expiry) / (1000 * 60 * 60 * 24));
+        warningDiv.innerHTML = `<div class="alert alert-danger py-1 px-2 mb-0"><small><i class="bi bi-exclamation-triangle"></i> Already expired ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} ago!</small></div>`;
+        expiryInput.classList.add('border-danger');
+        expiryInput.classList.remove('border-warning');
+    } else if (expiry <= oneWeekLater) {
+        // Expiring within 7 days
+        const daysUntil = Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
+        warningDiv.innerHTML = `<div class="alert alert-warning py-1 px-2 mb-0"><small><i class="bi bi-exclamation-circle"></i> Expires in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}!</small></div>`;
+        expiryInput.classList.add('border-warning');
+        expiryInput.classList.remove('border-danger');
+    } else {
+        // Good expiry date
+        warningDiv.innerHTML = `<div class="alert alert-success py-1 px-2 mb-0"><small><i class="bi bi-check-circle"></i> Good expiry date</small></div>`;
+        expiryInput.classList.remove('border-warning', 'border-danger');
+    }
+}
+
 function updateDamaged(itemId, orderedQty) {
     const receivedInput = document.getElementById(`received_${itemId}`);
     const damagedInput = document.getElementById(`damaged_${itemId}`);
@@ -231,9 +269,16 @@ function updateSummary() {
     document.getElementById('summary-damaged').textContent = totalDamaged + ' units';
 }
 
-// Initialize summary on page load
+// Initialize summary and validate existing expiry dates on page load
 document.addEventListener('DOMContentLoaded', function() {
     updateSummary();
+    
+    // Validate any pre-filled expiry dates
+    {% for item in purchase.items.all %}
+    {% if item.expiry_date %}
+    validateExpiry({{ item.id }}, '{{ item.product.name|escapejs }}');
+    {% endif %}
+    {% endfor %}
 });
 
 // Form validation
@@ -245,7 +290,7 @@ document.getElementById('receiveForm').addEventListener('submit', function(e) {
     const notes_{{ item.id }} = document.getElementById('notes_{{ item.id }}').value.trim();
     
     if (damaged_{{ item.id }} > 0 && notes_{{ item.id }} === '') {
-        alert('Please add notes for {{ item.product.name }} - you have {{ item.quantity }} damaged/missing items.');
+        alert('Please add notes for {{ item.product.name }} - you have damaged/missing items.');
         document.getElementById('notes_{{ item.id }}').focus();
         hasErrors = true;
         e.preventDefault();
@@ -274,6 +319,20 @@ document.getElementById('receiveForm').addEventListener('submit', function(e) {
 .border-danger {
     border-color: #dc3545 !important;
     border-width: 2px !important;
+}
+
+.border-warning {
+    border-color: #ffc107 !important;
+    border-width: 2px !important;
+}
+
+input[type="date"] {
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    font-size: 1.2rem;
 }
 </style>
 {% endblock %}

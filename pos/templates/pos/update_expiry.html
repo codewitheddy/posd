@@ -51,7 +51,7 @@
                     <div class="mb-3">
                         <label for="expiry_alert_days" class="form-label">Alert Days Before Expiry</label>
                         <input type="number" class="form-control" id="expiry_alert_days" name="expiry_alert_days" 
-                               value="{{ product.expiry_alert_days|default:3 }}" min="1" max="365">
+                               value="{{ product.expiry_alert_days|default:7 }}" min="1" max="365">
                         <small class="form-text text-muted">
                             You'll be alerted X days before the expiry date
                         </small>

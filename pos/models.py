@@ -366,7 +366,7 @@ class Product(models.Model):
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, help_text="Current stock quantity")
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=3, default=10, help_text="Alert when stock falls below this level")
     expiry_date = models.DateField(blank=True, null=True, help_text="Product expiry date (optional)")
-    expiry_alert_days = models.IntegerField(default=3, help_text="Alert X days before expiry")
+    expiry_alert_days = models.IntegerField(default=7, help_text="Alert X days before expiry")
     
     # Multi-unit selling (e.g., sell by piece or by carton)
     bulk_unit_name = models.CharField(max_length=50, blank=True, help_text="Name of bulk unit (e.g., Carton, Box, Sack)")
@@ -900,6 +900,9 @@ class Purchase(models.Model):
                 expiry_date = item_data.get('expiry_date')
                 batch_number = item_data.get('batch_number', '')
                 
+                # Get product reference first
+                product = item.product
+                
                 # Update item receiving details
                 item.quantity_received = qty_received
                 item.quantity_damaged = qty_damaged
@@ -909,7 +912,14 @@ class Purchase(models.Model):
                 if expiry_date:
                     from datetime import datetime
                     try:
-                        item.expiry_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                        expiry_date_obj = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                        item.expiry_date = expiry_date_obj
+                        
+                        # Also update the product's expiry date
+                        product.expiry_date = expiry_date_obj
+                        # Set default alert days to 7 if not already customized
+                        if product.expiry_alert_days <= 3:  # If using old default or less
+                            product.expiry_alert_days = 7
                     except ValueError:
                         pass  # Invalid date format, skip
                 
@@ -919,10 +929,10 @@ class Purchase(models.Model):
                 item.save()
                 
                 # Update stock with received quantity only
-                product = item.product
                 previous_qty = product.stock_quantity
                 product.stock_quantity += Decimal(qty_received)
-                product.save()
+                # Save product with all changes (stock + expiry if set)
+                product.save(update_fields=['stock_quantity', 'expiry_date', 'expiry_alert_days'])
                 
                 # Create restock adjustment
                 StockAdjustment.objects.create(
@@ -1262,7 +1272,7 @@ class BusinessSettings(models.Model):
     enable_low_stock_alerts = models.BooleanField(default=True)
     
     # Expiry Settings
-    default_expiry_alert_days = models.IntegerField(default=3)
+    default_expiry_alert_days = models.IntegerField(default=7)
     enable_expiry_alerts = models.BooleanField(default=True)
     
     # Loyalty Program Settings
@@ -2526,3 +2536,43 @@ class CashFloat(models.Model):
         """Calculate expected return amount (float + sales - change given)"""
         # This would need to be calculated based on sales made during the float period
         return self.amount
+
+
+# ==================== IDEMPOTENCY KEY MANAGEMENT ====================
+
+class IdempotencyKey(models.Model):
+    """
+    Idempotency keys for preventing duplicate request processing.
+    
+    Stores request fingerprints to detect and prevent duplicate operations
+    within a configurable time window (default 24 hours).
+    """
+    key = models.CharField(max_length=255, unique=True, db_index=True)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='idempotency_keys')
+    operation_type = models.CharField(max_length=50)
+    request_data = models.JSONField()
+    response_data = models.JSONField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('processing', 'Processing'),
+            ('completed', 'Completed'),
+            ('failed', 'Failed')
+        ]
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['business', 'operation_type', 'created_at'], name='pos_idempot_busines_idx'),
+            models.Index(fields=['expires_at'], name='pos_idempot_expires_idx'),
+        ]
+    
+    def __str__(self):
+        return f"{self.operation_type} - {self.key} ({self.status})"
+    
+    def is_expired(self):
+        """Check if this idempotency key has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at

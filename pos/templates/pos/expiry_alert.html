@@ -14,6 +14,24 @@
     </div>
 </div>
 
+<!-- Diagnostic Info -->
+{% if total_products_with_expiry == 0 %}
+<div class="alert alert-info">
+    <h5><i class="bi bi-info-circle"></i> No Products with Expiry Dates</h5>
+    <p class="mb-2">You haven't set expiry dates for any products yet. To start tracking expiry:</p>
+    <ol class="mb-0">
+        <li>Go to <a href="{% url 'product_list' slug=request.business.slug %}">Products</a></li>
+        <li>Edit a product and set its expiry date</li>
+        <li>Set the "Alert Days Before Expiry" (default is 7 days)</li>
+    </ol>
+</div>
+{% elif products_with_expiry_in_stock == 0 %}
+<div class="alert alert-warning">
+    <h5><i class="bi bi-exclamation-triangle"></i> No Products with Expiry Dates in Stock</h5>
+    <p class="mb-0">You have {{ total_products_with_expiry }} product{{ total_products_with_expiry|pluralize }} with expiry dates, but none currently have stock.</p>
+</div>
+{% endif %}
+
 <!-- Expired Products -->
 {% if expired_products %}
 <div class="card border-danger mb-4">
@@ -45,9 +63,11 @@
                         <td>{{ product.category.name|default:"-" }}</td>
                         <td>{{ product.expiry_date|date:"d M Y" }}</td>
                         <td>
+                            {% with days=product.days_until_expiry %}
                             <span class="badge bg-danger">
-                                {{ product.days_until_expiry|add:"-1"|stringformat:"d"|slice:"1:" }} days ago
+                                {{ days|add:"-1"|stringformat:"d"|slice:"1:" }} day{{ days|add:"-1"|stringformat:"d"|slice:"1:"|pluralize }} ago
                             </span>
+                            {% endwith %}
                         </td>
                         <td>{{ product.stock_quantity }}</td>
                         <td>
@@ -85,6 +105,7 @@
                         <th>Code</th>
                         <th>Category</th>
                         <th>Expiry Date</th>
+                        <th>Alert Days</th>
                         <th>Days Until Expiry</th>
                         <th>Stock Qty</th>
                         <th>Actions</th>
@@ -98,14 +119,22 @@
                         <td>{{ product.category.name|default:"-" }}</td>
                         <td>{{ product.expiry_date|date:"d M Y" }}</td>
                         <td>
+                            <span class="badge bg-secondary">
+                                {{ product.expiry_alert_days }} day{{ product.expiry_alert_days|pluralize }}
+                            </span>
+                        </td>
+                        <td>
                             <span class="badge bg-warning text-dark">
                                 {{ product.days_until_expiry }} day{{ product.days_until_expiry|pluralize }}
                             </span>
                         </td>
                         <td>{{ product.stock_quantity }}</td>
                         <td>
-                            <a href="{% url 'product_edit' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-pencil"></i> Edit
+                            <a href="{% url 'update_expiry' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-outline-warning" title="Update expiry date">
+                                <i class="bi bi-calendar-event"></i>
+                            </a>
+                            <a href="{% url 'product_edit' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-outline-primary" title="Edit product">
+                                <i class="bi bi-pencil"></i>
                             </a>
                         </td>
                     </tr>
@@ -118,12 +147,13 @@
 {% endif %}
 
 <!-- No Alerts -->
-{% if not expired_products and not expiring_soon_products %}
+{% if not expired_products and not expiring_soon_products and products_with_expiry_in_stock > 0 %}
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="bi bi-check-circle text-success" style="font-size: 4rem;"></i>
         <h4 class="mt-3">All Clear!</h4>
         <p class="text-muted">No products are expired or expiring soon.</p>
+        <p class="text-muted">Tracking {{ products_with_expiry_in_stock }} product{{ products_with_expiry_in_stock|pluralize }} with expiry dates.</p>
         <a href="{% url 'product_list' slug=request.business.slug  %}" class="btn btn-primary mt-2">
             <i class="bi bi-box"></i> View All Products
         </a>
@@ -144,6 +174,7 @@
             <li><strong>Stock Rotation:</strong> Place newer stock behind older stock</li>
             <li><strong>Remove Expired:</strong> Immediately remove expired products from shelves</li>
             <li><strong>Adjust Orders:</strong> Order less of slow-moving perishable items</li>
+            <li><strong>Alert Days:</strong> Increase "Alert Days Before Expiry" for products that need more time to sell (default is 7 days)</li>
         </ul>
     </div>
 </div>
