@@ -3936,7 +3936,7 @@ def supplier_payments(request, slug, supplier_id):
 @can_manage_purchases
 def create_payment(request, slug, supplier_id):
     """Create a new supplier payment"""
-    from .services import SupplierPaymentService
+    from .supplier_services import SupplierPaymentService
     from .models import PaymentMethod
     from datetime import datetime
     
@@ -4058,7 +4058,7 @@ def delete_payment(request, slug, payment_id):
 def supplier_statement(request, slug, supplier_id):
     """Generate supplier statement - Always fresh, no caching"""
     from django.views.decorators.cache import never_cache
-    from .services import SupplierStatementService
+    from .supplier_services import SupplierStatementService
     
     supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
     
@@ -4126,7 +4126,7 @@ def supplier_balances(request):
 @manager_required
 def aging_analysis(request):
     """Generate aging analysis report"""
-    from .services import SupplierStatementService
+    from .supplier_services import SupplierStatementService
     
     as_of_date = request.GET.get('as_of_date')
     if as_of_date:
