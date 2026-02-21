@@ -28,14 +28,18 @@ COPY . .
 # Make start script executable
 RUN chmod +x start.sh
 
-# Collect static files
-RUN python manage.py collectstatic --no-input
+# Don't collect static files during build - do it at runtime
+# This prevents build failures if settings aren't configured yet
 
 # Create media directory
 RUN mkdir -p /app/media
 
 # Expose port
 EXPOSE $PORT
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:${PORT}/health/', timeout=5)" || exit 1
 
 # Run startup script (migrations + gunicorn)
 CMD ["./start.sh"]

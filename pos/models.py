@@ -1632,11 +1632,11 @@ class ActivityLog(models.Model):
         indexes = [
             models.Index(fields=['-timestamp']),
             models.Index(fields=['user', '-timestamp']),
-            models.Index(fields=['business', 'timestamp'], name='pos_activitylog_bus_time_idx'),
-            models.Index(fields=['business', 'operation_type', 'timestamp'], name='pos_activitylog_bus_op_time_idx'),
-            models.Index(fields=['business', 'entity_type', 'entity_id'], name='pos_activitylog_bus_ent_idx'),
-            models.Index(fields=['business', 'user', 'timestamp'], name='pos_activitylog_bus_usr_time_idx'),
-            models.Index(fields=['correlation_id'], name='pos_activitylog_corr_idx'),
+            models.Index(fields=['business', 'timestamp'], name='pos_actlog_bus_time_idx'),
+            models.Index(fields=['business', 'operation_type', 'timestamp'], name='pos_actlog_bus_op_tm_idx'),
+            models.Index(fields=['business', 'entity_type', 'entity_id'], name='pos_actlog_bus_ent_idx'),
+            models.Index(fields=['business', 'user', 'timestamp'], name='pos_actlog_bus_usr_tm_idx'),
+            models.Index(fields=['correlation_id'], name='pos_actlog_corr_idx'),
         ]
     
     def __str__(self):
