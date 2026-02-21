@@ -181,8 +181,11 @@ business_urlpatterns = [
     path('reports/payment-transactions/csv/', views.payment_transactions_csv, name='payment_transactions_csv'),
     
     # Analytics
-    path('api/analytics/', views.analytics_api, name='analytics_api'),
-    path('analytics/export/', views.analytics_export_pdf, name='analytics_export_pdf'),
+    path('analytics/', views.analytics_dashboard, name='analytics_dashboard'),
+    path('analytics/sales-trends/', views.analytics_sales_trends, name='analytics_sales_trends'),
+    path('analytics/products/', views.analytics_products, name='analytics_products'),
+    path('analytics/customers/', views.analytics_customers, name='analytics_customers'),
+    path('analytics/api/', views.analytics_api, name='analytics_api'),
     
     # User Management
     path('users/', include([

@@ -501,6 +501,12 @@
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
             <li class="nav-section">Reports</li>
             <li>
+                <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="{% if 'analytics' in request.path %}active{% endif %}">
+                    <i class="bi bi-graph-up"></i> Analytics Dashboard
+                    <span class="badge bg-info">New</span>
+                </a>
+            </li>
+            <li>
                 <a href="{% url 'sales_list' slug=business_slug %}" class="{% if 'sales_list' in request.path or request.resolver_match.url_name == 'sales_list' %}active{% endif %}">
                     <i class="bi bi-receipt"></i> All Sales
                 </a>

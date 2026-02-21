@@ -1,0 +1,186 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Product Analytics - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="bi bi-box-seam"></i> Product Performance Analytics</h2>
+            <p class="text-muted">Insights into product sales and inventory performance</p>
+        </div>
+    </div>
+
+    <!-- Time Period Filter -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                <a href="?days=7" class="btn btn-outline-primary {% if days == 7 %}active{% endif %}">Last 7 Days</a>
+                <a href="?days=30" class="btn btn-outline-primary {% if days == 30 %}active{% endif %}">Last 30 Days</a>
+                <a href="?days=90" class="btn btn-outline-primary {% if days == 90 %}active{% endif %}">Last 90 Days</a>
+                <a href="?days=365" class="btn btn-outline-primary {% if days == 365 %}active{% endif %}">Last Year</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Turnover Summary -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Stock Turnover Rate</h6>
+                    <h2 class="text-primary">{{ turnover.turnover_rate|floatformat:1 }}x</h2>
+                    <small class="text-muted">{{ turnover.days_to_sell }} days to sell</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Average Stock Value</h6>
+                    <h2 class="text-success">KES {{ turnover.avg_stock_value|floatformat:2 }}</h2>
+                    <small class="text-muted">Current period</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Best Sellers -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-trophy-fill text-warning"></i> Top 20 Best Sellers</h5>
+                </div>
+                <div class="card-body">
+                    {% if best_sellers %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th class="text-end">Units Sold</th>
+                                    <th class="text-end">Revenue</th>
+                                    <th class="text-end">Profit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in best_sellers %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ product.name }}</td>
+                                    <td class="text-end">{{ product.units_sold|floatformat:0 }}</td>
+                                    <td class="text-end">KES {{ product.revenue|floatformat:2 }}</td>
+                                    <td class="text-end">KES {{ product.profit|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> No sales data available for the selected period.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slow Movers -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle text-warning"></i> Slow Moving Items</h5>
+                </div>
+                <div class="card-body">
+                    {% if slow_movers %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th class="text-end">Current Stock</th>
+                                    <th class="text-end">Units Sold</th>
+                                    <th class="text-end">Days Since Last Sale</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in slow_movers %}
+                                <tr>
+                                    <td>{{ product.name }}</td>
+                                    <td class="text-end">{{ product.stock|floatformat:0 }}</td>
+                                    <td class="text-end">{{ product.units_sold|floatformat:0 }}</td>
+                                    <td class="text-end">{{ product.days_since_sale|default:"Never" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i> No slow moving items found!
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABC Analysis -->
+    {% if abc_analysis %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> ABC Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h6>Category A (High Value)</h6>
+                                    <h3>{{ abc_analysis.a_count }} items</h3>
+                                    <p class="mb-0">{{ abc_analysis.a_percentage|floatformat:1 }}% of revenue</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <h6>Category B (Medium Value)</h6>
+                                    <h3>{{ abc_analysis.b_count }} items</h3>
+                                    <p class="mb-0">{{ abc_analysis.b_percentage|floatformat:1 }}% of revenue</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h6>Category C (Low Value)</h6>
+                                    <h3>{{ abc_analysis.c_count }} items</h3>
+                                    <p class="mb-0">{{ abc_analysis.c_percentage|floatformat:1 }}% of revenue</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Back Button -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Analytics Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

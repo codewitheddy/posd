@@ -645,9 +645,9 @@
             {% endif %}
             
             {% if user_permissions.can_view_reports %}
-            <button type="button" class="quick-action-btn btn btn-purple" data-bs-toggle="modal" data-bs-target="#analyticsModal" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <a href="{% url 'analytics_dashboard' slug=request.business.slug %}" class="quick-action-btn btn btn-purple" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                 <i class="bi bi-graph-up"></i> Analytics
-            </button>
+            </a>
             {% endif %}
             
             {% if user_permissions.can_make_sales %}
@@ -676,7 +676,5 @@
         </div>
     </div>
 </div>
-
-{% include 'pos/analytics_modal.html' %}
 
 {% endblock %}

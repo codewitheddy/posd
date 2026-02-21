@@ -1,0 +1,417 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border-left: 4px solid var(--primary-color);
+        transition: transform 0.2s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary-color);
+    }
+    
+    .stat-label {
+        color: #858796;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 2rem;
+    }
+    
+    .period-selector {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .period-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d3e2;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .period-btn:hover {
+        background: #f8f9fc;
+    }
+    
+    .period-btn.active {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+    
+    .insight-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+    }
+    
+    .insight-card h5 {
+        color: white;
+        margin-bottom: 0.5rem;
+    }
+    
+    .table-analytics {
+        font-size: 0.9rem;
+    }
+    
+    .table-analytics th {
+        background: #f8f9fc;
+        font-weight: 600;
+        color: #5a5c69;
+    }
+    
+    .badge-performance {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0"><i class="bi bi-graph-up"></i> Analytics Dashboard</h1>
+            <p class="text-muted mb-0">Business intelligence and insights</p>
+        </div>
+        <div class="period-selector">
+            <button class="period-btn {% if days == 7 %}active{% endif %}" onclick="changePeriod(7)">7 Days</button>
+            <button class="period-btn {% if days == 30 %}active{% endif %}" onclick="changePeriod(30)">30 Days</button>
+            <button class="period-btn {% if days == 90 %}active{% endif %}" onclick="changePeriod(90)">90 Days</button>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-label">Total Revenue</div>
+                    <div class="stat-value">KES {{ summary.sales.total_revenue|default:0|floatformat:2 }}</div>
+                    <small class="text-muted">Last {{ days }} days</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-label">Total Profit</div>
+                    <div class="stat-value">KES {{ summary.profit.total_profit|default:0|floatformat:2 }}</div>
+                    <small class="text-muted">
+                        {% if profit_analysis.profit_margin %}
+                            Margin: {{ profit_analysis.profit_margin|floatformat:1 }}%
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-label">Transactions</div>
+                    <div class="stat-value">{{ summary.sales.total_transactions|default:0 }}</div>
+                    <small class="text-muted">Avg: KES {{ summary.sales.avg_transaction|default:0|floatformat:2 }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-label">Active Customers</div>
+                    <div class="stat-value">{{ summary.customers.active_customers|default:0 }}</div>
+                    <small class="text-muted">of {{ summary.customers.total_customers|default:0 }} total</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <!-- Sales Trend Chart -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Sales Trend</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="salesTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Sales by Category</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Best Sellers & Insights -->
+    <div class="row mb-4">
+        <!-- Best Sellers -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-trophy"></i> Top 10 Best Sellers</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-analytics table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>Units Sold</th>
+                                    <th>Revenue</th>
+                                    <th>Profit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in best_sellers %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>
+                                        <strong>{{ product.name }}</strong>
+                                        <br><small class="text-muted">{{ product.category }}</small>
+                                    </td>
+                                    <td>{{ product.units_sold }}</td>
+                                    <td>KES {{ product.revenue|floatformat:2 }}</td>
+                                    <td class="text-success">KES {{ product.profit|floatformat:2 }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No sales data available</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Methods & Insights -->
+        <div class="col-lg-6 mb-4">
+            <!-- Payment Methods -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-credit-card"></i> Payment Methods</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="paymentMethodChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Insights -->
+            <div class="insight-card">
+                <h5><i class="bi bi-lightbulb"></i> Key Insights</h5>
+                <ul class="mb-0">
+                    <li>Stock turnover: {{ turnover.turnover_rate }} times ({{ turnover.days_to_sell }} days to sell)</li>
+                    <li>Customer retention: {{ retention.retention_rate }}%</li>
+                    <li>Profit margin: {{ profit_analysis.profit_margin|floatformat:1 }}%</li>
+                    <li>Low stock items: {{ summary.inventory.low_stock_count }}</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="mb-3">Detailed Analytics</h5>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="{% url 'analytics_sales_trends' slug=business_slug %}" class="btn btn-outline-primary">
+                            <i class="bi bi-graph-up"></i> Sales Trends
+                        </a>
+                        <a href="{% url 'analytics_products' slug=business_slug %}" class="btn btn-outline-primary">
+                            <i class="bi bi-box-seam"></i> Product Performance
+                        </a>
+                        <a href="{% url 'analytics_customers' slug=business_slug %}" class="btn btn-outline-primary">
+                            <i class="bi bi-people"></i> Customer Analytics
+                        </a>
+                        <a href="{% url 'sales_report' slug=business_slug %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-file-earmark-text"></i> Sales Report
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// Change period
+function changePeriod(days) {
+    window.location.href = '?days=' + days;
+}
+
+// Sales Trend Chart
+const salesTrendCtx = document.getElementById('salesTrendChart').getContext('2d');
+const salesTrendDates = {{ sales_trends.dates|safe }};
+const salesTrendTotals = {{ sales_trends.totals|safe }};
+const salesTrendProfits = {{ sales_trends.profits|safe }};
+
+new Chart(salesTrendCtx, {
+    type: 'line',
+    data: {
+        labels: salesTrendDates,
+        datasets: [{
+            label: 'Revenue',
+            data: salesTrendTotals,
+            borderColor: '#4e73df',
+            backgroundColor: 'rgba(78, 115, 223, 0.1)',
+            tension: 0.4,
+            fill: true
+        }, {
+            label: 'Profit',
+            data: salesTrendProfits,
+            borderColor: '#1cc88a',
+            backgroundColor: 'rgba(28, 200, 138, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return 'KES ' + value.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Category Sales Chart
+const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+const categoryData = [
+    {% for item in category_sales %}
+    {
+        name: '{{ item.product__category__name|default:"Uncategorized" }}',
+        revenue: {{ item.total_revenue|default:0|floatformat:2 }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+new Chart(categoryCtx, {
+    type: 'doughnut',
+    data: {
+        labels: categoryData.map(d => d.name),
+        datasets: [{
+            data: categoryData.map(d => d.revenue),
+            backgroundColor: [
+                '#4e73df',
+                '#1cc88a',
+                '#36b9cc',
+                '#f6c23e',
+                '#e74a3b',
+                '#858796',
+                '#5a5c69'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+            }
+        }
+    }
+});
+
+// Payment Method Chart
+const paymentCtx = document.getElementById('paymentMethodChart').getContext('2d');
+const paymentLabels = {{ payment_breakdown.labels|safe }};
+const paymentAmounts = {{ payment_breakdown.amounts|safe }};
+
+if (paymentLabels.length > 0) {
+    new Chart(paymentCtx, {
+        type: 'bar',
+        data: {
+            labels: paymentLabels,
+            datasets: [{
+                label: 'Amount',
+                data: paymentAmounts,
+                backgroundColor: '#4e73df'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KES ' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+} else {
+    // Show message if no payment data
+    paymentCtx.canvas.parentElement.innerHTML = '<div class="alert alert-info mb-0">Payment method breakdown not available</div>';
+}
+</script>
+{% endblock %}

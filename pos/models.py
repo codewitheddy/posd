@@ -6,6 +6,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
 from django.core.exceptions import ValidationError
 from .image_utils import ImageOptimizer, generate_upload_path
+import uuid
 
 
 from django.utils.text import slugify
@@ -1590,12 +1591,40 @@ class ActivityLog(models.Model):
         ('backup', 'Data Backup'),
     ]
     
+    STATUS_CHOICES = [
+        ('success', 'Success'),
+        ('failure', 'Failure'),
+        ('rollback', 'Rollback')
+    ]
+    
+    # Core fields
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='activity_logs')
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, null=True, blank=True, related_name='activity_logs')
     action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    
+    # Enhanced tracking fields
+    operation_type = models.CharField(max_length=50, db_index=True)
+    entity_type = models.CharField(max_length=100, db_index=True, default='')
+    entity_id = models.CharField(max_length=100, db_index=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='success', db_index=True)
+    
+    # Legacy fields (kept for backward compatibility)
     model_name = models.CharField(max_length=50, blank=True)
     object_id = models.IntegerField(blank=True, null=True)
     description = models.TextField()
+    
+    # Request tracking
     ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, default='')
+    correlation_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    
+    # Data fields
+    request_data = models.JSONField(null=True, blank=True)
+    response_data = models.JSONField(null=True, blank=True)
+    error_details = models.JSONField(null=True, blank=True)
+    
+    # Performance tracking
+    execution_time_ms = models.IntegerField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -1603,6 +1632,11 @@ class ActivityLog(models.Model):
         indexes = [
             models.Index(fields=['-timestamp']),
             models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['business', 'timestamp'], name='pos_activitylog_bus_time_idx'),
+            models.Index(fields=['business', 'operation_type', 'timestamp'], name='pos_activitylog_bus_op_time_idx'),
+            models.Index(fields=['business', 'entity_type', 'entity_id'], name='pos_activitylog_bus_ent_idx'),
+            models.Index(fields=['business', 'user', 'timestamp'], name='pos_activitylog_bus_usr_time_idx'),
+            models.Index(fields=['correlation_id'], name='pos_activitylog_corr_idx'),
         ]
     
     def __str__(self):
@@ -1610,23 +1644,47 @@ class ActivityLog(models.Model):
         return f"{username} - {self.action_type} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
     
     @classmethod
-    def log_activity(cls, user, action_type, description, model_name='', object_id=None, request=None):
+    def log_activity(cls, user, action_type, description, model_name='', object_id=None, request=None, 
+                     business=None, operation_type=None, entity_type='', entity_id='', status='success',
+                     request_data=None, response_data=None, error_details=None, execution_time_ms=None):
         """Helper method to create activity log"""
         ip_address = None
+        user_agent = ''
+        
         if request:
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             if x_forwarded_for:
                 ip_address = x_forwarded_for.split(',')[0]
             else:
                 ip_address = request.META.get('REMOTE_ADDR')
+            
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            
+            # Try to get business from request if not provided
+            if not business and hasattr(request, 'business'):
+                business = request.business
+        
+        # Use action_type as operation_type if not provided
+        if not operation_type:
+            operation_type = action_type
         
         return cls.objects.create(
             user=user,
+            business=business,
             action_type=action_type,
+            operation_type=operation_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            status=status,
             model_name=model_name,
             object_id=object_id,
             description=description,
-            ip_address=ip_address
+            ip_address=ip_address,
+            user_agent=user_agent,
+            request_data=request_data,
+            response_data=response_data,
+            error_details=error_details,
+            execution_time_ms=execution_time_ms
         )
 
 

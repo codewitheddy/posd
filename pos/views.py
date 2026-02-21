@@ -1623,6 +1623,7 @@ def invoice_pdf(request, slug, pk):
 
 
 @business_required
+@business_permission_required('can_view_reports')
 def sales_report(request, slug=None):
     """Daily sales report"""
     # Get date filter
@@ -5680,3 +5681,175 @@ def subscription(request, slug=None):
     }
     
     return render(request, 'pos/subscription.html', context)
+
+
+# ==================== ADVANCED ANALYTICS ====================
+
+@business_required
+@business_permission_required('can_view_reports')
+def analytics_dashboard(request, slug=None):
+    """Advanced analytics dashboard with charts and insights"""
+    from .analytics_service import AnalyticsService
+    from django.utils import timezone
+    
+    # Get date range from request (default to last 30 days)
+    days = int(request.GET.get('days', 30))
+    
+    # Initialize analytics service
+    analytics = AnalyticsService(request.business)
+    
+    # Get dashboard summary
+    summary = analytics.get_dashboard_summary(days=days)
+    
+    # Get sales trends for chart
+    sales_trends = analytics.get_sales_trends(days=days)
+    
+    # Get best sellers
+    best_sellers = analytics.get_best_sellers(limit=10, days=days)
+    
+    # Get sales by category
+    category_sales = analytics.get_sales_by_category()
+    
+    # Get payment method breakdown
+    payment_breakdown = analytics.get_payment_method_breakdown(days=days)
+    
+    # Get profit margin analysis
+    profit_analysis = analytics.get_profit_margin_analysis()
+    
+    # Get customer retention
+    retention = analytics.get_customer_retention_rate(days=days)
+    
+    # Get stock turnover
+    turnover = analytics.get_stock_turnover_rate(days=days)
+    
+    context = {
+        'summary': summary,
+        'sales_trends': sales_trends,
+        'best_sellers': best_sellers,
+        'category_sales': category_sales,
+        'payment_breakdown': payment_breakdown,
+        'profit_analysis': profit_analysis,
+        'retention': retention,
+        'turnover': turnover,
+        'days': days,
+    }
+    
+    return render(request, 'pos/analytics_dashboard.html', context)
+
+
+@business_required
+@business_permission_required('can_view_reports')
+def analytics_sales_trends(request, slug=None):
+    """Detailed sales trends analysis"""
+    from .analytics_service import AnalyticsService
+    
+    days = int(request.GET.get('days', 30))
+    analytics = AnalyticsService(request.business)
+    
+    # Get sales trends
+    sales_trends = analytics.get_sales_trends(days=days)
+    
+    # Get hourly patterns
+    hourly_patterns = analytics.get_hourly_sales_pattern(days=7)
+    
+    # Get revenue vs profit
+    revenue_profit = analytics.get_revenue_vs_profit_trend(days=days)
+    
+    context = {
+        'sales_trends': sales_trends,
+        'hourly_patterns': hourly_patterns,
+        'revenue_profit': revenue_profit,
+        'days': days,
+    }
+    
+    return render(request, 'pos/analytics_sales_trends.html', context)
+
+
+@business_required
+@business_permission_required('can_view_reports')
+def analytics_products(request, slug=None):
+    """Product performance analytics"""
+    from .analytics_service import AnalyticsService
+    
+    days = int(request.GET.get('days', 30))
+    analytics = AnalyticsService(request.business)
+    
+    # Get product analytics
+    best_sellers = analytics.get_best_sellers(limit=20, days=days)
+    slow_movers = analytics.get_slow_moving_items(limit=20, days=days)
+    abc_analysis = analytics.get_abc_analysis()
+    turnover = analytics.get_stock_turnover_rate(days=days)
+    
+    context = {
+        'best_sellers': best_sellers,
+        'slow_movers': slow_movers,
+        'abc_analysis': abc_analysis,
+        'turnover': turnover,
+        'days': days,
+    }
+    
+    return render(request, 'pos/analytics_products.html', context)
+
+
+@business_required
+@business_permission_required('can_view_reports')
+def analytics_customers(request, slug=None):
+    """Customer analytics and insights"""
+    from .analytics_service import AnalyticsService
+    
+    days = int(request.GET.get('days', 90))
+    analytics = AnalyticsService(request.business)
+    
+    # Get customer analytics
+    customer_insights = analytics.get_customer_insights(days=days)
+    retention = analytics.get_customer_retention_rate(days=30)
+    
+    context = {
+        'customer_insights': customer_insights,
+        'retention': retention,
+        'days': days,
+    }
+    
+    return render(request, 'pos/analytics_customers.html', context)
+
+
+@business_required
+@business_permission_required('can_view_reports')
+def analytics_api(request, slug=None):
+    """API endpoint for analytics data (AJAX)"""
+    from .analytics_service import AnalyticsService
+    import json
+    
+    analytics_type = request.GET.get('type', 'summary')
+    days = int(request.GET.get('days', 30))
+    
+    analytics = AnalyticsService(request.business)
+    
+    if analytics_type == 'summary':
+        data = analytics.get_dashboard_summary(days=days)
+    elif analytics_type == 'sales_trends':
+        data = analytics.get_sales_trends(days=days)
+    elif analytics_type == 'hourly_pattern':
+        data = analytics.get_hourly_sales_pattern(days=7)
+    elif analytics_type == 'category_sales':
+        data = analytics.get_sales_by_category()
+    elif analytics_type == 'best_sellers':
+        data = analytics.get_best_sellers(limit=10, days=days)
+    elif analytics_type == 'payment_breakdown':
+        data = analytics.get_payment_method_breakdown(days=days)
+    else:
+        data = {'error': 'Invalid analytics type'}
+    
+    # Convert Decimal to float for JSON serialization
+    def decimal_to_float(obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: decimal_to_float(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [decimal_to_float(item) for item in obj]
+        return obj
+    
+    data = decimal_to_float(data)
+    
+    return JsonResponse(data, safe=False)

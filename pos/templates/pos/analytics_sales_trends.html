@@ -1,0 +1,171 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Sales Trends - {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="bi bi-graph-up"></i> Sales Trends Analysis</h2>
+            <p class="text-muted">Detailed analysis of sales patterns and trends</p>
+        </div>
+    </div>
+
+    <!-- Time Period Filter -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                <a href="?days=7" class="btn btn-outline-primary {% if days == 7 %}active{% endif %}">Last 7 Days</a>
+                <a href="?days=30" class="btn btn-outline-primary {% if days == 30 %}active{% endif %}">Last 30 Days</a>
+                <a href="?days=90" class="btn btn-outline-primary {% if days == 90 %}active{% endif %}">Last 90 Days</a>
+                <a href="?days=365" class="btn btn-outline-primary {% if days == 365 %}active{% endif %}">Last Year</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Trends Chart -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Daily Sales Trends</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="salesTrendsChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hourly Patterns -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-clock"></i> Hourly Sales Pattern (Last 7 Days)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="hourlyPatternsChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revenue vs Profit -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-currency-exchange"></i> Revenue vs Profit Trend</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="revenueProfitChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back Button -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Analytics Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Sales Trends Chart
+const salesTrendsCtx = document.getElementById('salesTrendsChart').getContext('2d');
+new Chart(salesTrendsCtx, {
+    type: 'line',
+    data: {
+        labels: {{ sales_trends.dates|safe }},
+        datasets: [{
+            label: 'Sales',
+            data: {{ sales_trends.totals|safe }},
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { display: true }
+        },
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+
+// Hourly Patterns Chart
+const hourlyPatternsCtx = document.getElementById('hourlyPatternsChart').getContext('2d');
+new Chart(hourlyPatternsCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ hourly_patterns.hours|safe }},
+        datasets: [{
+            label: 'Sales by Hour',
+            data: {{ hourly_patterns.totals|safe }},
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgb(54, 162, 235)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+
+// Revenue vs Profit Chart
+const revenueProfitCtx = document.getElementById('revenueProfitChart').getContext('2d');
+new Chart(revenueProfitCtx, {
+    type: 'line',
+    data: {
+        labels: {{ revenue_profit.dates|safe }},
+        datasets: [
+            {
+                label: 'Revenue',
+                data: {{ revenue_profit.revenue|safe }},
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                tension: 0.1
+            },
+            {
+                label: 'Profit',
+                data: {{ revenue_profit.profit|safe }},
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                tension: 0.1
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { display: true }
+        },
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+</script>
+{% endblock %}

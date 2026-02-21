@@ -22,20 +22,47 @@ class AnalyticsService:
         """Get daily sales trends for the last N days"""
         start_date = timezone.now().date() - timedelta(days=days)
         
+        # Get sales data
         sales = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date,
-            status='completed'
+            date__gte=start_date
         ).annotate(
             day=TruncDate('date')
         ).values('day').annotate(
             total_sales=Sum('total'),
-            total_profit=Sum(F('total') - F('items__product__cost_price') * F('items__quantity')),
             transaction_count=Count('id'),
             items_sold=Sum('items__quantity')
         ).order_by('day')
         
-        return list(sales)
+        sales_list = list(sales)
+        
+        # Calculate profit separately from SaleItems
+        profit_by_day = {}
+        sale_items = SaleItem.objects.filter(
+            sale__business=self.business,
+            sale__date__gte=start_date
+        ).annotate(
+            day=TruncDate('sale__date')
+        ).values('day').annotate(
+            total_profit=Sum(
+                ExpressionWrapper(
+                    F('quantity') * (F('unit_price') - F('product__cost_price')),
+                    output_field=DecimalField()
+                )
+            )
+        )
+        
+        for item in sale_items:
+            profit_by_day[item['day']] = float(item['total_profit'] or 0)
+        
+        # Format for Chart.js
+        return {
+            'dates': [s['day'].strftime('%Y-%m-%d') for s in sales_list],
+            'totals': [float(s['total_sales'] or 0) for s in sales_list],
+            'profits': [profit_by_day.get(s['day'], 0) for s in sales_list],
+            'transactions': [s['transaction_count'] for s in sales_list],
+            'items': [float(s['items_sold'] or 0) for s in sales_list]
+        }
     
     def get_hourly_sales_pattern(self, days=7):
         """Analyze sales by hour to identify peak times"""
@@ -45,8 +72,7 @@ class AnalyticsService:
         
         hourly_sales = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date,
-            status='completed'
+            date__gte=start_date
         ).annotate(
             hour=ExtractHour('date')
         ).values('hour').annotate(
@@ -55,7 +81,15 @@ class AnalyticsService:
             avg_transaction=Avg('total')
         ).order_by('hour')
         
-        return list(hourly_sales)
+        hourly_list = list(hourly_sales)
+        
+        # Format for Chart.js
+        return {
+            'hours': [f"{h['hour']:02d}:00" for h in hourly_list],
+            'totals': [float(h['total_sales'] or 0) for h in hourly_list],
+            'transactions': [h['transaction_count'] for h in hourly_list],
+            'averages': [float(h['avg_transaction'] or 0) for h in hourly_list]
+        }
     
     def get_sales_by_category(self, start_date=None, end_date=None):
         """Get sales breakdown by product category"""
@@ -67,14 +101,28 @@ class AnalyticsService:
         category_sales = SaleItem.objects.filter(
             sale__business=self.business,
             sale__date__gte=start_date,
-            sale__date__lte=end_date,
-            sale__status='completed'
+            sale__date__lte=end_date
         ).values(
             'product__category__name'
         ).annotate(
-            total_revenue=Sum(F('quantity') * F('unit_price')),
-            total_cost=Sum(F('quantity') * F('product__cost_price')),
-            total_profit=Sum(F('quantity') * (F('unit_price') - F('product__cost_price'))),
+            total_revenue=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('unit_price'),
+                    output_field=DecimalField()
+                )
+            ),
+            total_cost=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('product__cost_price'),
+                    output_field=DecimalField()
+                )
+            ),
+            total_profit=Sum(
+                ExpressionWrapper(
+                    F('quantity') * (F('unit_price') - F('product__cost_price')),
+                    output_field=DecimalField()
+                )
+            ),
             units_sold=Sum('quantity'),
             transaction_count=Count('sale', distinct=True)
         ).order_by('-total_revenue')
@@ -91,12 +139,26 @@ class AnalyticsService:
         profit_analysis = SaleItem.objects.filter(
             sale__business=self.business,
             sale__date__gte=start_date,
-            sale__date__lte=end_date,
-            sale__status='completed'
+            sale__date__lte=end_date
         ).aggregate(
-            total_revenue=Sum(F('quantity') * F('unit_price')),
-            total_cost=Sum(F('quantity') * F('product__cost_price')),
-            total_profit=Sum(F('quantity') * (F('unit_price') - F('product__cost_price')))
+            total_revenue=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('unit_price'),
+                    output_field=DecimalField()
+                )
+            ),
+            total_cost=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('product__cost_price'),
+                    output_field=DecimalField()
+                )
+            ),
+            total_profit=Sum(
+                ExpressionWrapper(
+                    F('quantity') * (F('unit_price') - F('product__cost_price')),
+                    output_field=DecimalField()
+                )
+            )
         )
         
         if profit_analysis['total_revenue']:
@@ -116,20 +178,38 @@ class AnalyticsService:
         
         best_sellers = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date,
-            sale__status='completed'
+            sale__date__gte=start_date
         ).values(
             'product__id',
             'product__name',
             'product__category__name'
         ).annotate(
             units_sold=Sum('quantity'),
-            total_revenue=Sum(F('quantity') * F('unit_price')),
-            total_profit=Sum(F('quantity') * (F('unit_price') - F('product__cost_price'))),
+            total_revenue=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('unit_price'),
+                    output_field=DecimalField()
+                )
+            ),
+            total_profit=Sum(
+                ExpressionWrapper(
+                    F('quantity') * (F('unit_price') - F('product__cost_price')),
+                    output_field=DecimalField()
+                )
+            ),
             transaction_count=Count('sale', distinct=True)
         ).order_by('-units_sold')[:limit]
         
-        return list(best_sellers)
+        # Format for template
+        return [{
+            'id': item['product__id'],
+            'name': item['product__name'],
+            'category': item['product__category__name'] or 'Uncategorized',
+            'units_sold': float(item['units_sold'] or 0),
+            'revenue': float(item['total_revenue'] or 0),
+            'profit': float(item['total_profit'] or 0),
+            'transactions': item['transaction_count']
+        } for item in best_sellers]
     
     def get_slow_moving_items(self, limit=10, days=30):
         """Identify slow-moving inventory"""
@@ -143,14 +223,12 @@ class AnalyticsService:
             units_sold=Sum(
                 'saleitem__quantity',
                 filter=Q(
-                    saleitem__sale__date__gte=start_date,
-                    saleitem__sale__status='completed'
+                    saleitem__sale__date__gte=start_date
                 )
             )
         ).annotate(
             units_sold_clean=Count('saleitem', filter=Q(
-                saleitem__sale__date__gte=start_date,
-                saleitem__sale__status='completed'
+                saleitem__sale__date__gte=start_date
             ))
         ).filter(
             units_sold_clean__lte=5  # Sold 5 or fewer times
@@ -160,13 +238,21 @@ class AnalyticsService:
             total_sold=Sum(
                 'saleitem__quantity',
                 filter=Q(
-                    saleitem__sale__date__gte=start_date,
-                    saleitem__sale__status='completed'
+                    saleitem__sale__date__gte=start_date
                 )
             )
         ).order_by('total_sold')[:limit]
         
-        return list(slow_movers)
+        # Format for template
+        return [{
+            'id': item['id'],
+            'name': item['name'],
+            'category': item['category__name'],
+            'stock': float(item['stock_quantity'] or 0),
+            'units_sold': float(item['total_sold'] or 0),
+            'unit_price': float(item['unit_price'] or 0),
+            'days_since_sale': None  # Would need last sale date tracking
+        } for item in slow_movers]
     
     def get_stock_turnover_rate(self, days=30):
         """Calculate inventory turnover rate"""
@@ -175,8 +261,7 @@ class AnalyticsService:
         # Total cost of goods sold
         cogs = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date,
-            sale__status='completed'
+            sale__date__gte=start_date
         ).aggregate(
             total_cogs=Sum(F('quantity') * F('product__cost_price'))
         )['total_cogs'] or Decimal('0')
@@ -197,7 +282,7 @@ class AnalyticsService:
         return {
             'turnover_rate': round(turnover_rate, 2),
             'cogs': float(cogs),
-            'avg_inventory_value': float(avg_inventory),
+            'avg_stock_value': float(avg_inventory),
             'days_to_sell': round(days / turnover_rate, 1) if turnover_rate > 0 else 0
         }
     
@@ -205,8 +290,7 @@ class AnalyticsService:
         """ABC Analysis: Classify products by revenue contribution"""
         # Get all products with their revenue
         products = SaleItem.objects.filter(
-            sale__business=self.business,
-            sale__status='completed'
+            sale__business=self.business
         ).values(
             'product__id',
             'product__name'
@@ -215,17 +299,27 @@ class AnalyticsService:
         ).order_by('-total_revenue')
         
         products_list = list(products)
-        total_revenue = sum(p['total_revenue'] for p in products_list)
+        total_revenue = sum(p['total_revenue'] for p in products_list if p['total_revenue'])
         
-        if total_revenue == 0:
-            return {'A': [], 'B': [], 'C': []}
+        if total_revenue == 0 or not products_list:
+            return {
+                'a_count': 0,
+                'b_count': 0,
+                'c_count': 0,
+                'a_percentage': 0,
+                'b_percentage': 0,
+                'c_percentage': 0,
+                'A': [],
+                'B': [],
+                'C': []
+            }
         
         # Calculate cumulative percentage
         cumulative = 0
         abc_classification = {'A': [], 'B': [], 'C': []}
         
         for product in products_list:
-            revenue = product['total_revenue']
+            revenue = product['total_revenue'] or 0
             percentage = (revenue / total_revenue) * 100
             cumulative += percentage
             
@@ -242,7 +336,22 @@ class AnalyticsService:
             else:
                 abc_classification['C'].append(product)
         
-        return abc_classification
+        # Calculate summary stats
+        a_revenue = sum(p['total_revenue'] for p in abc_classification['A'])
+        b_revenue = sum(p['total_revenue'] for p in abc_classification['B'])
+        c_revenue = sum(p['total_revenue'] for p in abc_classification['C'])
+        
+        return {
+            'a_count': len(abc_classification['A']),
+            'b_count': len(abc_classification['B']),
+            'c_count': len(abc_classification['C']),
+            'a_percentage': round((a_revenue / total_revenue * 100), 1) if total_revenue > 0 else 0,
+            'b_percentage': round((b_revenue / total_revenue * 100), 1) if total_revenue > 0 else 0,
+            'c_percentage': round((c_revenue / total_revenue * 100), 1) if total_revenue > 0 else 0,
+            'A': abc_classification['A'],
+            'B': abc_classification['B'],
+            'C': abc_classification['C']
+        }
     
     # ==================== CUSTOMER ANALYTICS ====================
     
@@ -253,24 +362,24 @@ class AnalyticsService:
         customer_stats = Customer.objects.filter(
             business=self.business
         ).annotate(
-            total_purchases=Count(
-                'sale',
-                filter=Q(sale__date__gte=start_date, sale__status='completed')
+            purchase_count=Count(
+                'purchases',
+                filter=Q(purchases__date__gte=start_date)
             ),
-            total_spent=Sum(
-                'sale__total',
-                filter=Q(sale__date__gte=start_date, sale__status='completed')
+            amount_spent=Sum(
+                'purchases__total',
+                filter=Q(purchases__date__gte=start_date)
             ),
-            avg_transaction=Avg(
-                'sale__total',
-                filter=Q(sale__date__gte=start_date, sale__status='completed')
+            avg_purchase_value=Avg(
+                'purchases__total',
+                filter=Q(purchases__date__gte=start_date)
             )
         ).filter(
-            total_purchases__gt=0
-        ).order_by('-total_spent')
+            purchase_count__gt=0
+        ).order_by('-amount_spent')
         
         return list(customer_stats.values(
-            'id', 'name', 'phone', 'total_purchases', 'total_spent', 'avg_transaction'
+            'id', 'name', 'phone', 'purchase_count', 'amount_spent', 'avg_purchase_value'
         )[:20])
     
     def get_customer_retention_rate(self, days=30):
@@ -285,7 +394,6 @@ class AnalyticsService:
                 business=self.business,
                 date__gte=previous_start,
                 date__lt=start_date,
-                status='completed',
                 customer__isnull=False
             ).values_list('customer_id', flat=True)
         )
@@ -296,7 +404,6 @@ class AnalyticsService:
                 business=self.business,
                 date__gte=start_date,
                 date__lte=end_date,
-                status='completed',
                 customer__isnull=False
             ).values_list('customer_id', flat=True)
         )
@@ -320,37 +427,79 @@ class AnalyticsService:
         """Analyze sales by payment method"""
         start_date = timezone.now().date() - timedelta(days=days)
         
-        payment_breakdown = Sale.objects.filter(
+        # Get payment transactions grouped by method
+        from .models import SalePayment
+        
+        breakdown = SalePayment.objects.filter(
             business=self.business,
-            date__gte=start_date,
-            status='completed'
+            sale__date__gte=start_date
         ).values(
             'payment_method__name'
         ).annotate(
-            total_amount=Sum('total'),
-            transaction_count=Count('id'),
-            avg_transaction=Avg('total')
+            total_amount=Sum('amount'),
+            transaction_count=Count('id')
         ).order_by('-total_amount')
         
-        return list(payment_breakdown)
+        # Format for Chart.js
+        return {
+            'labels': [item['payment_method__name'] or 'Unknown' for item in breakdown],
+            'amounts': [float(item['total_amount'] or 0) for item in breakdown],
+            'counts': [item['transaction_count'] for item in breakdown]
+        }
     
     def get_revenue_vs_profit_trend(self, days=30):
         """Compare revenue and profit trends"""
         start_date = timezone.now().date() - timedelta(days=days)
         
-        daily_data = Sale.objects.filter(
+        # Get revenue data from Sales
+        daily_revenue = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date,
-            status='completed'
+            date__gte=start_date
         ).annotate(
             day=TruncDate('date')
         ).values('day').annotate(
-            revenue=Sum('total'),
-            cost=Sum(F('items__quantity') * F('items__product__cost_price')),
-            profit=Sum(F('total')) - Sum(F('items__quantity') * F('items__product__cost_price'))
+            revenue=Sum('total')
         ).order_by('day')
         
-        return list(daily_data)
+        revenue_dict = {item['day']: float(item['revenue'] or 0) for item in daily_revenue}
+        
+        # Get cost and profit from SaleItems
+        daily_profit = SaleItem.objects.filter(
+            sale__business=self.business,
+            sale__date__gte=start_date
+        ).annotate(
+            day=TruncDate('sale__date')
+        ).values('day').annotate(
+            cost=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('product__cost_price'),
+                    output_field=DecimalField()
+                )
+            ),
+            profit=Sum(
+                ExpressionWrapper(
+                    F('quantity') * (F('unit_price') - F('product__cost_price')),
+                    output_field=DecimalField()
+                )
+            )
+        ).order_by('day')
+        
+        profit_dict = {}
+        cost_dict = {}
+        for item in daily_profit:
+            profit_dict[item['day']] = float(item['profit'] or 0)
+            cost_dict[item['day']] = float(item['cost'] or 0)
+        
+        # Get all unique dates
+        all_dates = sorted(set(list(revenue_dict.keys()) + list(profit_dict.keys())))
+        
+        # Format for Chart.js
+        return {
+            'dates': [d.strftime('%Y-%m-%d') for d in all_dates],
+            'revenue': [revenue_dict.get(d, 0) for d in all_dates],
+            'profit': [profit_dict.get(d, 0) for d in all_dates],
+            'cost': [cost_dict.get(d, 0) for d in all_dates]
+        }
     
     # ==================== SUMMARY DASHBOARD ====================
     
@@ -361,21 +510,24 @@ class AnalyticsService:
         # Sales summary
         sales_summary = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date,
-            status='completed'
+            date__gte=start_date
         ).aggregate(
             total_revenue=Sum('total'),
             total_transactions=Count('id'),
             avg_transaction=Avg('total')
         )
         
-        # Profit calculation
+        # Profit calculation from SaleItems
         profit_data = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date,
-            sale__status='completed'
+            sale__date__gte=start_date
         ).aggregate(
-            total_profit=Sum(F('quantity') * (F('unit_price') - F('product__cost_price')))
+            total_profit=Sum(
+                ExpressionWrapper(
+                    F('quantity') * (F('unit_price') - F('product__cost_price')),
+                    output_field=DecimalField()
+                )
+            )
         )
         
         # Customer metrics
@@ -384,7 +536,6 @@ class AnalyticsService:
             'active_customers': Sale.objects.filter(
                 business=self.business,
                 date__gte=start_date,
-                status='completed',
                 customer__isnull=False
             ).values('customer').distinct().count()
         }
@@ -394,7 +545,12 @@ class AnalyticsService:
             business=self.business
         ).aggregate(
             total_products=Count('id'),
-            total_stock_value=Sum(F('stock_quantity') * F('cost_price')),
+            total_stock_value=Sum(
+                ExpressionWrapper(
+                    F('stock_quantity') * F('cost_price'),
+                    output_field=DecimalField()
+                )
+            ),
             low_stock_count=Count('id', filter=Q(stock_quantity__lte=F('low_stock_threshold')))
         )
         

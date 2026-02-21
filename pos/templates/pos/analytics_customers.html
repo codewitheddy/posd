@@ -1,0 +1,116 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Customer Analytics - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="bi bi-people"></i> Customer Analytics</h2>
+            <p class="text-muted">Insights into customer behavior and purchasing patterns</p>
+        </div>
+    </div>
+
+    <!-- Time Period Filter -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                <a href="?days=30" class="btn btn-outline-primary {% if days == 30 %}active{% endif %}">Last 30 Days</a>
+                <a href="?days=90" class="btn btn-outline-primary {% if days == 90 %}active{% endif %}">Last 90 Days</a>
+                <a href="?days=180" class="btn btn-outline-primary {% if days == 180 %}active{% endif %}">Last 6 Months</a>
+                <a href="?days=365" class="btn btn-outline-primary {% if days == 365 %}active{% endif %}">Last Year</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Retention -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Customer Retention Rate</h6>
+                    <h2 class="text-success">{{ retention.retention_rate|floatformat:1 }}%</h2>
+                    <small class="text-muted">Last 30 days</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">New Customers</h6>
+                    <h2 class="text-primary">{{ retention.new_customers|default:0 }}</h2>
+                    <small class="text-muted">Last 30 days</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Returning Customers</h6>
+                    <h2 class="text-info">{{ retention.returning_customers|default:0 }}</h2>
+                    <small class="text-muted">Last 30 days</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-star-fill text-warning"></i> Top 20 Customers</h5>
+                </div>
+                <div class="card-body">
+                    {% if customer_insights %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Customer</th>
+                                    <th>Phone</th>
+                                    <th class="text-end">Purchases</th>
+                                    <th class="text-end">Total Spent</th>
+                                    <th class="text-end">Avg Purchase</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for customer in customer_insights %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>
+                                        <a href="{% url 'customer_detail' slug=business_slug pk=customer.id %}">
+                                            {{ customer.name }}
+                                        </a>
+                                    </td>
+                                    <td>{{ customer.phone }}</td>
+                                    <td class="text-end">{{ customer.purchase_count|default:0 }}</td>
+                                    <td class="text-end">KES {{ customer.amount_spent|default:0|floatformat:2 }}</td>
+                                    <td class="text-end">KES {{ customer.avg_purchase_value|default:0|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> No customer data available for the selected period.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back Button -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Analytics Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
