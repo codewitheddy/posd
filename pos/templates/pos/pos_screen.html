@@ -5,6 +5,7 @@
 {% block extra_css %}
 {% load static %}
 <link rel="stylesheet" href="{% static 'css/pos-mobile.css' %}">
+<link rel="stylesheet" href="{% static 'css/pos-desktop-optimized.css' %}">
 <style>
     /* Custom 5-column grid for large screens */
     @media (min-width: 992px) {
@@ -418,8 +419,11 @@
                 <div class="mb-2">
                     <strong id="vat-label">VAT ({{ vat_rate }}%):</strong> <span class="float-end" id="vat">KES 0.00</span>
                 </div>
-                <div class="mb-3">
-                    <h4>Total (incl. VAT): <span class="float-end text-primary" id="cart-total">KES 0.00</span></h4>
+                
+                <!-- Total on one row -->
+                <div class="mb-3 d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                    <h4 class="mb-0">Total (incl. VAT):</h4>
+                    <h4 class="mb-0 text-primary" id="cart-total">KES 0.00</h4>
                 </div>
                 
                 <!-- Loyalty Points Info -->
@@ -435,22 +439,25 @@
                     <small class="text-muted">1 point per KES 100 spent (with tier multiplier)</small>
                 </div>
 
-                <!-- Action Buttons Row -->
-                <div class="row g-2">
-                    <div class="col-12">
-                        <button class="btn btn-success btn-lg w-100" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
-                            <i class="bi bi-check-circle"></i> Complete Sale
-                        </button>
-                    </div>
-                    <div class="col-6">
-                        <button class="btn btn-danger w-100" onclick="clearCart()">
-                            <i class="bi bi-trash"></i> Clear Cart
-                        </button>
-                    </div>
-                    <div class="col-6">
-                        <button class="btn btn-warning w-100" onclick="holdOrder()" id="hold-order-btn" disabled>
-                            <i class="bi bi-pause-circle"></i> Hold Order
-                        </button>
+                <!-- Action Buttons -->
+                <div class="d-grid gap-2">
+                    <!-- Complete Sale - Full Width -->
+                    <button class="btn btn-success btn-lg" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
+                        <i class="bi bi-check-circle"></i> Complete Sale
+                    </button>
+                    
+                    <!-- Clear Cart and Hold Order - One Row -->
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <button class="btn btn-danger w-100" onclick="clearCart()">
+                                <i class="bi bi-trash"></i> Clear Cart
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button class="btn btn-warning w-100" onclick="holdOrder()" id="hold-order-btn" disabled>
+                                <i class="bi bi-pause-circle"></i> Hold Order
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2735,4 +2742,7 @@ window.addEventListener('resize', function() {
     }, 250);
 });
 </script>
+
+<!-- Desktop POS Keyboard Shortcuts -->
+<script src="{% static 'js/pos-keyboard-shortcuts.js' %}"></script>
 {% endblock %}
