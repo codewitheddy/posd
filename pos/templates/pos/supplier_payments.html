@@ -16,9 +16,26 @@
             </nav>
         </div>
         <div class="col-auto">
-            <a href="{% url 'create_payment' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Create Payment
-            </a>
+            {% if supplier.outstanding_balance < 0 %}
+                <div class="alert alert-info d-inline-block me-2 mb-0 py-2">
+                    <i class="bi bi-exclamation-circle"></i> You have a credit of KES {{ supplier.outstanding_balance|floatformat:2|slice:"1:" }} with this supplier
+                </div>
+            {% endif %}
+            {% if supplier.has_received_purchases and supplier.outstanding_balance > 0 %}
+                <a href="{% url 'create_payment' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Create Payment
+                </a>
+            {% elif not supplier.has_received_purchases %}
+                <button class="btn btn-secondary" disabled title="Receive a purchase order first">
+                    <i class="bi bi-lock"></i> Create Payment
+                </button>
+                <small class="text-muted d-block mt-1">Receive goods before making payments</small>
+            {% else %}
+                <button class="btn btn-secondary" disabled title="No outstanding balance">
+                    <i class="bi bi-check-circle"></i> Fully Paid
+                </button>
+                <small class="text-success d-block mt-1">Account is fully settled</small>
+            {% endif %}
             <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-info">
                 <i class="bi bi-file-text"></i> View Statement
             </a>
@@ -38,9 +55,22 @@
                         </div>
                         <div class="col-md-3">
                             <h6 class="text-muted">Outstanding Balance</h6>
-                            <h4 class="mb-0 {% if supplier.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                KES {{ supplier.outstanding_balance|floatformat:2 }}
-                            </h4>
+                            {% if supplier.outstanding_balance > 0 %}
+                                <h4 class="mb-0 text-danger">
+                                    KES {{ supplier.outstanding_balance|floatformat:2 }}
+                                </h4>
+                                <small class="text-muted">Amount you owe</small>
+                            {% elif supplier.outstanding_balance < 0 %}
+                                <h4 class="mb-0 text-info">
+                                    KES {{ supplier.outstanding_balance|floatformat:2 }}
+                                </h4>
+                                <small class="text-info"><i class="bi bi-info-circle"></i> Credit balance - They owe you</small>
+                            {% else %}
+                                <h4 class="mb-0 text-success">
+                                    KES 0.00
+                                </h4>
+                                <small class="text-success">Fully settled</small>
+                            {% endif %}
                         </div>
                         <div class="col-md-3">
                             <h6 class="text-muted">Total Purchases</h6>

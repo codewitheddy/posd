@@ -76,11 +76,59 @@
         color: white;
         border-color: #0d6efd;
     }
+    
+    /* Skeleton Loading Styles */
+    .skeleton-card {
+        pointer-events: none;
+    }
+    
+    .skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s infinite;
+        border-radius: 4px;
+    }
+    
+    @keyframes skeleton-loading {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
+    }
+    
+    .skeleton-image {
+        width: 100%;
+        height: 120px;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .skeleton-text {
+        height: 16px;
+        width: 100%;
+    }
+    
+    .skeleton-text-short {
+        height: 20px;
+        width: 60%;
+    }
 
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Session Indicator -->
+{% if current_session %}
+<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+    <i class="bi bi-check-circle-fill"></i> 
+    <strong>Active Session:</strong> Session #{{ current_session.session_number }} 
+    | Opened: {{ current_session.opened_at|date:"M d, Y g:i A" }} 
+    | Opening Cash: KES {{ current_session.opening_cash|floatformat:2 }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
 <!-- Mobile Cart Toggle Button -->
 <button class="cart-toggle-btn d-md-none" onclick="toggleMobileCart()" id="cartToggleBtn">
     <i class="bi bi-cart3"></i>
@@ -314,12 +362,62 @@
             </div>
         </div>
 
-        <!-- Products Loading -->
-        <div id="products-loading" class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading products...</span>
+        <!-- Products Loading Skeleton -->
+        <div id="products-loading" class="py-3">
+            <div class="row" id="products-skeleton">
+                <!-- Skeleton cards for better perceived performance -->
+                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3" style="--bs-gutter-x: 1rem;">
+                    <div class="card skeleton-card">
+                        <div class="skeleton skeleton-image"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text mb-2"></div>
+                            <div class="skeleton skeleton-text-short"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
+                    <div class="card skeleton-card">
+                        <div class="skeleton skeleton-image"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text mb-2"></div>
+                            <div class="skeleton skeleton-text-short"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
+                    <div class="card skeleton-card">
+                        <div class="skeleton skeleton-image"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text mb-2"></div>
+                            <div class="skeleton skeleton-text-short"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
+                    <div class="card skeleton-card">
+                        <div class="skeleton skeleton-image"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text mb-2"></div>
+                            <div class="skeleton skeleton-text-short"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
+                    <div class="card skeleton-card">
+                        <div class="skeleton skeleton-image"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text mb-2"></div>
+                            <div class="skeleton skeleton-text-short"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <p class="mt-2 text-muted">Loading products...</p>
+            <div class="text-center mt-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading products...</span>
+                </div>
+                <p class="mt-2 text-muted small">Loading products...</p>
+            </div>
         </div>
         
         <!-- Products Grid View -->
@@ -620,7 +718,7 @@
 {% block extra_js %}
 <script>
 let cart = [];
-const VAT_RATE = {{ vat_rate }};
+const VAT_RATE = {{ vat_rate|default:16 }};
 const productStock = {};
 let selectedCustomer = null;
 let paymentMethods = [];
@@ -628,18 +726,11 @@ let totalDue = 0;
 
 // Lazy loading state
 let productsOffset = 0;
-const productsLimit = 30;
+const productsLimit = 50;
 let productsLoading = false;
 let productsHasMore = true;
-let currentSearchQuery = '{{ search_query|default:"" }}';
-let currentCategoryFilter = '{{ category_filter|default:"" }}';
-
-// Initialize product stock data (will be populated via AJAX)
-{% if not lazy_load %}
-{% for product in products %}
-productStock[{{ product.id }}] = {{ product.stock_quantity }};
-{% endfor %}
-{% endif %}
+let currentSearchQuery = '';
+let currentCategoryFilter = '';
 
 // ==================== VIEW SWITCHING ====================
 let currentView = localStorage.getItem('pos_view') || 'grid';
@@ -664,13 +755,21 @@ function switchView(view) {
 
 // Initialize view on page load
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎬 POS Screen initializing...');
+    console.log('   Current URL:', window.location.href);
+    console.log('   Path:', window.location.pathname);
+    
+    // DON'T load cart here - it's handled in window.load event
+    // This prevents duplicate loading and race conditions
+    
     // Set initial view
     switchView(currentView);
     
     // Update filter info on page load
     updateFilterInfo();
     
-    // Load products
+    // Load products immediately - don't wait for AJAX test
+    console.log('🚀 Starting product load...');
     loadProducts(true);
     
     // Update held orders count
@@ -680,7 +779,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // ==================== LAZY LOADING PRODUCTS ====================
 
 function loadProducts(reset = false) {
-    if (productsLoading) return;
+    if (productsLoading) {
+        console.log('Products already loading, skipping...');
+        return;
+    }
     
     if (reset) {
         productsOffset = 0;
@@ -694,8 +796,11 @@ function loadProducts(reset = false) {
     }
     
     productsLoading = true;
-    document.getElementById('products-loading').style.display = 'block';
-    document.getElementById('load-more-btn').disabled = true;
+    const loadingEl = document.getElementById('products-loading');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (loadMoreBtn) loadMoreBtn.disabled = true;
     
     const url = new URL(window.location.href);
     url.searchParams.set('load_products', '1');
@@ -704,58 +809,147 @@ function loadProducts(reset = false) {
     if (currentSearchQuery) url.searchParams.set('q', currentSearchQuery);
     if (currentCategoryFilter) url.searchParams.set('category', currentCategoryFilter);
     
-    console.log('Loading products:', {
+    console.log('🚀 Loading products:', {
         reset: reset,
         search: currentSearchQuery,
         category: currentCategoryFilter,
-        offset: productsOffset
+        offset: productsOffset,
+        url: url.toString()
     });
+    
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+        console.error('⏱️ Request timeout after 10 seconds');
+        console.error('   URL was:', url.toString());
+        console.error('   Check server logs for errors');
+        if (loadingEl) {
+            loadingEl.innerHTML = `
+                <div class="alert alert-warning m-3">
+                    <h5>⏱️ Loading is taking longer than expected</h5>
+                    <p><strong>URL:</strong> <code>${url.toString()}</code></p>
+                    <p>This might be due to:</p>
+                    <ul>
+                        <li>Slow network connection</li>
+                        <li>Server is processing the request</li>
+                        <li>Large number of products</li>
+                        <li>Server error (check server console)</li>
+                    </ul>
+                    <button class="btn btn-primary" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Reload Page
+                    </button>
+                    <button class="btn btn-secondary ms-2" onclick="loadProducts(true)">
+                        <i class="bi bi-arrow-repeat"></i> Try Again
+                    </button>
+                    <hr>
+                    <small class="text-muted">
+                        <strong>Debug Info:</strong><br>
+                        Current URL: ${window.location.href}<br>
+                        Request URL: ${url.toString()}<br>
+                        Offset: ${productsOffset}, Limit: ${productsLimit}
+                    </small>
+                </div>
+            `;
+        }
+        productsLoading = false;
+    }, 10000); // 10 second timeout
     
     fetch(url, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        clearTimeout(timeoutId);
+        console.log('✅ Response received - Status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
-        console.log('Products loaded:', data.products.length, 'total:', data.total);
-        console.log('Backend received:', data.debug);
+        console.log('📦 Products loaded:', data.products ? data.products.length : 0, 'total:', data.total);
         
         if (data.success) {
+            if (data.products.length === 0 && productsOffset === 0) {
+                // No products at all
+                console.log('ℹ️ No products found');
+                if (loadingEl) {
+                    loadingEl.innerHTML = `
+                        <div class="alert alert-info m-3">
+                            <h5><i class="bi bi-info-circle"></i> No Products Found</h5>
+                            <p>You don't have any products yet. Add your first product to get started!</p>
+                            <a href="${window.location.origin}/${window.location.pathname.split('/')[1]}/products/add/" class="btn btn-primary">
+                                <i class="bi bi-plus-circle"></i> Add Product
+                            </a>
+                        </div>
+                    `;
+                }
+                productsLoading = false;
+                return;
+            }
+            
             renderProducts(data.products);
             productsOffset += data.products.length;
             productsHasMore = data.has_more;
             
             // Update UI
-            document.getElementById('products-loading').style.display = 'none';
+            if (loadingEl) loadingEl.style.display = 'none';
             
             // Show appropriate view
             if (currentView === 'grid') {
-                document.getElementById('products-grid').style.display = 'flex';
+                const gridEl = document.getElementById('products-grid');
+                if (gridEl) gridEl.style.display = 'flex';
             } else {
-                document.getElementById('products-list').style.display = 'block';
+                const listEl = document.getElementById('products-list');
+                if (listEl) listEl.style.display = 'block';
             }
             
-            if (data.products.length === 0 && productsOffset === 0) {
-                // No products found
-                document.getElementById('products-empty').style.display = 'block';
-                document.getElementById('load-more-container').style.display = 'none';
-                document.getElementById('products-grid').style.display = 'none';
-                document.getElementById('products-list').style.display = 'none';
-                console.log('No products found for current filters');
-            } else {
-                document.getElementById('products-empty').style.display = 'none';
-                document.getElementById('load-more-container').style.display = productsHasMore ? 'block' : 'none';
-                console.log('Products displayed:', data.products.length, 'Has more:', productsHasMore);
-            }
+            const emptyEl = document.getElementById('products-empty');
+            const loadMoreContainer = document.getElementById('load-more-container');
+            
+            if (emptyEl) emptyEl.style.display = 'none';
+            if (loadMoreContainer) loadMoreContainer.style.display = productsHasMore ? 'block' : 'none';
+            console.log('✨ Products displayed successfully!', 'Has more:', productsHasMore);
+        } else {
+            console.error('❌ Server returned success=false:', data);
+            throw new Error(data.error || 'Failed to load products');
         }
         productsLoading = false;
-        document.getElementById('load-more-btn').disabled = false;
+        if (loadMoreBtn) loadMoreBtn.disabled = false;
     })
     .catch(error => {
-        console.error('Error loading products:', error);
-        document.getElementById('products-loading').innerHTML = 
-            '<p class="text-danger">Error loading products. Please refresh the page.</p>';
+        clearTimeout(timeoutId);
+        console.error('💥 Error loading products:', error);
+        console.error('   Error type:', error.name);
+        console.error('   Error message:', error.message);
+        console.error('   URL was:', url.toString());
+        if (loadingEl) {
+            loadingEl.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <h5><i class="bi bi-exclamation-triangle"></i> Error Loading Products</h5>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Error Type:</strong> ${error.name}</p>
+                    <p><strong>URL:</strong> <code>${url.toString()}</code></p>
+                    <p>Please try one of the following:</p>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            <i class="bi bi-arrow-clockwise"></i> Reload Page
+                        </button>
+                        <button class="btn btn-secondary" onclick="loadProducts(true)">
+                            <i class="bi bi-arrow-repeat"></i> Try Again
+                        </button>
+                    </div>
+                    <hr>
+                    <small class="text-muted">
+                        If this persists, check your internet connection or contact support.
+                        <br><strong>Debug Info:</strong>
+                        <br>Current URL: ${window.location.href}
+                        <br>Request URL: ${url.toString()}
+                        <br>Error: ${error.stack || error.message}
+                    </small>
+                </div>
+            `;
+        }
         productsLoading = false;
     });
 }
@@ -793,7 +987,7 @@ function renderProducts(products) {
         
         const onclick = isOutOfStock ? 
             `alert('This product is out of stock!')` :
-            `addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, 'standard')`;
+            `addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, '${product.tax_class || 'standard'}')`;
         
         col.innerHTML = `
             <div class="card product-card h-100 ${borderClass}" onclick="${onclick}">
@@ -824,7 +1018,7 @@ function renderProducts(products) {
         
         if (!isOutOfStock) {
             row.onclick = function() {
-                addToCart(product.id, product.name, product.unit_price, product.stock_quantity, 'standard');
+                addToCart(product.id, product.name, product.unit_price, product.stock_quantity, product.tax_class || 'standard');
             };
         }
         
@@ -858,7 +1052,7 @@ function renderProducts(products) {
             <td>
                 ${isOutOfStock ? 
                     '<button class="btn btn-sm btn-secondary" disabled><i class="bi bi-x-circle"></i> Out</button>' :
-                    `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, 'standard');"><i class="bi bi-plus-circle"></i> Add</button>`
+                    `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, '${product.tax_class || 'standard'}');"><i class="bi bi-plus-circle"></i> Add</button>`
                 }
             </td>
         `;
@@ -989,31 +1183,11 @@ function loadCartFromStorage() {
             cart = JSON.parse(savedCart);
             console.log('Cart restored from storage:', cart.length, 'items');
             
-            // Validate cart items against current stock
-            cart = cart.filter(item => {
-                if (productStock[item.id] !== undefined) {
-                    // Update available stock to current value
-                    item.availableStock = productStock[item.id];
-                    
-                    // Adjust quantity if it exceeds current stock
-                    if (item.quantity > item.availableStock) {
-                        if (item.availableStock > 0) {
-                            item.quantity = item.availableStock;
-                            const notifEl = document.querySelector('.alert');
-                            if (notifEl) {
-                                console.log(`${item.name} quantity adjusted to available stock (${item.availableStock})`);
-                            }
-                        } else {
-                            console.log(`${item.name} removed from cart (out of stock)`);
-                            return false; // Remove from cart
-                        }
-                    }
-                    return true;
-                } else {
-                    console.log(`${item.name} removed from cart (product no longer available)`);
-                    return false; // Remove if product doesn't exist
-                }
-            });
+            // DON'T validate against productStock here because products haven't loaded yet
+            // Just restore the cart as-is. Stock validation will happen when:
+            // 1. User tries to add more of an item
+            // 2. User tries to complete the sale
+            // This prevents items from being removed just because products haven't loaded yet
         }
         
         if (savedCustomer) {
@@ -1107,27 +1281,15 @@ window.addEventListener('beforeunload', function(e) {
 // Handle page visibility change (when user returns to tab)
 document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
-        // Check if sale was completed while tab was hidden
-        const saleCompleting = localStorage.getItem('pos_sale_completing');
-        if (saleCompleting === 'true') {
-            clearCartStorage();
-            localStorage.removeItem('pos_sale_completing');
-            cart = [];
-            selectedCustomer = null;
-            
-            // Reset UI with null checks
-            const customerSelectEl = document.getElementById('customer-select');
-            const customerInfoEl = document.getElementById('customer-info');
-            const discountTypeEl = document.getElementById('discount-type');
-            const discountValueEl = document.getElementById('discount-value');
-            
-            if (customerSelectEl) customerSelectEl.value = '';
-            if (customerInfoEl) customerInfoEl.style.display = 'none';
-            if (discountTypeEl) discountTypeEl.value = 'percentage';
-            if (discountValueEl) discountValueEl.value = '0';
-            
-            updateCart();
-            showNotification('Cart cleared - ready for next sale', 'success');
+        // Only reload cart from storage when returning to tab
+        // Don't clear cart here - let the page load handler do it after successful sale
+        loadCartFromStorage();
+        console.log('Tab became visible - cart reloaded from storage');
+    } else {
+        // Save cart when leaving tab
+        if (cart.length > 0) {
+            saveCartToStorage();
+            console.log('Tab hidden - cart saved to storage');
         }
     }
 });
@@ -1502,10 +1664,8 @@ function addVariablePriceToCart() {
 
 // Add event listener for weight input to calculate price in real-time
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize lazy loading
-    {% if lazy_load %}
+    // Initialize lazy loading - always load products
     loadProducts(true);
-    {% endif %}
     
     const weightInput = document.getElementById('weight-input');
     if (weightInput) {
@@ -2491,11 +2651,9 @@ function confirmPaymentAndComplete() {
     console.log('Discount type:', discountTypeInput ? discountTypeInput.value : 'N/A');
     console.log('Discount value:', discountValueInput ? discountValueInput.value : 'N/A');
     
-    // Clear cart immediately before submitting
-    // This ensures the cart is empty even if user doesn't return to POS screen
-    cart = [];
-    selectedCustomer = null;
-    clearCartStorage();
+    // DO NOT clear cart here - only clear after successful sale completion
+    // The cart will be cleared when the page reloads after successful sale
+    // This ensures cart persists if user navigates away or if there's an error
     
     // Set flag to indicate sale is being completed
     localStorage.setItem('pos_sale_completing', 'true');

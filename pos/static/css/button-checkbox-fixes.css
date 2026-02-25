@@ -1,0 +1,640 @@
+/* ============================================
+   BUTTON AND CHECKBOX CSS FIXES
+   Comprehensive styling for all buttons and checkboxes
+   ============================================ */
+
+/* ============================================
+   BUTTON FIXES
+   ============================================ */
+
+/* Base button styling - ensure consistency */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 20px;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: center;
+    text-decoration: none;
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease-in-out;
+    white-space: nowrap;
+}
+
+/* Fix button icon spacing */
+.btn i {
+    margin-right: 0.5rem;
+    font-size: 1rem;
+}
+
+.btn i:last-child:only-child {
+    margin-right: 0;
+}
+
+/* Button sizes */
+.btn-sm {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+}
+
+.btn-lg {
+    min-height: 52px;
+    padding: 16px 24px;
+    font-size: 1.125rem;
+}
+
+/* Button variants - ensure proper contrast */
+.btn-primary {
+    background-color: #4e73df;
+    border-color: #4e73df;
+    color: #fff;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: #2e59d9;
+    border-color: #2653d4;
+    color: #fff;
+}
+
+.btn-primary:active {
+    background-color: #2653d4;
+    border-color: #244ec9;
+}
+
+.btn-secondary {
+    background-color: #858796;
+    border-color: #858796;
+    color: #fff;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background-color: #6e707e;
+    border-color: #60616f;
+    color: #fff;
+}
+
+.btn-success {
+    background-color: #1cc88a;
+    border-color: #1cc88a;
+    color: #fff;
+}
+
+.btn-success:hover,
+.btn-success:focus {
+    background-color: #17a673;
+    border-color: #169b6b;
+    color: #fff;
+}
+
+.btn-danger {
+    background-color: #e74a3b;
+    border-color: #e74a3b;
+    color: #fff;
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+    background-color: #e02d1b;
+    border-color: #d52a1a;
+    color: #fff;
+}
+
+.btn-warning {
+    background-color: #f6c23e;
+    border-color: #f6c23e;
+    color: #000;
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+    background-color: #f4b619;
+    border-color: #f4b30d;
+    color: #000;
+}
+
+.btn-info {
+    background-color: #36b9cc;
+    border-color: #36b9cc;
+    color: #fff;
+}
+
+.btn-info:hover,
+.btn-info:focus {
+    background-color: #2c9faf;
+    border-color: #2a96a5;
+    color: #fff;
+}
+
+.btn-light {
+    background-color: #f8f9fc;
+    border-color: #e3e6f0;
+    color: #3a3b45;
+}
+
+.btn-light:hover,
+.btn-light:focus {
+    background-color: #e2e6ea;
+    border-color: #dae0e5;
+    color: #3a3b45;
+}
+
+.btn-dark {
+    background-color: #5a5c69;
+    border-color: #5a5c69;
+    color: #fff;
+}
+
+.btn-dark:hover,
+.btn-dark:focus {
+    background-color: #42444e;
+    border-color: #3a3b45;
+    color: #fff;
+}
+
+/* Outline button variants */
+.btn-outline-primary {
+    color: #4e73df;
+    border-color: #4e73df;
+    background-color: transparent;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    background-color: #4e73df;
+    border-color: #4e73df;
+    color: #fff;
+}
+
+.btn-outline-secondary {
+    color: #858796;
+    border-color: #858796;
+    background-color: transparent;
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus {
+    background-color: #858796;
+    border-color: #858796;
+    color: #fff;
+}
+
+.btn-outline-success {
+    color: #1cc88a;
+    border-color: #1cc88a;
+    background-color: transparent;
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus {
+    background-color: #1cc88a;
+    border-color: #1cc88a;
+    color: #fff;
+}
+
+.btn-outline-danger {
+    color: #e74a3b;
+    border-color: #e74a3b;
+    background-color: transparent;
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger:focus {
+    background-color: #e74a3b;
+    border-color: #e74a3b;
+    color: #fff;
+}
+
+.btn-outline-warning {
+    color: #f6c23e;
+    border-color: #f6c23e;
+    background-color: transparent;
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus {
+    background-color: #f6c23e;
+    border-color: #f6c23e;
+    color: #000;
+}
+
+.btn-outline-info {
+    color: #36b9cc;
+    border-color: #36b9cc;
+    background-color: transparent;
+}
+
+.btn-outline-info:hover,
+.btn-outline-info:focus {
+    background-color: #36b9cc;
+    border-color: #36b9cc;
+    color: #fff;
+}
+
+.btn-outline-light {
+    color: #858796;
+    border-color: #e3e6f0;
+    background-color: transparent;
+}
+
+.btn-outline-light:hover,
+.btn-outline-light:focus {
+    background-color: #f8f9fc;
+    border-color: #e3e6f0;
+    color: #3a3b45;
+}
+
+.btn-outline-dark {
+    color: #5a5c69;
+    border-color: #5a5c69;
+    background-color: transparent;
+}
+
+.btn-outline-dark:hover,
+.btn-outline-dark:focus {
+    background-color: #5a5c69;
+    border-color: #5a5c69;
+    color: #fff;
+}
+
+/* Disabled state */
+.btn:disabled,
+.btn.disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Button groups */
+.btn-group {
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.btn-group > .btn {
+    position: relative;
+    flex: 1 1 auto;
+}
+
+.btn-group > .btn:not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.btn-group > .btn:not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    margin-left: -1px;
+}
+
+/* Button close (for alerts, modals) */
+.btn-close {
+    box-sizing: content-box;
+    width: 1em;
+    height: 1em;
+    padding: 0.25em;
+    color: #000;
+    background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3e%3cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;
+    border: 0;
+    border-radius: 0.375rem;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.btn-close:hover,
+.btn-close:focus {
+    opacity: 0.75;
+}
+
+/* ============================================
+   CHECKBOX FIXES
+   ============================================ */
+
+/* Base checkbox styling */
+.form-check {
+    display: block;
+    min-height: 1.5rem;
+    padding-left: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.125rem;
+    margin-left: -1.75rem;
+    vertical-align: top;
+    background-color: #fff;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    border: 2px solid #858796;
+    border-radius: 0.25rem;
+    appearance: none;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+}
+
+/* Checkbox checked state */
+.form-check-input:checked {
+    background-color: #4e73df;
+    border-color: #4e73df;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3c/svg%3e");
+}
+
+/* Checkbox focus state */
+.form-check-input:focus {
+    border-color: #4e73df;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
+}
+
+/* Checkbox hover state */
+.form-check-input:hover:not(:disabled):not(:checked) {
+    border-color: #4e73df;
+}
+
+/* Checkbox disabled state */
+.form-check-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.form-check-input:disabled ~ .form-check-label {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Checkbox label */
+.form-check-label {
+    display: inline-block;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Checkbox indeterminate state */
+.form-check-input:indeterminate {
+    background-color: #4e73df;
+    border-color: #4e73df;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10h8'/%3e%3c/svg%3e");
+}
+
+/* ============================================
+   SWITCH CHECKBOX (Toggle)
+   ============================================ */
+
+.form-switch {
+    padding-left: 2.5rem;
+}
+
+.form-switch .form-check-input {
+    width: 2rem;
+    height: 1.25rem;
+    margin-left: -2.5rem;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28134, 135, 150, 1%29'/%3e%3c/svg%3e");
+    background-position: left center;
+    border-radius: 2rem;
+    transition: background-position 0.15s ease-in-out;
+}
+
+.form-switch .form-check-input:checked {
+    background-position: right center;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+}
+
+.form-switch .form-check-input:focus {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28134, 135, 150, 1%29'/%3e%3c/svg%3e");
+}
+
+.form-switch .form-check-input:checked:focus {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+}
+
+/* ============================================
+   RADIO BUTTONS
+   ============================================ */
+
+.form-check-input[type="radio"] {
+    border-radius: 50%;
+}
+
+.form-check-input[type="radio"]:checked {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2' fill='%23fff'/%3e%3c/svg%3e");
+}
+
+/* ============================================
+   BUTTON CHECKBOX (btn-check)
+   ============================================ */
+
+.btn-check {
+    position: absolute;
+    clip: rect(0, 0, 0, 0);
+    pointer-events: none;
+}
+
+.btn-check:checked + .btn {
+    background-color: #4e73df;
+    border-color: #4e73df;
+    color: #fff;
+}
+
+.btn-check:checked + .btn-outline-success {
+    background-color: #1cc88a;
+    border-color: #1cc88a;
+    color: #fff;
+}
+
+.btn-check:checked + .btn-outline-danger {
+    background-color: #e74a3b;
+    border-color: #e74a3b;
+    color: #fff;
+}
+
+.btn-check:checked + .btn-outline-warning {
+    background-color: #f6c23e;
+    border-color: #f6c23e;
+    color: #000;
+}
+
+.btn-check:focus + .btn {
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 767px) {
+    /* Larger touch targets on mobile */
+    .btn {
+        min-height: 48px;
+        min-width: 48px;
+        padding: 14px 20px;
+    }
+    
+    .btn-sm {
+        min-height: 40px;
+        min-width: 40px;
+        padding: 10px 16px;
+    }
+    
+    .btn-lg {
+        min-height: 56px;
+        padding: 18px 28px;
+    }
+    
+    /* Larger checkboxes on mobile */
+    .form-check-input {
+        width: 1.5rem;
+        height: 1.5rem;
+        margin-top: 0;
+    }
+    
+    .form-switch .form-check-input {
+        width: 2.5rem;
+        height: 1.5rem;
+    }
+    
+    /* Stack button groups on mobile */
+    .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-group > .btn {
+        width: 100%;
+        margin-left: 0;
+        margin-bottom: 0.5rem;
+        border-radius: 0.375rem !important;
+    }
+    
+    .btn-group > .btn:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* Full width buttons on mobile */
+    .btn-mobile-full {
+        width: 100%;
+        display: flex;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+.btn:focus-visible {
+    outline: 2px solid #4e73df;
+    outline-offset: 2px;
+}
+
+.form-check-input:focus-visible {
+    outline: 2px solid #4e73df;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .btn {
+        border-width: 2px;
+    }
+    
+    .form-check-input {
+        border-width: 3px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .btn,
+    .form-check-input,
+    .form-switch .form-check-input {
+        transition: none;
+    }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Button spacing */
+.btn-gap {
+    gap: 0.5rem;
+}
+
+.btn-gap-sm {
+    gap: 0.25rem;
+}
+
+.btn-gap-lg {
+    gap: 0.75rem;
+}
+
+/* Button block (full width) */
+.btn-block {
+    display: flex;
+    width: 100%;
+}
+
+/* Button loading state */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    top: 50%;
+    left: 50%;
+    margin-left: -0.5rem;
+    margin-top: -0.5rem;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: btn-spinner 0.6s linear infinite;
+}
+
+@keyframes btn-spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Checkbox inline */
+.form-check-inline {
+    display: inline-block;
+    margin-right: 1rem;
+}
+
+/* Checkbox reverse (label before input) */
+.form-check-reverse {
+    padding-right: 1.75rem;
+    padding-left: 0;
+    text-align: right;
+}
+
+.form-check-reverse .form-check-input {
+    float: right;
+    margin-right: -1.75rem;
+    margin-left: 0;
+}

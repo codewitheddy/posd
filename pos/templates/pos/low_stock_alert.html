@@ -43,8 +43,8 @@
                             <td>{{ product.category.name|default:"Uncategorized" }}</td>
                             <td>KES {{ product.unit_price|floatformat:2 }}</td>
                             <td>
-                                <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-danger">
-                                    <i class="bi bi-plus-circle"></i> Restock Now
+                                <a href="{% url 'purchase_create' slug=request.business.slug %}?product={{ product.pk }}" class="btn btn-sm btn-success">
+                                    <i class="bi bi-cart-plus"></i> Purchase Product
                                 </a>
                             </td>
                         </tr>
@@ -88,8 +88,8 @@
                             <td><span class="badge bg-warning text-dark">{{ product.stock_quantity }}</span></td>
                             <td>{{ product.low_stock_threshold }}</td>
                             <td>
-                                <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-warning">
-                                    <i class="bi bi-plus-circle"></i> Restock
+                                <a href="{% url 'purchase_create' slug=request.business.slug %}?product={{ product.pk }}" class="btn btn-sm btn-success">
+                                    <i class="bi bi-cart-plus"></i> Purchase Product
                                 </a>
                             </td>
                         </tr>

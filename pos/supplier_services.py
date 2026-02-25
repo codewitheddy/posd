@@ -7,6 +7,7 @@ from django.db.models import Sum, F, Q
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 from django.utils import timezone
+from datetime import datetime, date
 from .models import (
     SupplierPayment, PaymentAllocation, Purchase, Supplier, 
     PaymentMethod, ActivityLog
@@ -156,20 +157,30 @@ class SupplierStatementService:
         Args:
             supplier: Supplier instance
             start_date: Optional start date (defaults to earliest transaction)
-            end_date: Optional end date (defaults to today)
+            end_date: Optional end date (defaults to today, end of day)
         
         Returns:
             dict with statement data
         """
         if end_date is None:
+            # Default to end of today to include all of today's transactions
             end_date = timezone.now().date()
+        
+        # Convert end_date to end of day for datetime comparisons
+        # This ensures we include all transactions from the end_date
+        from datetime import time
+        end_datetime = timezone.make_aware(
+            datetime.combine(end_date, time(23, 59, 59))
+        )
         
         # Calculate opening balance (transactions before start_date)
         opening_balance = Decimal('0.00')
         if start_date:
             opening_purchases = supplier.purchases.filter(
-                status='received',
-                date__lt=start_date
+                status='received'
+            ).filter(
+                Q(received_date__lt=start_date) |
+                Q(received_date__isnull=True, date__date__lt=start_date)
             ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
             
             opening_payments = supplier.payments.filter(
@@ -187,10 +198,11 @@ class SupplierStatementService:
         # Get transactions in period
         if start_date:
             purchases = supplier.purchases.filter(
-                status='received',
-                date__gte=start_date,
-                date__lte=timezone.datetime.combine(end_date, timezone.datetime.max.time())
-            ).prefetch_related('items').order_by('date')  # Added prefetch_related
+                status='received'
+            ).filter(
+                Q(received_date__gte=start_date, received_date__lte=end_datetime) |
+                Q(received_date__isnull=True, date__date__gte=start_date, date__date__lte=end_date)
+            ).prefetch_related('items').order_by('date')
             
             payments = supplier.payments.filter(
                 payment_date__gte=start_date,
@@ -204,11 +216,13 @@ class SupplierStatementService:
                 credit_note_date__lte=end_date
             ).order_by('credit_note_date')
         else:
-            # No start date - get all transactions up to end_date
+            # No start date - get all transactions up to end_date (end of day)
             purchases = supplier.purchases.filter(
-                status='received',
-                date__lte=timezone.datetime.combine(end_date, timezone.datetime.max.time())
-            ).prefetch_related('items').order_by('date')  # Added prefetch_related
+                status='received'
+            ).filter(
+                Q(received_date__lte=end_datetime) |
+                Q(received_date__isnull=True, date__date__lte=end_date)
+            ).prefetch_related('items').order_by('date')
             
             payments = supplier.payments.filter(
                 payment_date__lte=end_date
@@ -227,8 +241,21 @@ class SupplierStatementService:
             # This is the correct amount that was invoiced/received
             actual_amount = purchase.total_amount
             
+            # Use received_date if available, otherwise fall back to purchase date
+            # Always convert to date object for consistent comparison
+            if purchase.received_date:
+                if isinstance(purchase.received_date, datetime):
+                    trans_date = purchase.received_date.date()
+                else:
+                    trans_date = purchase.received_date
+            else:
+                if isinstance(purchase.date, datetime):
+                    trans_date = purchase.date.date()
+                else:
+                    trans_date = purchase.date
+            
             transactions.append({
-                'date': purchase.date.date(),
+                'date': trans_date,
                 'type': 'purchase',
                 'reference': purchase.purchase_number,
                 'description': f'Purchase: {purchase.purchase_number}',

@@ -59,9 +59,13 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="date_of_birth" class="form-label">Date of Birth</label>
+                                <label for="date_of_birth" class="form-label">Date of Birth <small class="text-muted">(Must be 18+ years old)</small></label>
                                 <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" 
-                                       value="{% if customer.date_of_birth %}{{ customer.date_of_birth|date:'Y-m-d' }}{% endif %}">
+                                       value="{% if customer.date_of_birth %}{{ customer.date_of_birth|date:'Y-m-d' }}{% endif %}"
+                                       max="{{ max_date }}">
+                                <div class="invalid-feedback" id="age-error">
+                                    Customer must be at least 18 years old.
+                                </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label d-block">Status</label>
@@ -101,4 +105,58 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dobInput = document.getElementById('date_of_birth');
+    const form = document.querySelector('form');
+    const ageError = document.getElementById('age-error');
+    
+    // Set max date to 18 years ago from today
+    const today = new Date();
+    const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+    const maxDateStr = maxDate.toISOString().split('T')[0];
+    dobInput.setAttribute('max', maxDateStr);
+    
+    // Validate age on input change
+    dobInput.addEventListener('change', function() {
+        validateAge();
+    });
+    
+    // Validate on form submit
+    form.addEventListener('submit', function(e) {
+        if (dobInput.value && !validateAge()) {
+            e.preventDefault();
+            dobInput.focus();
+        }
+    });
+    
+    function validateAge() {
+        if (!dobInput.value) {
+            dobInput.classList.remove('is-invalid');
+            return true;
+        }
+        
+        const dob = new Date(dobInput.value);
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+            age--;
+        }
+        
+        if (age < 18) {
+            dobInput.classList.add('is-invalid');
+            ageError.textContent = `Customer must be at least 18 years old. Current age: ${age} years.`;
+            ageError.style.display = 'block';
+            return false;
+        } else {
+            dobInput.classList.remove('is-invalid');
+            ageError.style.display = 'none';
+            return true;
+        }
+    }
+});
+</script>
 {% endblock %}

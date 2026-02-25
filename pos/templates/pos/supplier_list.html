@@ -39,9 +39,22 @@
                             <td>{{ supplier.phone|default:"-" }}</td>
                             <td>{{ supplier.email|default:"-" }}</td>
                             <td>
-                                <strong class="{% if supplier.outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                    KES {{ supplier.outstanding_balance|floatformat:2 }}
-                                </strong>
+                                {% if supplier.outstanding_balance > 0 %}
+                                    <strong class="text-danger">
+                                        KES {{ supplier.outstanding_balance|floatformat:2 }}
+                                    </strong>
+                                    <br><small class="text-muted">You owe</small>
+                                {% elif supplier.outstanding_balance < 0 %}
+                                    <strong class="text-info">
+                                        KES {{ supplier.outstanding_balance|floatformat:2 }}
+                                    </strong>
+                                    <br><small class="text-info">Credit (They owe you)</small>
+                                {% else %}
+                                    <strong class="text-success">
+                                        KES 0.00
+                                    </strong>
+                                    <br><small class="text-muted">Settled</small>
+                                {% endif %}
                             </td>
                             <td>KES {{ supplier.total_purchases_amount|floatformat:2 }}</td>
                             <td>
@@ -61,9 +74,15 @@
                                 <a href="{% url 'supplier_edit' slug=request.business.slug pk=supplier.pk %}" class="btn btn-sm btn-outline-primary" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                <a href="{% url 'supplier_delete' slug=request.business.slug pk=supplier.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
-                                    <i class="bi bi-trash"></i>
-                                </a>
+                                {% if supplier.purchases.count == 0 %}
+                                    <a href="{% url 'supplier_delete' slug=request.business.slug pk=supplier.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                {% else %}
+                                    <button class="btn btn-sm btn-outline-secondary" disabled title="Cannot delete - has purchase history">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

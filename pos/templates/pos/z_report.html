@@ -15,12 +15,14 @@
             </nav>
         </div>
         <div class="col-auto">
+            {% if day_is_closed %}
             <a href="{% url 'z_report_pdf' slug=request.business.slug  %}?date={{ report_date|date:'Y-m-d' }}" class="btn btn-danger" target="_blank">
                 <i class="bi bi-file-pdf"></i> Download PDF
             </a>
             <button onclick="window.print()" class="btn btn-secondary">
                 <i class="bi bi-printer"></i> Print
             </button>
+            {% endif %}
         </div>
     </div>
 
@@ -134,24 +136,17 @@
                     <h5 class="mb-0">CASH DRAWER SUMMARY</h5>
                 </div>
                 <div class="card-body">
+                    {% if existing_closure %}
+                    <!-- Day Already Closed - Show Full Details -->
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle-fill"></i>
+                        <strong>Historical Report:</strong> This day was officially closed on {{ existing_closure.closed_at|date:"d M Y at H:i" }} by {{ existing_closure.closed_by.get_full_name|default:existing_closure.closed_by.username }}.
+                    </div>
                     <table class="table table-borderless">
                         <tr>
                             <td><strong>Opening Cash/Floats:</strong></td>
                             <td class="text-end">KES {{ opening_cash|floatformat:2 }}</td>
                         </tr>
-                        {% if cash_floats.exists %}
-                        <tr class="table-light">
-                            <td colspan="2">
-                                <small class="text-muted">
-                                    <i class="bi bi-info-circle"></i> 
-                                    Opening Floats: KES {{ opening_floats|floatformat:2 }}
-                                    {% if additional_floats > 0 %}
-                                    | Additional: KES {{ additional_floats|floatformat:2 }}
-                                    {% endif %}
-                                </small>
-                            </td>
-                        </tr>
-                        {% endif %}
                         <tr>
                             <td><strong>Cash Sales:</strong></td>
                             <td class="text-end">+ KES {{ cash_payments|floatformat:2 }}</td>
@@ -161,19 +156,40 @@
                             <td class="text-end"><strong>KES {{ expected_cash|floatformat:2 }}</strong></td>
                         </tr>
                         <tr>
-                            <td><strong>Actual Closing Cash:</strong></td>
-                            <td class="text-end">KES {{ closing_cash|floatformat:2 }}</td>
+                            <td><strong>Declared Cash:</strong></td>
+                            <td class="text-end">KES {{ existing_closure.declared_cash|floatformat:2 }}</td>
                         </tr>
-                        <tr class="{% if cash_difference < 0 %}table-danger{% elif cash_difference > 0 %}table-warning{% else %}table-success{% endif %}">
-                            <td><strong>Difference:</strong></td>
+                        <tr class="{% if existing_closure.is_short %}table-danger{% elif existing_closure.is_over %}table-warning{% else %}table-success{% endif %}">
+                            <td><strong>Variance:</strong></td>
                             <td class="text-end">
-                                <strong>
-                                    {% if cash_difference > 0 %}+{% endif %}
-                                    KES {{ cash_difference|floatformat:2 }}
-                                </strong>
+                                <strong>{{ existing_closure.variance_status }}</strong>
                             </td>
                         </tr>
                     </table>
+                    {% else %}
+                    <!-- Day Not Closed - Cash Declaration Form -->
+                    
+                    <div class="alert alert-warning mb-3">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <strong>Action Required:</strong> Count your cash drawer and enter the total amount below to close the day.
+                    </div>
+                    
+                    <!-- Cash Count Form - Simple and Direct -->
+                    <div class="p-3 bg-light rounded border mb-3" id="cashCountForm">
+                        <h6 class="mb-3 text-center"><i class="bi bi-calculator-fill"></i> Enter Cash Drawer Amount</h6>
+                        <div>
+                            <div class="mb-2">
+                                <label class="form-label"><strong>Total Cash in Drawer:</strong></label>
+                                <input type="number" id="actualCash" class="form-control form-control-lg" step="0.01" min="0" placeholder="Enter amount" autofocus>
+                                <small class="text-muted">Count all cash and enter the total amount</small>
+                            </div>
+                            <button type="button" onclick="declareCash()" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-check-circle-fill"></i> Submit Amount & Close Day
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {% endif %}
                     
                     <!-- Cash Floats Details -->
                     {% if cash_floats.exists %}
@@ -203,27 +219,6 @@
                         </div>
                     </div>
                     {% endif %}
-                    
-                    <!-- Cash Count Form -->
-                    <div class="mt-3 p-3 bg-light rounded">
-                        <h6 class="mb-3"><i class="bi bi-calculator"></i> Count Cash Drawer</h6>
-                        <div>
-                            <div class="mb-2">
-                                <label class="form-label small">Actual Cash Counted:</label>
-                                <input type="number" id="actualCash" class="form-control" step="0.01" min="0" placeholder="Enter counted amount">
-                            </div>
-                            <button type="button" onclick="calculateDifference()" class="btn btn-sm btn-primary w-100">
-                                <i class="bi bi-calculator-fill"></i> Calculate Difference
-                            </button>
-                            
-                            <!-- Result Display -->
-                            <div id="differenceResult" class="mt-3" style="display: none;">
-                                <div id="differenceAlert" class="alert mb-0">
-                                    <strong>Difference:</strong> <span id="differenceAmount"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -243,8 +238,44 @@
                     {% if day_is_closed %}
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle-fill"></i>
-                        <strong>Day Closed:</strong> This day has been closed. All shifts for {{ report_date|date:"d F Y" }} are locked.
+                        <strong>Day Closed:</strong> This day has been closed. 
+                        {% if existing_closure %}
+                        Officially closed on {{ existing_closure.closed_at|date:"d M Y at H:i" }} by {{ existing_closure.closed_by.get_full_name|default:existing_closure.closed_by.username }}.
+                        {% else %}
+                        All shifts for {{ report_date|date:"d F Y" }} are locked.
+                        {% endif %}
                     </div>
+                    
+                    {% if existing_closure %}
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>Expected Cash</h6>
+                                    <h4 class="text-primary">KES {{ existing_closure.expected_cash|floatformat:2 }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>Declared Cash</h6>
+                                    <h4 class="text-success">KES {{ existing_closure.declared_cash|floatformat:2 }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>Variance</h6>
+                                    <h4 class="{% if existing_closure.is_short %}text-danger{% elif existing_closure.is_over %}text-warning{% else %}text-success{% endif %}">
+                                        {{ existing_closure.variance_status }}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     <div class="mb-3">
                         <h6>Closed Shifts:</h6>
@@ -273,16 +304,30 @@
                     
                     <div class="text-center">
                         <a href="{% url 'z_report_pdf' slug=request.business.slug %}?date={{ report_date|date:'Y-m-d' }}" 
-                           class="btn btn-primary btn-lg" target="_blank">
+                           class="btn btn-primary btn-lg me-2" target="_blank">
                             <i class="bi bi-file-pdf"></i> Download/Print Z-Report
                         </a>
+                        
+                        {% now "Y-m-d" as today_date %}
+                        {% if report_date|date:"Y-m-d" != today_date %}
+                        <!-- Viewing historical closed day - show "View Today's Report" -->
+                        <a href="{% url 'z_report' slug=request.business.slug %}" 
+                           class="btn btn-success btn-lg">
+                            <i class="bi bi-calendar-plus"></i> View Today's Report
+                        </a>
+                        {% else %}
+                        <!-- Viewing today's closed day - show "Open New Day" -->
+                        <button type="button" class="btn btn-success btn-lg" onclick="showOpenNewDayModal()">
+                            <i class="bi bi-sunrise"></i> Open New Day
+                        </button>
+                        {% endif %}
                     </div>
                     
                     {% else %}
                     <div class="alert alert-warning">
                         <i class="bi bi-exclamation-triangle-fill"></i>
                         <strong>Important:</strong> Closing the day will lock all shifts for {{ report_date|date:"d F Y" }}. 
-                        Make sure you have counted the cash and verified all transactions before proceeding.
+                        Make sure you have counted the cash and declared the amount above before proceeding.
                     </div>
                     
                     {% if shifts.exists %}
@@ -310,156 +355,29 @@
                     </div>
                     {% endif %}
                     
-                    <div class="row">
-                        <div class="col-md-6">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
                             <div class="card bg-light">
-                                <div class="card-body">
-                                    <h6>Expected Cash</h6>
-                                    <h4 class="text-primary">KES {{ expected_cash|floatformat:2 }}</h4>
-                                    <small class="text-muted">Opening + Cash Sales</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card bg-light">
-                                <div class="card-body">
-                                    <h6>Actual Cash (from calculator above)</h6>
-                                    <h4 class="text-success" id="displayActualCash">KES 0.00</h4>
-                                    <small class="text-muted">Enter amount in calculator above</small>
+                                <div class="card-body text-center">
+                                    <h6>Status</h6>
+                                    <h4 class="text-info">
+                                        <i class="bi bi-info-circle-fill"></i> Awaiting Cash Declaration
+                                    </h4>
+                                    <p class="text-muted mb-0">
+                                        <small>Count your cash drawer and enter the amount in the "Cash Drawer Summary" section above. The day will close automatically after you confirm your declaration.</small>
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="mt-4 text-center">
-                        <button type="button" class="btn btn-danger btn-lg" onclick="confirmCloseDay()" id="closeDayBtn">
-                            <i class="bi bi-lock-fill"></i> Close Day - {{ report_date|date:"d F Y" }}
-                        </button>
-                    </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Sales by Cashier -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header bg-warning">
-                    <h5 class="mb-0">SALES BY CASHIER</h5>
-                </div>
-                <div class="card-body">
-                    {% if cashier_sales %}
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Cashier</th>
-                                <th class="text-center">Transactions</th>
-                                <th class="text-end">Total Sales</th>
-                                <th class="text-end">Average Sale</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for cs in cashier_sales %}
-                            <tr>
-                                <td>
-                                    <strong>
-                                        {% if cs.cashier__first_name %}
-                                            {{ cs.cashier__first_name }} {{ cs.cashier__last_name }}
-                                        {% else %}
-                                            {{ cs.cashier__username }}
-                                        {% endif %}
-                                    </strong>
-                                </td>
-                                <td class="text-center">{{ cs.count }}</td>
-                                <td class="text-end">KES {{ cs.total|floatformat:2 }}</td>
-                                <td class="text-end">KES {% widthratio cs.total cs.count 1 %}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <p class="text-muted">No cashier data available.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Top Selling Products -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">TOP 10 SELLING PRODUCTS</h5>
-                </div>
-                <div class="card-body">
-                    {% if top_products %}
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Product</th>
-                                <th class="text-center">Quantity Sold</th>
-                                <th class="text-end">Revenue</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for product in top_products %}
-                            <tr>
-                                <td>{{ forloop.counter }}</td>
-                                <td><strong>{{ product.product__name }}</strong></td>
-                                <td class="text-center">{{ product.quantity }}</td>
-                                <td class="text-end">KES {{ product.revenue|floatformat:2 }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <p class="text-muted">No product sales data available.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Hourly Sales -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">HOURLY SALES BREAKDOWN</h5>
-                </div>
-                <div class="card-body">
-                    {% if hourly_sales %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Hour</th>
-                                    <th class="text-center">Transactions</th>
-                                    <th class="text-end">Sales</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for hour in hourly_sales %}
-                                <tr>
-                                    <td>{{ hour.hour }}:00 - {{ hour.hour }}:59</td>
-                                    <td class="text-center">{{ hour.count }}</td>
-                                    <td class="text-end">KES {{ hour.total|floatformat:2 }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <p class="text-muted">No hourly sales data available.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Detailed sales reports (Sales by Cashier, Top Products, Hourly Breakdown) 
+         are available in the Sales Reports section -->
 
     <!-- Report Footer -->
     <div class="card">
@@ -488,196 +406,411 @@
 <script>
 // Store expected cash value from server
 const EXPECTED_CASH = parseFloat('{{ expected_cash }}') || 0;
+const DAY_IS_CLOSED = {% if existing_closure %}true{% else %}false{% endif %};
+let cashDeclared = false;
+let declaredAmount = 0;
 
 console.log('Expected Cash from server:', EXPECTED_CASH);
+console.log('Day is closed:', DAY_IS_CLOSED);
 
-function calculateDifference() {
+// Blind Cash Declaration Function - TRUE BLIND IMPLEMENTATION
+function declareCash() {
+    // Prevent declaration if day is already closed
+    if (DAY_IS_CLOSED) {
+        showErrorModal('Day Already Closed', 'This day has already been officially closed. You cannot redeclare the cash amount.');
+        return;
+    }
+    
     const actualCashInput = document.getElementById('actualCash');
+    
+    // Check if input exists (it won't exist if day is closed)
+    if (!actualCashInput) {
+        showErrorModal('Day Already Closed', 'This day has already been officially closed. You cannot redeclare the cash amount.');
+        return;
+    }
+    
     const actualCash = parseFloat(actualCashInput.value);
     
-    console.log('=== Calculate Difference Called ===');
+    console.log('=== Declare Cash Called ===');
     console.log('Actual Cash Input Value:', actualCashInput.value);
     console.log('Actual Cash Parsed:', actualCash);
-    console.log('Expected Cash:', EXPECTED_CASH);
     
     if (!actualCashInput.value || actualCashInput.value.trim() === '') {
-        alert('Please enter the actual cash amount');
-        return;
-    }
-    
-    if (isNaN(actualCash) || actualCash < 0) {
-        alert('Please enter a valid cash amount (must be 0 or greater)');
-        return;
-    }
-    
-    const difference = actualCash - EXPECTED_CASH;
-    
-    console.log('Difference:', difference);
-    
-    // Get or create result elements
-    let differenceResult = document.getElementById('differenceResult');
-    let differenceAlert = document.getElementById('differenceAlert');
-    let differenceAmount = document.getElementById('differenceAmount');
-    
-    console.log('differenceResult element:', differenceResult);
-    console.log('differenceAlert element:', differenceAlert);
-    console.log('differenceAmount element:', differenceAmount);
-    
-    // If elements don't exist, create them
-    if (!differenceResult) {
-        console.log('Creating differenceResult element');
-        differenceResult = document.createElement('div');
-        differenceResult.id = 'differenceResult';
-        differenceResult.className = 'mt-3';
-        actualCashInput.parentElement.parentElement.appendChild(differenceResult);
-    }
-    
-    if (!differenceAlert) {
-        console.log('Creating differenceAlert element');
-        differenceAlert = document.createElement('div');
-        differenceAlert.id = 'differenceAlert';
-        differenceAlert.className = 'alert mb-0';
-        differenceResult.appendChild(differenceAlert);
-    }
-    
-    if (!differenceAmount) {
-        console.log('Creating differenceAmount element');
-        const strongEl = document.createElement('strong');
-        strongEl.textContent = 'Difference: ';
-        differenceAmount = document.createElement('span');
-        differenceAmount.id = 'differenceAmount';
-        differenceAlert.appendChild(strongEl);
-        differenceAlert.appendChild(differenceAmount);
-    }
-    
-    // Show result
-    differenceResult.style.display = 'block';
-    
-    // Format difference
-    const formattedDiff = 'KES ' + Math.abs(difference).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    
-    // Set color and message based on difference
-    if (difference > 0) {
-        differenceAlert.className = 'alert alert-warning mb-0';
-        differenceAmount.innerHTML = '<strong class="text-warning">+' + formattedDiff + '</strong> (Over)';
-    } else if (difference < 0) {
-        differenceAlert.className = 'alert alert-danger mb-0';
-        differenceAmount.innerHTML = '<strong class="text-danger">-' + formattedDiff + '</strong> (Short)';
-    } else {
-        differenceAlert.className = 'alert alert-success mb-0';
-        differenceAmount.innerHTML = '<strong class="text-success">' + formattedDiff + '</strong> (Balanced ✓)';
-    }
-    
-    // Update display actual cash in close day section
-    const displayActualCash = document.getElementById('displayActualCash');
-    if (displayActualCash) {
-        displayActualCash.textContent = 'KES ' + actualCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    }
-}
-
-function confirmCloseDay() {
-    const actualCashInput = document.getElementById('actualCash');
-    const actualCash = parseFloat(actualCashInput.value);
-    
-    if (!actualCashInput.value || actualCashInput.value.trim() === '' || isNaN(actualCash)) {
-        alert('Please count the cash and calculate the difference first!');
+        showErrorModal('Amount Required', 'Please enter the total cash amount from your drawer.');
         actualCashInput.focus();
         return;
     }
     
-    const difference = actualCash - EXPECTED_CASH;
-    const reportDate = '{{ report_date|date:"d F Y" }}';
-    
-    let message = `Are you sure you want to close the day for ${reportDate}?\n\n`;
-    message += `Expected Cash: KES ${EXPECTED_CASH.toFixed(2)}\n`;
-    message += `Actual Cash: KES ${actualCash.toFixed(2)}\n`;
-    message += `Variance: KES ${Math.abs(difference).toFixed(2)} `;
-    
-    if (difference > 0) {
-        message += '(Over)';
-    } else if (difference < 0) {
-        message += '(Short)';
-    } else {
-        message += '(Balanced)';
+    if (isNaN(actualCash) || actualCash < 0) {
+        showErrorModal('Invalid Amount', 'Please enter a valid cash amount (must be 0 or greater).');
+        actualCashInput.focus();
+        return;
     }
     
-    message += '\n\nThis action cannot be undone!';
+    // Mark as declared
+    cashDeclared = true;
+    declaredAmount = actualCash;
     
-    if (confirm(message)) {
-        // Disable button to prevent double submission
-        const btn = document.getElementById('closeDayBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Closing...';
-        
-        // Submit close day request
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '{% url "close_day" slug=request.business.slug %}';
-        
-        // Add CSRF token
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrfmiddlewaretoken';
-        csrfInput.value = '{{ csrf_token }}';
-        form.appendChild(csrfInput);
-        
-        // Add report date
-        const dateInput = document.createElement('input');
-        dateInput.type = 'hidden';
-        dateInput.name = 'report_date';
-        dateInput.value = '{{ report_date|date:"Y-m-d" }}';
-        form.appendChild(dateInput);
-        
-        // Add closing cash
-        const cashInput = document.createElement('input');
-        cashInput.type = 'hidden';
-        cashInput.name = 'closing_cash';
-        cashInput.value = actualCash;
-        form.appendChild(cashInput);
-        
-        document.body.appendChild(form);
-        form.submit();
-    }
+    console.log('Declared Amount:', declaredAmount);
+    
+    // Show BLIND confirmation modal - NO expected cash shown
+    showBlindConfirmationModal(actualCash);
 }
 
-// Allow Enter key to trigger calculation
+// Show blind confirmation modal - cashier only sees what they declared
+function showBlindConfirmationModal(declared) {
+    const reportDate = '{{ report_date|date:"d F Y" }}';
+    
+    const modalHTML = `
+        <div class="modal fade" id="blindConfirmModal" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="bi bi-check-circle-fill"></i> Confirm Cash Declaration
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-cash-stack text-primary" style="font-size: 4rem;"></i>
+                        </div>
+                        
+                        <h5 class="text-center mb-4">You declared:</h5>
+                        
+                        <div class="card bg-light mb-4">
+                            <div class="card-body text-center">
+                                <h2 class="text-success mb-0">KES ${declared.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</h2>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning mb-3">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <strong>Are you sure this is correct?</strong>
+                        </div>
+                        
+                        <p class="text-center text-muted mb-0">
+                            <small>Once confirmed, the day will be closed and the full report will be generated.</small>
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="cancelDeclaration()">
+                            <i class="bi bi-x-lg"></i> No, Let Me Recount
+                        </button>
+                        <button type="button" class="btn btn-success btn-lg" onclick="submitCloseDayImmediately()">
+                            <i class="bi bi-check-lg"></i> Yes, Close Day Now
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('blindConfirmModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('blindConfirmModal'));
+    modal.show();
+}
+
+// Cancel declaration - allow cashier to recount
+function cancelDeclaration() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('blindConfirmModal'));
+    modal.hide();
+    
+    // Reset state
+    cashDeclared = false;
+    declaredAmount = 0;
+    
+    // Clear input and refocus
+    const actualCashInput = document.getElementById('actualCash');
+    actualCashInput.value = '';
+    actualCashInput.focus();
+}
+
+// Submit close day immediately after confirmation
+function submitCloseDayImmediately() {
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('blindConfirmModal'));
+    modal.hide();
+    
+    // Hide the cash count form
+    document.getElementById('cashCountForm').style.display = 'none';
+    
+    // Show processing message
+    const cashDrawerCard = document.querySelector('.col-md-6:has(#cashCountForm)');
+    if (cashDrawerCard) {
+        const processingDiv = document.createElement('div');
+        processingDiv.className = 'alert alert-info text-center';
+        processingDiv.innerHTML = `
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Processing...</span>
+            </div>
+            <h5>Closing Day...</h5>
+            <p class="mb-0">Please wait while we process your declaration and generate the Z-Report.</p>
+        `;
+        cashDrawerCard.querySelector('.card-body').appendChild(processingDiv);
+    }
+    
+    // Submit close day request
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{% url "close_day" slug=request.business.slug %}';
+    
+    // Add CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+    
+    // Add report date
+    const dateInput = document.createElement('input');
+    dateInput.type = 'hidden';
+    dateInput.name = 'report_date';
+    dateInput.value = '{{ report_date|date:"Y-m-d" }}';
+    form.appendChild(dateInput);
+    
+    // Add closing cash (declared amount)
+    const cashInput = document.createElement('input');
+    cashInput.type = 'hidden';
+    cashInput.name = 'closing_cash';
+    cashInput.value = declaredAmount;
+    form.appendChild(cashInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Legacy function for compatibility (if day is already closed)
+function calculateDifference() {
+    declareCash();
+}
+
+// Show error modal
+function showErrorModal(title, message) {
+    const modalHTML = `
+        <div class="modal fade" id="errorModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">
+                            <i class="bi bi-exclamation-triangle-fill"></i> ${title}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <i class="bi bi-x-circle text-danger" style="font-size: 4rem;"></i>
+                        <p class="mt-3 mb-0">${message}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const existingModal = document.getElementById('errorModal');
+    if (existingModal) existingModal.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const modal = new bootstrap.Modal(document.getElementById('errorModal'));
+    modal.show();
+}
+
+// Show "Open New Day" modal
+function showOpenNewDayModal() {
+    const closingCash = parseFloat('{{ existing_closure.declared_cash|default:"0" }}') || 0;
+    
+    const modalHTML = `
+        <div class="modal fade" id="openNewDayModal" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title">
+                            <i class="bi bi-sunrise"></i> Open New Day
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-calendar-check text-success" style="font-size: 4rem;"></i>
+                        </div>
+                        
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle-fill"></i>
+                            <strong>Previous Day Closed:</strong> {{ report_date|date:"d F Y" }}
+                        </div>
+                        
+                        <div class="card bg-light mb-3">
+                            <div class="card-body">
+                                <h6 class="mb-2">Previous Day's Closing Cash:</h6>
+                                <h4 class="text-primary mb-0">KES ${closingCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</h4>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Bank Deposit (Optional):</strong></label>
+                            <input type="number" id="bankDeposit" class="form-control" step="0.01" min="0" max="${closingCash}" value="0" placeholder="Enter amount deposited to bank">
+                            <small class="text-muted">If you deposited cash to the bank, enter the amount here. This will be subtracted from your opening cash.</small>
+                        </div>
+                        
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="mb-2">New Day's Opening Cash:</h6>
+                                <h4 class="text-success mb-0" id="newOpeningCash">KES ${closingCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</h4>
+                                <small class="text-muted">Closing Cash - Bank Deposit</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="bi bi-x-lg"></i> Cancel
+                        </button>
+                        <button type="button" class="btn btn-success btn-lg" onclick="confirmOpenNewDay()">
+                            <i class="bi bi-check-lg"></i> Open New Day
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('openNewDayModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('openNewDayModal'));
+    modal.show();
+    
+    // Update opening cash calculation when bank deposit changes
+    const bankDepositInput = document.getElementById('bankDeposit');
+    const newOpeningCashDisplay = document.getElementById('newOpeningCash');
+    
+    bankDepositInput.addEventListener('input', function() {
+        const deposit = parseFloat(this.value) || 0;
+        const newOpening = closingCash - deposit;
+        newOpeningCashDisplay.textContent = 'KES ' + newOpening.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    });
+}
+
+// Confirm and open new day
+function confirmOpenNewDay() {
+    const bankDeposit = parseFloat(document.getElementById('bankDeposit').value) || 0;
+    const closingCash = parseFloat('{{ existing_closure.declared_cash|default:"0" }}') || 0;
+    const openingCash = closingCash - bankDeposit;
+    
+    if (bankDeposit < 0) {
+        showErrorModal('Invalid Amount', 'Bank deposit cannot be negative.');
+        return;
+    }
+    
+    if (bankDeposit > closingCash) {
+        showErrorModal('Invalid Amount', 'Bank deposit cannot be more than the closing cash.');
+        return;
+    }
+    
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('openNewDayModal'));
+    modal.hide();
+    
+    // Show processing message
+    const processingDiv = document.createElement('div');
+    processingDiv.className = 'alert alert-info text-center position-fixed top-50 start-50 translate-middle';
+    processingDiv.style.zIndex = '9999';
+    processingDiv.style.minWidth = '300px';
+    processingDiv.innerHTML = `
+        <div class="spinner-border text-primary mb-3" role="status">
+            <span class="visually-hidden">Processing...</span>
+        </div>
+        <h5>Opening New Day...</h5>
+        <p class="mb-0">Please wait...</p>
+    `;
+    document.body.appendChild(processingDiv);
+    
+    // Submit form to open new day
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{% url "open_new_day" slug=request.business.slug %}';
+    
+    // Add CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+    
+    // Add opening cash
+    const openingInput = document.createElement('input');
+    openingInput.type = 'hidden';
+    openingInput.name = 'opening_cash';
+    openingInput.value = openingCash;
+    form.appendChild(openingInput);
+    
+    // Add bank deposit
+    const depositInput = document.createElement('input');
+    depositInput.type = 'hidden';
+    depositInput.name = 'bank_deposit';
+    depositInput.value = bankDeposit;
+    form.appendChild(depositInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Allow Enter key to trigger declaration
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM Loaded - Setting up event listeners');
     const actualCashInput = document.getElementById('actualCash');
-    if (actualCashInput) {
-        console.log('Actual cash input found');
+    if (actualCashInput && !DAY_IS_CLOSED) {
+        console.log('Actual cash input found - blind declaration mode');
         actualCashInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                calculateDifference();
-            }
-        });
-        
-        // Update display when value changes
-        actualCashInput.addEventListener('input', function() {
-            const actualCash = parseFloat(this.value);
-            const displayActualCash = document.getElementById('displayActualCash');
-            if (displayActualCash && !isNaN(actualCash)) {
-                displayActualCash.textContent = 'KES ' + actualCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                declareCash();
             }
         });
     } else {
-        console.error('Actual cash input NOT found');
+        console.log('Day is closed or input not found');
     }
     
     // Auto-print after closing day
     {% if auto_print %}
     console.log('Auto-print triggered');
+    
+    // Show success message
+    const successAlert = document.createElement('div');
+    successAlert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+    successAlert.style.zIndex = '9999';
+    successAlert.innerHTML = `
+        <i class="bi bi-check-circle-fill"></i>
+        <strong>Day Closed Successfully!</strong> The Z-Report is ready. 
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(successAlert);
+    
+    // Auto-dismiss after 3 seconds
     setTimeout(function() {
-        // Open PDF in new window for printing
-        const pdfUrl = '{% url "z_report_pdf" slug=request.business.slug %}?date={{ report_date|date:"Y-m-d" }}';
-        window.open(pdfUrl, '_blank');
-        
-        // Also trigger browser print dialog
-        setTimeout(function() {
-            window.print();
-        }, 500);
-    }, 1000);
+        successAlert.remove();
+    }, 3000);
+    
+    // Trigger print dialog after a short delay
+    setTimeout(function() {
+        window.print();
+    }, 1500);
     {% endif %}
 });
 </script>

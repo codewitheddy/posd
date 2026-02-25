@@ -6,7 +6,8 @@ from .models import (
     SalePayment, Shift, SaleReturn, SaleReturnItem, Promotion,
     ExpenseCategory, Expense, LoyaltyTransaction, LoyaltyReward,
     LoyaltyRedemption, SupplierPayment, PaymentAllocation,
-    Business, BusinessMembership, SubscriptionPayment
+    Business, BusinessMembership, SubscriptionPayment, DayClosureReport,
+    SupportAccessRequest
 )
 
 
@@ -200,6 +201,24 @@ class ShiftAdmin(admin.ModelAdmin):
     list_filter = ['status', 'start_time', 'cashier']
     search_fields = ['shift_number', 'cashier__username']
     readonly_fields = ['shift_number', 'start_time', 'expected_cash', 'cash_difference', 'total_sales', 'total_revenue']
+
+
+@admin.register(DayClosureReport)
+class DayClosureReportAdmin(admin.ModelAdmin):
+    list_display = ['report_date', 'business', 'closed_by', 'closed_at', 'declared_cash', 'expected_cash', 'variance', 'variance_status_display', 'total_transactions']
+    list_filter = ['business', 'report_date', 'closed_by']
+    search_fields = ['business__name', 'closed_by__username']
+    readonly_fields = ['closed_at', 'variance']
+    date_hierarchy = 'report_date'
+    
+    def variance_status_display(self, obj):
+        if obj.is_balanced:
+            return '✅ Balanced'
+        elif obj.is_over:
+            return f'⚠️ Over by KES {obj.variance:.2f}'
+        else:
+            return f'❌ Short by KES {abs(obj.variance):.2f}'
+    variance_status_display.short_description = 'Status'
 
 
 @admin.register(SaleReturn)
@@ -474,3 +493,27 @@ class SubscriptionPaymentAdmin(admin.ModelAdmin):
         
         return response
     export_payments.short_description = "Export to CSV"
+
+
+@admin.register(SupportAccessRequest)
+class SupportAccessRequestAdmin(admin.ModelAdmin):
+    list_display = ['business', 'requested_by', 'status', 'requested_at', 'approved_by', 'expires_at']
+    list_filter = ['status', 'requested_at', 'approved_at']
+    search_fields = ['business__name', 'requested_by__username', 'reason']
+    readonly_fields = ['requested_at', 'approved_at']
+    
+    fieldsets = (
+        ('Request Information', {
+            'fields': ('business', 'requested_by', 'requested_at', 'reason')
+        }),
+        ('Status', {
+            'fields': ('status', 'approved_by', 'approved_at', 'expires_at')
+        }),
+        ('Notes', {
+            'fields': ('notes',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('business', 'requested_by', 'approved_by')

@@ -50,11 +50,29 @@ class TenantMiddleware:
                         )
                         request.business_membership = membership
                     except BusinessMembership.DoesNotExist:
-                        # User doesn't have access to this business
-                        # Even superusers need explicit membership for privacy
-                        from django.contrib import messages
-                        messages.error(request, 'You do not have access to this business. The business owner must invite you first.')
-                        return redirect('business_list')
+                        # Check if user is superuser with active support access
+                        if request.user.is_superuser:
+                            from .models import SupportAccessRequest
+                            support_access = SupportAccessRequest.objects.filter(
+                                business=business,
+                                requested_by=request.user,
+                                status='approved'
+                            ).first()
+                            
+                            if support_access and support_access.is_active():
+                                # Grant temporary access via support request
+                                request.business_membership = None
+                                request.support_access = support_access
+                            else:
+                                # No active support access
+                                from django.contrib import messages
+                                messages.error(request, 'You do not have access to this business. Please request support access first.')
+                                return redirect('platform_admin_dashboard')
+                        else:
+                            # Regular user without access
+                            from django.contrib import messages
+                            messages.error(request, 'You do not have access to this business. The business owner must invite you first.')
+                            return redirect('business_list')
                 else:
                     request.business_membership = None
                     

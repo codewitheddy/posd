@@ -224,6 +224,26 @@ document.getElementById('purchaseForm').addEventListener('submit', function(e) {
 // Add first item on page load
 document.addEventListener('DOMContentLoaded', function() {
     addItem();
+    
+    // Pre-fill product if specified
+    {% if prefill_product %}
+    const firstProductSelect = document.getElementById('product-1');
+    if (firstProductSelect) {
+        firstProductSelect.value = '{{ prefill_product.pk }}';
+        updatePrice(1);
+        
+        // Show helpful message
+        const container = document.getElementById('itemsContainer');
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-info alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            <i class="bi bi-info-circle"></i> 
+            <strong>{{ prefill_product.name }}</strong> has been pre-selected because it's {% if prefill_product.is_out_of_stock %}out of stock{% else %}low on stock{% endif %}.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        container.insertBefore(alertDiv, container.firstChild);
+    }
+    {% endif %}
 });
 </script>
 {% endblock %}

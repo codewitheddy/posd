@@ -70,6 +70,11 @@
                                 <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> View
                                 </a>
+                                {% if purchase.status == 'received' %}
+                                    <a href="{% url 'create_payment' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-sm btn-success" title="Make Payment">
+                                        <i class="bi bi-cash-coin"></i>
+                                    </a>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

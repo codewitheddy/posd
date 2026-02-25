@@ -1,0 +1,95 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Approve Support Access{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-check-circle"></i> Approve Support Access
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        You are about to grant support access to your business dashboard.
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Support Person:</strong></label>
+                            <p class="form-control-plaintext">
+                                {{ access_request.requested_by.get_full_name|default:access_request.requested_by.username }}
+                                ({{ access_request.requested_by.email }})
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Reason for Request:</strong></label>
+                            <p class="form-control-plaintext border p-3 bg-light rounded">
+                                {{ access_request.reason }}
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Requested At:</strong></label>
+                            <p class="form-control-plaintext">
+                                {{ access_request.requested_at|date:"M d, Y H:i" }}
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="duration_hours" class="form-label">
+                                <strong>Access Duration:</strong> <span class="text-danger">*</span>
+                            </label>
+                            <select name="duration_hours" id="duration_hours" class="form-select" required>
+                                <option value="1">1 Hour</option>
+                                <option value="4">4 Hours</option>
+                                <option value="24" selected>24 Hours (1 Day)</option>
+                                <option value="72">72 Hours (3 Days)</option>
+                                <option value="168">168 Hours (7 Days)</option>
+                            </select>
+                            <small class="text-muted">
+                                Access will automatically expire after this duration.
+                            </small>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="notes" class="form-label">
+                                <strong>Notes (Optional):</strong>
+                            </label>
+                            <textarea 
+                                name="notes" 
+                                id="notes" 
+                                class="form-control" 
+                                rows="3"
+                                placeholder="Any additional notes or conditions..."
+                            ></textarea>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Important:</strong> The support person will have full access to your business dashboard 
+                            during the approved duration. You can revoke access at any time.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'view_support_access_requests' slug=business.slug %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle"></i> Approve Access
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

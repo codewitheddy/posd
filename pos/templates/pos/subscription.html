@@ -200,14 +200,20 @@
         font-weight: 600;
         font-size: 16px;
         cursor: pointer;
-        transition: transform 0.2s;
+        transition: all 0.2s;
         width: 100%;
         margin-top: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        min-height: 48px;
     }
     
     .btn-upgrade:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        color: white;
     }
     
     .contact-support {
@@ -344,7 +350,7 @@
                 </ul>
                 
                 {% if business.subscription_plan == 'trial' %}
-                <button class="btn btn-secondary" style="width: 100%; padding: 15px;" disabled>Current Plan</button>
+                <button class="btn btn-secondary btn-block" disabled>Current Plan</button>
                 {% endif %}
             </div>
             
@@ -370,7 +376,7 @@
                 </ul>
                 
                 {% if business.subscription_plan == 'paid' %}
-                <button class="btn btn-secondary" style="width: 100%; padding: 15px;" disabled>Current Plan</button>
+                <button class="btn btn-secondary btn-block" disabled>Current Plan</button>
                 {% else %}
                 <a href="#payment-instructions" class="btn btn-upgrade">Subscribe Now</a>
                 {% endif %}

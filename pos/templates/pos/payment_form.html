@@ -3,6 +3,26 @@
 {% block title %}Create Payment - {{ supplier.name }}{% endblock %}
 
 {% block content %}
+
+{% if supplier.outstanding_balance < 0 %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle"></i> <strong>Credit Balance Notice:</strong>
+    You currently have a credit of <strong>KES {{ supplier.outstanding_balance|floatformat:2|slice:"1:" }}</strong> with {{ supplier.name }}.
+    This means they owe you money (overpayment or credit note). 
+    <br><small>You can still make a payment if needed, but consider using this credit against future purchases first.</small>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if not unpaid_purchases %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> <strong>No Outstanding Purchases:</strong>
+    {{ supplier.name }} has no unpaid purchase orders. All purchases have been fully paid.
+    {% if supplier.outstanding_balance == 0 %}
+    <br><small>The account is fully settled. Create a new purchase order before making additional payments.</small>
+    {% endif %}
+</div>
+{% endif %}
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col">
@@ -25,12 +45,21 @@
                     <h5 class="mb-0">Payment Details</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post">
+                    <form method="post" id="paymentForm">
                         {% csrf_token %}
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> <strong>Outstanding Balance:</strong> 
+                            <span class="fs-5">KES {{ supplier.outstanding_balance|floatformat:2 }}</span>
+                            <br><small>Maximum amount you can pay to this supplier</small>
+                        </div>
                         
                         <div class="mb-3">
                             <label class="form-label">Amount <span class="text-danger">*</span></label>
-                            <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required>
+                            <input type="number" name="amount" id="amount" class="form-control" 
+                                   step="0.01" min="0.01" max="{{ supplier.outstanding_balance }}" 
+                                   placeholder="Max: {{ supplier.outstanding_balance|floatformat:2 }}" required>
+                            <small class="text-muted">Cannot exceed outstanding balance</small>
                         </div>
 
                         <div class="mb-3">
@@ -59,7 +88,7 @@
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
                                 <i class="bi bi-check-circle"></i> Create Payment
                             </button>
                             <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-secondary">
@@ -67,6 +96,25 @@
                             </a>
                         </div>
                     </form>
+                    
+                    <script>
+                    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+                        const amount = parseFloat(document.getElementById('amount').value);
+                        const maxAmount = parseFloat({{ supplier.outstanding_balance }});
+                        
+                        if (amount > maxAmount) {
+                            e.preventDefault();
+                            alert('Payment amount (KES ' + amount.toFixed(2) + ') cannot exceed outstanding balance (KES ' + maxAmount.toFixed(2) + ')');
+                            return false;
+                        }
+                        
+                        if (amount <= 0) {
+                            e.preventDefault();
+                            alert('Payment amount must be greater than zero');
+                            return false;
+                        }
+                    });
+                    </script>
                 </div>
             </div>
         </div>

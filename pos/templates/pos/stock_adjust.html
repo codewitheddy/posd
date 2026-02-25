@@ -16,17 +16,25 @@
                     <p class="mb-0"><strong>Low Stock Alert:</strong> {{ product.low_stock_threshold }} units</p>
                 </div>
 
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle"></i> <strong>Need to add stock?</strong> 
+                    You must create a <a href="{% url 'purchase_create' slug=request.business.slug %}" class="alert-link">Purchase Order</a> to restock products. 
+                    This ensures proper tracking and supplier accountability.
+                </div>
+
                 <form method="POST">
                     {% csrf_token %}
                     
                     <div class="mb-3">
                         <label for="adjustment_type" class="form-label">Adjustment Type *</label>
                         <select class="form-select" id="adjustment_type" name="adjustment_type" required>
-                            <option value="restock">Restock (Add Stock)</option>
                             <option value="damage">Damage/Loss (Remove Stock)</option>
                             <option value="return">Customer Return (Add Stock)</option>
                             <option value="correction">Stock Correction</option>
                         </select>
+                        <small class="form-text text-muted">
+                            <strong>Note:</strong> To add new stock from suppliers, create a Purchase Order instead.
+                        </small>
                     </div>
 
                     <div class="mb-3">
@@ -34,8 +42,9 @@
                         <input type="number" class="form-control" id="quantity_change" name="quantity_change" 
                                required min="1" placeholder="Enter quantity">
                         <small class="form-text text-muted">
-                            For adding stock (restock, return): Enter positive number<br>
-                            For removing stock (damage, correction): Enter positive number (will be deducted)
+                            For adding stock (customer return): Enter positive number<br>
+                            For removing stock (damage, loss): Enter positive number (will be deducted)<br>
+                            For correction: Enter positive or negative number
                         </small>
                     </div>
 
@@ -75,7 +84,7 @@ document.getElementById('adjustment_type').addEventListener('change', function()
     
     if (type === 'damage') {
         quantityInput.placeholder = 'Enter quantity to remove';
-    } else if (type === 'restock' || type === 'return') {
+    } else if (type === 'return') {
         quantityInput.placeholder = 'Enter quantity to add';
     } else {
         quantityInput.placeholder = 'Enter quantity';

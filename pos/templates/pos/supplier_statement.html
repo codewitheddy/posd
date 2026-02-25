@@ -116,12 +116,31 @@
                     </div>
                 </div>
                 <div class="col-md-2">
-                    <div class="card {% if closing_balance > 0 %}bg-danger{% else %}bg-success{% endif %} text-white">
-                        <div class="card-body text-center">
-                            <h6 class="small">Closing Balance</h6>
-                            <h5 class="mb-0">KES {{ closing_balance|floatformat:2 }}</h5>
+                    {% if closing_balance > 0 %}
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h6 class="small">Closing Balance</h6>
+                                <h5 class="mb-0">KES {{ closing_balance|floatformat:2 }}</h5>
+                                <small>You owe</small>
+                            </div>
                         </div>
-                    </div>
+                    {% elif closing_balance < 0 %}
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h6 class="small">Closing Balance</h6>
+                                <h5 class="mb-0">KES {{ closing_balance|floatformat:2 }}</h5>
+                                <small>Credit (They owe you)</small>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h6 class="small">Closing Balance</h6>
+                                <h5 class="mb-0">KES 0.00</h5>
+                                <small>Fully settled</small>
+                            </div>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
 

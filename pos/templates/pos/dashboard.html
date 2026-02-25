@@ -228,6 +228,35 @@
         </div>
     </div>
 
+    <!-- Support Access Requests Alert (Business Owners Only) -->
+    {% if pending_support_requests_count > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info" style="border-radius: 12px; border: none; box-shadow: 0 2px 12px rgba(0,123,255,0.15); border-left: 4px solid #007bff;">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-shield-lock-fill" style="font-size: 40px; color: #007bff;"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-4">
+                        <h5 class="mb-2"><strong><i class="bi bi-bell-fill"></i> Support Access Request{% if pending_support_requests_count > 1 %}s{% endif %} Pending</strong></h5>
+                        <p class="mb-2">
+                            You have <strong>{{ pending_support_requests_count }}</strong> pending support access request{% if pending_support_requests_count > 1 %}s{% endif %} from platform support team.
+                            {% if pending_support_requests_count == 1 %}
+                            The support team is requesting access to help you with your business.
+                            {% else %}
+                            The support team has requested access to help you with your business.
+                            {% endif %}
+                        </p>
+                        <a href="{% url 'view_support_access_requests' slug=request.business.slug %}" class="btn btn-primary">
+                            <i class="bi bi-eye"></i> Review Request{% if pending_support_requests_count > 1 %}s{% endif %} Now
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Alerts Section -->
     {% if low_stock_count > 0 or out_of_stock_count > 0 or expired_count > 0 or expiring_soon_count > 0 or pending_purchases > 0 %}
     <div class="row">
@@ -669,7 +698,7 @@
             {% endif %}
             
             {% if user_permissions.can_view_reports %}
-            <a href="{% url 'z_report' slug=request.business.slug %}" class="quick-action-btn btn btn-danger">
+            <a href="{% url 'zreport_session_status' slug=request.business.slug %}" class="quick-action-btn btn btn-danger">
                 <i class="bi bi-calculator-fill"></i> Z-Report
             </a>
             {% endif %}

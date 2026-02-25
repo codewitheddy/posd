@@ -4,8 +4,36 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <h2><i class="fas fa-history"></i> Activity Log</h2>
-    <p class="text-muted">Track all system activities and user actions</p>
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-history"></i> Activity Log</h2>
+            <p class="text-muted">Track all system activities and user actions</p>
+        </div>
+        <div class="col-auto">
+            <div class="dropdown">
+                <button class="btn btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-trash"></i> Clear Old Logs
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'clear_old_logs' slug=request.business.slug %}?days=30">
+                        Clear logs older than 30 days
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'clear_old_logs' slug=request.business.slug %}?days=60">
+                        Clear logs older than 60 days
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'clear_old_logs' slug=request.business.slug %}?days=90">
+                        Clear logs older than 90 days
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'clear_old_logs' slug=request.business.slug %}?days=180">
+                        Clear logs older than 6 months
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'clear_old_logs' slug=request.business.slug %}?days=365">
+                        Clear logs older than 1 year
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
 
     {% if messages %}
         {% for message in messages %}
@@ -15,6 +43,45 @@
             </div>
         {% endfor %}
     {% endif %}
+
+    <!-- Log Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Total Logs</h6>
+                    <h3 class="mb-0">{{ total_logs|default:0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Last 30 Days</h6>
+                    <h3 class="mb-0 text-success">{{ logs_30_days|default:0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Last 90 Days</h6>
+                    <h3 class="mb-0 text-info">{{ logs_90_days|default:0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Older than 90 Days</h6>
+                    <h3 class="mb-0 text-warning">{{ logs_older_90|default:0 }}</h3>
+                    {% if logs_older_90 > 0 %}
+                    <small class="text-muted">Consider clearing</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Filters -->
     <div class="card mb-4">

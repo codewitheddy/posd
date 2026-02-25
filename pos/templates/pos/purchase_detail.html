@@ -15,6 +15,13 @@
             <a href="{% url 'purchase_cancel' slug=request.business.slug pk=purchase.pk %}" class="btn btn-danger">
                 <i class="bi bi-x-circle"></i> Cancel
             </a>
+        {% elif purchase.status == 'received' %}
+            <a href="{% url 'create_payment' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-success">
+                <i class="bi bi-cash-coin"></i> Make Payment
+            </a>
+            <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-info">
+                <i class="bi bi-list-ul"></i> View Payments
+            </a>
         {% endif %}
         <a href="{% url 'purchase_list' slug=request.business.slug  %}" class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i> Back to List

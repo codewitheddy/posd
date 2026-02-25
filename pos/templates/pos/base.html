@@ -30,6 +30,7 @@
     <link rel="stylesheet" href="{% static 'css/mobile-enhancements.css' %}">
     <link rel="stylesheet" href="{% static 'css/pwa.css' %}">
     <link rel="stylesheet" href="{% static 'css/custom-theme.css' %}">
+    <link rel="stylesheet" href="{% static 'css/button-checkbox-fixes.css' %}">
     
     <!-- Dynamic Theme Colors -->
     {% if request.business.settings %}
@@ -198,27 +199,40 @@
             display: flex;
             align-items: center;
             padding: 0 30px;
-            z-index: 999;
+            z-index: 10000; /* Higher than cart (999) to ensure dropdown appears on top */
         }
 
         .search-bar {
             flex: 1;
-            max-width: 500px;
+            max-width: 600px;
+        }
+
+        .search-bar form {
+            width: 100%;
         }
 
         .search-bar input {
-            border-radius: 25px;
+            border-radius: 25px 0 0 25px;
             border: 1px solid #d1d3e2;
+            border-right: none;
             padding: 8px 20px 8px 40px;
             font-size: 0.9rem;
+            flex: 1;
+        }
+        
+        .search-bar button {
+            border-radius: 0 25px 25px 0;
+            padding: 8px 20px;
+            white-space: nowrap;
         }
 
-        .search-bar i {
+        .search-bar i.bi-search {
             position: absolute;
             left: 15px;
             top: 50%;
             transform: translateY(-50%);
             color: #858796;
+            z-index: 1;
         }
 
         .topbar-right {
@@ -396,6 +410,16 @@
             border: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             border-radius: 8px;
+            z-index: 10000 !important; /* Ensure dropdown is always on top */
+        }
+        
+        /* Ensure dropdown parent has proper z-index */
+        .topbar .dropdown {
+            z-index: 10000 !important;
+        }
+        
+        .topbar .dropdown.show {
+            z-index: 10001 !important;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -512,7 +536,7 @@
                 </a>
             </li>
             <li>
-                <a href="{% url 'z_report' slug=business_slug %}" class="{% if 'z_report' in request.path %}active{% endif %}">
+                <a href="{% url 'zreport_session_status' slug=business_slug %}" class="{% if 'z-reports' in request.path %}active{% endif %}">
                     <i class="bi bi-calculator-fill"></i> Z-Report (EOD)
                     <span class="badge bg-danger">EOD</span>
                 </a>
@@ -572,10 +596,20 @@
             {% endif %}
             {% if user_permissions.can_manage_settings %}
             <li>
-                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'settings' in request.path and 'payment' not in request.path and 'backup' not in request.path %}active{% endif %}">
+                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'settings' in request.path and 'payment' not in request.path and 'backup' not in request.path and 'support-access' not in request.path %}active{% endif %}">
                     <i class="bi bi-gear"></i> Business Settings
                 </a>
             </li>
+            {% if business_membership and business_membership.role == 'owner' %}
+            <li>
+                <a href="{% url 'view_support_access_requests' slug=business_slug %}" class="{% if 'support-access' in request.path %}active{% endif %}">
+                    <i class="bi bi-shield-lock"></i> Support Access
+                    {% if pending_support_requests_count > 0 %}
+                    <span class="badge bg-warning text-dark">{{ pending_support_requests_count }}</span>
+                    {% endif %}
+                </a>
+            </li>
+            {% endif %}
             <li>
                 <a href="{% url 'backup_data' slug=business_slug %}" class="{% if 'backup' in request.path %}active{% endif %}">
                     <i class="bi bi-database"></i> Data Backup
@@ -634,7 +668,12 @@
 
         <div class="search-bar position-relative">
             <i class="bi bi-search"></i>
-            <input type="text" class="form-control" id="globalSearch" placeholder="Search products, customers, invoices...">
+            <form action="#" method="get" id="globalSearchForm" class="d-flex">
+                <input type="text" class="form-control" id="globalSearch" name="q" placeholder="Search products, customers, invoices..." autocomplete="off">
+                <button type="submit" class="btn btn-primary ms-2">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </form>
         </div>
 
         <div class="topbar-right">
@@ -642,6 +681,13 @@
             <div id="connectionStatus" class="connection-status-inline">
                 <i class="fas fa-wifi"></i>
             </div>
+            
+            <!-- Sync Button -->
+            <button id="syncButton" class="btn btn-sm btn-secondary" title="Sync offline data">
+                <i class="fas fa-sync"></i>
+                <span class="d-none d-md-inline">Sync</span>
+                <span id="pendingCount" class="badge bg-danger" style="display: none;">0</span>
+            </button>
             
             <div class="notification-icon" title="Notifications">
                 <i class="bi bi-bell"></i>
@@ -760,18 +806,59 @@
         });
 
         // Global search functionality
+        const globalSearchForm = document.getElementById('globalSearchForm');
         const globalSearchInput = document.getElementById('globalSearch');
-        if (globalSearchInput) {
+        
+        if (globalSearchForm && globalSearchInput) {
+            globalSearchForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const query = globalSearchInput.value.trim();
+                if (query) {
+                    performGlobalSearch(query);
+                }
+            });
+            
+            // Also trigger search on Enter key
             globalSearchInput.addEventListener('keyup', function(e) {
                 if (e.key === 'Enter') {
+                    e.preventDefault();
                     const query = this.value.trim();
                     if (query) {
-                        // Redirect to search page (to be implemented)
-                        console.log('Searching for:', query);
-                        // window.location.href = '/search/?q=' + encodeURIComponent(query);
+                        performGlobalSearch(query);
                     }
                 }
             });
+        }
+        
+        function performGlobalSearch(query) {
+            // Show loading state
+            const searchBtn = globalSearchForm.querySelector('button[type="submit"]');
+            const originalHTML = searchBtn.innerHTML;
+            searchBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Searching...';
+            searchBtn.disabled = true;
+            
+            // Determine what to search based on query pattern
+            let searchUrl = '';
+            
+            // Check if it's a phone number (for customers)
+            if (/^[\d\+\-\(\)\s]+$/.test(query) && query.replace(/\D/g, '').length >= 9) {
+                searchUrl = `{% url 'customer_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
+            }
+            // Check if it's an invoice number (starts with INV, SALE, etc.)
+            else if (/^(INV|SALE|RET|PO|GRN)-/i.test(query)) {
+                searchUrl = `{% url 'sales_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
+            }
+            // Check if it's a product code or barcode
+            else if (/^(PRD|SKU)-/i.test(query) || /^\d{8,13}$/.test(query)) {
+                searchUrl = `{% url 'product_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
+            }
+            // Default: search products (most common)
+            else {
+                searchUrl = `{% url 'product_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
+            }
+            
+            // Navigate to search results
+            window.location.href = searchUrl;
         }
 
         // Auto-hide alerts after 5 seconds
@@ -790,6 +877,10 @@
     
     <!-- PWA Scripts -->
     <script src="{% static 'js/pwa-install.js' %}"></script>
+    
+    <!-- Offline Sync Scripts -->
+    <script src="{% static 'js/offline-db.js' %}"></script>
+    <script src="{% static 'js/sync-manager.js' %}"></script>
     
     <!-- Connection Status Indicator -->
     <div id="connection-status" class="connection-status online">

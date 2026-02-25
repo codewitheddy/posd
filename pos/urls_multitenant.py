@@ -5,7 +5,7 @@ Wraps existing URLs with business slug prefix
 
 from django.urls import path, include
 from django.shortcuts import render, redirect
-from . import views, tenant_views, cash_float_views, user_management_views
+from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views
 
 
 def landing_page(request):
@@ -56,6 +56,10 @@ public_urlpatterns = [
     path('platform-admin/create-business/', views.admin_create_business, name='admin_create_business'),
     path('platform-admin/extend-license/', views.extend_license, name='extend_license'),
     
+    # Support Access Management (platform admin)
+    path('support-access/my-requests/', support_access_views.my_support_access_requests, name='my_support_access_requests'),
+    path('support-access/request/<int:business_id>/', support_access_views.request_support_access, name='request_support_access'),
+    
     # Authentication
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
@@ -85,6 +89,12 @@ business_urlpatterns = [
     # Data Backup
     path('backup/', tenant_views.backup_data, name='backup_data'),
     path('backup/download/', tenant_views.download_backup, name='download_backup'),
+    
+    # Support Access Management (business owner)
+    path('support-access/', support_access_views.view_support_access_requests, name='view_support_access_requests'),
+    path('support-access/<int:request_id>/approve/', support_access_views.approve_support_access, name='approve_support_access'),
+    path('support-access/<int:request_id>/deny/', support_access_views.deny_support_access, name='deny_support_access'),
+    path('support-access/<int:request_id>/revoke/', support_access_views.revoke_support_access, name='revoke_support_access'),
     
     # Products
     path('products/', views.product_list, name='product_list'),
@@ -173,12 +183,42 @@ business_urlpatterns = [
     path('reports/sales/', views.sales_report, name='sales_report'),
     path('reports/cashier/', views.cashier_report, name='cashier_report'),
     path('reports/writeoff/', views.writeoff_report, name='writeoff_report'),
-    path('reports/z-report/', views.z_report, name='z_report'),
-    path('reports/z-report/pdf/', views.z_report_pdf, name='z_report_pdf'),
-    path('reports/z-report/close-day/', views.close_day, name='close_day'),
+    
+    # OLD Z-REPORT URLS - Redirected to new system
+    path('reports/z-report/', views.z_report_redirect, name='z_report'),
+    path('reports/z-report/pdf/', views.z_report_redirect, name='z_report_pdf'),
+    path('reports/z-report/close-day/', views.z_report_redirect, name='close_day'),
+    path('reports/z-report/open-new-day/', views.z_report_redirect, name='open_new_day'),
+    
     path('reports/payment-transactions/', views.payment_transactions_report, name='payment_transactions_report'),
     path('reports/payment-transactions/export/', views.payment_transactions_export, name='payment_transactions_export'),
     path('reports/payment-transactions/csv/', views.payment_transactions_csv, name='payment_transactions_csv'),
+    
+    # NEW Z-REPORT SYSTEM
+    path('z-reports/', include([
+        # List and detail
+        path('', zreport_views.zreport_list, name='zreport_list'),
+        path('<int:z_number>/', zreport_views.zreport_detail, name='zreport_detail'),
+        
+        # Session management
+        path('session/status/', zreport_views.session_status, name='zreport_session_status'),
+        path('session/open/', zreport_views.session_open, name='zreport_session_open'),
+        path('session/close/', zreport_views.session_close, name='zreport_session_close'),
+        
+        # Report actions
+        path('<int:z_number>/verify/', zreport_views.zreport_verify, name='zreport_verify'),
+        path('<int:z_number>/void/', zreport_views.zreport_void, name='zreport_void'),
+        path('<int:z_number>/print/', zreport_views.zreport_print, name='zreport_print'),
+        
+        # Export
+        path('<int:z_number>/export/json/', zreport_views.zreport_export_json, name='zreport_export_json'),
+        path('<int:z_number>/export/csv/', zreport_views.zreport_export_csv, name='zreport_export_csv'),
+        path('<int:z_number>/export/pdf/', zreport_views.zreport_export_pdf, name='zreport_export_pdf'),
+        
+        # API endpoints
+        path('api/session/status/', zreport_views.api_session_status, name='api_session_status'),
+        path('api/<int:z_number>/data/', zreport_views.api_zreport_data, name='api_zreport_data'),
+    ])),
     
     # Analytics
     path('analytics/', views.analytics_dashboard, name='analytics_dashboard'),
@@ -206,6 +246,7 @@ business_urlpatterns = [
     
     # Activity Log
     path('activity-log/', views.activity_log, name='activity_log'),
+    path('activity-log/clear/', views.clear_old_logs, name='clear_old_logs'),
     
     # Customer Management
     path('customers/', views.customer_list, name='customer_list'),
@@ -228,6 +269,10 @@ business_urlpatterns = [
     path('payment-methods/create/', views.payment_method_create, name='payment_method_create'),
     path('payment-methods/<int:pk>/edit/', views.payment_method_edit, name='payment_method_edit'),
     path('payment-methods/<int:pk>/delete/', views.payment_method_delete, name='payment_method_delete'),
+    
+    # Offline Sync API
+    path('api/sales/sync/', sync_views.sync_sale, name='api_sync_sale'),
+    path('api/sync/status/', sync_views.sync_status, name='api_sync_status'),
 ]
 
 # Combine all patterns

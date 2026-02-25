@@ -12,7 +12,7 @@ from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
     SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
-    GoodsReturnedNote, GoodsReturnedNoteItem
+    GoodsReturnedNote, GoodsReturnedNoteItem, DayClosureReport
 )
 from .decorators import business_required, business_permission_required, feature_required
 from reportlab.lib.pagesizes import letter, A4
@@ -391,6 +391,15 @@ def dashboard(request, slug=None):
         created_at__date=today
     ).count()
     
+    # Support Access Requests (for business owners)
+    pending_support_requests_count = 0
+    if hasattr(request, 'business_membership') and request.business_membership and request.business_membership.role == 'owner':
+        from .models import SupportAccessRequest
+        pending_support_requests_count = SupportAccessRequest.objects.filter(
+            business=request.business,
+            status='pending'
+        ).count()
+    
     # Expiry statistics - Optimized
     expired_count = Product.objects.filter(
         business=request.business,
@@ -471,6 +480,9 @@ def dashboard(request, slug=None):
         
         # Customer stats
         'total_customers': total_customers,
+        
+        # Support Access (for business owners)
+        'pending_support_requests_count': pending_support_requests_count,
         
         # Expiry alerts
         'expired_count': expired_count,
@@ -1144,12 +1156,51 @@ def unit_delete(request, slug=None, pk=None):
 @business_required
 def pos_screen(request, slug=None):
     """Main POS sales screen - Optimized for fast loading"""
-    from .models import PaymentMethod
+    from .models import PaymentMethod, POSSession
     from django.db.models import Q
     from django.http import JsonResponse
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Check if there's an open POS session
+    open_session = POSSession.objects.filter(
+        business=request.business,
+        status='open'
+    ).first()
+    
+    if not open_session:
+        # No open session - redirect to Z-Report page to open one
+        messages.warning(
+            request,
+            'No active POS session. Please open a new session before making sales.'
+        )
+        return redirect('zreport_session_status', slug=request.business.slug)
+    
+    # Simple diagnostic endpoint
+    if request.GET.get('test_ajax'):
+        logger.info(f"🧪 Test AJAX endpoint hit - User: {request.user}, Business: {getattr(request, 'business', None)}")
+        
+        # Also test product count
+        product_count = 0
+        if hasattr(request, 'business') and request.business:
+            try:
+                product_count = Product.objects.filter(business=request.business).count()
+            except Exception as e:
+                logger.error(f"Error counting products: {e}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'AJAX is working!',
+            'user': str(request.user),
+            'business': str(getattr(request, 'business', None)),
+            'business_id': getattr(request.business, 'id', None) if hasattr(request, 'business') else None,
+            'product_count': product_count,
+            'path': request.path
+        })
     
     # Handle AJAX request for price refresh
-    if request.GET.get('get_prices') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    if request.GET.get('get_prices'):
         product_ids = request.GET.get('ids', '').split(',')
         try:
             product_ids = [int(pid) for pid in product_ids if pid]
@@ -1164,81 +1215,118 @@ def pos_screen(request, slug=None):
             return JsonResponse({'success': False, 'error': 'Invalid product IDs'})
     
     # Handle AJAX request for lazy loading products
-    if request.GET.get('load_products') and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        search_query = request.GET.get('q', '').strip()
-        category_filter = request.GET.get('category', '')
-        offset = int(request.GET.get('offset', 0))
-        limit = int(request.GET.get('limit', 30))
-        
-        # Debug logging
+    if request.GET.get('load_products'):
         import logging
+        import traceback
         logger = logging.getLogger(__name__)
-        logger.info(f"Product load request - Search: '{search_query}', Category: '{category_filter}', Offset: {offset}")
         
-        # Base product query with optimizations
-        products_query = Product.objects.filter(
-            business=request.business,
-            stock_quantity__gt=0
-        ).select_related('category', 'unit').only(
-            'id', 'name', 'unit_price', 'stock_quantity', 'barcode',
-            'product_code', 'category__name', 'unit__name', 'unit__abbreviation',
-            'bulk_unit_name', 'bulk_unit_price', 'bulk_unit_quantity'
-        )
+        try:
+            # Log request details
+            logger.info(f"🚀 POS Products AJAX Request - User: {request.user}, Business: {getattr(request, 'business', None)}")
+            logger.info(f"   Request path: {request.path}")
+            logger.info(f"   Request GET params: {dict(request.GET)}")
+            
+            # Check if business context exists
+            if not hasattr(request, 'business') or request.business is None:
+                logger.error("❌ No business context in request!")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No business context. Please refresh the page.',
+                    'debug': {
+                        'has_business_attr': hasattr(request, 'business'),
+                        'business_value': str(getattr(request, 'business', None)),
+                        'path': request.path,
+                        'user': str(request.user)
+                    }
+                }, status=400)
+            
+            search_query = request.GET.get('q', '').strip()
+            category_filter = request.GET.get('category', '')
+            offset = int(request.GET.get('offset', 0))
+            limit = int(request.GET.get('limit', 50))
+            
+            logger.info(f"   Filters - Search: '{search_query}', Category: '{category_filter}', Offset: {offset}, Limit: {limit}")
         
-        # Apply filters
-        if search_query:
-            products_query = products_query.filter(
-                Q(name__icontains=search_query) |
-                Q(barcode__icontains=search_query) |
-                Q(product_code__icontains=search_query)
+            # Base product query with optimizations
+            products_query = Product.objects.filter(
+                business=request.business
+            ).select_related('category', 'unit').only(
+                'id', 'name', 'unit_price', 'stock_quantity', 'barcode',
+                'product_code', 'category__name', 'unit__name', 'unit__abbreviation',
+                'tax_class', 'bulk_unit_name', 'bulk_unit_price', 'bulk_unit_quantity'
             )
-            logger.info(f"Applied search filter: {search_query}")
-        
-        if category_filter:
-            products_query = products_query.filter(category_id=category_filter)
-            logger.info(f"Applied category filter: {category_filter}")
-        
-        # Order by most recent if no search query
-        if not search_query:
-            products_query = products_query.order_by('-created_at')
-        
-        # Paginate
-        products = products_query[offset:offset + limit]
-        total_count = products_query.count()
-        
-        # Serialize products
-        products_data = []
-        for product in products:
-            products_data.append({
-                'id': product.id,
-                'name': product.name,
-                'unit_price': float(product.unit_price),
-                'stock_quantity': product.stock_quantity,
-                'barcode': product.barcode or '',
-                'product_code': product.product_code,
-                'category_name': product.category.name if product.category else '',
-                'unit_name': product.unit.abbreviation if product.unit else 'pcs',
-                'has_bulk': bool(product.bulk_unit_name and product.bulk_unit_price),
-                'bulk_unit_name': product.bulk_unit_name or '',
-                'bulk_unit_price': float(product.bulk_unit_price) if product.bulk_unit_price else 0,
-                'bulk_unit_quantity': product.bulk_unit_quantity or 1,
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'products': products_data,
-            'total': total_count,
-            'has_more': (offset + limit) < total_count,
-            'debug': {
-                'search_query': search_query,
-                'category_filter': category_filter,
-                'offset': offset,
-                'limit': limit
+            
+            logger.info(f"   Base query count: {products_query.count()}")
+            
+            # Apply filters
+            if search_query:
+                products_query = products_query.filter(
+                    Q(name__icontains=search_query) |
+                    Q(barcode__icontains=search_query) |
+                    Q(product_code__icontains=search_query)
+                )
+                logger.info(f"   After search filter: {products_query.count()}")
+            
+            if category_filter:
+                products_query = products_query.filter(category_id=category_filter)
+                logger.info(f"   After category filter: {products_query.count()}")
+            
+            # Order by name for consistent results (removed created_at ordering for performance)
+            products_query = products_query.order_by('name')
+            
+            # Get total count efficiently
+            total_count = products_query.count()
+            logger.info(f"   Total products matching filters: {total_count}")
+            
+            # Paginate
+            products = list(products_query[offset:offset + limit])
+            logger.info(f"   Fetched {len(products)} products for this page")
+            
+            # Serialize products
+            products_data = []
+            for product in products:
+                products_data.append({
+                    'id': product.id,
+                    'name': product.name,
+                    'unit_price': float(product.unit_price),
+                    'stock_quantity': product.stock_quantity,
+                    'barcode': product.barcode or '',
+                    'product_code': product.product_code,
+                    'category_name': product.category.name if product.category else '',
+                    'unit_name': product.unit.abbreviation if product.unit else 'pcs',
+                    'tax_class': product.tax_class,
+                    'has_bulk': bool(product.bulk_unit_name and product.bulk_unit_price),
+                    'bulk_unit_name': product.bulk_unit_name or '',
+                    'bulk_unit_price': float(product.bulk_unit_price) if product.bulk_unit_price else 0,
+                    'bulk_unit_quantity': product.bulk_unit_quantity or 1,
+                })
+            
+            response_data = {
+                'success': True,
+                'products': products_data,
+                'total': total_count,
+                'has_more': (offset + limit) < total_count,
             }
-        })
+            
+            logger.info(f"✅ Successfully returning {len(products_data)} products")
+            return JsonResponse(response_data)
+        
+        except Exception as e:
+            logger.error(f"💥 Error in POS products AJAX: {str(e)}")
+            logger.error(f"   Traceback: {traceback.format_exc()}")
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'traceback': traceback.format_exc(),
+                'debug': {
+                    'has_business': hasattr(request, 'business'),
+                    'business': str(getattr(request, 'business', None)),
+                    'user': str(request.user),
+                    'path': request.path
+                }
+            }, status=500)
     
     # Initial page load - minimal data for fast rendering
-    # Get categories for filter
     categories = Category.objects.filter(business=request.business).only('id', 'name')
     
     # Optimize customer query - only load when needed
@@ -1257,8 +1345,7 @@ def pos_screen(request, slug=None):
     
     # Get total product count for display
     total_products = Product.objects.filter(
-        business=request.business,
-        stock_quantity__gt=0
+        business=request.business
     ).count()
     
     context = {
@@ -1267,7 +1354,8 @@ def pos_screen(request, slug=None):
         'payment_methods': payment_methods,
         'vat_rate': vat_rate,
         'total_products': total_products,
-        'lazy_load': True,  # Flag to enable lazy loading in template
+        'lazy_load': True,
+        'current_session': open_session,  # Add session info to context
     }
     return render(request, 'pos/pos_screen.html', context)
 
@@ -1277,6 +1365,20 @@ def complete_sale(request, slug=None):
     """Process and complete a sale"""
     if request.method == 'POST':
         try:
+            # Check if there's an open POS session
+            from .models import POSSession
+            open_session = POSSession.objects.filter(
+                business=request.business,
+                status='open'
+            ).first()
+            
+            if not open_session:
+                messages.error(
+                    request,
+                    'Cannot complete sale: No active POS session. Please open a new session first.'
+                )
+                return redirect('zreport_session_status', slug=request.business.slug)
+            
             # Get sale data
             items_data = request.POST.getlist('items')
             payments_data = request.POST.getlist('payments')
@@ -1343,6 +1445,7 @@ def complete_sale(request, slug=None):
                 business=request.business,
                 cashier=request.user,
                 customer=customer,
+                session=open_session,  # Link sale to current session
                 subtotal=subtotal,
                 vat_rate=vat_rate,
                 vat_amount=vat_amount,
@@ -1786,14 +1889,14 @@ def sales_list(request, slug=None):
         'customers': customers,
         'payment_methods': payment_methods,
         'search': search,
-        'start_date': start_date,
-        'end_date': end_date,
+        'start_date': start_date or '',
+        'end_date': end_date or '',
         'date_range': date_range,
         'cashier_id': cashier_id,
         'customer_id': customer_id,
         'payment_method_id': payment_method_id,
-        'min_amount': min_amount,
-        'max_amount': max_amount,
+        'min_amount': min_amount or '',
+        'max_amount': max_amount or '',
         'order_by': order_by,
         'per_page': per_page,
     }
@@ -1910,11 +2013,20 @@ def stock_adjust(request, slug=None, pk=None):
             messages.error(request, 'Quantity change cannot be zero!')
             return redirect('stock_adjust', slug=request.business.slug, pk=pk)
         
+        # ENFORCE: Cannot restock without a purchase order
+        if adjustment_type == 'restock':
+            messages.error(request, 
+                'Direct restocking is not allowed! Please create a Purchase Order to add stock. '
+                'Go to Purchasing > Purchase Orders > Create New Purchase Order.')
+            return redirect('stock_adjust', slug=request.business.slug, pk=pk)
+        
         try:
             previous_qty = product.stock_quantity
             
-            if quantity_change > 0:
+            # For positive adjustments (return, correction with +)
+            if adjustment_type in ['return', 'correction'] and quantity_change > 0:
                 product.add_stock(quantity_change)
+            # For negative adjustments (damage, correction with -)
             else:
                 if not product.has_sufficient_stock(abs(quantity_change)):
                     messages.error(request, 'Cannot deduct more than available stock!')
@@ -1925,7 +2037,7 @@ def stock_adjust(request, slug=None, pk=None):
             StockAdjustment.objects.create(
                 product=product,
                 adjustment_type=adjustment_type,
-                quantity_change=quantity_change,
+                quantity_change=quantity_change if adjustment_type in ['return', 'correction'] else -abs(quantity_change),
                 previous_quantity=previous_qty,
                 new_quantity=product.stock_quantity,
                 reason=reason
@@ -2214,9 +2326,19 @@ def purchase_create(request, slug=None):
     suppliers = Supplier.objects.filter(business=request.business, is_active=True)
     products = Product.objects.filter(business=request.business).select_related('category').all()
     
+    # Check if a product is pre-selected (from low stock alert)
+    prefill_product_id = request.GET.get('product')
+    prefill_product = None
+    if prefill_product_id:
+        try:
+            prefill_product = Product.objects.get(pk=prefill_product_id, business=request.business)
+        except Product.DoesNotExist:
+            pass
+    
     context = {
         'suppliers': suppliers,
         'products': products,
+        'prefill_product': prefill_product,
     }
     return render(request, 'pos/purchase_form.html', context)
 
@@ -3339,6 +3461,13 @@ def activity_log(request, slug=None):
         except ValueError:
             pass
     
+    # Get log statistics
+    from datetime import timedelta
+    total_logs = logs.count()
+    logs_30_days = logs.filter(timestamp__gte=timezone.now() - timedelta(days=30)).count()
+    logs_90_days = logs.filter(timestamp__gte=timezone.now() - timedelta(days=90)).count()
+    logs_older_90 = logs.filter(timestamp__lt=timezone.now() - timedelta(days=90)).count()
+    
     # Pagination
     from django.core.paginator import Paginator
     paginator = Paginator(logs, 50)  # Show 50 logs per page
@@ -3355,8 +3484,75 @@ def activity_log(request, slug=None):
         'action_filter': action_filter,
         'date_filter': date_filter,
         'action_types': ActivityLog.ACTION_TYPES,
+        'total_logs': total_logs,
+        'logs_30_days': logs_30_days,
+        'logs_90_days': logs_90_days,
+        'logs_older_90': logs_older_90,
     }
     return render(request, 'pos/activity_log.html', context)
+
+
+@login_required
+@business_required
+@manager_required
+def clear_old_logs(request, slug=None):
+    """Clear old activity logs"""
+    if request.method == 'POST':
+        days = int(request.POST.get('days', 90))
+        
+        from datetime import timedelta
+        cutoff_date = timezone.now() - timedelta(days=days)
+        
+        # Get users in this business
+        memberships = request.business.memberships.filter(is_active=True)
+        business_user_ids = memberships.values_list('user_id', flat=True)
+        
+        # Delete logs for users in this business older than cutoff date
+        deleted_count, _ = ActivityLog.objects.filter(
+            user_id__in=business_user_ids,
+            timestamp__lt=cutoff_date
+        ).delete()
+        
+        # Log this action
+        ActivityLog.log_activity(
+            user=request.user,
+            action_type='delete',
+            description=f'Cleared {deleted_count} activity logs older than {days} days',
+            model_name='ActivityLog',
+            business=request.business
+        )
+        
+        messages.success(request, f'Successfully deleted {deleted_count} log entries older than {days} days')
+        return redirect('activity_log', slug=request.business.slug)
+    
+    # GET request - show confirmation page
+    days = int(request.GET.get('days', 90))
+    
+    from datetime import timedelta
+    cutoff_date = timezone.now() - timedelta(days=days)
+    
+    # Get users in this business
+    memberships = request.business.memberships.filter(is_active=True)
+    business_user_ids = memberships.values_list('user_id', flat=True)
+    
+    # Count logs that would be deleted
+    logs_to_delete = ActivityLog.objects.filter(
+        user_id__in=business_user_ids,
+        timestamp__lt=cutoff_date
+    )
+    count = logs_to_delete.count()
+    
+    # Get breakdown by action type
+    from django.db.models import Count
+    breakdown = logs_to_delete.values('action_type').annotate(count=Count('id')).order_by('-count')
+    
+    context = {
+        'days': days,
+        'cutoff_date': cutoff_date,
+        'count': count,
+        'breakdown': breakdown,
+    }
+    return render(request, 'pos/clear_logs_confirm.html', context)
 
 
 
@@ -3415,6 +3611,21 @@ def customer_create(request, slug=None):
         is_active = request.POST.get('is_active') == 'on'
         notes = request.POST.get('notes', '')
         
+        # Validate age if date of birth is provided
+        if date_of_birth:
+            try:
+                from datetime import datetime, date
+                dob = datetime.strptime(date_of_birth, '%Y-%m-%d').date()
+                today = date.today()
+                age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                
+                if age < 18:
+                    messages.error(request, f'Customer must be at least 18 years old. Current age: {age} years.')
+                    return render(request, 'pos/customer_form.html')
+            except ValueError:
+                messages.error(request, 'Invalid date of birth format.')
+                return render(request, 'pos/customer_form.html')
+        
         try:
             customer = Customer.objects.create(
                 business=request.business,
@@ -3444,7 +3655,15 @@ def customer_create(request, slug=None):
         except Exception as e:
             messages.error(request, f'Error creating customer: {str(e)}')
     
-    return render(request, 'pos/customer_form.html')
+    # Calculate max date (18 years ago from today)
+    from datetime import date
+    today = date.today()
+    max_date = date(today.year - 18, today.month, today.day)
+    
+    context = {
+        'max_date': max_date.strftime('%Y-%m-%d')
+    }
+    return render(request, 'pos/customer_form.html', context)
 
 
 @business_required
@@ -3458,10 +3677,40 @@ def customer_edit(request, slug=None, pk=None):
         customer.email = request.POST.get('email', '')
         customer.address = request.POST.get('address', '')
         date_of_birth = request.POST.get('date_of_birth', '')
-        customer.date_of_birth = date_of_birth if date_of_birth else None
         customer.customer_type = request.POST.get('customer_type', 'regular')
         customer.is_active = request.POST.get('is_active') == 'on'
         customer.notes = request.POST.get('notes', '')
+        
+        # Validate age if date of birth is provided
+        if date_of_birth:
+            try:
+                from datetime import datetime, date
+                dob = datetime.strptime(date_of_birth, '%Y-%m-%d').date()
+                today = date.today()
+                age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                
+                if age < 18:
+                    messages.error(request, f'Customer must be at least 18 years old. Current age: {age} years.')
+                    # Calculate max date for template
+                    max_date = date(today.year - 18, today.month, today.day)
+                    context = {
+                        'customer': customer,
+                        'max_date': max_date.strftime('%Y-%m-%d')
+                    }
+                    return render(request, 'pos/customer_form.html', context)
+            except ValueError:
+                messages.error(request, 'Invalid date of birth format.')
+                # Calculate max date for template
+                from datetime import date
+                today = date.today()
+                max_date = date(today.year - 18, today.month, today.day)
+                context = {
+                    'customer': customer,
+                    'max_date': max_date.strftime('%Y-%m-%d')
+                }
+                return render(request, 'pos/customer_form.html', context)
+        
+        customer.date_of_birth = date_of_birth if date_of_birth else None
         
         try:
             customer.save()
@@ -3482,8 +3731,14 @@ def customer_edit(request, slug=None, pk=None):
         except Exception as e:
             messages.error(request, f'Error updating customer: {str(e)}')
     
+    # Calculate max date (18 years ago from today)
+    from datetime import date
+    today = date.today()
+    max_date = date(today.year - 18, today.month, today.day)
+    
     context = {
         'customer': customer,
+        'max_date': max_date.strftime('%Y-%m-%d')
     }
     return render(request, 'pos/customer_form.html', context)
 
@@ -3942,6 +4197,36 @@ def create_payment(request, slug, supplier_id):
     
     supplier = get_object_or_404(Supplier, pk=supplier_id)
     
+    # Check if supplier has any received purchases
+    has_received_purchases = supplier.purchases.filter(status='received').exists()
+    
+    if not has_received_purchases:
+        messages.error(
+            request, 
+            f'Cannot create payment for {supplier.name}. '
+            'You must receive at least one purchase order before making payments. '
+            'This prevents advance payments and accounting errors.'
+        )
+        return redirect('supplier_payments', slug=request.business.slug, supplier_id=supplier.id)
+    
+    # Check if there's an outstanding balance to pay
+    outstanding = supplier.outstanding_balance()
+    if outstanding <= Decimal('0.00'):
+        if outstanding < Decimal('0.00'):
+            messages.warning(
+                request,
+                f'Cannot create payment for {supplier.name}. '
+                f'You have a credit balance of KES {abs(outstanding):,.2f}. '
+                'The supplier owes you money, not the other way around.'
+            )
+        else:
+            messages.warning(
+                request,
+                f'Cannot create payment for {supplier.name}. '
+                'The account is fully settled with zero outstanding balance.'
+            )
+        return redirect('supplier_payments', slug=request.business.slug, supplier_id=supplier.id)
+    
     if request.method == 'POST':
         try:
             amount = Decimal(request.POST.get('amount'))
@@ -3949,6 +4234,33 @@ def create_payment(request, slug, supplier_id):
             payment_method_id = request.POST.get('payment_method')
             reference_number = request.POST.get('reference_number', '')
             notes = request.POST.get('notes', '')
+            
+            # Validate payment amount doesn't exceed outstanding balance
+            outstanding = supplier.outstanding_balance()
+            if amount > outstanding:
+                messages.error(
+                    request,
+                    f'Payment amount (KES {amount:,.2f}) exceeds outstanding balance (KES {outstanding:,.2f}). '
+                    'You cannot overpay a supplier.'
+                )
+                # Re-render form with error
+                unpaid_purchases = Purchase.objects.filter(
+                    supplier=supplier,
+                    status='received'
+                ).annotate(
+                    allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
+                ).filter(
+                    allocated__lt=F('total_amount')
+                ).order_by('date')
+                
+                payment_methods = PaymentMethod.objects.filter(business=request.business, is_active=True)
+                
+                context = {
+                    'supplier': supplier,
+                    'unpaid_purchases': unpaid_purchases,
+                    'payment_methods': payment_methods,
+                }
+                return render(request, 'pos/payment_form.html', context)
             
             # Parse date string to date object
             if payment_date_str:
@@ -3985,7 +4297,7 @@ def create_payment(request, slug, supplier_id):
         allocated__lt=F('total_amount')
     ).order_by('date')
     
-    payment_methods = PaymentMethod.objects.filter(is_active=True)
+    payment_methods = PaymentMethod.objects.filter(business=request.business, is_active=True)
     
     context = {
         'supplier': supplier,
@@ -4152,9 +4464,18 @@ def aging_analysis(request):
 
 
 # ==================== Z-REPORT (END OF DAY) ====================
+# Note: Z-Report system has been replaced with new production-ready version
+# See: posd/pos/zreport_views.py and posd/pos/zreport_service.py
+# Old URLs redirect to new system for backward compatibility
 
 @business_required
-def z_report(request, slug=None):
+def z_report_redirect(request, slug=None):
+    """Redirect old Z-Report URLs to new system"""
+    messages.info(request, "Z-Report system has been upgraded. You've been redirected to the new system.")
+    return redirect('zreport_session_status', slug=request.business.slug)
+
+
+
     """Generate Z-Report for end of day closing"""
     from django.db.models import Sum, Count
 
@@ -4164,6 +4485,12 @@ def z_report(request, slug=None):
         report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
     else:
         report_date = datetime.now().date()
+
+    # Check if this day has already been officially closed
+    existing_closure = DayClosureReport.objects.filter(
+        business=request.business,
+        report_date=report_date
+    ).first()
 
     # Get all sales for the date
     sales = Sale.objects.filter(
@@ -4235,9 +4562,13 @@ def z_report(request, slug=None):
     
     expected_cash = opening_cash + cash_payments
 
-    # Closing cash (from closed shifts)
-    closing_cash = shifts.filter(status='closed').aggregate(total=Sum('closing_cash'))['total'] or Decimal('0.00')
-    cash_difference = closing_cash - expected_cash if closing_cash > 0 else Decimal('0.00')
+    # Closing cash (from closed shifts or existing closure)
+    if existing_closure:
+        closing_cash = existing_closure.declared_cash
+        cash_difference = existing_closure.variance
+    else:
+        closing_cash = shifts.filter(status='closed').aggregate(total=Sum('closing_cash'))['total'] or Decimal('0.00')
+        cash_difference = closing_cash - expected_cash if closing_cash > 0 else Decimal('0.00')
 
     # Top selling products
     top_products = SaleItem.objects.filter(
@@ -4256,8 +4587,8 @@ def z_report(request, slug=None):
         count=Count('id')
     ).order_by('hour')
     
-    # Check if day is already closed (all shifts are closed)
-    day_is_closed = shifts.exists() and not shifts.filter(status='open').exists()
+    # Check if day is already closed (all shifts are closed OR existing closure exists)
+    day_is_closed = existing_closure is not None or (shifts.exists() and not shifts.filter(status='open').exists())
     
     # Check for auto-print flag (after closing)
     auto_print = request.GET.get('auto_print', '0') == '1'
@@ -4280,6 +4611,7 @@ def z_report(request, slug=None):
         'top_products': top_products,
         'hourly_sales': hourly_sales,
         'day_is_closed': day_is_closed,
+        'existing_closure': existing_closure,
         'auto_print': auto_print,
         'cash_floats': cash_floats,
         'opening_floats': opening_floats,
@@ -4404,6 +4736,9 @@ def z_report_pdf(request, slug=None):
 @manager_required
 def close_day(request, slug=None):
     """Close the day - closes all open shifts for the specified date and reconciles cash floats"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if request.method != 'POST':
         messages.error(request, 'Invalid request method.')
         return redirect('z_report', slug=request.business.slug)
@@ -4413,12 +4748,35 @@ def close_day(request, slug=None):
         report_date_str = request.POST.get('report_date')
         closing_cash = Decimal(request.POST.get('closing_cash', '0'))
         
+        logger.info(f"[CLOSE_DAY] Starting day closure for business={request.business.slug}, date={report_date_str}, closing_cash={closing_cash}")
+        
         if not report_date_str:
             messages.error(request, 'Report date is required.')
             return redirect('z_report', slug=request.business.slug)
         
         # Parse date
         report_date = datetime.strptime(report_date_str, '%Y-%m-%d').date()
+        
+        # ===== DUPLICATE CLOSURE PREVENTION =====
+        # Check if this day has already been officially closed
+        existing_closure = DayClosureReport.objects.filter(
+            business=request.business,
+            report_date=report_date
+        ).first()
+        
+        logger.info(f"[CLOSE_DAY] Existing closure check: {existing_closure}")
+        
+        if existing_closure:
+            messages.error(
+                request,
+                f'Day {report_date.strftime("%d %B %Y")} has already been closed! '
+                f'Closed by {existing_closure.closed_by.username} on {existing_closure.closed_at.strftime("%d %B %Y at %H:%M")}. '
+                f'Declared cash: KES {existing_closure.declared_cash:.2f}, '
+                f'Variance: {existing_closure.variance_status}. '
+                f'Cannot close the same day twice.'
+            )
+            return redirect('z_report', slug=request.business.slug)
+        # ===== END DUPLICATE PREVENTION =====
         
         # Get all shifts for this date that belong to business members
         business_cashiers = User.objects.filter(business_memberships__business=request.business)
@@ -4428,9 +4786,11 @@ def close_day(request, slug=None):
             status='open'
         )
         
-        if not shifts.exists():
-            messages.warning(request, f'No open shifts found for {report_date.strftime("%d %B %Y")}. Day may already be closed.')
-            return redirect('z_report', slug=request.business.slug)
+        logger.info(f"[CLOSE_DAY] Found {shifts.count()} open shifts")
+        
+        # REMOVED: Don't block day closure if no open shifts exist
+        # Many businesses don't use the shift system or close retrospectively
+        # The DayClosureReport is the authoritative record of day closure
         
         # Calculate expected cash for the day
         from django.db.models import Q
@@ -4442,6 +4802,8 @@ def close_day(request, slug=None):
         ).filter(
             Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        logger.info(f"[CLOSE_DAY] Cash payments: {cash_payments}")
         
         # Get cash floats for the day
         cash_floats = CashFloat.objects.filter(
@@ -4458,8 +4820,23 @@ def close_day(request, slug=None):
         if total_floats > opening_cash:
             opening_cash = total_floats
         
+        logger.info(f"[CLOSE_DAY] Opening cash: {opening_cash}, Total floats: {total_floats}")
+        
         expected_cash = opening_cash + cash_payments
         cash_difference = closing_cash - expected_cash
+        
+        logger.info(f"[CLOSE_DAY] Expected: {expected_cash}, Declared: {closing_cash}, Variance: {cash_difference}")
+        
+        # Get sales summary for the day
+        sales = Sale.objects.filter(
+            business=request.business,
+            date__date=report_date
+        )
+        total_transactions = sales.count()
+        total_revenue = sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        total_discounts = sales.aggregate(total=Sum('discount_amount'))['total'] or Decimal('0.00')
+        
+        logger.info(f"[CLOSE_DAY] Sales: {total_transactions} transactions, Revenue: {total_revenue}")
         
         # Reconcile cash floats
         floats_reconciled = 0
@@ -4489,6 +4866,8 @@ def close_day(request, slug=None):
             cash_float.save()
             floats_reconciled += 1
         
+        logger.info(f"[CLOSE_DAY] Reconciled {floats_reconciled} cash floats")
+        
         # Close all open shifts
         closed_count = 0
         for shift in shifts:
@@ -4516,11 +4895,40 @@ def close_day(request, slug=None):
             
             closed_count += 1
         
+        logger.info(f"[CLOSE_DAY] Closed {closed_count} shifts")
+        
+        # ===== CREATE DAY CLOSURE REPORT =====
+        # This creates the official record and prevents duplicate closures
+        logger.info(f"[CLOSE_DAY] Creating DayClosureReport for business={request.business.slug}, date={report_date}")
+        
+        day_closure = DayClosureReport.objects.create(
+            business=request.business,
+            report_date=report_date,
+            closed_by=request.user,
+            opening_cash=opening_cash,
+            cash_sales=cash_payments,
+            expected_cash=expected_cash,
+            declared_cash=closing_cash,
+            variance=cash_difference,
+            total_transactions=total_transactions,
+            total_revenue=total_revenue,
+            total_discounts=total_discounts,
+            shifts_closed=closed_count,
+            floats_reconciled=floats_reconciled,
+            notes=f'Day closed successfully. {closed_count} shift(s) closed, {floats_reconciled} float(s) reconciled.'
+        )
+        
+        logger.info(f"[CLOSE_DAY] DayClosureReport created successfully with ID={day_closure.id}")
+        # ===== END DAY CLOSURE REPORT =====
+        
         # Log the activity
         ActivityLog.objects.create(
             business=request.business,
             user=request.user,
-            action='close_day',
+            action_type='settings',
+            operation_type='close_day',
+            entity_type='DayClosureReport',
+            entity_id=str(day_closure.id),
             description=f'Closed day for {report_date.strftime("%d %B %Y")}. '
                        f'Closed {closed_count} shift(s). '
                        f'Reconciled {floats_reconciled} cash float(s). '
@@ -4528,6 +4936,8 @@ def close_day(request, slug=None):
                        f'Actual: KES {closing_cash:.2f}, '
                        f'Variance: KES {cash_difference:.2f}'
         )
+        
+        logger.info(f"[CLOSE_DAY] Activity logged successfully")
         
         # Success message
         variance_msg = ''
@@ -4548,12 +4958,130 @@ def close_day(request, slug=None):
         )
         
         # Redirect to Z-report with auto-print flag
-        return redirect(f"{request.path.replace('/close-day/', '')}?date={report_date_str}&auto_print=1")
+        from django.urls import reverse
+        z_report_url = reverse('z_report', kwargs={'slug': request.business.slug})
+        redirect_url = f"{z_report_url}?date={report_date_str}&auto_print=1"
+        
+        logger.info(f"[CLOSE_DAY] Redirecting to: {redirect_url}")
+        
+        return redirect(redirect_url)
         
     except ValueError as e:
+        logger.error(f"[CLOSE_DAY] ValueError: {str(e)}", exc_info=True)
         messages.error(request, f'Invalid data provided: {str(e)}')
     except Exception as e:
+        logger.error(f"[CLOSE_DAY] Exception: {str(e)}", exc_info=True)
         messages.error(request, f'Error closing day: {str(e)}')
+    
+    return redirect('z_report', slug=request.business.slug)
+
+
+
+@business_required
+@manager_required
+def open_new_day(request, slug=None):
+    """Open a new day after closing previous day - creates new shift with opening cash"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if request.method != 'POST':
+        messages.error(request, 'Invalid request method.')
+        return redirect('z_report', slug=request.business.slug)
+    
+    try:
+        opening_cash = Decimal(request.POST.get('opening_cash', '0'))
+        bank_deposit = Decimal(request.POST.get('bank_deposit', '0'))
+        
+        logger.info(f"[OPEN_NEW_DAY] Opening new day for business={request.business.slug}, opening_cash={opening_cash}, bank_deposit={bank_deposit}")
+        
+        # Validate amounts
+        if opening_cash < 0:
+            messages.error(request, 'Opening cash cannot be negative.')
+            return redirect('z_report', slug=request.business.slug)
+        
+        if bank_deposit < 0:
+            messages.error(request, 'Bank deposit cannot be negative.')
+            return redirect('z_report', slug=request.business.slug)
+        
+        # Get today's date
+        today = datetime.now().date()
+        
+        # Check if there's already an open shift for today
+        # If there is, close it automatically before opening new day
+        existing_shift = Shift.objects.filter(
+            cashier=request.user,
+            start_time__date=today,
+            status='open'
+        ).first()
+        
+        if existing_shift:
+            # Auto-close the existing shift with the declared cash
+            logger.info(f"[OPEN_NEW_DAY] Auto-closing existing shift: {existing_shift.shift_number}")
+            
+            existing_shift.end_time = timezone.now()
+            existing_shift.closing_cash = opening_cash  # Use the declared amount as closing
+            existing_shift.status = 'closed'
+            existing_shift.notes = (existing_shift.notes or '') + f' Auto-closed by Open New Day feature. '
+            existing_shift.save()
+            
+            logger.info(f"[OPEN_NEW_DAY] Shift {existing_shift.shift_number} closed successfully")
+        
+        # Check if there's a closed shift for today - this is OK, we can open a new one
+        closed_shift_today = Shift.objects.filter(
+            cashier=request.user,
+            start_time__date=today,
+            status='closed'
+        ).first()
+        
+        if closed_shift_today:
+            logger.info(f"[OPEN_NEW_DAY] Found closed shift for today: {closed_shift_today.shift_number}. Allowing new shift creation.")
+        
+        # Create new shift for today
+        shift = Shift.objects.create(
+            cashier=request.user,
+            opening_cash=opening_cash,
+            status='open',
+            notes=f'New day opened by {request.user.username}. '
+                  f'Opening cash: KES {opening_cash:.2f}. '
+                  f'Bank deposit: KES {bank_deposit:.2f}.'
+        )
+        
+        logger.info(f"[OPEN_NEW_DAY] Created shift #{shift.shift_number} with ID={shift.id}")
+        
+        # Log the activity
+        ActivityLog.objects.create(
+            business=request.business,
+            user=request.user,
+            action_type='settings',
+            operation_type='open_new_day',
+            entity_type='Shift',
+            entity_id=str(shift.id),
+            description=f'Opened new day with shift #{shift.shift_number}. '
+                       f'Opening cash: KES {opening_cash:.2f}. '
+                       f'Bank deposit: KES {bank_deposit:.2f}.'
+        )
+        
+        # Success message
+        deposit_msg = f' Bank deposit of KES {bank_deposit:.2f} recorded.' if bank_deposit > 0 else ''
+        
+        messages.success(
+            request,
+            f'New day opened successfully! '
+            f'Shift #{shift.shift_number} started with opening cash of KES {opening_cash:.2f}.{deposit_msg} '
+            f'Ready to start selling!'
+        )
+        
+        logger.info(f"[OPEN_NEW_DAY] Success - redirecting to today's Z-Report")
+        
+        # Redirect to today's Z-Report
+        return redirect('z_report', slug=request.business.slug)
+        
+    except ValueError as e:
+        logger.error(f"[OPEN_NEW_DAY] ValueError: {str(e)}", exc_info=True)
+        messages.error(request, f'Invalid data provided: {str(e)}')
+    except Exception as e:
+        logger.error(f"[OPEN_NEW_DAY] Exception: {str(e)}", exc_info=True)
+        messages.error(request, f'Error opening new day: {str(e)}')
     
     return redirect('z_report', slug=request.business.slug)
 

@@ -60,9 +60,9 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'product_code', 'barcode', 'category', 'category_name',
-            'price', 'cost_price', 'stock_quantity', 'low_stock_threshold',
-            'unit', 'description', 'image', 'expiry_date', 'expiry_alert_days',
-            'is_active', 'created_at', 'updated_at'
+            'unit_price', 'cost_price', 'stock_quantity', 'low_stock_threshold',
+            'unit', 'expiry_date', 'expiry_alert_days',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -73,11 +73,23 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = [
-            'id', 'name', 'email', 'phone', 'address', 'loyalty_points',
-            'lifetime_points', 'tier', 'total_purchases', 'last_purchase_date',
-            'created_at', 'updated_at'
+            'id', 'name', 'email', 'phone', 'address', 'date_of_birth', 'loyalty_points',
+            'lifetime_points', 'tier', 'total_purchases', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'total_purchases', 'last_purchase_date']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'total_purchases']
+    
+    def validate_date_of_birth(self, value):
+        """Validate that customer is at least 18 years old"""
+        if value:
+            from datetime import date
+            today = date.today()
+            age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+            
+            if age < 18:
+                raise serializers.ValidationError(
+                    f'Customer must be at least 18 years old. Current age: {age} years.'
+                )
+        return value
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -185,7 +197,7 @@ class LoyaltyRewardSerializer(serializers.ModelSerializer):
         model = LoyaltyReward
         fields = [
             'id', 'name', 'description', 'points_required', 'reward_type',
-            'discount_amount', 'product', 'is_active', 'created_at', 'updated_at'
+            'discount_value', 'product', 'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -195,8 +207,8 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PaymentMethod
-        fields = ['id', 'name', 'is_active', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'code', 'is_active']
+        read_only_fields = ['id']
 
 
 class BusinessSettingsSerializer(serializers.ModelSerializer):

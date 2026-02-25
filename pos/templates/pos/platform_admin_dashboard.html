@@ -293,6 +293,10 @@
                                     <strong>{{ business.get_subscription_plan_display }}</strong>
                                 </div>
                                 <div class="col-md-3 text-end">
+                                    <a href="{% url 'request_support_access' business_id=business.id %}" 
+                                       class="btn btn-sm btn-success me-2">
+                                        <i class="bi bi-shield-lock"></i> Request Access
+                                    </a>
                                     <button class="btn btn-sm btn-primary" onclick="showExtendLicenseModal({{ business.id }}, '{{ business.name|escapejs }}', '{% if business.license_expires_at %}{{ business.license_expires_at|date:"Y-m-d" }}{% else %}Not set{% endif %}')">
                                         <i class="bi bi-calendar-plus"></i> Extend License
                                     </button>
@@ -318,6 +322,9 @@
                 <div class="card-body text-center py-4">
                     <h5 class="section-title">Platform Management</h5>
                     <div class="mt-3">
+                        <a href="{% url 'my_support_access_requests' %}" class="btn btn-success btn-lg me-2 mb-2">
+                            <i class="bi bi-shield-lock"></i> My Support Access
+                        </a>
                         <a href="/admin/" class="btn btn-dark btn-lg me-2 mb-2">
                             <i class="bi bi-shield-lock"></i> Django Admin
                         </a>
@@ -327,7 +334,7 @@
                         <a href="/admin/auth/user/" class="btn btn-info btn-lg me-2 mb-2">
                             <i class="bi bi-people"></i> Manage Users
                         </a>
-                        <a href="{% url 'business_list' %}" class="btn btn-success btn-lg mb-2">
+                        <a href="{% url 'business_list' %}" class="btn btn-secondary btn-lg mb-2">
                             <i class="bi bi-list-ul"></i> My Businesses
                         </a>
                     </div>

@@ -1,0 +1,240 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Close Session - {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-stop-circle"></i> Close Session #{{ session.session_number }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Important:</strong> Closing this session will generate an immutable Z-Report. This action cannot be undone. All sales in this session will be locked.
+                    </div>
+
+                    <!-- Session Summary -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Session Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Opened By:</strong> {{ session.opened_by.get_full_name|default:session.opened_by.username }}</p>
+                                    <p><strong>Opened At:</strong> {{ session.opened_at|date:"Y-m-d H:i:s" }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Opening Cash:</strong> <span class="text-success">KES {{ session.opening_cash|floatformat:2 }}</span></p>
+                                    <p><strong>Duration:</strong> {{ session.opened_at|timesince }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cash Declaration (Blind) -->
+                    <form method="post" id="closeSessionForm">
+                        {% csrf_token %}
+                        
+                        <div class="card mb-4 border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-money-bill-wave"></i> Cash Declaration
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>Instructions:</strong> Count all cash in the drawer and enter the total amount below. Do not calculate or estimate - enter only what you physically counted.
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="closing_cash" class="font-weight-bold">
+                                        Total Cash Counted <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group input-group-lg">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text bg-primary text-white">KES</span>
+                                        </div>
+                                        <input 
+                                            type="number" 
+                                            class="form-control form-control-lg" 
+                                            id="closing_cash" 
+                                            name="closing_cash" 
+                                            step="0.01" 
+                                            min="0" 
+                                            required
+                                            autofocus
+                                            placeholder="Enter amount counted"
+                                        >
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-shield-alt"></i> Enter the exact amount you counted in the cash drawer
+                                    </small>
+                                </div>
+
+                                <!-- Reconciliation Details (Hidden until cash entered) -->
+                                <div id="reconciliationDetails" style="display: none;">
+                                    <hr class="my-4">
+                                    <h6 class="font-weight-bold text-primary mb-3">
+                                        <i class="fas fa-calculator"></i> Cash Reconciliation
+                                    </h6>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body text-center">
+                                                    <small class="text-muted">Opening Cash</small>
+                                                    <h5 class="mb-0 text-info">KES <span id="displayOpeningCash">{{ opening_cash|floatformat:2 }}</span></h5>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body text-center">
+                                                    <small class="text-muted">Cash Sales</small>
+                                                    <h5 class="mb-0 text-success">KES <span id="displayCashSales">{{ cash_sales|floatformat:2 }}</span></h5>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card bg-light">
+                                                <div class="card-body text-center">
+                                                    <small class="text-muted">Expected Cash</small>
+                                                    <h5 class="mb-0 text-primary">KES <span id="displayExpectedCash">{{ expected_cash|floatformat:2 }}</span></h5>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="cashDifference" class="alert">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>Cash Variance:</strong> <span id="differenceAmount" class="h5 mb-0"></span>
+                                            </div>
+                                            <div>
+                                                <span id="differenceIcon"></span>
+                                            </div>
+                                        </div>
+                                        <small id="differenceNote" class="d-block mt-2"></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-danger btn-lg btn-block" id="closeBtn">
+                                <i class="fas fa-lock"></i> Close Session & Generate Z-Report
+                            </button>
+                            <a href="{% url 'zreport_session_status' slug=business.slug %}" class="btn btn-secondary btn-block">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="font-weight-bold text-danger">
+                        <i class="fas fa-info-circle"></i> What Happens When You Close?
+                    </h6>
+                    <ul class="mb-0">
+                        <li>A Z-Report will be generated with all financial data</li>
+                        <li>All sales in this session will be locked (cannot be modified)</li>
+                        <li>The Z-Report is permanent and immutable</li>
+                        <li>You can open a new session after closing</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const expectedCash = {{ expected_cash }};
+const openingCash = {{ opening_cash }};
+const cashSales = {{ cash_sales }};
+let reconciliationShown = false;
+
+// Function to show reconciliation details
+function showReconciliation(actualCash) {
+    if (reconciliationShown) return; // Only show once
+    
+    reconciliationShown = true;
+    document.getElementById('reconciliationDetails').style.display = 'block';
+    
+    const difference = actualCash - expectedCash;
+    
+    const diffDiv = document.getElementById('cashDifference');
+    const diffAmount = document.getElementById('differenceAmount');
+    const diffNote = document.getElementById('differenceNote');
+    const diffIcon = document.getElementById('differenceIcon');
+    
+    if (difference > 0) {
+        diffDiv.className = 'alert alert-warning';
+        diffAmount.textContent = `+KES ${difference.toFixed(2)}`;
+        diffNote.innerHTML = `<i class="fas fa-arrow-up"></i> <strong>Overage:</strong> You have KES ${difference.toFixed(2)} more than expected. Please verify your count.`;
+        diffIcon.innerHTML = '<i class="fas fa-exclamation-triangle fa-2x text-warning"></i>';
+    } else if (difference < 0) {
+        diffDiv.className = 'alert alert-danger';
+        diffAmount.textContent = `KES ${difference.toFixed(2)}`;
+        diffNote.innerHTML = `<i class="fas fa-arrow-down"></i> <strong>Shortage:</strong> You have KES ${Math.abs(difference).toFixed(2)} less than expected. Please verify your count.`;
+        diffIcon.innerHTML = '<i class="fas fa-exclamation-circle fa-2x text-danger"></i>';
+    } else {
+        diffDiv.className = 'alert alert-success';
+        diffAmount.textContent = 'KES 0.00';
+        diffNote.innerHTML = `<i class="fas fa-check-circle"></i> <strong>Perfect Match:</strong> Cash count matches expected amount exactly!`;
+        diffIcon.innerHTML = '<i class="fas fa-check-circle fa-2x text-success"></i>';
+    }
+    
+    // Scroll to reconciliation details smoothly
+    document.getElementById('reconciliationDetails').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ONLY show reconciliation on form submission - NOT while typing or on blur
+// This ensures truly blind declaration
+document.getElementById('closeSessionForm').addEventListener('submit', function(e) {
+    const actualCash = parseFloat(document.getElementById('closing_cash').value);
+    
+    if (!actualCash || actualCash < 0) {
+        alert('Please enter the actual cash amount counted.');
+        e.preventDefault();
+        return false;
+    }
+    
+    // Show reconciliation if not already shown
+    if (!reconciliationShown) {
+        showReconciliation(actualCash);
+        // Prevent submission to let user review
+        alert('Please review the cash reconciliation details below before confirming.');
+        e.preventDefault();
+        return false;
+    }
+    
+    const difference = actualCash - expectedCash;
+    
+    let message = `Confirm Session Closure\n\n`;
+    message += `Declared Cash: KES ${actualCash.toFixed(2)}\n`;
+    message += `Expected Cash: KES ${expectedCash.toFixed(2)}\n`;
+    message += `Variance: KES ${difference.toFixed(2)}`;
+    
+    if (difference !== 0) {
+        message += `\n\n⚠️ There is a cash ${difference > 0 ? 'overage' : 'shortage'} of KES ${Math.abs(difference).toFixed(2)}`;
+    }
+    
+    message += `\n\nThis will generate an immutable Z-Report. Continue?`;
+    
+    if (!confirm(message)) {
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+{% endblock %}

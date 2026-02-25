@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Z-Report #{{ zreport.z_number|stringformat:"05d" }} - {{ business.name }}</title>
+    <style>
+        @media print {
+            .no-print { display: none; }
+            @page { margin: 1cm; }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .header h2 {
+            margin: 5px 0;
+            font-size: 18px;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        
+        table td {
+            padding: 4px 8px;
+        }
+        
+        table.data-table td {
+            border-bottom: 1px dotted #ccc;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .font-bold {
+            font-weight: bold;
+        }
+        
+        .highlight {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            padding-top: 10px;
+            border-top: 2px solid #000;
+            text-align: center;
+            font-size: 10px;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .print-btn:hover {
+            background: #0056b3;
+        }
+        
+        .voided-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 120px;
+            color: rgba(255, 0, 0, 0.1);
+            font-weight: bold;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+    {% if zreport.is_voided %}
+    <div class="voided-watermark">VOIDED</div>
+    {% endif %}
+    
+    <button class="print-btn no-print" onclick="window.print()">🖨️ Print</button>
+    
+    <!-- Header -->
+    <div class="header">
+        <h1>{{ business.name }}</h1>
+        <p>{{ business.address }}</p>
+        <p>Phone: {{ business.phone }} | Email: {{ business.email }}</p>
+        <h2>Z-REPORT #{{ zreport.z_number|stringformat:"05d" }}</h2>
+        <p>{{ zreport.created_at|date:"l, F d, Y - H:i:s" }}</p>
+        {% if zreport.is_voided %}
+        <p style="color: red; font-weight: bold;">*** VOIDED REPORT ***</p>
+        {% endif %}
+    </div>
+    
+    <!-- Session Information -->
+    <div class="section">
+        <div class="section-title">SESSION INFORMATION</div>
+        <table>
+            <tr>
+                <td>Session Number:</td>
+                <td class="text-right font-bold">#{{ zreport.session.session_number }}</td>
+            </tr>
+            <tr>
+                <td>Opened By:</td>
+                <td class="text-right">{{ report_data.session.opened_by }}</td>
+            </tr>
+            <tr>
+                <td>Opened At:</td>
+                <td class="text-right">{{ report_data.session.opened_at }}</td>
+            </tr>
+            <tr>
+                <td>Closed By:</td>
+                <td class="text-right">{{ report_data.session.closed_by }}</td>
+            </tr>
+            <tr>
+                <td>Closed At:</td>
+                <td class="text-right">{{ report_data.session.closed_at }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <!-- Sales Summary -->
+    <div class="section">
+        <div class="section-title">SALES SUMMARY</div>
+        <table class="data-table">
+            <tr>
+                <td>Total Transactions:</td>
+                <td class="text-right font-bold">{{ report_data.sales_summary.total_transactions }}</td>
+            </tr>
+            <tr class="highlight">
+                <td>Gross Sales:</td>
+                <td class="text-right">KES {{ report_data.sales_summary.gross_sales|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Total Tax:</td>
+                <td class="text-right">KES {{ report_data.sales_summary.total_tax|floatformat:2 }}</td>
+            </tr>
+            <tr class="highlight">
+                <td>Net Sales:</td>
+                <td class="text-right">KES {{ report_data.sales_summary.net_sales|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Total Discounts:</td>
+                <td class="text-right">KES {{ report_data.sales_summary.total_discounts|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Total Refunds:</td>
+                <td class="text-right">KES {{ report_data.sales_summary.total_refunds|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Total Voids:</td>
+                <td class="text-right">KES {{ report_data.sales_summary.total_voids|floatformat:2 }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <!-- Cash Management -->
+    <div class="section">
+        <div class="section-title">CASH MANAGEMENT</div>
+        <table class="data-table">
+            <tr>
+                <td>Opening Float:</td>
+                <td class="text-right">KES {{ report_data.cash_management.opening_float|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Cash Sales:</td>
+                <td class="text-right">KES {{ report_data.cash_management.cash_sales|floatformat:2 }}</td>
+            </tr>
+            <tr class="highlight">
+                <td>Expected Cash:</td>
+                <td class="text-right">KES {{ report_data.cash_management.expected_cash|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Actual Cash Counted:</td>
+                <td class="text-right">KES {{ report_data.cash_management.actual_cash_counted|floatformat:2 }}</td>
+            </tr>
+            <tr class="highlight">
+                <td>Difference (Over/Short):</td>
+                <td class="text-right">
+                    {% if report_data.cash_management.difference > 0 %}
+                        +KES {{ report_data.cash_management.difference|floatformat:2 }}
+                    {% else %}
+                        KES {{ report_data.cash_management.difference|floatformat:2 }}
+                    {% endif %}
+                    ({{ report_data.cash_management.difference_percentage|floatformat:2 }}%)
+                </td>
+            </tr>
+        </table>
+    </div>
+    
+    <!-- Payment Breakdown -->
+    <div class="section">
+        <div class="section-title">PAYMENT BREAKDOWN</div>
+        <table class="data-table">
+            <tr style="font-weight: bold; border-bottom: 2px solid #000;">
+                <td>Method</td>
+                <td class="text-center">Count</td>
+                <td class="text-right">Amount</td>
+            </tr>
+            {% for payment in report_data.payment_breakdown %}
+            <tr>
+                <td>{{ payment.method }}</td>
+                <td class="text-center">{{ payment.count }}</td>
+                <td class="text-right">KES {{ payment.amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    
+    <!-- Tax Breakdown -->
+    {% if report_data.tax_breakdown %}
+    <div class="section">
+        <div class="section-title">TAX BREAKDOWN</div>
+        <table class="data-table">
+            <tr style="font-weight: bold; border-bottom: 2px solid #000;">
+                <td>Rate</td>
+                <td class="text-right">Taxable Amount</td>
+                <td class="text-right">Tax Amount</td>
+            </tr>
+            {% for tax in report_data.tax_breakdown %}
+            <tr>
+                <td>{{ tax.rate }}</td>
+                <td class="text-right">KES {{ tax.taxable_amount|floatformat:2 }}</td>
+                <td class="text-right">KES {{ tax.tax_amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- Transaction Metrics -->
+    <div class="section">
+        <div class="section-title">TRANSACTION METRICS</div>
+        <table>
+            <tr>
+                <td>First Transaction:</td>
+                <td class="text-right">{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</td>
+            </tr>
+            <tr>
+                <td>Last Transaction:</td>
+                <td class="text-right">{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</td>
+            </tr>
+            <tr>
+                <td>Average Transaction Value:</td>
+                <td class="text-right">KES {{ report_data.transaction_metrics.average_transaction_value|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Largest Transaction:</td>
+                <td class="text-right">KES {{ report_data.transaction_metrics.largest_transaction|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Smallest Transaction:</td>
+                <td class="text-right">KES {{ report_data.transaction_metrics.smallest_transaction|floatformat:2 }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <!-- Top Products -->
+    {% if report_data.top_products %}
+    <div class="section">
+        <div class="section-title">TOP 10 PRODUCTS</div>
+        <table class="data-table">
+            <tr style="font-weight: bold; border-bottom: 2px solid #000;">
+                <td>#</td>
+                <td>Product</td>
+                <td class="text-center">Qty</td>
+                <td class="text-right">Revenue</td>
+            </tr>
+            {% for product in report_data.top_products %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ product.name }}</td>
+                <td class="text-center">{{ product.quantity }}</td>
+                <td class="text-right">KES {{ product.revenue|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- Footer -->
+    <div class="footer">
+        <p>This is an official Z-Report generated by {{ business.name }}</p>
+        <p>Report Hash: {{ zreport.data_hash }}</p>
+        <p>Generated: {{ zreport.created_at|date:"Y-m-d H:i:s" }} | Generated By: {{ zreport.created_by.get_full_name|default:zreport.created_by.username }}</p>
+        {% if zreport.is_voided %}
+        <p style="color: red; font-weight: bold;">
+            VOIDED BY: {{ zreport.voided_by.get_full_name|default:zreport.voided_by.username }} 
+            ON: {{ zreport.voided_at|date:"Y-m-d H:i:s" }}
+        </p>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -89,7 +89,7 @@
             <!-- Reports Section -->
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
             <li>
-                <a href="{% url 'z_report' slug=business_slug %}" class="touch-target">
+                <a href="{% url 'zreport_session_status' slug=business_slug %}" class="touch-target">
                     <i class="bi bi-calculator-fill"></i> Z-Report (EOD)
                 </a>
             </li>

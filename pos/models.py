@@ -633,6 +633,11 @@ class Sale(models.Model):
     # Shift tracking
     shift = models.ForeignKey('Shift', on_delete=models.SET_NULL, null=True, blank=True, related_name='sales')
     
+    # NEW Z-REPORT SYSTEM: Session and locking
+    session = models.ForeignKey('POSSession', on_delete=models.PROTECT, null=True, blank=True, related_name='sales', help_text="POS session this sale belongs to")
+    is_locked = models.BooleanField(default=False, db_index=True, help_text="Locked after Z-Report generation")
+    locked_at = models.DateTimeField(null=True, blank=True, help_text="When this sale was locked")
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -791,6 +796,14 @@ class Supplier(models.Model):
         return self.payments.aggregate(
             total=models.Sum('amount')
         )['total'] or Decimal('0.00')
+    
+    def has_received_purchases(self):
+        """Check if supplier has any received purchases"""
+        return self.purchases.filter(status='received').exists()
+
+    def has_received_purchases(self):
+        """Check if supplier has any received purchases"""
+        return self.purchases.filter(status='received').exists()
 
 
 class Purchase(models.Model):
@@ -2189,6 +2202,77 @@ class Shift(models.Model):
         self.save()
 
 
+class DayClosureReport(models.Model):
+        """
+        Track official end-of-day Z-Report closures
+        Ensures only one official closure per business per day
+        Implements blind cash declaration for security
+        """
+        business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='day_closures')
+        report_date = models.DateField(help_text='Date of the closure')
+
+        # Closure metadata
+        closed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='day_closures')
+        closed_at = models.DateTimeField(auto_now_add=True)
+
+        # Cash reconciliation (blind declaration)
+        opening_cash = models.DecimalField(max_digits=12, decimal_places=2, help_text='Opening cash/floats')
+        cash_sales = models.DecimalField(max_digits=12, decimal_places=2, help_text='Total cash sales for the day')
+        expected_cash = models.DecimalField(max_digits=12, decimal_places=2, help_text='Opening + Cash sales')
+        declared_cash = models.DecimalField(max_digits=12, decimal_places=2, help_text='Cash declared by cashier (blind)')
+        variance = models.DecimalField(max_digits=12, decimal_places=2, help_text='Declared - Expected')
+
+        # Sales summary
+        total_transactions = models.IntegerField(default=0)
+        total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+        total_discounts = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+        # Operational data
+        shifts_closed = models.IntegerField(default=0, help_text='Number of shifts closed')
+        floats_reconciled = models.IntegerField(default=0, help_text='Number of cash floats reconciled')
+
+        notes = models.TextField(blank=True)
+
+        class Meta:
+            ordering = ['-report_date', '-closed_at']
+            unique_together = [['business', 'report_date']]
+            indexes = [
+                models.Index(fields=['business', 'report_date']),
+                models.Index(fields=['business', '-closed_at']),
+            ]
+            verbose_name = 'Day Closure Report'
+            verbose_name_plural = 'Day Closure Reports'
+
+        def __str__(self):
+            return f"{self.business.name} - {self.report_date.strftime('%Y-%m-%d')} - Closed by {self.closed_by.username}"
+
+        @property
+        def is_balanced(self):
+            """Check if cash is balanced (no variance)"""
+            return self.variance == Decimal('0.00')
+
+        @property
+        def is_over(self):
+            """Check if cash is over"""
+            return self.variance > Decimal('0.00')
+
+        @property
+        def is_short(self):
+            """Check if cash is short"""
+            return self.variance < Decimal('0.00')
+
+        @property
+        def variance_status(self):
+            """Get human-readable variance status"""
+            if self.is_balanced:
+                return 'Balanced'
+            elif self.is_over:
+                return f'Over by KES {self.variance:.2f}'
+            else:
+                return f'Short by KES {abs(self.variance):.2f}'
+
+
+
 # ==================== RETURNS & REFUNDS ====================
 
 class SaleReturn(models.Model):
@@ -2634,3 +2718,308 @@ class IdempotencyKey(models.Model):
         """Check if this idempotency key has expired."""
         from django.utils import timezone
         return timezone.now() > self.expires_at
+
+
+class SupportAccessRequest(models.Model):
+    """
+    Support access request system for platform admins to access business dashboards
+    with explicit permission from business owners.
+    """
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='support_access_requests')
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='support_requests_made')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('denied', 'Denied'),
+        ('expired', 'Expired'),
+        ('revoked', 'Revoked')
+    ], default='pending')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='support_approvals')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(help_text="Reason for requesting access")
+    notes = models.TextField(blank=True, help_text="Additional notes from business owner")
+
+    class Meta:
+        ordering = ['-requested_at']
+        indexes = [
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['requested_by', 'status']),
+        ]
+
+    def __str__(self):
+        return f"Support Access: {self.requested_by.username} -> {self.business.name} ({self.status})"
+
+    def is_active(self):
+        """Check if access is currently active"""
+        if self.status != 'approved':
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            self.status = 'expired'
+            self.save()
+            return False
+        return True
+
+    def approve(self, approver, duration_hours=24):
+        """Approve the access request"""
+        self.status = 'approved'
+        self.approved_by = approver
+        self.approved_at = timezone.now()
+        self.expires_at = timezone.now() + timezone.timedelta(hours=duration_hours)
+        self.save()
+
+    def deny(self, approver, notes=''):
+        """Deny the access request"""
+        self.status = 'denied'
+        self.approved_by = approver
+        self.approved_at = timezone.now()
+        self.notes = notes
+        self.save()
+
+    def revoke(self):
+        """Revoke active access"""
+        self.status = 'revoked'
+        self.save()
+
+        def approve(self, approver, duration_hours=24):
+            """Approve the access request"""
+            self.status = 'approved'
+            self.approved_by = approver
+            self.approved_at = timezone.now()
+            self.expires_at = timezone.now() + timezone.timedelta(hours=duration_hours)
+            self.save()
+
+        def deny(self, approver, notes=''):
+            """Deny the access request"""
+            self.status = 'denied'
+            self.approved_by = approver
+            self.approved_at = timezone.now()
+            self.notes = notes
+            self.save()
+
+        def revoke(self):
+            """Revoke active access"""
+            self.status = 'revoked'
+            self.save()
+
+
+
+
+# ============================================================================
+# NEW Z-REPORT SYSTEM - Production-Ready Financial Reporting
+# ============================================================================
+
+class POSSession(models.Model):
+    """
+    Represents a single POS session (business day).
+    Immutable once closed. One session per business day.
+    """
+    business = models.ForeignKey(Business, on_delete=models.PROTECT, related_name='pos_sessions')
+    session_number = models.IntegerField(help_text="Sequential number per business")
+    
+    # Session lifecycle
+    opened_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='sessions_opened')
+    opened_at = models.DateTimeField(auto_now_add=True)
+    opening_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Starting cash in drawer")
+    
+    status = models.CharField(max_length=20, choices=[
+        ('open', 'Open'),
+        ('closed', 'Closed'),
+    ], default='open', db_index=True)
+    
+    closed_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True, related_name='sessions_closed')
+    closed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Metadata
+    notes = models.TextField(blank=True, help_text="Optional notes about this session")
+    
+    class Meta:
+        unique_together = [['business', 'session_number']]
+        ordering = ['-opened_at']
+        indexes = [
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['business', 'opened_at']),
+            models.Index(fields=['status', 'opened_at']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status='open') | (models.Q(status='closed') & models.Q(closed_at__isnull=False)),
+                name='pos_session_closed_requires_timestamp'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(opening_cash__gte=0),
+                name='pos_session_opening_cash_non_negative'
+            ),
+        ]
+        verbose_name = 'POS Session'
+        verbose_name_plural = 'POS Sessions'
+    
+    def __str__(self):
+        return f"{self.business.name} - Session #{self.session_number} ({self.get_status_display()})"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate session number if not set
+        if not self.session_number:
+            last_session = POSSession.objects.filter(business=self.business).order_by('-session_number').first()
+            self.session_number = (last_session.session_number + 1) if last_session else 1
+        super().save(*args, **kwargs)
+    
+    def can_close(self):
+        """Check if session can be closed"""
+        return self.status == 'open'
+    
+    def get_sales_count(self):
+        """Get number of sales in this session"""
+        return self.sales.count()
+    
+    def get_total_sales(self):
+        """Get total sales amount"""
+        from django.db.models import Sum
+        return self.sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+
+
+class ZReport(models.Model):
+    """
+    Immutable end-of-day financial report.
+    Once created, cannot be edited or deleted - only voided.
+    """
+    business = models.ForeignKey(Business, on_delete=models.PROTECT, related_name='z_reports')
+    z_number = models.IntegerField(editable=False, help_text="Sequential Z-Report number")
+    session = models.OneToOneField(POSSession, on_delete=models.PROTECT, related_name='z_report')
+    
+    # Creation metadata (immutable)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, editable=False, related_name='z_reports_created')
+    
+    # Financial snapshot (immutable JSON)
+    report_data = models.JSONField(editable=False, help_text="Complete immutable financial snapshot")
+    
+    # Integrity verification
+    data_hash = models.CharField(max_length=64, editable=False, help_text="SHA256 hash of report_data")
+    
+    # Void handling (never delete, only void)
+    is_voided = models.BooleanField(default=False, db_index=True)
+    voided_at = models.DateTimeField(null=True, blank=True, editable=False)
+    voided_by = models.ForeignKey(
+        User, 
+        on_delete=models.PROTECT, 
+        null=True, 
+        blank=True,
+        related_name='z_reports_voided', 
+        editable=False
+    )
+    void_reason = models.TextField(blank=True, editable=False)
+    
+    class Meta:
+        unique_together = [['business', 'z_number']]
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', 'z_number']),
+            models.Index(fields=['business', 'created_at']),
+            models.Index(fields=['is_voided']),
+            models.Index(fields=['business', 'is_voided', 'created_at']),
+        ]
+        permissions = [
+            ('can_close_session', 'Can close POS session and generate Z-Report'),
+            ('can_void_zreport', 'Can void Z-Report'),
+            ('can_export_zreport', 'Can export Z-Report'),
+            ('can_verify_zreport', 'Can verify Z-Report integrity'),
+        ]
+        verbose_name = 'Z-Report'
+        verbose_name_plural = 'Z-Reports'
+    
+    def __str__(self):
+        status = " (VOIDED)" if self.is_voided else ""
+        return f"Z-{self.z_number:05d} - {self.business.name}{status}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate Z-number if not set
+        if not self.z_number:
+            last_report = ZReport.objects.filter(business=self.business).order_by('-z_number').first()
+            self.z_number = (last_report.z_number + 1) if last_report else 1
+        
+        # Generate hash if not set
+        if not self.data_hash and self.report_data:
+            import hashlib
+            import json
+            data_string = json.dumps(self.report_data, sort_keys=True)
+            self.data_hash = hashlib.sha256(data_string.encode()).hexdigest()
+        
+        super().save(*args, **kwargs)
+    
+    def verify_integrity(self):
+        """Verify that report data hasn't been tampered with"""
+        import hashlib
+        import json
+        data_string = json.dumps(self.report_data, sort_keys=True)
+        computed_hash = hashlib.sha256(data_string.encode()).hexdigest()
+        return computed_hash == self.data_hash
+    
+    def can_void(self):
+        """Check if report can be voided"""
+        return not self.is_voided
+    
+    def get_gross_sales(self):
+        """Get gross sales from report data"""
+        return Decimal(str(self.report_data.get('sales_summary', {}).get('gross_sales', 0)))
+    
+    def get_net_sales(self):
+        """Get net sales from report data"""
+        return Decimal(str(self.report_data.get('sales_summary', {}).get('net_sales', 0)))
+    
+    def get_cash_difference(self):
+        """Get cash difference (over/short)"""
+        return Decimal(str(self.report_data.get('cash_management', {}).get('difference', 0)))
+
+
+class ZReportAuditLog(models.Model):
+    """
+    Immutable audit trail for all Z-Report operations.
+    Every action on a Z-Report is logged here.
+    """
+    zreport = models.ForeignKey(ZReport, on_delete=models.PROTECT, related_name='audit_logs')
+    action = models.CharField(max_length=50, choices=[
+        ('created', 'Created'),
+        ('viewed', 'Viewed'),
+        ('exported_pdf', 'Exported PDF'),
+        ('exported_csv', 'Exported CSV'),
+        ('exported_json', 'Exported JSON'),
+        ('voided', 'Voided'),
+        ('integrity_verified', 'Integrity Verified'),
+        ('integrity_failed', 'Integrity Check Failed'),
+        ('printed', 'Printed'),
+    ], db_index=True)
+    
+    performed_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    performed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Request metadata
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    
+    # Additional details
+    details = models.JSONField(default=dict, blank=True)
+    
+    class Meta:
+        ordering = ['-performed_at']
+        indexes = [
+            models.Index(fields=['zreport', 'performed_at']),
+            models.Index(fields=['performed_by', 'performed_at']),
+            models.Index(fields=['action', 'performed_at']),
+        ]
+        verbose_name = 'Z-Report Audit Log'
+        verbose_name_plural = 'Z-Report Audit Logs'
+    
+    def __str__(self):
+        return f"{self.zreport} - {self.get_action_display()} by {self.performed_by.username}"
+    
+    def save(self, *args, **kwargs):
+        # Audit logs are immutable - prevent updates
+        if self.pk:
+            raise ValueError("Audit logs cannot be modified")
+        super().save(*args, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        # Audit logs cannot be deleted
+        raise ValueError("Audit logs cannot be deleted")
