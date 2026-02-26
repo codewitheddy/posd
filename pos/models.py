@@ -2844,11 +2844,11 @@ class POSSession(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(status='open') | (models.Q(status='closed') & models.Q(closed_at__isnull=False)),
+                condition=models.Q(status='open') | (models.Q(status='closed') & models.Q(closed_at__isnull=False)),
                 name='pos_session_closed_requires_timestamp'
             ),
             models.CheckConstraint(
-                check=models.Q(opening_cash__gte=0),
+                condition=models.Q(opening_cash__gte=0),
                 name='pos_session_opening_cash_non_negative'
             ),
         ]
