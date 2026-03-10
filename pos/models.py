@@ -58,6 +58,36 @@ class Business(models.Model):
         default='active',
         help_text='Current license status'
     )
+    
+    # KRA Tax Compliance (Kenya)
+    kra_pin = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="KRA PIN Number (e.g., A001234567X)"
+    )
+    cu_number = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Control Unit Number from KRA TIMS"
+    )
+    cu_serial_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="CU Device Serial Number"
+    )
+    tims_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether TIMS integration is enabled"
+    )
+    tims_last_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last successful TIMS sync timestamp"
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -393,6 +423,30 @@ class Product(models.Model):
         help_text="Product image (will be automatically optimized)"
     )
     
+    # Kenyan Tax Compliance Fields
+    hs_code = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Harmonized System Code for tax classification (e.g., 0901.21)"
+    )
+    hs_code_description = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Description of HS Code category"
+    )
+    is_excisable = models.BooleanField(
+        default=False,
+        help_text="Whether this product is subject to excise duty"
+    )
+    excise_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="Excise duty rate percentage"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -637,6 +691,33 @@ class Sale(models.Model):
     session = models.ForeignKey('POSSession', on_delete=models.PROTECT, null=True, blank=True, related_name='sales', help_text="POS session this sale belongs to")
     is_locked = models.BooleanField(default=False, db_index=True, help_text="Locked after Z-Report generation")
     locked_at = models.DateTimeField(null=True, blank=True, help_text="When this sale was locked")
+    
+    # TIMS Integration (Kenya)
+    tims_invoice_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="TIMS-generated invoice number"
+    )
+    tims_qr_code = models.TextField(
+        blank=True,
+        null=True,
+        help_text="TIMS QR code data for receipt"
+    )
+    tims_verification_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="URL for customer to verify invoice on KRA portal"
+    )
+    tims_synced = models.BooleanField(
+        default=False,
+        help_text="Whether this sale has been synced to TIMS"
+    )
+    tims_sync_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this sale was synced to TIMS"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
 
