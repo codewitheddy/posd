@@ -1,0 +1,183 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}{{ note.grn_number }} - Goods Received Note{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-box-seam"></i> {{ note.grn_number }}</h2>
+        <div class="d-flex gap-2">
+            <a href="{% url 'goods_received_list' slug=business_slug %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
+            <a href="{% url 'goods_received_print' slug=business_slug pk=note.pk %}" class="btn btn-outline-primary" target="_blank">
+                <i class="bi bi-printer"></i> Print
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main content -->
+        <div class="col-md-8">
+
+            <!-- Header card -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Receipt Details</h5>
+                    {% if note.status == 'confirmed' %}
+                    <span class="badge bg-success fs-6">Confirmed</span>
+                    {% elif note.status == 'discrepancy' %}
+                    <span class="badge bg-warning text-dark fs-6"><i class="bi bi-exclamation-triangle"></i> Discrepancy</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <small class="text-muted d-block">Supplier</small>
+                            <strong>{{ note.supplier.name }}</strong>
+                            {% if note.supplier.contact_person %}<br><small>{{ note.supplier.contact_person }}</small>{% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <small class="text-muted d-block">Purchase Order</small>
+                            <a href="{% url 'purchase_detail' slug=business_slug pk=note.purchase.pk %}">
+                                <strong>{{ note.purchase.purchase_number }}</strong>
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <small class="text-muted d-block">Received Date</small>
+                            <strong>{{ note.received_date|date:"d M Y" }}</strong>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <small class="text-muted d-block">Received By</small>
+                            <strong>{{ note.received_by.get_full_name|default:note.received_by.username }}</strong>
+                        </div>
+                        {% if note.delivery_note_number %}
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Delivery Note #</small>
+                            <strong>{{ note.delivery_note_number }}</strong>
+                        </div>
+                        {% endif %}
+                        {% if note.vehicle_number %}
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Vehicle</small>
+                            <strong>{{ note.vehicle_number }}</strong>
+                        </div>
+                        {% endif %}
+                        {% if note.driver_name %}
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Driver</small>
+                            <strong>{{ note.driver_name }}</strong>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if note.notes %}
+                    <div class="mt-2">
+                        <small class="text-muted d-block">Notes</small>
+                        <p class="mb-0">{{ note.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Items table -->
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0">Items Received</h5></div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Product</th>
+                                    <th class="text-center">Ordered</th>
+                                    <th class="text-center">Received</th>
+                                    <th class="text-center">Damaged</th>
+                                    <th class="text-center">Missing</th>
+                                    <th>Batch</th>
+                                    <th>Expiry</th>
+                                    <th class="text-end">Unit Cost</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr class="{% if item.has_discrepancy %}table-warning{% endif %}">
+                                    <td>
+                                        <strong>{{ item.product.name }}</strong>
+                                        {% if item.notes %}<br><small class="text-muted">{{ item.notes }}</small>{% endif %}
+                                    </td>
+                                    <td class="text-center">{{ item.quantity_ordered }}</td>
+                                    <td class="text-center text-success fw-bold">{{ item.quantity_received }}</td>
+                                    <td class="text-center {% if item.quantity_damaged > 0 %}text-danger fw-bold{% endif %}">
+                                        {{ item.quantity_damaged }}
+                                    </td>
+                                    <td class="text-center {% if item.quantity_missing > 0 %}text-warning fw-bold{% endif %}">
+                                        {{ item.quantity_missing }}
+                                    </td>
+                                    <td>{{ item.batch_number|default:"-" }}</td>
+                                    <td>{{ item.expiry_date|date:"d/m/Y"|default:"-" }}</td>
+                                    <td class="text-end">KES {{ item.unit_cost|floatformat:2 }}</td>
+                                    <td class="text-end">KES {{ item.total_cost|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th>Totals</th>
+                                    <th class="text-center">{{ note.total_ordered_qty }}</th>
+                                    <th class="text-center text-success">{{ note.total_received_qty }}</th>
+                                    <th class="text-center text-danger">{{ note.total_damaged_qty }}</th>
+                                    <th colspan="4"></th>
+                                    <th class="text-end">KES {{ note.total_value|floatformat:2 }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {% if note.has_discrepancy %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Discrepancy noted.</strong> Consider creating a
+                <a href="{% url 'grn_create' slug=business_slug %}">Goods Returned Note</a>
+                for damaged items or contacting the supplier for a credit note.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar summary -->
+        <div class="col-md-4">
+            <div class="card sticky-top" style="top:20px;">
+                <div class="card-header"><h5 class="mb-0">Summary</h5></div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total Ordered</span><strong>{{ note.total_ordered_qty }} units</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-success">
+                        <span>Total Received</span><strong>{{ note.total_received_qty }} units</strong>
+                    </div>
+                    {% if note.total_damaged_qty > 0 %}
+                    <div class="d-flex justify-content-between mb-2 text-danger">
+                        <span>Damaged / Missing</span><strong>{{ note.total_damaged_qty }} units</strong>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <span>Total Value</span><strong>KES {{ note.total_value|floatformat:2 }}</strong>
+                    </div>
+                    <hr>
+                    <a href="{% url 'goods_received_print' slug=business_slug pk=note.pk %}" class="btn btn-outline-primary w-100 mb-2" target="_blank">
+                        <i class="bi bi-printer"></i> Print GRN
+                    </a>
+                    {% if note.has_discrepancy %}
+                    <a href="{% url 'grn_create' slug=business_slug %}" class="btn btn-outline-warning w-100">
+                        <i class="bi bi-arrow-return-left"></i> Create Return Note
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

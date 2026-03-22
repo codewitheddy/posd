@@ -1,171 +1,114 @@
 {% extends 'pos/base.html' %}
 {% load static %}
-
-{% block title %}Sales Trends - {{ business.name }}{% endblock %}
+{% block title %}Sales Trends — {{ business.name }}{% endblock %}
 
 {% block extra_css %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.an-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.an-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.an-card .card-body{padding:16px 20px}
+.an-title{font-size:14px;font-weight:700;color:#1a202c;margin:0}
+.period-btn{padding:6px 14px;border:1.5px solid #e8ecf0;background:#fff;border-radius:8px;font-size:13px;font-weight:500;color:#374151;text-decoration:none;transition:all .2s;display:inline-block}
+.period-btn:hover,.period-btn.active{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195)}
+.period-btn.active{background:var(--primary-color,#224195);color:#fff}
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <h2><i class="bi bi-graph-up"></i> Sales Trends Analysis</h2>
-            <p class="text-muted">Detailed analysis of sales patterns and trends</p>
-        </div>
-    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-    <!-- Time Period Filter -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="btn-group" role="group">
-                <a href="?days=7" class="btn btn-outline-primary {% if days == 7 %}active{% endif %}">Last 7 Days</a>
-                <a href="?days=30" class="btn btn-outline-primary {% if days == 30 %}active{% endif %}">Last 30 Days</a>
-                <a href="?days=90" class="btn btn-outline-primary {% if days == 90 %}active{% endif %}">Last 90 Days</a>
-                <a href="?days=365" class="btn btn-outline-primary {% if days == 365 %}active{% endif %}">Last Year</a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Sales Trends Chart -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Daily Sales Trends</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="salesTrendsChart" height="80"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Hourly Patterns -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-clock"></i> Hourly Sales Pattern (Last 7 Days)</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="hourlyPatternsChart" height="80"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Revenue vs Profit -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-currency-exchange"></i> Revenue vs Profit Trend</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="revenueProfitChart" height="80"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Back Button -->
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Back to Analytics Dashboard
-            </a>
-        </div>
-    </div>
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>Sales Trends</h1>
+    <p class="text-muted small mb-0">Detailed analysis of sales patterns and trends</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="?days=7"   class="period-btn {% if days == 7 %}active{% endif %}">7 Days</a>
+    <a href="?days=30"  class="period-btn {% if days == 30 %}active{% endif %}">30 Days</a>
+    <a href="?days=90"  class="period-btn {% if days == 90 %}active{% endif %}">90 Days</a>
+    <a href="?days=365" class="period-btn {% if days == 365 %}active{% endif %}">1 Year</a>
+  </div>
 </div>
 
+<!-- Daily Sales Trend -->
+<div class="an-card mb-3">
+  <div class="card-header"><span class="an-title"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Daily Sales Trend</span></div>
+  <div class="card-body"><canvas id="salesTrendsChart" height="80"></canvas></div>
+</div>
+
+<!-- Hourly Pattern -->
+<div class="an-card mb-3">
+  <div class="card-header"><span class="an-title"><i class="bi bi-clock text-info me-2"></i>Hourly Sales Pattern (Last 7 Days)</span></div>
+  <div class="card-body"><canvas id="hourlyPatternsChart" height="80"></canvas></div>
+</div>
+
+<!-- Revenue vs Profit -->
+<div class="an-card mb-4">
+  <div class="card-header"><span class="an-title"><i class="bi bi-currency-exchange text-success me-2"></i>Revenue vs Profit</span></div>
+  <div class="card-body"><canvas id="revenueProfitChart" height="80"></canvas></div>
+</div>
+
+<a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-outline-secondary">
+  <i class="bi bi-arrow-left me-1"></i>Back to Analytics
+</a>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Sales Trends Chart
-const salesTrendsCtx = document.getElementById('salesTrendsChart').getContext('2d');
-new Chart(salesTrendsCtx, {
-    type: 'line',
-    data: {
-        labels: {{ sales_trends.dates|safe }},
-        datasets: [{
-            label: 'Sales',
-            data: {{ sales_trends.totals|safe }},
-            borderColor: 'rgb(75, 192, 192)',
-            backgroundColor: 'rgba(75, 192, 192, 0.1)',
-            tension: 0.1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: { display: true }
-        },
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
+const gridColor = '#f0f2f5';
+const tickFont = { size: 11 };
+const kesFormatter = v => 'KES ' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toLocaleString());
+
+new Chart(document.getElementById('salesTrendsChart'), {
+  type:'line',
+  data:{
+    labels: {{ sales_trends.dates|safe }},
+    datasets:[{ label:'Sales', data:{{ sales_trends.totals|safe }},
+      borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.08)', tension:.4, fill:true, pointRadius:3 }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => 'KES '+c.parsed.y.toLocaleString() } } },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+             y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+  }
 });
 
-// Hourly Patterns Chart
-const hourlyPatternsCtx = document.getElementById('hourlyPatternsChart').getContext('2d');
-new Chart(hourlyPatternsCtx, {
-    type: 'bar',
-    data: {
-        labels: {{ hourly_patterns.hours|safe }},
-        datasets: [{
-            label: 'Sales by Hour',
-            data: {{ hourly_patterns.totals|safe }},
-            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-            borderColor: 'rgb(54, 162, 235)',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: { display: false }
-        },
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
+new Chart(document.getElementById('hourlyPatternsChart'), {
+  type:'bar',
+  data:{
+    labels: {{ hourly_patterns.hours|safe }},
+    datasets:[{ label:'Sales by Hour', data:{{ hourly_patterns.totals|safe }},
+      backgroundColor:'rgba(37,99,235,.2)', borderColor:'#2563eb', borderWidth:2, borderRadius:4 }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => 'KES '+c.parsed.y.toLocaleString() } } },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+             y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+  }
 });
 
-// Revenue vs Profit Chart
-const revenueProfitCtx = document.getElementById('revenueProfitChart').getContext('2d');
-new Chart(revenueProfitCtx, {
-    type: 'line',
-    data: {
-        labels: {{ revenue_profit.dates|safe }},
-        datasets: [
-            {
-                label: 'Revenue',
-                data: {{ revenue_profit.revenue|safe }},
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                tension: 0.1
-            },
-            {
-                label: 'Profit',
-                data: {{ revenue_profit.profit|safe }},
-                borderColor: 'rgb(255, 99, 132)',
-                backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                tension: 0.1
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: { display: true }
-        },
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
+new Chart(document.getElementById('revenueProfitChart'), {
+  type:'line',
+  data:{
+    labels: {{ revenue_profit.dates|safe }},
+    datasets:[
+      { label:'Revenue', data:{{ revenue_profit.revenue|safe }}, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.08)', tension:.4, fill:true, pointRadius:3 },
+      { label:'Profit',  data:{{ revenue_profit.profit|safe }},  borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.08)',  tension:.4, fill:true, pointRadius:3 }
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ position:'top', labels:{ font:{ size:12 }, boxWidth:12 } },
+              tooltip:{ callbacks:{ label: c => c.dataset.label+': KES '+c.parsed.y.toLocaleString() } } },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+             y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+  }
 });
 </script>
 {% endblock %}

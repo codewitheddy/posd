@@ -1,14 +1,14 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Receive Purchase{% endblock %}
+{% block title %}Create Goods Received Note{% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="card">
-        <div class="card-header bg-primary text-white">
-            <h4><i class="bi bi-box-seam"></i> Receive Purchase: {{ purchase.purchase_number }}</h4>
+    <div class="ui-card">
+        <div class="ui-card-header">
+            <span class="ui-card-title"><i class="bi bi-box-seam"></i> Create GRN: {{ purchase.purchase_number }}</span>
         </div>
-        <div class="card-body">
+        <div class="ui-card-body">
             <div class="alert alert-info">
                 <div class="row">
                     <div class="col-md-4">
@@ -135,8 +135,8 @@
                 </div>
                 {% endfor %}
                 
-                <div class="card bg-light mb-4">
-                    <div class="card-body">
+                <div class="ui-card bg-light mb-4">
+                    <div class="ui-card-body">
                         <h5 class="mb-3"><i class="bi bi-calculator"></i> Summary</h5>
                         <div class="row">
                             <div class="col-md-3">
@@ -172,9 +172,36 @@
                     <ul class="mb-0 mt-2">
                         <li>Good items will be added to your stock immediately</li>
                         <li>Damage adjustments will be created for damaged items</li>
-                        <li>You can view the receiving details in the purchase order</li>
+                        <li>A Goods Received Note (GRN) document will be generated automatically</li>
                         <li>Contact your supplier for credit notes on damaged items</li>
                     </ul>
+                </div>
+
+                <!-- Delivery Details -->
+                <div class="ui-card mb-4">
+                    <div class="ui-card-header">
+                        <span class="ui-card-title"><i class="bi bi-truck"></i> Delivery Details (Optional)</span>
+                    </div>
+                    <div class="ui-card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">Delivery Note / Waybill #</label>
+                                <input type="text" name="delivery_note_number" class="form-control" placeholder="e.g., DN-2026-001">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">Vehicle Number</label>
+                                <input type="text" name="vehicle_number" class="form-control" placeholder="e.g., KCA 123A">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">Driver Name</label>
+                                <input type="text" name="driver_name" class="form-control" placeholder="Driver's name">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Receiving Notes</label>
+                                <textarea name="receiving_notes" class="form-control" rows="2" placeholder="Any general notes about this delivery..."></textarea>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="d-flex justify-content-between mt-4">

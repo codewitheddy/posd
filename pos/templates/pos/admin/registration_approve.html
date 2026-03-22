@@ -1,0 +1,69 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Approve Registration - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="form-card">
+                <h5 class="mb-3">Registration Details</h5>
+                <table class="ui-table mb-4">
+                        <tr>
+                            <th>Business Name:</th>
+                            <td>{{ registration.business_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Owner:</th>
+                            <td>{{ registration.first_name }} {{ registration.last_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ registration.email }}</td>
+                        </tr>
+                        <tr>
+                            <th>Phone:</th>
+                            <td>{{ registration.phone }}</td>
+                        </tr>
+                        <tr>
+                            <th>Business Type:</th>
+                            <td>{{ registration.business_type|default:"Not specified" }}</td>
+                        </tr>
+                        <tr>
+                            <th>KRA PIN:</th>
+                            <td>{{ registration.kra_pin|default:"Not provided" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Submitted:</th>
+                            <td>{{ registration.created_at|date:"Y-m-d H:i:s" }}</td>
+                        </tr>
+                        <tr>
+                            <th>IP Address:</th>
+                            <td>{{ registration.ip_address }}</td>
+                        </tr>
+                </table>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        Approving this registration will create a user account and business. 
+                        The user will receive an email with login credentials.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-check"></i> Approve Registration
+                            </button>
+                            <a href="{% url 'registrations_list' %}" class="btn-action">
+                                <i class="fas fa-arrow-left"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,308 +1,412 @@
 {% extends 'pos/base.html' %}
-
-{% block title %}{% if product %}Edit{% else %}Add{% endif %} Product{% endblock %}
+{% block title %}{% if product %}Edit{% else %}New{% endif %} Product{% endblock %}
 
 {% block extra_css %}
 <style>
-    .image-preview-container {
-        position: relative;
-        width: 200px;
-        height: 200px;
-        border: 2px dashed #ddd;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        background: #f8f9fa;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    
-    .image-preview-container:hover {
-        border-color: #4e73df;
-        background: #f0f4ff;
-    }
-    
-    .image-preview-container img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-    }
-    
-    .image-placeholder {
-        text-align: center;
-        color: #858796;
-    }
-    
-    .image-placeholder i {
-        font-size: 3rem;
-        margin-bottom: 10px;
-        display: block;
-    }
-    
-    .remove-image-btn {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        background: #dc3545;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        cursor: pointer;
-        display: none;
-        z-index: 10;
-    }
-    
-    .image-preview-container:hover .remove-image-btn {
-        display: block;
-    }
-    
-    .image-info {
-        font-size: 0.85rem;
-        color: #6c757d;
-        margin-top: 10px;
-    }
+.nav-tabs .nav-link { color: #495057; }
+.nav-tabs .nav-link.active { font-weight: 600; }
+.tab-section-title { font-size:.85rem; font-weight:600; text-transform:uppercase; color:#6c757d; letter-spacing:.05em; margin-bottom:.75rem; padding-bottom:.4rem; border-bottom:1px solid #e9ecef; }
+.image-drop-zone { border:2px dashed #dee2e6; border-radius:8px; min-height:180px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s; background:#f8f9fa; }
+.image-drop-zone:hover, .image-drop-zone.dragover { border-color:#0d6efd; background:#e8f0fe; }
+.image-drop-zone img { max-height:160px; max-width:100%; object-fit:contain; border-radius:6px; }
+.calc-badge { font-size:.8rem; padding:.3rem .6rem; }
+.field-hint { font-size:.78rem; color:#6c757d; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-md-8 offset-md-2">
-        <div class="card">
-            <div class="card-header">
-                <h4>{% if product %}Edit{% else %}Add New{% endif %} Product</h4>
-            </div>
-            <div class="card-body">
-                <form method="POST" enctype="multipart/form-data" id="productForm">
-                    {% csrf_token %}
-                    
-                    <div class="row">
-                        <!-- Left Column: Product Image -->
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label">Product Image</label>
-                                <div class="image-preview-container" onclick="document.getElementById('imageInput').click()">
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-box-seam"></i> {% if product %}Edit: {{ product.name }}{% else %}New Product{% endif %}</h2>
+    <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Back to Products
+    </a>
+</div>
+
+<form method="POST" enctype="multipart/form-data" id="productForm">
+    {% csrf_token %}
+    <input type="hidden" name="remove_image" id="removeImageFlag" value="false">
+
+    <div class="row">
+        <!-- LEFT: Tabs -->
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header p-0">
+                    <ul class="nav nav-tabs border-0 px-3 pt-2" id="productTabs">
+                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-general"><i class="bi bi-info-circle"></i> General</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-pricing"><i class="bi bi-tag"></i> Pricing</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-inventory"><i class="bi bi-boxes"></i> Inventory</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-image"><i class="bi bi-image"></i> Image</a></li>
+                        {% if product %}<li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-history"><i class="bi bi-clock-history"></i> History</a></li>{% endif %}
+                    </ul>
+                </div>
+                <div class="card-body tab-content pt-4">
+
+                    <!-- TAB 1: GENERAL -->
+                    <div class="tab-pane fade show active" id="tab-general">
+                        <div class="tab-section-title">Basic Information</div>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-label">Product Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="name" value="{{ product.name|default:'' }}" required placeholder="e.g. Coca Cola 500ml">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Product Type</label>
+                                <select class="form-select" name="product_type">
+                                    {% for val, label in product_types %}
+                                    <option value="{{ val }}" {% if product.product_type == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Description</label>
+                                <textarea class="form-control" name="description" rows="2" placeholder="Optional product description">{{ product.description|default:'' }}</textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">SKU / Product Code</label>
+                                <input type="text" class="form-control" name="product_code" value="{{ product.product_code|default:'' }}" placeholder="Auto-generated if blank">
+                                <div class="field-hint">Leave blank to auto-generate</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Barcode</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="barcode" id="barcodeInput" value="{{ product.barcode|default:'' }}" placeholder="EAN / UPC / custom">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="scanBarcode()" title="Scan barcode"><i class="bi bi-upc-scan"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Unit of Measure</label>
+                                <select class="form-select" name="unit">
+                                    <option value="">-- None --</option>
+                                    {% for u in units %}
+                                    <option value="{{ u.pk }}" {% if product.unit_id == u.pk %}selected{% endif %}>{{ u.name }} ({{ u.abbreviation }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Category</label>
+                                <div class="input-group">
+                                    <select class="form-select" name="category">
+                                        <option value="">-- Uncategorized --</option>
+                                        {% for cat in categories %}
+                                        <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="Add category"><i class="bi bi-plus"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Brand</label>
+                                <div class="input-group">
+                                    <select class="form-select" name="brand">
+                                        <option value="">-- No Brand --</option>
+                                        {% for b in brands %}
+                                        <option value="{{ b.pk }}" {% if product.brand_id == b.pk %}selected{% endif %}>{{ b.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addBrandModal" title="Add brand"><i class="bi bi-plus"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Tax Class</label>
+                                <select class="form-select" name="tax_class">
+                                    <option value="standard" {% if product.tax_class == 'standard' or not product %}selected{% endif %}>Standard (16% VAT)</option>
+                                    <option value="zero_rated" {% if product.tax_class == 'zero_rated' %}selected{% endif %}>Zero Rated (0%)</option>
+                                    <option value="exempt" {% if product.tax_class == 'exempt' %}selected{% endif %}>Exempt</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="is_active">
+                                    <option value="1" {% if product.is_active or not product %}selected{% endif %}>Active</option>
+                                    <option value="0" {% if product and not product.is_active %}selected{% endif %}>Inactive</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: PRICING -->
+                    <div class="tab-pane fade" id="tab-pricing">
+                        <div class="tab-section-title">Core Pricing</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Cost Price (KES) <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" name="cost_price" id="costPrice"
+                                       value="{{ product.cost_price|default:'' }}" step="0.01" min="0.01" required
+                                       oninput="recalcPricing()">
+                                <div class="field-hint">What you pay the supplier</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Markup %</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="markupPct" step="0.1" min="0" placeholder="e.g. 30" oninput="applyMarkup()">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="field-hint">Auto-fills selling price</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Selling Price (KES) <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" name="unit_price" id="sellingPrice"
+                                       value="{{ product.unit_price|default:'' }}" step="0.01" min="0.01" required
+                                       oninput="recalcPricing()">
+                                <div class="field-hint">Retail / default price</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Wholesale Price (KES)</label>
+                                <input type="number" class="form-control" name="wholesale_price"
+                                       value="{{ product.wholesale_price|default:'' }}" step="0.01" min="0" placeholder="Optional">
+                                <div class="field-hint">For wholesale customers</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Minimum Price (KES)</label>
+                                <input type="number" class="form-control" name="minimum_price"
+                                       value="{{ product.minimum_price|default:'' }}" step="0.01" min="0" placeholder="Optional">
+                                <div class="field-hint">Floor price — cannot sell below this</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Profit Summary</label>
+                                <div class="d-flex gap-2 flex-wrap mt-1">
+                                    <span class="badge bg-success calc-badge" id="profitBadge">Profit: —</span>
+                                    <span class="badge bg-info calc-badge" id="marginBadge">Margin: —</span>
+                                    <span class="badge bg-secondary calc-badge" id="markupBadge">Markup: —</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-section-title mt-4">Bulk / Multi-Unit Pricing</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Bulk Unit Name</label>
+                                <input type="text" class="form-control" name="bulk_unit_name"
+                                       value="{{ product.bulk_unit_name|default:'' }}" placeholder="e.g. Carton, Box, Sack">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Units per Bulk</label>
+                                <input type="number" class="form-control" name="bulk_unit_quantity"
+                                       value="{{ product.bulk_unit_quantity|default:'' }}" step="0.001" min="0.001" placeholder="e.g. 12">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Bulk Unit Price (KES)</label>
+                                <input type="number" class="form-control" name="bulk_unit_price"
+                                       value="{{ product.bulk_unit_price|default:'' }}" step="0.01" min="0" placeholder="e.g. 1200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: INVENTORY -->
+                    <div class="tab-pane fade" id="tab-inventory">
+                        <div class="tab-section-title">Stock Settings</div>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Current Stock</label>
+                                <input type="text" class="form-control bg-light" value="{{ product.stock_quantity|default:'0' }}" readonly>
+                                <div class="field-hint">Updated via purchases & adjustments</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Low Stock Alert</label>
+                                <input type="number" class="form-control" name="low_stock_threshold"
+                                       value="{{ product.low_stock_threshold|default:'10' }}" step="0.001" min="0">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Reorder Quantity</label>
+                                <input type="number" class="form-control" name="reorder_quantity"
+                                       value="{{ product.reorder_quantity|default:'0' }}" step="0.001" min="0">
+                                <div class="field-hint">Suggested qty to reorder</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Lead Time (days)</label>
+                                <input type="number" class="form-control" name="lead_time_days"
+                                       value="{{ product.lead_time_days|default:'0' }}" min="0">
+                                <div class="field-hint">Days from order to delivery</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Preferred Supplier</label>
+                                <select class="form-select" name="preferred_supplier">
+                                    <option value="">-- None --</option>
+                                    {% for s in suppliers %}
+                                    <option value="{{ s.pk }}" {% if product.preferred_supplier_id == s.pk %}selected{% endif %}>{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Expiry Date</label>
+                                <input type="date" class="form-control" name="expiry_date"
+                                       value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Expiry Alert (days)</label>
+                                <input type="number" class="form-control" name="expiry_alert_days"
+                                       value="{{ product.expiry_alert_days|default:'7' }}" min="1">
+                            </div>
+                        </div>
+
+                        <div class="tab-section-title mt-4">Kenyan Tax Compliance</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">HS Code</label>
+                                <input type="text" class="form-control" name="hs_code"
+                                       value="{{ product.hs_code|default:'' }}" placeholder="e.g. 0901.21">
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">HS Code Description</label>
+                                <input type="text" class="form-control" name="hs_code_description"
+                                       value="{{ product.hs_code_description|default:'' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Excisable?</label>
+                                <select class="form-select" name="is_excisable">
+                                    <option value="0" {% if not product.is_excisable %}selected{% endif %}>No</option>
+                                    <option value="1" {% if product.is_excisable %}selected{% endif %}>Yes</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Excise Rate %</label>
+                                <input type="number" class="form-control" name="excise_rate"
+                                       value="{{ product.excise_rate|default:'0' }}" step="0.01" min="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 4: IMAGE -->
+                    <div class="tab-pane fade" id="tab-image">
+                        <div class="row g-3 align-items-start">
+                            <div class="col-md-5">
+                                <div class="image-drop-zone" id="dropZone" onclick="document.getElementById('imageInput').click()"
+                                     ondragover="event.preventDefault();this.classList.add('dragover')"
+                                     ondragleave="this.classList.remove('dragover')"
+                                     ondrop="handleDrop(event)">
                                     {% if product.image %}
-                                        <img src="{{ product.image.url }}" alt="{{ product.name }}" id="imagePreview">
-                                        <button type="button" class="remove-image-btn" onclick="removeImage(event)" title="Remove image">
-                                            <i class="bi bi-x"></i>
-                                        </button>
+                                    <img src="{{ product.image.url }}" id="imagePreview" alt="Product image">
                                     {% else %}
-                                        <div class="image-placeholder" id="imagePlaceholder">
-                                            <i class="bi bi-image"></i>
-                                            <div>Click to upload</div>
-                                            <small>JPG, PNG, GIF</small>
-                                        </div>
+                                    <div class="text-center text-muted" id="dropPlaceholder">
+                                        <i class="bi bi-cloud-upload fs-1 d-block mb-2"></i>
+                                        <div>Click or drag image here</div>
+                                        <small>JPG, PNG, GIF — max 5MB</small>
+                                    </div>
                                     {% endif %}
                                 </div>
-                                <input type="file" id="imageInput" name="image" accept="image/*" style="display: none;" onchange="previewImage(event)">
-                                <input type="hidden" id="removeImageFlag" name="remove_image" value="false">
-                                <div class="image-info">
-                                    <small>
-                                        <i class="bi bi-info-circle"></i> Max 5MB. Will be auto-optimized.
-                                    </small>
-                                </div>
+                                <input type="file" id="imageInput" name="image" accept="image/*" class="d-none" onchange="previewImage(this)">
+                                {% if product.image %}
+                                <button type="button" class="btn btn-sm btn-outline-danger mt-2 w-100" onclick="removeImage()">
+                                    <i class="bi bi-trash"></i> Remove Image
+                                </button>
+                                {% endif %}
                             </div>
-                        </div>
-
-                        <!-- Right Column: Product Details -->
-                        <div class="col-md-8">
-                            <div class="mb-3">
-                                <label for="name" class="form-label">Product Name *</label>
-                                <input type="text" class="form-control" id="name" name="name" 
-                                       value="{{ product.name|default:'' }}" required>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="product_code" class="form-label">Product Code / SKU</label>
-                                    <input type="text" class="form-control" id="product_code" name="product_code" 
-                                           value="{{ product.product_code|default:'' }}" 
-                                           placeholder="e.g., PROD-001">
-                                    <small class="form-text text-muted">Internal product code or SKU</small>
-                                </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label for="barcode" class="form-label">Barcode</label>
-                                    <input type="text" class="form-control" id="barcode" name="barcode" 
-                                           value="{{ product.barcode|default:'' }}" 
-                                           placeholder="e.g., 1234567890123">
-                                    <small class="form-text text-muted">EAN, UPC, or other barcode format</small>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="category" class="form-label">Category</label>
-                                    <select class="form-select" id="category" name="category">
-                                        <option value="">-- Select Category --</option>
-                                        {% for cat in categories %}
-                                        <option value="{{ cat.id }}" {% if product.category.id == cat.id %}selected{% endif %}>
-                                            {{ cat.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label for="unit" class="form-label">Unit of Measurement</label>
-                                    <select class="form-select" id="unit" name="unit">
-                                        <option value="">-- No Unit --</option>
-                                        {% for u in units %}
-                                        <option value="{{ u.id }}" {% if product.unit.id == u.id %}selected{% endif %}>
-                                            {{ u.name }} ({{ u.abbreviation }})
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <small class="form-text text-muted">e.g., kg, L, pcs</small>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-12 mb-3">
-                                    <label for="tax_class" class="form-label">Tax Class</label>
-                                    <select class="form-select" id="tax_class" name="tax_class">
-                                        <option value="standard" {% if not product or product.tax_class == 'standard' %}selected{% endif %}>Standard (16% VAT)</option>
-                                        <option value="zero_rated" {% if product.tax_class == 'zero_rated' %}selected{% endif %}>Zero Rated (0% VAT)</option>
-                                        <option value="exempt" {% if product.tax_class == 'exempt' %}selected{% endif %}>Exempt (No VAT)</option>
-                                    </select>
-                                    <small class="form-text text-muted">
-                                        Standard: Most goods and services | Zero Rated: Exports, basic foods | Exempt: Financial services, education
-                                    </small>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="cost_price" class="form-label">
-                                        Cost Price (KES) * <span class="text-danger">REQUIRED</span>
-                                    </label>
-                                    <input type="number" class="form-control" id="cost_price" name="cost_price" 
-                                           value="{% if product and product.cost_price %}{{ product.cost_price }}{% endif %}" 
-                                           step="0.01" min="0.01" required oninput="calculateFromMarkup()" 
-                                           placeholder="Enter cost price">
-                                    <small class="form-text text-muted">What you pay to stock this product</small>
-                                </div>
-
-                                <div class="col-md-4 mb-3">
-                                    <label for="markup_percentage" class="form-label">
-                                        <i class="bi bi-calculator"></i> Markup % (Optional)
-                                    </label>
-                                    <input type="number" class="form-control bg-warning bg-opacity-10" id="markup_percentage" name="markup_percentage" 
-                                           value="" step="0.1" min="0" placeholder="e.g., 25" oninput="calculateFromMarkup()">
-                                    <small class="form-text text-muted"><i class="bi bi-lightning-fill text-warning"></i> Enter to auto-calculate selling price</small>
-                                </div>
-
-                                <div class="col-md-4 mb-3">
-                                    <label for="unit_price" class="form-label">
-                                        Selling Price (KES) * <span class="text-danger">REQUIRED</span>
-                                    </label>
-                                    <input type="number" class="form-control" id="unit_price" name="unit_price" 
-                                           value="{{ product.unit_price|default:'' }}" step="0.01" min="0.01" required oninput="calculateProfit()"
-                                           placeholder="Enter selling price">
-                                    <small class="form-text text-muted">Price customers pay (tax-inclusive)</small>
-                                </div>
-                            </div>
-                            
-                            <!-- Profit Display Fields -->
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="profit_amount" class="form-label">Profit per Unit (KES)</label>
-                                    <input type="text" class="form-control bg-light" id="profit_amount" readonly value="0.00">
-                                </div>
-                                
-                                <div class="col-md-4 mb-3">
-                                    <label for="profit_margin" class="form-label">Profit Margin (%)</label>
-                                    <input type="text" class="form-control bg-light" id="profit_margin" readonly value="0.0">
-                                </div>
-                                
-                                <div class="col-md-4 mb-3">
-                                    <label for="profit_markup" class="form-label">Markup (%)</label>
-                                    <input type="text" class="form-control bg-light" id="profit_markup" readonly value="0.0">
-                                </div>
-                            </div>
-
-                            <hr class="my-3">
-
-                            <!-- Multi-Unit Selling (Optional) -->
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle"></i> <strong>Multi-Unit Selling (Optional)</strong><br>
-                                <small>Configure bulk units for products sold in multiple quantities (e.g., by piece or by carton). Leave blank if not needed.</small>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="bulk_unit_name" class="form-label">Bulk Unit Name</label>
-                                    <input type="text" class="form-control" id="bulk_unit_name" name="bulk_unit_name" 
-                                           value="{{ product.bulk_unit_name|default:'' }}" 
-                                           placeholder="e.g., Carton, Box, Sack">
-                                    <small class="form-text text-muted">Name of the bulk unit</small>
-                                </div>
-
-                                <div class="col-md-4 mb-3">
-                                    <label for="bulk_unit_quantity" class="form-label">Quantity in Bulk Unit</label>
-                                    <input type="number" class="form-control" id="bulk_unit_quantity" name="bulk_unit_quantity" 
-                                           value="{{ product.bulk_unit_quantity|default:'' }}" step="0.001" min="0.001"
-                                           placeholder="e.g., 12">
-                                    <small class="form-text text-muted">How many base units in one bulk unit</small>
-                                </div>
-
-                                <div class="col-md-4 mb-3">
-                                    <label for="bulk_unit_price" class="form-label">Bulk Unit Price (KES)</label>
-                                    <input type="number" class="form-control" id="bulk_unit_price" name="bulk_unit_price" 
-                                           value="{{ product.bulk_unit_price|default:'' }}" step="0.01" min="0"
-                                           placeholder="e.g., 550">
-                                    <small class="form-text text-muted">Selling price for one bulk unit</small>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-12 mb-3">
-                                    <div class="alert alert-success" id="bulk-unit-example" style="display: none;">
-                                        <small><strong>Example:</strong> <span id="bulk-example-text"></span></small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="my-3">
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="stock_quantity" class="form-label">Stock Quantity</label>
-                                    <input type="number" class="form-control bg-light" id="stock_quantity" name="stock_quantity" 
-                                           value="{% if product %}{{ product.stock_quantity }}{% else %}0{% endif %}" min="0" readonly>
-                                    <small class="form-text text-muted">
-                                        {% if product %}
-                                            Use "Adjust Stock" to change quantity.
-                                        {% else %}
-                                            Stock will be added through purchases.
-                                        {% endif %}
-                                    </small>
-                                </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label for="low_stock_threshold" class="form-label">Low Stock Alert</label>
-                                    <input type="number" class="form-control" id="low_stock_threshold" name="low_stock_threshold" 
-                                           value="{{ product.low_stock_threshold|default:10 }}" min="0">
+                            <div class="col-md-7">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Images are automatically optimized on upload.
+                                    Recommended: square images, at least 400×400px.
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <hr class="my-4">
+                    <!-- TAB 5: HISTORY (edit only) -->
+                    {% if product %}
+                    <div class="tab-pane fade" id="tab-history">
+                        <div class="tab-section-title">Stock Movement History</div>
+                        {% if stock_history %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr><th>Date</th><th>Type</th><th>Change</th><th>Before</th><th>After</th><th>Reason</th></tr>
+                                </thead>
+                                <tbody>
+                                    {% for adj in stock_history %}
+                                    <tr>
+                                        <td>{{ adj.created_at|date:"d M Y H:i" }}</td>
+                                        <td><span class="badge bg-secondary">{{ adj.get_adjustment_type_display }}</span></td>
+                                        <td class="{% if adj.quantity_change > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                            {{ adj.quantity_change|floatformat:3 }}
+                                        </td>
+                                        <td>{{ adj.previous_quantity }}</td>
+                                        <td>{{ adj.new_quantity }}</td>
+                                        <td class="text-muted small">{{ adj.reason|truncatechars:60 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No stock movements recorded yet.</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
 
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'product_list' slug=request.business.slug  %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left"></i> Cancel
-                        </a>
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="bi bi-save"></i> Save Product
+                </div><!-- tab-content -->
+            </div><!-- card -->
+        </div>
+
+        <!-- RIGHT: Summary + Save -->
+        <div class="col-lg-3">
+            <div class="card sticky-top" style="top:80px;">
+                <div class="card-header"><h6 class="mb-0">Save Product</h6></div>
+                <div class="card-body">
+                    {% if product %}
+                    <div class="mb-3 text-center">
+                        {% if product.image %}
+                        <img src="{{ product.image.url }}" class="rounded" style="max-height:80px;max-width:100%;object-fit:contain;">
+                        {% endif %}
+                        <div class="mt-2">
+                            <span class="badge {% if product.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if product.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                            <span class="badge bg-light text-dark border">{{ product.get_product_type_display }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> {% if product %}Save Changes{% else %}Create Product{% endif %}
                         </button>
+                        <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
                     </div>
-                </form>
+
+                    {% if product %}
+                    <hr>
+                    <div class="small text-muted">
+                        <div><i class="bi bi-calendar3"></i> Created: {{ product.created_at|date:"d M Y" }}</div>
+                        <div><i class="bi bi-pencil"></i> Updated: {{ product.updated_at|date:"d M Y" }}</div>
+                        <div class="mt-2"><strong>Stock:</strong>
+                            <span class="{% if product.is_out_of_stock %}text-danger{% elif product.is_low_stock %}text-warning{% else %}text-success{% endif %} fw-bold">
+                                {{ product.stock_quantity|floatformat:3 }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Quick Add Category Modal -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Add Category</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="text" class="form-control" id="newCategoryName" placeholder="Category name">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" onclick="quickAddCategory()">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Brand Modal -->
+<div class="modal fade" id="addBrandModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Add Brand</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="text" class="form-control" id="newBrandName" placeholder="Brand name">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" onclick="quickAddBrand()">Add</button>
             </div>
         </div>
     </div>
@@ -311,225 +415,104 @@
 
 {% block extra_js %}
 <script>
-    // Calculate selling price from cost price and markup percentage
-    function calculateFromMarkup() {
-        console.log('calculateFromMarkup called');
-        const costPrice = parseFloat(document.getElementById('cost_price').value) || 0;
-        const markupPercentage = parseFloat(document.getElementById('markup_percentage').value);
-        
-        console.log('Cost Price:', costPrice, 'Markup:', markupPercentage);
-        
-        if (costPrice > 0 && markupPercentage >= 0 && !isNaN(markupPercentage)) {
-            const sellingPrice = costPrice * (1 + markupPercentage / 100);
-            document.getElementById('unit_price').value = sellingPrice.toFixed(2);
-            console.log('Calculated Selling Price:', sellingPrice);
-        }
-        
-        calculateProfit();
+function recalcPricing() {
+    const cost = parseFloat(document.getElementById('costPrice').value) || 0;
+    const sell = parseFloat(document.getElementById('sellingPrice').value) || 0;
+    if (cost > 0 && sell > 0) {
+        const profit = sell - cost;
+        const margin = (profit / sell * 100).toFixed(1);
+        const markup = (profit / cost * 100).toFixed(1);
+        document.getElementById('profitBadge').textContent = `Profit: KES ${profit.toFixed(2)}`;
+        document.getElementById('marginBadge').textContent = `Margin: ${margin}%`;
+        document.getElementById('markupBadge').textContent = `Markup: ${markup}%`;
+        document.getElementById('markupPct').value = markup;
     }
-    
-    // Calculate and display profit margin
-    function calculateProfit() {
-        const costPrice = parseFloat(document.getElementById('cost_price').value) || 0;
-        const sellingPrice = parseFloat(document.getElementById('unit_price').value) || 0;
-        
-        if (costPrice >= 0 && sellingPrice > 0) {
-            const profit = sellingPrice - costPrice;
-            const margin = (profit / sellingPrice) * 100;
-            const markup = costPrice > 0 ? (profit / costPrice) * 100 : 0;
-            
-            document.getElementById('profit_amount').value = profit.toFixed(2);
-            document.getElementById('profit_margin').value = margin.toFixed(1);
-            document.getElementById('profit_markup').value = markup.toFixed(1);
-            
-            // Update markup percentage field if user manually changed selling price
-            if (document.activeElement.id === 'unit_price') {
-                document.getElementById('markup_percentage').value = markup > 0 ? markup.toFixed(1) : '';
-            }
-            
-            // Color code based on margin
-            const profitField = document.getElementById('profit_amount');
-            const marginField = document.getElementById('profit_margin');
-            const markupField = document.getElementById('profit_markup');
-            
-            if (profit < 0) {
-                profitField.classList.add('text-danger', 'fw-bold');
-                marginField.classList.add('text-danger', 'fw-bold');
-                markupField.classList.add('text-danger', 'fw-bold');
-            } else if (profit > 0) {
-                profitField.classList.remove('text-danger');
-                profitField.classList.add('text-success', 'fw-bold');
-                marginField.classList.remove('text-danger');
-                marginField.classList.add('text-success', 'fw-bold');
-                markupField.classList.remove('text-danger');
-                markupField.classList.add('text-success', 'fw-bold');
-            } else {
-                profitField.classList.remove('text-danger', 'text-success', 'fw-bold');
-                marginField.classList.remove('text-danger', 'text-success', 'fw-bold');
-                markupField.classList.remove('text-danger', 'text-success', 'fw-bold');
-            }
-        } else {
-            document.getElementById('profit_amount').value = '0.00';
-            document.getElementById('profit_margin').value = '0.0';
-            document.getElementById('profit_markup').value = '0.0';
-        }
+}
+
+function applyMarkup() {
+    const cost = parseFloat(document.getElementById('costPrice').value) || 0;
+    const markup = parseFloat(document.getElementById('markupPct').value) || 0;
+    if (cost > 0) {
+        const sell = cost * (1 + markup / 100);
+        document.getElementById('sellingPrice').value = sell.toFixed(2);
+        recalcPricing();
     }
-    
-    // Calculate profit on page load if values exist
-    window.addEventListener('load', function() {
-        calculateProfit();
-        updateBulkUnitExample();
-    });
-    
-    // Update bulk unit example
-    function updateBulkUnitExample() {
-        const bulkName = document.getElementById('bulk_unit_name').value;
-        const bulkQty = parseFloat(document.getElementById('bulk_unit_quantity').value);
-        const bulkPrice = parseFloat(document.getElementById('bulk_unit_price').value);
-        const basePrice = parseFloat(document.getElementById('unit_price').value);
-        const unitName = document.getElementById('unit').selectedOptions[0]?.text || 'unit';
-        
-        const exampleDiv = document.getElementById('bulk-unit-example');
-        const exampleText = document.getElementById('bulk-example-text');
-        
-        if (bulkName && bulkQty > 0 && bulkPrice > 0 && basePrice > 0) {
-            const pricePerBase = bulkPrice / bulkQty;
-            const savings = basePrice - pricePerBase;
-            const savingsPercent = (savings / basePrice) * 100;
-            
-            let exampleHtml = `1 ${bulkName} = ${bulkQty} ${unitName} @ KES ${bulkPrice.toFixed(2)}`;
-            exampleHtml += ` (KES ${pricePerBase.toFixed(2)} per ${unitName})`;
-            
-            if (savings > 0) {
-                exampleHtml += ` - <span class="text-success">Save KES ${savings.toFixed(2)} (${savingsPercent.toFixed(1)}%) per ${unitName}</span>`;
-            } else if (savings < 0) {
-                exampleHtml += ` - <span class="text-danger">KES ${Math.abs(savings).toFixed(2)} more per ${unitName}</span>`;
-            }
-            
-            exampleText.innerHTML = exampleHtml;
-            exampleDiv.style.display = 'block';
-        } else {
-            exampleDiv.style.display = 'none';
-        }
+}
+
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const zone = document.getElementById('dropZone');
+            zone.innerHTML = `<img src="${e.target.result}" id="imagePreview" style="max-height:160px;max-width:100%;object-fit:contain;border-radius:6px;">`;
+            document.getElementById('removeImageFlag').value = 'false';
+        };
+        reader.readAsDataURL(input.files[0]);
     }
-    
-    // Add event listeners for bulk unit fields
-    document.getElementById('bulk_unit_name').addEventListener('input', updateBulkUnitExample);
-    document.getElementById('bulk_unit_quantity').addEventListener('input', updateBulkUnitExample);
-    document.getElementById('bulk_unit_price').addEventListener('input', updateBulkUnitExample);
-    document.getElementById('unit_price').addEventListener('input', function() {
-        calculateProfit();
-        updateBulkUnitExample();
-    });
-    document.getElementById('unit').addEventListener('change', updateBulkUnitExample);
-    
-    function previewImage(event) {
-        const file = event.target.files[0];
-        if (file) {
-            // Validate file size (5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                alert('Image too large! Maximum size is 5MB.');
-                event.target.value = '';
-                return;
-            }
+}
 
-            // Validate file type
-            if (!file.type.startsWith('image/')) {
-                alert('Please select an image file.');
-                event.target.value = '';
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const container = document.querySelector('.image-preview-container');
-                container.innerHTML = `
-                    <img src="${e.target.result}" alt="Preview" id="imagePreview">
-                    <button type="button" class="remove-image-btn" onclick="removeImage(event)" title="Remove image">
-                        <i class="bi bi-x"></i>
-                    </button>
-                `;
-                document.getElementById('removeImageFlag').value = 'false';
-            };
-            reader.readAsDataURL(file);
-        }
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('imageInput').files = dt.files;
+        previewImage(document.getElementById('imageInput'));
     }
+}
 
-    function removeImage(event) {
-        event.stopPropagation();
-        
-        if (confirm('Remove this image?')) {
-            const container = document.querySelector('.image-preview-container');
-            container.innerHTML = `
-                <div class="image-placeholder" id="imagePlaceholder">
-                    <i class="bi bi-image"></i>
-                    <div>Click to upload</div>
-                    <small>JPG, PNG, GIF</small>
-                </div>
-            `;
-            
-            document.getElementById('imageInput').value = '';
-            document.getElementById('removeImageFlag').value = 'true';
-        }
-    }
+function removeImage() {
+    document.getElementById('removeImageFlag').value = 'true';
+    document.getElementById('imageInput').value = '';
+    document.getElementById('dropZone').innerHTML = `
+        <div class="text-center text-muted" id="dropPlaceholder">
+            <i class="bi bi-cloud-upload fs-1 d-block mb-2"></i>
+            <div>Click or drag image here</div>
+            <small>JPG, PNG, GIF — max 5MB</small>
+        </div>`;
+}
 
-    // Validate date format before submission
-    document.getElementById('productForm').addEventListener('submit', function(e) {
-        // Validate cost price
-        const costPrice = parseFloat(document.getElementById('cost_price').value);
-        if (!costPrice || costPrice <= 0) {
-            e.preventDefault();
-            alert('Cost Price is required and must be greater than 0. This is needed for profit tracking and financial reporting.');
-            document.getElementById('cost_price').focus();
-            return false;
-        }
-        
-        // Validate selling price
-        const sellingPrice = parseFloat(document.getElementById('unit_price').value);
-        if (!sellingPrice || sellingPrice <= 0) {
-            e.preventDefault();
-            alert('Selling Price is required and must be greater than 0.');
-            document.getElementById('unit_price').focus();
-            return false;
-        }
-        
-        // Warn if selling price is less than cost price
-        if (sellingPrice < costPrice) {
-            if (!confirm('Warning: Selling price is less than cost price. You will make a loss on this product. Continue anyway?')) {
-                e.preventDefault();
-                return false;
-            }
-        }
-        
-        const expiryDateInput = document.getElementById('expiry_date');
-        const expiryDate = expiryDateInput.value.trim();
-        
-        if (expiryDate) {
-            // Check if date format is valid (YYYY-MM-DD)
-            const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-            if (!datePattern.test(expiryDate)) {
-                e.preventDefault();
-                alert('Invalid date format. Please use the date picker or enter date in YYYY-MM-DD format (e.g., 2026-02-22).');
-                expiryDateInput.focus();
-                return false;
-            }
-            
-            // Validate it's a real date
-            const date = new Date(expiryDate);
-            if (isNaN(date.getTime())) {
-                e.preventDefault();
-                alert('Invalid date. Please enter a valid date.');
-                expiryDateInput.focus();
-                return false;
-            }
-        }
-    });
+function scanBarcode() {
+    const code = prompt('Enter or scan barcode:');
+    if (code) document.getElementById('barcodeInput').value = code;
+}
 
-    // Prevent form submission on Enter key in text fields
-    document.getElementById('productForm').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
+function quickAddCategory() {
+    const name = document.getElementById('newCategoryName').value.trim();
+    if (!name) return;
+    fetch('{% url "api_create_category" slug=request.business.slug %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({name})
+    }).then(r => r.json()).then(data => {
+        if (data.id) {
+            const sel = document.querySelector('select[name="category"]');
+            const opt = new Option(data.name, data.id, true, true);
+            sel.add(opt);
+            bootstrap.Modal.getInstance(document.getElementById('addCategoryModal')).hide();
         }
-    });
+    }).catch(() => alert('Could not add category. Try refreshing.'));
+}
+
+function quickAddBrand() {
+    const name = document.getElementById('newBrandName').value.trim();
+    if (!name) return;
+    fetch('{% url "api_create_brand" slug=request.business.slug %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({name})
+    }).then(r => r.json()).then(data => {
+        if (data.id) {
+            const sel = document.querySelector('select[name="brand"]');
+            const opt = new Option(data.name, data.id, true, true);
+            sel.add(opt);
+            bootstrap.Modal.getInstance(document.getElementById('addBrandModal')).hide();
+        }
+    }).catch(() => alert('Could not add brand. Try refreshing.'));
+}
+
+document.addEventListener('DOMContentLoaded', recalcPricing);
 </script>
 {% endblock %}

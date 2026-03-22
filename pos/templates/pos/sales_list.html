@@ -1,315 +1,166 @@
 {% extends 'pos/base.html' %}
-
-{% block title %}All Sales - POS System{% endblock %}
-
-{% block extra_css %}
-<style>
-    .filter-card {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    .summary-card {
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 20px;
-        border-left: 4px solid #0d6efd;
-    }
-    .table-responsive {
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    .badge-status {
-        padding: 5px 10px;
-        border-radius: 5px;
-    }
-    .quick-filter-btn {
-        margin: 5px;
-    }
-</style>
-{% endblock %}
+{% block title %}All Sales — {{ request.business.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-receipt"></i> All Sales</h2>
-        <a href="{% url 'pos_screen' slug=request.business.slug %}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> New Sale
-        </a>
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<!-- Header -->
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-receipt me-2 text-primary"></i>All Sales</h1>
+    <p class="page-subtitle">Transaction history for {{ request.business.name }}</p>
+  </div>
+  <a href="{% url 'pos_screen' slug=request.business.slug %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Sale
+  </a>
+</div>
+
+<!-- Summary Cards -->
+{% if summary %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb"><i class="bi bi-receipt"></i></div>
+      <div><div class="stat-label">Transactions</div><div class="stat-value">{{ summary.transaction_count|default:0 }}</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a"><i class="bi bi-cash-stack"></i></div>
+      <div><div class="stat-label">Revenue</div><div class="stat-value" style="font-size:17px">KES {{ summary.total_sales|default:0|floatformat:0 }}</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-percent"></i></div>
+      <div><div class="stat-label">VAT Collected</div><div class="stat-value" style="font-size:17px">KES {{ summary.total_vat|default:0|floatformat:0 }}</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fef9c3;color:#ca8a04"><i class="bi bi-tag"></i></div>
+      <div><div class="stat-label">Discounts</div><div class="stat-value" style="font-size:17px">KES {{ summary.total_discounts|default:0|floatformat:0 }}</div></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="filter-bar mb-3">
+  <form method="get" id="filter-form">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 mb-1">
+        <div class="d-flex gap-1 flex-wrap">
+          <button type="button" class="period-btn {% if date_range == 'today' %}active{% endif %}" onclick="setDateRange('today')">Today</button>
+          <button type="button" class="period-btn {% if date_range == 'yesterday' %}active{% endif %}" onclick="setDateRange('yesterday')">Yesterday</button>
+          <button type="button" class="period-btn {% if date_range == 'this_week' %}active{% endif %}" onclick="setDateRange('this_week')">This Week</button>
+          <button type="button" class="period-btn {% if date_range == 'this_month' %}active{% endif %}" onclick="setDateRange('this_month')">This Month</button>
+          <button type="button" class="period-btn {% if date_range == 'last_month' %}active{% endif %}" onclick="setDateRange('last_month')">Last Month</button>
+          <button type="button" class="period-btn" onclick="clearDateRange()">Clear</button>
+        </div>
+        <input type="hidden" name="date_range" id="date_range" value="{{ date_range }}">
+      </div>
+      <div class="col-md-3 col-6">
+        <input type="text" name="search" class="form-control form-control-sm" placeholder="Invoice number…" value="{{ search }}">
+      </div>
+      <div class="col-md-2 col-6">
+        <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}" id="start_date">
+      </div>
+      <div class="col-md-2 col-6">
+        <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}" id="end_date">
+      </div>
+      <div class="col-md-2 col-6">
+        <select name="cashier" class="form-select form-select-sm">
+          <option value="">All Cashiers</option>
+          {% for c in cashiers %}<option value="{{ c.id }}" {% if cashier_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.username }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 col-6">
+        <select name="payment_method" class="form-select form-select-sm">
+          <option value="">All Methods</option>
+          {% for m in payment_methods %}<option value="{{ m.id }}" {% if payment_method_id == m.id|stringformat:"s" %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 col-6">
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All Categories</option>
+          {% for cat in categories %}<option value="{{ cat.id }}" {% if category_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1 col-6">
+        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i></button>
+      </div>
+    </div>
+    <div class="mt-2">
+      <a href="{% url 'sales_list' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear All</a>
+    </div>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="ui-card">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-list-ul me-2"></i>Sales Records</span>
+    <span class="badge bg-light text-dark">{{ sales|length }} records</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead>
+          <tr>
+            <th>Invoice #</th><th>Date</th><th>Customer</th><th>Cashier</th>
+            <th class="text-end">Subtotal</th><th class="text-end">VAT</th>
+            <th class="text-end">Discount</th><th class="text-end">Total</th>
+            <th>Payment</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sale in sales %}
+          <tr>
+            <td style="font-weight:600;color:#7c3aed">{{ sale.invoice_number }}</td>
+            <td style="white-space:nowrap">{{ sale.date|date:"d M Y H:i" }}</td>
+            <td>{% if sale.customer %}{{ sale.customer.name }}{% else %}<span class="text-muted">Walk-in</span>{% endif %}</td>
+            <td>{{ sale.cashier.username|default:"—" }}</td>
+            <td class="text-end">KES {{ sale.subtotal|floatformat:0 }}</td>
+            <td class="text-end">KES {{ sale.vat_amount|floatformat:0 }}</td>
+            <td class="text-end">{% if sale.discount_amount > 0 %}<span style="color:#ca8a04">KES {{ sale.discount_amount|floatformat:0 }}</span>{% else %}—{% endif %}</td>
+            <td class="text-end fw-bold" style="color:#16a34a">KES {{ sale.total|floatformat:0 }}</td>
+            <td>{% for p in sale.payments.all %}<span class="status-badge status-info">{{ p.payment_method.name }}</span>{% endfor %}</td>
+            <td>
+              <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn-action btn-action-primary" title="Receipt"><i class="bi bi-receipt"></i></a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10"><div class="empty-state"><i class="bi bi-inbox"></i><p>No sales found matching your filters.</p></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
-    <!-- Summary Cards -->
-    {% if summary %}
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="summary-card bg-white shadow-sm">
-                <h6 class="text-muted">Total Sales</h6>
-                <h3 class="text-primary">{{ summary.transaction_count|default:0 }}</h3>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="summary-card bg-white shadow-sm">
-                <h6 class="text-muted">Total Revenue</h6>
-                <h3 class="text-success">KES {{ summary.total_sales|default:0|floatformat:2 }}</h3>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="summary-card bg-white shadow-sm">
-                <h6 class="text-muted">Total VAT</h6>
-                <h3 class="text-info">KES {{ summary.total_vat|default:0|floatformat:2 }}</h3>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="summary-card bg-white shadow-sm">
-                <h6 class="text-muted">Total Discounts</h6>
-                <h3 class="text-warning">KES {{ summary.total_discounts|default:0|floatformat:2 }}</h3>
-            </div>
-        </div>
+    {% if sales.has_other_pages %}
+    <div class="p-3">
+      <nav><ul class="pagination justify-content-center mb-0">
+        {% if sales.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&date_range={{ date_range }}&cashier={{ cashier_id }}&payment_method={{ payment_method_id }}&category={{ category_id }}&order_by={{ order_by }}&per_page={{ per_page }}">«</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ sales.previous_page_number }}&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&date_range={{ date_range }}&cashier={{ cashier_id }}&payment_method={{ payment_method_id }}&category={{ category_id }}&order_by={{ order_by }}&per_page={{ per_page }}">‹</a></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ sales.number }} / {{ sales.paginator.num_pages }}</span></li>
+        {% if sales.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ sales.next_page_number }}&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&date_range={{ date_range }}&cashier={{ cashier_id }}&payment_method={{ payment_method_id }}&category={{ category_id }}&order_by={{ order_by }}&per_page={{ per_page }}">›</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ sales.paginator.num_pages }}&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&date_range={{ date_range }}&cashier={{ cashier_id }}&payment_method={{ payment_method_id }}&category={{ category_id }}&order_by={{ order_by }}&per_page={{ per_page }}">»</a></li>
+        {% endif %}
+      </ul></nav>
     </div>
     {% endif %}
+  </div>
+</div>
 
-    <!-- Filters -->
-    <div class="card filter-card">
-        <form method="get" id="filter-form">
-            <div class="row mb-3">
-                <div class="col-md-12">
-                    <label class="form-label"><strong>Quick Date Filters:</strong></label>
-                    <div>
-                        <button type="button" class="btn btn-sm btn-outline-primary quick-filter-btn" onclick="setDateRange('today')">Today</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary quick-filter-btn" onclick="setDateRange('yesterday')">Yesterday</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary quick-filter-btn" onclick="setDateRange('this_week')">This Week</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary quick-filter-btn" onclick="setDateRange('this_month')">This Month</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary quick-filter-btn" onclick="setDateRange('last_month')">Last Month</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary quick-filter-btn" onclick="clearDateRange()">Clear</button>
-                    </div>
-                    <input type="hidden" name="date_range" id="date_range" value="{{ date_range }}">
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-md-3">
-                    <label class="form-label">Search Invoice</label>
-                    <input type="text" name="search" class="form-control" placeholder="Invoice number..." value="{{ search }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Start Date</label>
-                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}" id="start_date">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">End Date</label>
-                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}" id="end_date">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Cashier</label>
-                    <select name="cashier" class="form-select">
-                        <option value="">All Cashiers</option>
-                        {% for cashier in cashiers %}
-                        <option value="{{ cashier.id }}" {% if cashier_id == cashier.id|stringformat:"s" %}selected{% endif %}>
-                            {{ cashier.username }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Customer</label>
-                    <select name="customer" class="form-select">
-                        <option value="">All Customers</option>
-                        {% for customer in customers %}
-                        <option value="{{ customer.id }}" {% if customer_id == customer.id|stringformat:"s" %}selected{% endif %}>
-                            {{ customer.name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="row mt-3">
-                <div class="col-md-2">
-                    <label class="form-label">Payment Method</label>
-                    <select name="payment_method" class="form-select">
-                        <option value="">All Methods</option>
-                        {% for method in payment_methods %}
-                        <option value="{{ method.id }}" {% if payment_method_id == method.id|stringformat:"s" %}selected{% endif %}>
-                            {{ method.name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Min Amount</label>
-                    <input type="number" name="min_amount" class="form-control" placeholder="0.00" step="0.01" value="{{ min_amount }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Max Amount</label>
-                    <input type="number" name="max_amount" class="form-control" placeholder="0.00" step="0.01" value="{{ max_amount }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Order By</label>
-                    <select name="order_by" class="form-select">
-                        <option value="-date" {% if order_by == "-date" %}selected{% endif %}>Newest First</option>
-                        <option value="date" {% if order_by == "date" %}selected{% endif %}>Oldest First</option>
-                        <option value="-total" {% if order_by == "-total" %}selected{% endif %}>Highest Amount</option>
-                        <option value="total" {% if order_by == "total" %}selected{% endif %}>Lowest Amount</option>
-                        <option value="invoice_number" {% if order_by == "invoice_number" %}selected{% endif %}>Invoice A-Z</option>
-                        <option value="-invoice_number" {% if order_by == "-invoice_number" %}selected{% endif %}>Invoice Z-A</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Per Page</label>
-                    <select name="per_page" class="form-select">
-                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                        <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-funnel"></i> Filter
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row mt-2">
-                <div class="col-md-12">
-                    <a href="{% url 'sales_list' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-x-circle"></i> Clear All Filters
-                    </a>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- Sales Table -->
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Invoice #</th>
-                            <th>Date</th>
-                            <th>Customer</th>
-                            <th>Cashier</th>
-                            <th>Items</th>
-                            <th>Subtotal</th>
-                            <th>VAT</th>
-                            <th>Discount</th>
-                            <th>Total</th>
-                            <th>Payment</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for sale in sales %}
-                        <tr>
-                            <td><strong>{{ sale.invoice_number }}</strong></td>
-                            <td>{{ sale.date|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                {% if sale.customer %}
-                                    {{ sale.customer.name }}
-                                {% else %}
-                                    <span class="text-muted">Walk-in</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ sale.cashier.username|default:"N/A" }}</td>
-                            <td>{{ sale.items.count }}</td>
-                            <td>KES {{ sale.subtotal|floatformat:2 }}</td>
-                            <td>KES {{ sale.vat_amount|floatformat:2 }}</td>
-                            <td>
-                                {% if sale.discount_amount > 0 %}
-                                    <span class="text-warning">KES {{ sale.discount_amount|floatformat:2 }}</span>
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                            <td><strong class="text-success">KES {{ sale.total|floatformat:2 }}</strong></td>
-                            <td>
-                                {% for payment in sale.payments.all %}
-                                    <span class="badge bg-info">{{ payment.payment_method.name }}</span>
-                                {% endfor %}
-                            </td>
-                            <td>
-                                <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-outline-primary" title="View Receipt">
-                                    <i class="bi bi-receipt"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="11" class="text-center text-muted py-4">
-                                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
-                                <p class="mt-2">No sales found matching your filters.</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Pagination -->
-            {% if sales.has_other_pages %}
-            <nav aria-label="Sales pagination">
-                <ul class="pagination justify-content-center">
-                    {% if sales.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% if search %}&search={{ search }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if date_range %}&date_range={{ date_range }}{% endif %}{% if cashier_id %}&cashier={{ cashier_id }}{% endif %}{% if customer_id %}&customer={{ customer_id }}{% endif %}{% if payment_method_id %}&payment_method={{ payment_method_id }}{% endif %}{% if min_amount %}&min_amount={{ min_amount }}{% endif %}{% if max_amount %}&max_amount={{ max_amount }}{% endif %}&order_by={{ order_by }}&per_page={{ per_page }}">First</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ sales.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if date_range %}&date_range={{ date_range }}{% endif %}{% if cashier_id %}&cashier={{ cashier_id }}{% endif %}{% if customer_id %}&customer={{ customer_id }}{% endif %}{% if payment_method_id %}&payment_method={{ payment_method_id }}{% endif %}{% if min_amount %}&min_amount={{ min_amount }}{% endif %}{% if max_amount %}&max_amount={{ max_amount }}{% endif %}&order_by={{ order_by }}&per_page={{ per_page }}">Previous</a>
-                    </li>
-                    {% endif %}
-
-                    <li class="page-item active">
-                        <span class="page-link">
-                            Page {{ sales.number }} of {{ sales.paginator.num_pages }}
-                        </span>
-                    </li>
-
-                    {% if sales.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ sales.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if date_range %}&date_range={{ date_range }}{% endif %}{% if cashier_id %}&cashier={{ cashier_id }}{% endif %}{% if customer_id %}&customer={{ customer_id }}{% endif %}{% if payment_method_id %}&payment_method={{ payment_method_id }}{% endif %}{% if min_amount %}&min_amount={{ min_amount }}{% endif %}{% if max_amount %}&max_amount={{ max_amount }}{% endif %}&order_by={{ order_by }}&per_page={{ per_page }}">Next</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ sales.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if date_range %}&date_range={{ date_range }}{% endif %}{% if cashier_id %}&cashier={{ cashier_id }}{% endif %}{% if customer_id %}&customer={{ customer_id }}{% endif %}{% if payment_method_id %}&payment_method={{ payment_method_id }}{% endif %}{% if min_amount %}&min_amount={{ min_amount }}{% endif %}{% if max_amount %}&max_amount={{ max_amount }}{% endif %}&order_by={{ order_by }}&per_page={{ per_page }}">Last</a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-            {% endif %}
-        </div>
-    </div>
 </div>
 
 <script>
-function setDateRange(range) {
-    document.getElementById('date_range').value = range;
-    document.getElementById('start_date').value = '';
-    document.getElementById('end_date').value = '';
-    document.getElementById('filter-form').submit();
-}
-
-function clearDateRange() {
-    document.getElementById('date_range').value = '';
-    document.getElementById('start_date').value = '';
-    document.getElementById('end_date').value = '';
-}
-
-// Clear date_range when custom dates are selected
-document.getElementById('start_date').addEventListener('change', function() {
-    if (this.value) {
-        document.getElementById('date_range').value = '';
-    }
-});
-
-document.getElementById('end_date').addEventListener('change', function() {
-    if (this.value) {
-        document.getElementById('date_range').value = '';
-    }
-});
+function setDateRange(r){document.getElementById('date_range').value=r;document.getElementById('start_date').value='';document.getElementById('end_date').value='';document.getElementById('filter-form').submit();}
+function clearDateRange(){document.getElementById('date_range').value='';document.getElementById('start_date').value='';document.getElementById('end_date').value='';}
+document.getElementById('start_date').addEventListener('change',function(){if(this.value)document.getElementById('date_range').value='';});
+document.getElementById('end_date').addEventListener('change',function(){if(this.value)document.getElementById('date_range').value='';});
 </script>
 {% endblock %}

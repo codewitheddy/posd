@@ -309,7 +309,7 @@ class BusinessMembershipInline(admin.TabularInline):
 
 @admin.register(Business)
 class BusinessAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug', 'owner', 'subscription_plan', 'is_active', 'is_trial', 'created_at']
+    list_display = ['name', 'slug', 'owner', 'subscription_plan', 'activation_status', 'is_trial', 'created_at']
     list_filter = ['is_active', 'is_trial', 'subscription_plan', 'created_at']
     search_fields = ['name', 'slug', 'owner__username', 'owner__email']
     readonly_fields = ['created_at', 'updated_at']
@@ -363,6 +363,15 @@ class BusinessAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         return qs.select_related('owner')
     
+    def activation_status(self, obj):
+        """Display activation status with visual indicator"""
+        if obj.is_active:
+            return '✅ Active'
+        else:
+            return '⏳ Pending Activation'
+    activation_status.short_description = 'Status'
+    activation_status.admin_order_field = 'is_active'
+    
     def deactivate_businesses(self, request, queryset):
         """Deactivate selected businesses (soft delete)"""
         count = queryset.update(is_active=False)
@@ -370,10 +379,54 @@ class BusinessAdmin(admin.ModelAdmin):
     deactivate_businesses.short_description = "Deactivate selected businesses (soft delete)"
     
     def activate_businesses(self, request, queryset):
-        """Activate selected businesses"""
-        count = queryset.update(is_active=True)
-        self.message_user(request, f'{count} business(es) have been activated.')
-    activate_businesses.short_description = "Activate selected businesses"
+        """Activate selected businesses and send activation email"""
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        activated_count = 0
+        for business in queryset:
+            if not business.is_active:
+                business.is_active = True
+                business.save()
+                activated_count += 1
+                
+                # Send activation email to business owner
+                try:
+                    login_url = f"{getattr(settings, 'SITE_URL', 'http://localhost:8000')}/login/"
+                    
+                    subject = f'Your Business "{business.name}" Has Been Activated!'
+                    message = f"""
+Hello {business.owner.first_name or business.owner.username},
+
+Great news! Your business "{business.name}" has been activated and is now ready to use.
+
+You can now log in and start using the Marid POS:
+Login URL: {login_url}
+Username: {business.owner.username}
+
+Your 30-day free trial has started. Explore all features and let us know if you need any help.
+
+Need Support?
+Email: info@marid.co.ke
+Phone/WhatsApp: +254 717 147 700
+
+Best regards,
+Marid POS Team
+                    """
+                    
+                    send_mail(
+                        subject,
+                        message,
+                        settings.DEFAULT_FROM_EMAIL,
+                        [business.owner.email],
+                        fail_silently=True,  # Don't fail if email fails
+                    )
+                except Exception as e:
+                    # Log error but don't fail the activation
+                    print(f"Failed to send activation email to {business.owner.email}: {e}")
+        
+        self.message_user(request, f'{activated_count} business(es) have been activated and notification emails sent.')
+    activate_businesses.short_description = "Activate selected businesses and notify owners"
 
 
 @admin.register(BusinessMembership)

@@ -6,45 +6,35 @@
 <div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0"><i class="bi bi-check2-circle"></i> Reconcile Float</h4>
+            <div class="confirm-card">
+                <div class="confirm-card-header" style="background:#dbeafe; color:#1e40af;">
+                    <i class="bi bi-check2-circle"></i> Reconcile Float
                 </div>
-                <div class="card-body">
+                <div class="confirm-card-body">
                     <div class="alert alert-info">
                         <h5><i class="bi bi-info-circle"></i> Confirm Reconciliation</h5>
-                        <p>You are about to reconcile float <strong>{{ cash_float.float_number }}</strong>.</p>
+                        <p class="mb-0">You are about to reconcile float <strong>{{ cash_float.float_number }}</strong>.</p>
                     </div>
 
-                    <table class="table">
-                        <tr>
-                            <td><strong>Float Number:</strong></td>
-                            <td>{{ cash_float.float_number }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Cashier:</strong></td>
-                            <td>{{ cash_float.cashier.username }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Float Amount:</strong></td>
-                            <td>KES {{ cash_float.amount|floatformat:2 }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Returned Amount:</strong></td>
-                            <td>KES {{ cash_float.returned_amount|floatformat:2 }}</td>
-                        </tr>
-                        <tr class="table-{% if cash_float.variance == 0 %}success{% elif cash_float.variance > 0 %}primary{% else %}danger{% endif %}">
-                            <td><strong>Variance:</strong></td>
-                            <td>
-                                {% if cash_float.variance == 0 %}
-                                <strong>KES 0.00 (No Variance)</strong>
-                                {% elif cash_float.variance > 0 %}
-                                <strong>+KES {{ cash_float.variance|floatformat:2 }} (Surplus)</strong>
-                                {% else %}
-                                <strong>KES {{ cash_float.variance|floatformat:2 }} (Shortage)</strong>
-                                {% endif %}
-                            </td>
-                        </tr>
+                    <table class="ui-table mb-3">
+                        <tbody>
+                            <tr><td><strong>Float Number:</strong></td><td>{{ cash_float.float_number }}</td></tr>
+                            <tr><td><strong>Cashier:</strong></td><td>{{ cash_float.cashier.username }}</td></tr>
+                            <tr><td><strong>Float Amount:</strong></td><td>KES {{ cash_float.amount|floatformat:2 }}</td></tr>
+                            <tr><td><strong>Returned Amount:</strong></td><td>KES {{ cash_float.returned_amount|floatformat:2 }}</td></tr>
+                            <tr>
+                                <td><strong>Variance:</strong></td>
+                                <td>
+                                    {% if cash_float.variance == 0 %}
+                                    <span class="status-badge status-success">KES 0.00 (No Variance)</span>
+                                    {% elif cash_float.variance > 0 %}
+                                    <span class="status-badge status-info">+KES {{ cash_float.variance|floatformat:2 }} (Surplus)</span>
+                                    {% else %}
+                                    <span class="status-badge status-danger">KES {{ cash_float.variance|floatformat:2 }} (Shortage)</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
 
                     {% if cash_float.notes %}
@@ -65,8 +55,8 @@
                             <button type="submit" class="btn btn-primary btn-lg">
                                 <i class="bi bi-check-circle"></i> Confirm Reconciliation
                             </button>
-                            <a href="{% url 'cash_float_detail' slug=request.business.slug pk=cash_float.pk %}" 
-                               class="btn btn-secondary">
+                            <a href="{% url 'cash_float_detail' slug=request.business.slug pk=cash_float.pk %}"
+                               class="btn-action">
                                 <i class="bi bi-x-circle"></i> Cancel
                             </a>
                         </div>

@@ -13,7 +13,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="POS System">
+    <meta name="apple-mobile-web-app-title" content="Marid POS">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
@@ -22,7 +22,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{% static 'images/icon-192.png' %}">
     <link rel="apple-touch-icon" href="{% static 'images/icon-192.png' %}">
     
-    <title>{% block title %}POS System{% endblock %}</title>
+    <title>{% block title %}Marid POS{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -30,7 +30,9 @@
     <link rel="stylesheet" href="{% static 'css/mobile-enhancements.css' %}">
     <link rel="stylesheet" href="{% static 'css/pwa.css' %}">
     <link rel="stylesheet" href="{% static 'css/custom-theme.css' %}">
+    <link rel="stylesheet" href="{% static 'css/pos-ui.css' %}">
     <link rel="stylesheet" href="{% static 'css/button-checkbox-fixes.css' %}">
+    <link rel="stylesheet" href="{% static 'css/checkbox-override.css' %}">
     
     <!-- Dynamic Theme Colors -->
     {% if request.business.settings %}
@@ -435,12 +437,12 @@
             {% if user_permissions.can_make_sales %}
             <a href="{% url 'pos_screen' slug=business_slug %}" style="text-decoration: none; color: inherit; cursor: pointer;">
                 <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
-                <small>POS System</small>
+                <small>Marid POS</small>
             </a>
             {% else %}
             <a href="{% url 'dashboard' slug=business_slug %}" style="text-decoration: none; color: inherit; cursor: pointer;">
                 <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
-                <small>POS System</small>
+                <small>Marid POS</small>
             </a>
             {% endif %}
         </div>
@@ -502,18 +504,51 @@
                 </a>
             </li>
             <li>
+                <a href="{% url 'goods_received_list' slug=business_slug %}" class="{% if 'goods-received' in request.path %}active{% endif %}">
+                    <i class="bi bi-box-seam"></i> Goods Received Notes
+                </a>
+            </li>
+            <li>
                 <a href="{% url 'grn_list' slug=business_slug %}" class="{% if 'grn' in request.path %}active{% endif %}">
                     <i class="bi bi-arrow-return-left"></i> Goods Returned Notes
                 </a>
             </li>
             {% endif %}
 
-            <li class="nav-section">Loyalty Program</li>
+            <li class="nav-section">CRM</li>
             <li>
-                <a href="{% url 'customer_list' slug=business_slug %}" class="{% if 'customer' in request.path and 'loyalty' not in request.path %}active{% endif %}">
+                <a href="{% url 'customer_list' slug=business_slug %}" class="{% if 'customer' in request.path and 'loyalty' not in request.path and 'crm' not in request.path %}active{% endif %}">
                     <i class="bi bi-people"></i> Customers
                 </a>
             </li>
+            <li>
+                <a href="{% url 'customer_credit_list' slug=business_slug %}" class="{% if 'customers/credit' in request.path %}active{% endif %}">
+                    <i class="bi bi-credit-card-2-back"></i> Customer Credit
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'credit_aging_report' slug=business_slug %}" class="{% if 'credit/aging' in request.path %}active{% endif %}">
+                    <i class="bi bi-clock-history"></i> Aging Report
+                </a>
+            </li>
+            {% if user_permissions.is_manager %}
+            <li>
+                <a href="{% url 'segment_list' slug=business_slug %}" class="{% if 'crm/segments' in request.path %}active{% endif %}">
+                    <i class="bi bi-diagram-3"></i> Segments
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'campaign_list' slug=business_slug %}" class="{% if 'crm/campaigns' in request.path %}active{% endif %}">
+                    <i class="bi bi-megaphone"></i> Campaigns
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'crm_reports' slug=business_slug %}" class="{% if 'crm/reports' in request.path %}active{% endif %}">
+                    <i class="bi bi-bar-chart-line"></i> CRM Reports
+                </a>
+            </li>
+            {% endif %}
+            <li class="nav-section">Loyalty Program</li>
             {% if user_permissions.is_manager %}
                 <li>
                     <a href="{% url 'loyalty_rewards_list' slug=business_slug %}" class="{% if 'loyalty/rewards' in request.path %}active{% endif %}">
@@ -576,6 +611,25 @@
             <li>
                 <a href="{% url 'expiry_alert' slug=business_slug %}" class="{% if 'expiry' in request.path %}active{% endif %}">
                     <i class="bi bi-calendar-x"></i> Expiry Alerts
+                </a>
+            </li>
+            {% endif %}
+
+            {% if user_permissions.can_view_reports or user_permissions.is_manager %}
+            <li class="nav-section">Finances</li>
+            <li>
+                <a href="{% url 'expense_list' slug=business_slug %}" class="{% if 'finances/expenses' in request.path %}active{% endif %}">
+                    <i class="bi bi-wallet2"></i> Expenses
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'profit_dashboard' slug=business_slug %}" class="{% if 'finances/profit' in request.path %}active{% endif %}">
+                    <i class="bi bi-graph-up-arrow"></i> Profit
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'pl_statement' slug=business_slug %}" class="{% if 'finances/pl' in request.path %}active{% endif %}">
+                    <i class="bi bi-file-earmark-bar-graph"></i> P&amp;L Statement
                 </a>
             </li>
             {% endif %}
@@ -668,7 +722,11 @@
 
         <div class="search-bar position-relative">
             <i class="bi bi-search"></i>
+            {% if has_business %}
+            <form action="{% url 'global_search' slug=business_slug %}" method="get" id="globalSearchForm" class="d-flex">
+            {% else %}
             <form action="#" method="get" id="globalSearchForm" class="d-flex">
+            {% endif %}
                 <input type="text" class="form-control" id="globalSearch" name="q" placeholder="Search products, customers, invoices..." autocomplete="off">
                 <button type="submit" class="btn btn-primary ms-2">
                     <i class="bi bi-search"></i> Search
@@ -690,8 +748,12 @@
             </button>
             
             <div class="notification-icon" title="Notifications">
-                <i class="bi bi-bell"></i>
-                <span class="badge bg-danger">3</span>
+                <a href="{% if has_business %}{% url 'low_stock_alert' slug=business_slug %}{% else %}#{% endif %}" style="color: inherit; text-decoration: none;">
+                    <i class="bi bi-bell"></i>
+                    {% if alert_count and alert_count > 0 %}
+                    <span class="badge bg-danger">{{ alert_count }}</span>
+                    {% endif %}
+                </a>
             </div>
 
             <div class="dropdown">
@@ -805,60 +867,17 @@
             });
         });
 
-        // Global search functionality
+        // Global search — submit to global search page
         const globalSearchForm = document.getElementById('globalSearchForm');
         const globalSearchInput = document.getElementById('globalSearch');
         
         if (globalSearchForm && globalSearchInput) {
-            globalSearchForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const query = globalSearchInput.value.trim();
-                if (query) {
-                    performGlobalSearch(query);
-                }
-            });
-            
-            // Also trigger search on Enter key
+            // Remove any default prevention — let the form action handle it
             globalSearchInput.addEventListener('keyup', function(e) {
                 if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const query = this.value.trim();
-                    if (query) {
-                        performGlobalSearch(query);
-                    }
+                    globalSearchForm.submit();
                 }
             });
-        }
-        
-        function performGlobalSearch(query) {
-            // Show loading state
-            const searchBtn = globalSearchForm.querySelector('button[type="submit"]');
-            const originalHTML = searchBtn.innerHTML;
-            searchBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Searching...';
-            searchBtn.disabled = true;
-            
-            // Determine what to search based on query pattern
-            let searchUrl = '';
-            
-            // Check if it's a phone number (for customers)
-            if (/^[\d\+\-\(\)\s]+$/.test(query) && query.replace(/\D/g, '').length >= 9) {
-                searchUrl = `{% url 'customer_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
-            }
-            // Check if it's an invoice number (starts with INV, SALE, etc.)
-            else if (/^(INV|SALE|RET|PO|GRN)-/i.test(query)) {
-                searchUrl = `{% url 'sales_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
-            }
-            // Check if it's a product code or barcode
-            else if (/^(PRD|SKU)-/i.test(query) || /^\d{8,13}$/.test(query)) {
-                searchUrl = `{% url 'product_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
-            }
-            // Default: search products (most common)
-            else {
-                searchUrl = `{% url 'product_list' slug=business_slug %}?search=${encodeURIComponent(query)}`;
-            }
-            
-            // Navigate to search results
-            window.location.href = searchUrl;
         }
 
         // Auto-hide alerts after 5 seconds

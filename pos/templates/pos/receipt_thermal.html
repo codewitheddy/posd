@@ -509,6 +509,9 @@
         {% for item in sale.items.all %}
         <div class="item">
             <div class="item-name">{{ item.product.name }}</div>
+            {% if item.note %}
+            <div style="font-size: 11px; color: #888; font-style: italic; margin-bottom: 2px;">↳ {{ item.note }}</div>
+            {% endif %}
             <div class="item-details">
                 <span>{{ item.quantity }}{% if item.product.unit %} {{ item.product.unit.abbreviation }}{% endif %} x {{ item.unit_price|floatformat:2 }}</span>
                 <span class="bold">{{ item.total_price|floatformat:2 }}</span>
@@ -619,7 +622,7 @@
         </div>
         
         <div class="powered-by">
-            Powered by POS System
+            Powered by Marid POS
         </div>
         
         <!-- Invoice Number -->

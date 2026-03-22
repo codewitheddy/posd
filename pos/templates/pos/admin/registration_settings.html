@@ -1,0 +1,158 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Registration Settings - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-cog"></i> Registration Settings</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <h5 class="mb-3">General Settings</h5>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="registration_enabled" 
+                                   name="registration_enabled" {% if settings.registration_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="registration_enabled">
+                                <strong>Enable Registration</strong>
+                                <br><small class="text-muted">Allow new business registrations</small>
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="registration_closed_message" class="form-label">Registration Closed Message</label>
+                            <textarea class="form-control" id="registration_closed_message" 
+                                      name="registration_closed_message" rows="2">{{ settings.registration_closed_message }}</textarea>
+                            <small class="text-muted">Shown when registration is disabled</small>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Validation Requirements</h5>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="require_invitation_code" 
+                                   name="require_invitation_code" {% if settings.require_invitation_code %}checked{% endif %}>
+                            <label class="form-check-label" for="require_invitation_code">
+                                <strong>Require Invitation Code</strong>
+                                <br><small class="text-muted">Users must have an invitation code to register</small>
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="require_email_verification" 
+                                   name="require_email_verification" {% if settings.require_email_verification %}checked{% endif %}>
+                            <label class="form-check-label" for="require_email_verification">
+                                <strong>Require Email Verification</strong>
+                                <br><small class="text-muted">Users must verify their email before activation</small>
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="require_admin_approval" 
+                                   name="require_admin_approval" {% if settings.require_admin_approval %}checked{% endif %}>
+                            <label class="form-check-label" for="require_admin_approval">
+                                <strong>Require Admin Approval</strong>
+                                <br><small class="text-muted">Admins must manually approve registrations</small>
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="require_kra_pin" 
+                                   name="require_kra_pin" {% if settings.require_kra_pin %}checked{% endif %}>
+                            <label class="form-check-label" for="require_kra_pin">
+                                <strong>Require KRA PIN</strong>
+                                <br><small class="text-muted">Require valid KRA PIN for registration</small>
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="require_phone_verification" 
+                                   name="require_phone_verification" {% if settings.require_phone_verification %}checked{% endif %}>
+                            <label class="form-check-label" for="require_phone_verification">
+                                <strong>Require Phone Verification</strong>
+                                <br><small class="text-muted">Require SMS verification (not yet implemented)</small>
+                            </label>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Rate Limiting</h5>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="max_registrations_per_ip_per_day" class="form-label">
+                                    Max Registrations per IP per Day
+                                </label>
+                                <input type="number" class="form-control" id="max_registrations_per_ip_per_day" 
+                                       name="max_registrations_per_ip_per_day" 
+                                       value="{{ settings.max_registrations_per_ip_per_day }}" min="1" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="max_registrations_per_email_domain_per_day" class="form-label">
+                                    Max Registrations per Email Domain per Day
+                                </label>
+                                <input type="number" class="form-control" id="max_registrations_per_email_domain_per_day" 
+                                       name="max_registrations_per_email_domain_per_day" 
+                                       value="{{ settings.max_registrations_per_email_domain_per_day }}" min="1" required>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Email Domain Control</h5>
+                        
+                        <div class="mb-3">
+                            <label for="blocked_email_domains" class="form-label">Blocked Email Domains</label>
+                            <textarea class="form-control" id="blocked_email_domains" 
+                                      name="blocked_email_domains" rows="3" 
+                                      placeholder="tempmail.com, guerrillamail.com, 10minutemail.com">{{ settings.blocked_email_domains }}</textarea>
+                            <small class="text-muted">Comma-separated list of blocked domains</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="allowed_email_domains" class="form-label">Allowed Email Domains (Whitelist)</label>
+                            <textarea class="form-control" id="allowed_email_domains" 
+                                      name="allowed_email_domains" rows="3" 
+                                      placeholder="company.com, partner.co.ke">{{ settings.allowed_email_domains }}</textarea>
+                            <small class="text-muted">If set, ONLY these domains are allowed. Leave blank to allow all (except blocked)</small>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Admin Notifications</h5>
+                        
+                        <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="notify_admin_on_registration" 
+                                   name="notify_admin_on_registration" {% if settings.notify_admin_on_registration %}checked{% endif %}>
+                            <label class="form-check-label" for="notify_admin_on_registration">
+                                <strong>Notify Admins on New Registration</strong>
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="admin_notification_emails" class="form-label">Admin Notification Emails</label>
+                            <textarea class="form-control" id="admin_notification_emails" 
+                                      name="admin_notification_emails" rows="2" 
+                                      placeholder="admin@example.com, manager@example.com">{{ settings.admin_notification_emails }}</textarea>
+                            <small class="text-muted">Comma-separated list of admin emails</small>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> Save Settings
+                            </button>
+                            <a href="{% url 'registrations_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Registrations
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

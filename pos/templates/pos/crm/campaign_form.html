@@ -1,0 +1,63 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if campaign %}Edit Campaign{% else %}New Campaign{% endif %}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div><h1 class="h4 fw-bold mb-0"><i class="bi bi-megaphone me-2"></i>{% if campaign %}Edit Campaign{% else %}New Campaign{% endif %}</h1></div>
+    <a href="{% url 'campaign_list' slug=business_slug %}" class="btn-action btn-action-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+  </div>
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="form-card">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Campaign Name *</label>
+              <input type="text" class="form-control" name="name" value="{{ campaign.name|default:'' }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Channel *</label>
+              <select class="form-select" name="channel" required>
+                <option value="email" {% if campaign.channel == 'email' %}selected{% endif %}>Email</option>
+                <option value="sms" {% if campaign.channel == 'sms' %}selected{% endif %}>SMS</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Target Segment</label>
+              <select class="form-select" name="segment">
+                <option value="">All Active Customers</option>
+                {% for seg in segments %}
+                <option value="{{ seg.pk }}" {% if campaign.segment_id == seg.pk %}selected{% endif %}>{{ seg.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12" id="subjectRow">
+              <label class="form-label fw-semibold">Email Subject</label>
+              <input type="text" class="form-control" name="subject" value="{{ campaign.subject|default:'' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Message *</label>
+              <textarea class="form-control" name="message" rows="6" required>{{ campaign.message|default:'' }}</textarea>
+              <small class="text-muted">You can use {name} as a placeholder for the customer's name.</small>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'campaign_list' slug=business_slug %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Campaign</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const channelSelect = document.querySelector('[name="channel"]');
+  const subjectRow = document.getElementById('subjectRow');
+  function toggleSubject() {
+    subjectRow.style.display = channelSelect.value === 'email' ? '' : 'none';
+  }
+  channelSelect.addEventListener('change', toggleSubject);
+  toggleSubject();
+</script>
+{% endblock %}

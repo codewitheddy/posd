@@ -52,7 +52,8 @@ class SyncManager {
     setupAutoSync() {
         // Check for pending items every 30 seconds when online
         this.syncInterval = setInterval(async () => {
-            if (navigator.onLine && this.autoSyncEnabled && !this.syncInProgress) {
+            const isOnline = window._realOnline !== undefined ? window._realOnline : navigator.onLine;
+            if (isOnline && this.autoSyncEnabled && !this.syncInProgress) {
                 const count = await offlineDB.getPendingCount();
                 if (count > 0) {
                     console.log('[SyncManager] Auto-sync triggered');
@@ -72,7 +73,9 @@ class SyncManager {
 
     // Manual sync triggered by user
     async manualSync() {
-        if (!navigator.onLine) {
+        const isOnline = window._realOnline !== undefined ? window._realOnline : navigator.onLine;
+
+        if (!isOnline) {
             this.showNotification('Cannot sync while offline', 'warning');
             return;
         }
@@ -84,7 +87,7 @@ class SyncManager {
 
         const count = await offlineDB.getPendingCount();
         if (count === 0) {
-            this.showNotification('No pending data to sync', 'info');
+            this.showNotification('No pending offline sales to sync', 'info');
             return;
         }
 
@@ -230,7 +233,6 @@ class SyncManager {
         }
 
         if (syncButton) {
-            syncButton.disabled = count === 0 || !navigator.onLine;
             if (count > 0) {
                 syncButton.classList.add('btn-warning');
                 syncButton.classList.remove('btn-secondary');

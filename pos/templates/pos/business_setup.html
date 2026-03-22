@@ -9,11 +9,11 @@
         <div class="col-md-8">
             <!-- Login Credentials Display (if just registered) -->
             {% if request.session.new_user_credentials %}
-            <div class="card shadow-lg mb-4 border-success">
-                <div class="card-header bg-success text-white">
-                    <h4 class="mb-0"><i class="fas fa-check-circle"></i> Registration Successful!</h4>
+            <div class="ui-card mb-4" style="border-left:3px solid #16a34a;">
+                <div class="ui-card-header" style="background:#dcfce7;">
+                    <span class="ui-card-title" style="color:#16a34a;"><i class="fas fa-check-circle"></i> Registration Successful!</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body">
                     <div class="alert alert-success mb-3">
                         <i class="fas fa-info-circle"></i> 
                         <strong>Important:</strong> Please save your login credentials below. You'll need them to access your account.
@@ -46,10 +46,8 @@
             </div>
             {% endif %}
             
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0"><i class="fas fa-cog"></i> Complete Your Business Setup</h4>
-                </div>
+            <div class="form-card">
+                <h4 class="mb-3"><i class="fas fa-cog"></i> Complete Your Business Setup</h4>
                 <div class="card-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i> 
@@ -109,11 +107,10 @@
                             </a>
                         </div>
                     </form>
-                </div>
             </div>
-            
-            <div class="card mt-4 shadow-sm">
-                <div class="card-body">
+
+            <div class="ui-card mt-4">
+                <div class="ui-card-body">
                     <h5><i class="fas fa-lightbulb text-warning"></i> Next Steps</h5>
                     <ul class="mb-0">
                         <li>Add your products and categories</li>

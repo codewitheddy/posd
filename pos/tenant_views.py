@@ -10,111 +10,98 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
-from .models import Business, BusinessMembership, ActivityLog
+from .models import Business, BusinessMembership, ActivityLog, RegistrationSettings
+from .services.registration_service import RegistrationService
+
+
+def get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
 
 
 def register_business(request):
     """
-    Business registration page - allows users to create a new business
-    Only accessible to users who don't already own a business (one license per user)
+    Business registration page with validation and control
     """
     # Check if user is already logged in and owns a business
     if request.user.is_authenticated and not request.user.is_superuser:
-        # Check if user already owns a business
         existing_business = Business.objects.filter(owner=request.user).first()
         if existing_business:
             messages.warning(request, 'You already have a business registered. Only one business per license is allowed.')
             return redirect('business_list')
     
-    if request.method == 'POST':
-        # Get form data
-        business_name = request.POST.get('business_name', '').strip()
-        user_email = request.POST.get('email', '').strip()
-        user_username = request.POST.get('username', '').strip()
-        user_password = request.POST.get('password', '').strip()
-        confirm_password = request.POST.get('confirm_password', '').strip()
-        user_first_name = request.POST.get('first_name', '').strip()
-        user_last_name = request.POST.get('last_name', '').strip()
-        
-        # Validation
-        if not all([business_name, user_email, user_username, user_password, confirm_password, user_first_name, user_last_name]):
-            messages.error(request, 'All fields are required.')
-            return render(request, 'pos/register_business.html')
-        
-        # Username validation
-        import re
-        if not re.match(r'^[a-zA-Z0-9_]{4,20}$', user_username):
-            messages.error(request, 'Username must be 4-20 characters and contain only letters, numbers, and underscores.')
-            return render(request, 'pos/register_business.html')
-        
-        # Password validation
-        if user_password != confirm_password:
-            messages.error(request, 'Passwords do not match. Please try again.')
-            return render(request, 'pos/register_business.html')
-        
-        if len(user_password) < 8:
-            messages.error(request, 'Password must be at least 8 characters long.')
-            return render(request, 'pos/register_business.html')
-        
-        # Check if username already exists
-        if User.objects.filter(username=user_username).exists():
-            messages.error(request, 'Username already taken. Please choose a different username.')
-            return render(request, 'pos/register_business.html')
-        
-        # Check if email already exists
-        if User.objects.filter(email=user_email).exists():
-            messages.error(request, 'Email already registered. Please login instead.')
-            return render(request, 'pos/register_business.html')
-        
-        try:
-            with transaction.atomic():
-                # Create user with the provided username
-                user = User.objects.create_user(
-                    username=user_username,
-                    email=user_email,
-                    first_name=user_first_name,
-                    last_name=user_last_name
-                )
-                # Set password explicitly to ensure proper hashing
-                user.set_password(user_password)
-                user.save()
-                
-                # Create business
-                business = Business.objects.create(
-                    name=business_name,
-                    owner=user,
-                    is_active=True,
-                    is_trial=True,
-                    trial_ends_at=timezone.now() + timedelta(days=30),  # 30-day trial
-                    subscription_plan='free'
-                )
-                
-                # Create membership
-                BusinessMembership.objects.create(
-                    user=user,
-                    business=business,
-                    role='owner',
-                    is_active=True
-                )
-                
-                # Store credentials in session for display on next page
-                request.session['new_user_credentials'] = {
-                    'username': user_username,
-                    'email': user_email,
-                    'business_name': business_name
-                }
-                
-                # Log the user in
-                login(request, user)
-                
-                messages.success(request, f'Welcome! Your business "{business_name}" has been created successfully.')
-                return redirect('business_setup', slug=business.slug)
-                
-        except Exception as e:
-            messages.error(request, f'Error creating business: {str(e)}')
-            return render(request, 'pos/register_business.html')
+    # Get registration settings
+    settings_obj = RegistrationSettings.get_settings()
     
-    return render(request, 'pos/register_business.html')
+    # Check if registration is enabled
+    if not settings_obj.registration_enabled:
+        messages.error(request, settings_obj.registration_closed_message)
+        return render(request, 'pos/register_business.html', {
+            'registration_closed': True,
+            'settings': settings_obj
+        })
+    
+    if request.method == 'POST':
+        # Prepare registration data
+        data = {
+            'business_name': request.POST.get('business_name', '').strip(),
+            'email': request.POST.get('email', '').strip(),
+            'first_name': request.POST.get('first_name', '').strip(),
+            'last_name': request.POST.get('last_name', '').strip(),
+            'phone': request.POST.get('phone', '').strip(),
+            'business_type': request.POST.get('business_type', '').strip(),
+            'kra_pin': request.POST.get('kra_pin', '').strip(),
+            'invitation_code': request.POST.get('invitation_code', '').strip(),
+        }
+        
+        # Get client info
+        ip_address = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        # Create registration request
+        registration, errors = RegistrationService.create_registration_request(
+            data, ip_address, user_agent
+        )
+        
+        if registration:
+            # Success - check if it's instant registration (dict with credentials) or pending (object)
+            if isinstance(registration, dict):
+                # Instant registration - show credentials on screen
+                return render(request, 'pos/registration_success.html', {
+                    'credentials': registration,
+                    'instant_registration': True
+                })
+            else:
+                # Email verification or approval required
+                if settings_obj.require_email_verification:
+                    messages.success(request, 
+                        f'Registration submitted! Please check your email ({data["email"]}) to verify your account.')
+                elif settings_obj.require_admin_approval:
+                    messages.success(request, 
+                        'Registration submitted! Your request is pending admin approval. You will receive an email once approved.')
+                else:
+                    messages.success(request, 
+                        'Registration completed! Check your email for login credentials.')
+                
+                return redirect('login')
+        else:
+            # Show errors
+            if '_general' in errors:
+                messages.error(request, errors['_general'])
+            for field, error in errors.items():
+                if field != '_general':
+                    messages.error(request, f'{field.replace("_", " ").title()}: {error}')
+    
+    context = {
+        'settings': settings_obj,
+        'registration_closed': False,
+    }
+    return render(request, 'pos/register_business.html', context)
 
 
 @login_required
@@ -571,3 +558,16 @@ def download_backup(request, slug):
         logger.error(f'Backup download failed for {business.name}: {e}')
         messages.error(request, f'Backup failed: {str(e)}. Please contact support if this persists.')
         return redirect('backup_data', slug=slug)
+
+
+
+def verify_email(request, token):
+    """Verify email address with token"""
+    success, message = RegistrationService.verify_email(token)
+    
+    if success:
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+    
+    return redirect('login')

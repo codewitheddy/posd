@@ -7,20 +7,20 @@
     <div class="row">
         <!-- Customer Info Card -->
         <div class="col-md-4">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5><i class="bi bi-person-circle"></i> Customer Information</h5>
+            <div class="ui-card">
+                <div class="ui-card-header">
+                    <span class="ui-card-title"><i class="bi bi-person-circle"></i> Customer Information</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body">
                     <h4>{{ customer.name }}</h4>
                     <p class="text-muted">{{ customer.customer_code }}</p>
-                    
+
                     {% if customer.customer_type == 'vip' %}
-                        <span class="badge bg-warning text-dark mb-3">VIP Customer</span>
+                        <span class="status-badge status-warning mb-3 d-inline-block">VIP Customer</span>
                     {% elif customer.customer_type == 'wholesale' %}
-                        <span class="badge bg-info mb-3">Wholesale</span>
+                        <span class="status-badge status-info mb-3 d-inline-block">Wholesale</span>
                     {% else %}
-                        <span class="badge bg-secondary mb-3">Regular</span>
+                        <span class="status-badge status-gray mb-3 d-inline-block">Regular</span>
                     {% endif %}
 
                     <hr>
@@ -40,7 +40,7 @@
 
                     <div class="row text-center">
                         <div class="col-6">
-                            <h4 class="text-primary">{{ customer.loyalty_points }}</h4>
+                            <h4 style="color:var(--primary-color,#224195);">{{ customer.loyalty_points }}</h4>
                             <small class="text-muted">Loyalty Points</small>
                         </div>
                         <div class="col-6">
@@ -51,17 +51,17 @@
 
                     <hr>
 
-                    <p><strong>Total Purchases:</strong><br>
-                    <h4 class="text-success">KES {{ customer.total_purchases|floatformat:2 }}</h4></p>
+                    <p><strong>Total Purchases:</strong></p>
+                    <h4 class="text-success">KES {{ customer.total_purchases|floatformat:2 }}</h4>
 
                     <div class="d-grid gap-2 mt-3">
-                        <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-primary">
+                        <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-primary btn-sm">
                             <i class="bi bi-star-fill"></i> Loyalty Dashboard
                         </a>
-                        <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn btn-warning">
+                        <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn-action btn-action-primary">
                             <i class="bi bi-pencil"></i> Edit Customer
                         </a>
-                        <a href="{% url 'customer_list' slug=request.business.slug  %}" class="btn btn-secondary">
+                        <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn-action">
                             <i class="bi bi-arrow-left"></i> Back to List
                         </a>
                     </div>
@@ -71,20 +71,20 @@
 
         <!-- Purchase History -->
         <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="bi bi-receipt"></i> Purchase History</h5>
+            <div class="ui-card">
+                <div class="ui-card-header">
+                    <span class="ui-card-title"><i class="bi bi-receipt"></i> Purchase History</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body p-0">
                     {% if purchases %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="ui-table">
                             <thead>
                                 <tr>
                                     <th>Invoice</th>
                                     <th>Date</th>
                                     <th>Items</th>
-                                    <th>Total</th>
+                                    <th class="text-end">Total</th>
                                     <th>Points Earned</th>
                                     <th>Action</th>
                                 </tr>
@@ -95,18 +95,18 @@
                                     <td><strong>{{ sale.invoice_number }}</strong></td>
                                     <td>{{ sale.date|date:"d M Y H:i" }}</td>
                                     <td>{{ sale.items.count }}</td>
-                                    <td>KES {{ sale.total|floatformat:2 }}</td>
+                                    <td class="text-end">KES {{ sale.total|floatformat:2 }}</td>
                                     <td>
                                         {% with points_earned=sale.loyalty_transactions.first %}
                                             {% if points_earned %}
-                                                <span class="badge bg-success">+{{ points_earned.points }}</span>
+                                                <span class="status-badge status-success">+{{ points_earned.points }}</span>
                                             {% else %}
                                                 <span class="text-muted">0 pts</span>
                                             {% endif %}
                                         {% endwith %}
                                     </td>
                                     <td>
-                                        <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-info">
+                                        <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" class="btn-action btn-action-primary">
                                             <i class="bi bi-eye"></i> View
                                         </a>
                                     </td>
@@ -116,9 +116,9 @@
                         </table>
                     </div>
                     {% else %}
-                    <div class="text-center py-5">
-                        <i class="bi bi-cart-x" style="font-size: 48px; color: #ccc;"></i>
-                        <p class="text-muted mt-3">No purchase history yet</p>
+                    <div class="empty-state">
+                        <i class="bi bi-cart-x"></i>
+                        <p>No purchase history yet</p>
                     </div>
                     {% endif %}
                 </div>

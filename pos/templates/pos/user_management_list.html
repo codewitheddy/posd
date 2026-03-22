@@ -3,174 +3,164 @@
 {% block title %}User Management{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2><i class="bi bi-people-fill"></i> User Management</h2>
-            <p class="text-muted">Manage users and assign roles</p>
-        </div>
-        <div>
-            <a href="{% url 'roles_permissions' slug=request.business.slug %}" class="btn btn-info me-2">
-                <i class="bi bi-shield-check"></i> View Roles & Permissions
-            </a>
-            <a href="{% url 'user_management_create' slug=request.business.slug %}" class="btn btn-primary">
-                <i class="bi bi-person-plus-fill"></i> Add New User
-            </a>
-        </div>
-    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>User</th>
-                            <th>Contact</th>
-                            <th>Role</th>
-                            <th>Employee ID</th>
-                            <th>Status</th>
-                            <th>Performance</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for membership in memberships %}
-                        <tr>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" 
-                                         style="width: 45px; height: 45px; font-size: 1.2rem;">
-                                        {{ membership.user.username|slice:":1"|upper }}
-                                    </div>
-                                    <div>
-                                        <strong>{{ membership.user.get_full_name|default:membership.user.username }}</strong>
-                                        <br>
-                                        <small class="text-muted">@{{ membership.user.username }}</small>
-                                        {% if membership.role == 'owner' %}
-                                        <span class="badge bg-danger ms-1">Owner</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                {% if membership.user.email %}
-                                <i class="bi bi-envelope"></i> {{ membership.user.email }}<br>
-                                {% endif %}
-                                {% if membership.user.profile.phone %}
-                                <i class="bi bi-telephone"></i> {{ membership.user.profile.phone }}
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="badge bg-{% if membership.role == 'owner' %}danger{% elif membership.role == 'admin' %}warning{% elif membership.role == 'manager' %}primary{% elif membership.role == 'stock_manager' %}success{% elif membership.role == 'cashier' %}info{% elif membership.role == 'sales' %}secondary{% else %}dark{% endif %} fs-6">
-                                    {{ membership.get_role_display }}
-                                </span>
-                            </td>
-                            <td>{{ membership.user.profile.employee_id|default:"-" }}</td>
-                            <td>
-                                {% if membership.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-danger">Inactive</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <small class="text-muted">
-                                    <strong>{{ membership.total_sales }}</strong> sales<br>
-                                    <strong>KES {{ membership.total_revenue|floatformat:0 }}</strong> revenue
-                                </small>
-                            </td>
-                            <td>
-                                <div class="btn-group" role="group">
-                                    <a href="{% url 'user_management_edit' slug=request.business.slug pk=membership.user.pk %}" 
-                                       class="btn btn-sm btn-warning" title="Edit User">
-                                        <i class="bi bi-pencil-square"></i>
-                                    </a>
-                                    {% if membership.role != 'owner' and membership.user != request.user %}
-                                    <button type="button" class="btn btn-sm btn-info" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#changeRoleModal{{ membership.user.pk }}"
-                                            title="Change Role">
-                                        <i class="bi bi-arrow-left-right"></i>
-                                    </button>
-                                    <a href="{% url 'user_management_delete' slug=request.business.slug pk=membership.user.pk %}" 
-                                       class="btn btn-sm btn-danger" title="Remove User">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                    {% endif %}
-                                </div>
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-people-fill me-2 text-primary"></i>User Management</h1>
+    <p class="page-subtitle">Manage users and assign roles for {{ request.business.name }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'roles_permissions' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-shield-check me-1"></i>Roles & Permissions
+    </a>
+    <a href="{% url 'user_management_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-person-plus-fill me-1"></i>Add User
+    </a>
+  </div>
+</div>
 
-                                <!-- Change Role Modal -->
-                                <div class="modal fade" id="changeRoleModal{{ membership.user.pk }}" tabindex="-1">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Change Role for {{ membership.user.username }}</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                            </div>
-                                            <form method="post" action="{% url 'user_management_change_role' slug=request.business.slug pk=membership.user.pk %}">
-                                                {% csrf_token %}
-                                                <div class="modal-body">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Current Role</label>
-                                                        <p><span class="badge bg-primary fs-6">{{ membership.get_role_display }}</span></p>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label for="role{{ membership.user.pk }}" class="form-label">New Role</label>
-                                                        <select name="role" id="role{{ membership.user.pk }}" class="form-select" required>
-                                                            <option value="">Select Role</option>
-                                                            <option value="admin">Administrator</option>
-                                                            <option value="manager">Manager</option>
-                                                            <option value="stock_manager">Stock Manager</option>
-                                                            <option value="cashier">Cashier</option>
-                                                            <option value="sales">Sales Associate</option>
-                                                            <option value="viewer">Viewer</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-primary">Change Role</button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
-                                No users found. <a href="{% url 'user_management_create' slug=request.business.slug %}">Add your first user</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Quick Stats -->
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> User Management Tips</h5>
+<div class="ui-card">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-people me-2"></i>Team Members</span>
+    <span class="badge bg-light text-dark">{{ memberships|length }} users</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Contact</th>
+            <th>Role</th>
+            <th>Employee ID</th>
+            <th>Status</th>
+            <th>Performance</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for membership in memberships %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div style="width:38px;height:38px;border-radius:50%;background:var(--primary-color,#224195);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
+                  {{ membership.user.username|slice:":1"|upper }}
                 </div>
-                <div class="card-body">
-                    <ul class="mb-0">
-                        <li><strong>Owner:</strong> Full control - cannot be removed or have role changed</li>
-                        <li><strong>Administrator:</strong> Full access to all features except business deletion</li>
-                        <li><strong>Manager:</strong> Can manage users, products, and view reports</li>
-                        <li><strong>Stock Manager:</strong> Manages inventory and suppliers only</li>
-                        <li><strong>Cashier:</strong> Can make sales and manage customers</li>
-                        <li><strong>Sales Associate:</strong> Similar to cashier with limited access</li>
-                        <li><strong>Viewer:</strong> Read-only access to reports</li>
-                    </ul>
+                <div>
+                  <div style="font-weight:600;font-size:13px;">{{ membership.user.get_full_name|default:membership.user.username }}</div>
+                  <div style="font-size:11px;color:#8a94a6;">@{{ membership.user.username }}
+                    {% if membership.role == 'owner' %}<span class="status-badge status-danger ms-1">Owner</span>{% endif %}
+                  </div>
                 </div>
-            </div>
-        </div>
+              </div>
+            </td>
+            <td>
+              {% if membership.user.email %}<div style="font-size:12px;"><i class="bi bi-envelope me-1"></i>{{ membership.user.email }}</div>{% endif %}
+              {% if membership.user.profile.phone %}<div style="font-size:12px;"><i class="bi bi-telephone me-1"></i>{{ membership.user.profile.phone }}</div>{% endif %}
+            </td>
+            <td>
+              <span class="status-badge {% if membership.role == 'owner' %}status-danger{% elif membership.role == 'admin' %}status-warning{% elif membership.role == 'manager' %}status-info{% elif membership.role == 'stock_manager' %}status-success{% elif membership.role == 'cashier' %}status-purple{% else %}status-gray{% endif %}">
+                {{ membership.get_role_display }}
+              </span>
+            </td>
+            <td>{{ membership.user.profile.employee_id|default:"—" }}</td>
+            <td>
+              {% if membership.is_active %}
+              <span class="status-badge status-success">Active</span>
+              {% else %}
+              <span class="status-badge status-danger">Inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="font-size:12px;color:#374151;">
+                <strong>{{ membership.total_sales }}</strong> sales<br>
+                <strong>KES {{ membership.total_revenue|floatformat:0 }}</strong>
+              </div>
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{% url 'user_management_edit' slug=request.business.slug pk=membership.user.pk %}" class="btn-action btn-action-primary" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                {% if membership.role != 'owner' and membership.user != request.user %}
+                <button type="button" class="btn-action" data-bs-toggle="modal" data-bs-target="#changeRoleModal{{ membership.user.pk }}" title="Change Role">
+                  <i class="bi bi-arrow-left-right"></i>
+                </button>
+                <a href="{% url 'user_management_delete' slug=request.business.slug pk=membership.user.pk %}" class="btn-action btn-action-danger" title="Remove">
+                  <i class="bi bi-trash"></i>
+                </a>
+                {% endif %}
+              </div>
+
+              <!-- Change Role Modal -->
+              <div class="modal fade" id="changeRoleModal{{ membership.user.pk }}" tabindex="-1">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Change Role — {{ membership.user.username }}</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="post" action="{% url 'user_management_change_role' slug=request.business.slug pk=membership.user.pk %}">
+                      {% csrf_token %}
+                      <div class="modal-body">
+                        <div class="mb-3">
+                          <label class="form-label">Current Role</label>
+                          <p><span class="status-badge status-info">{{ membership.get_role_display }}</span></p>
+                        </div>
+                        <div class="mb-3">
+                          <label for="role{{ membership.user.pk }}" class="form-label">New Role</label>
+                          <select name="role" id="role{{ membership.user.pk }}" class="form-select" required>
+                            <option value="">Select Role</option>
+                            <option value="admin">Administrator</option>
+                            <option value="manager">Manager</option>
+                            <option value="stock_manager">Stock Manager</option>
+                            <option value="cashier">Cashier</option>
+                            <option value="sales">Sales Associate</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Change Role</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <i class="bi bi-people"></i>
+                <p>No users found.</p>
+                <a href="{% url 'user_management_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">Add First User</a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
+</div>
+
+<div class="ui-card">
+  <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-info-circle me-2"></i>Role Guide</span></div>
+  <div class="ui-card-body">
+    <div class="row g-2" style="font-size:13px;">
+      <div class="col-md-6"><span class="status-badge status-danger me-2">Owner</span> Full control — cannot be removed or role changed</div>
+      <div class="col-md-6"><span class="status-badge status-warning me-2">Admin</span> Full access except business deletion</div>
+      <div class="col-md-6"><span class="status-badge status-info me-2">Manager</span> Manage users, products, and view reports</div>
+      <div class="col-md-6"><span class="status-badge status-success me-2">Stock Manager</span> Inventory and suppliers only</div>
+      <div class="col-md-6"><span class="status-badge status-purple me-2">Cashier</span> Make sales and manage customers</div>
+      <div class="col-md-6"><span class="status-badge status-gray me-2">Viewer</span> Read-only access to reports</div>
+    </div>
+  </div>
+</div>
+
 </div>
 {% endblock %}

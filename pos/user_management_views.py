@@ -167,7 +167,11 @@ def user_edit_view(request, slug=None, pk=None):
     user = membership.user
     
     # Prevent editing owner if not owner
-    if membership.role == 'owner' and not request.business.is_owner(request.user):
+    is_requester_owner = (request.user.is_superuser or 
+                          (hasattr(request, 'business_membership') and 
+                           request.business_membership and 
+                           request.business_membership.role == 'owner'))
+    if membership.role == 'owner' and not is_requester_owner:
         messages.error(request, 'Only the business owner can edit owner accounts!')
         return redirect('user_management_list', slug=request.business.slug)
     

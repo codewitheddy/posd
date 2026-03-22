@@ -12,7 +12,7 @@ from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
     SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
-    GoodsReturnedNote, GoodsReturnedNoteItem, DayClosureReport
+    GoodsReturnedNote, GoodsReturnedNoteItem, GoodsReceivedNote, GoodsReceivedNoteItem, DayClosureReport
 )
 from .decorators import business_required, business_permission_required, feature_required
 from reportlab.lib.pagesizes import letter, A4
@@ -42,6 +42,7 @@ def platform_admin_dashboard(request):
     total_businesses = Business.objects.count()
     active_businesses = Business.objects.filter(is_active=True).count()
     inactive_businesses = total_businesses - active_businesses
+    pending_activations = Business.objects.filter(is_active=False).count()
     
     # User statistics
     total_users = User.objects.count()
@@ -70,6 +71,7 @@ def platform_admin_dashboard(request):
         'total_businesses': total_businesses,
         'active_businesses': active_businesses,
         'inactive_businesses': inactive_businesses,
+        'pending_activations': pending_activations,
         'total_users': total_users,
         'total_sales': total_sales,
         'total_revenue': total_revenue,
@@ -200,6 +202,85 @@ def extend_license(request):
             messages.error(request, 'Invalid number of days.')
         except Exception as e:
             messages.error(request, f'Error extending license: {str(e)}')
+    
+    return redirect('platform_admin_dashboard')
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def activate_business(request, business_id):
+    """Activate a business and send notification email"""
+    if request.method == 'POST':
+        try:
+            business = Business.objects.get(id=business_id)
+            
+            if business.is_active:
+                messages.info(request, f'Business "{business.name}" is already active.')
+                return redirect('platform_admin_dashboard')
+            
+            # Activate the business
+            business.is_active = True
+            business.save()
+            
+            # Send activation email
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings
+                
+                login_url = f"{getattr(settings, 'SITE_URL', 'http://localhost:8000')}/login/"
+                
+                subject = f'Your Business "{business.name}" Has Been Activated!'
+                message = f"""
+Hello {business.owner.first_name or business.owner.username},
+
+Great news! Your business "{business.name}" has been activated and is now ready to use.
+
+You can now log in and start using the Marid POS:
+Login URL: {login_url}
+Username: {business.owner.username}
+
+Your 30-day free trial has started. Explore all features and let us know if you need any help.
+
+Need Support?
+Email: info@marid.co.ke
+Phone/WhatsApp: +254 717 147 700
+
+Best regards,
+Marid POS Team
+                """
+                
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [business.owner.email],
+                    fail_silently=True,
+                )
+                
+                messages.success(
+                    request, 
+                    f'Business "{business.name}" has been activated! Notification email sent to {business.owner.email}.'
+                )
+            except Exception as e:
+                messages.success(
+                    request, 
+                    f'Business "{business.name}" has been activated! (Email notification failed: {str(e)})'
+                )
+            
+            # Log activity
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='update',
+                model_name='Business',
+                object_id=business.id,
+                description=f'Business activated: {business.name}',
+                request=request
+            )
+            
+        except Business.DoesNotExist:
+            messages.error(request, 'Business not found.')
+        except Exception as e:
+            messages.error(request, f'Error activating business: {str(e)}')
     
     return redirect('platform_admin_dashboard')
 
@@ -400,6 +481,36 @@ def dashboard(request, slug=None):
             status='pending'
         ).count()
     
+    # Trial/License Information
+    trial_info = {
+        'is_trial': request.business.is_trial,
+        'trial_ends_at': request.business.trial_ends_at,
+        'is_expired': request.business.is_trial_expired,
+        'days_remaining': None,
+        'show_warning': False,
+        'warning_level': 'info',  # info, warning, danger
+    }
+    
+    # Superusers (system root) have lifetime access - don't show trial warnings
+    if not request.user.is_superuser and request.business.is_trial and request.business.trial_ends_at:
+        from django.utils import timezone
+        delta = request.business.trial_ends_at - timezone.now()
+        trial_info['days_remaining'] = delta.days
+        
+        # Determine warning level and whether to show
+        if trial_info['is_expired']:
+            trial_info['show_warning'] = True
+            trial_info['warning_level'] = 'danger'
+        elif trial_info['days_remaining'] <= 3:
+            trial_info['show_warning'] = True
+            trial_info['warning_level'] = 'danger'
+        elif trial_info['days_remaining'] <= 7:
+            trial_info['show_warning'] = True
+            trial_info['warning_level'] = 'warning'
+        elif trial_info['days_remaining'] <= 14:
+            trial_info['show_warning'] = True
+            trial_info['warning_level'] = 'info'
+    
     # Expiry statistics - Optimized
     expired_count = Product.objects.filter(
         business=request.business,
@@ -437,12 +548,14 @@ def dashboard(request, slug=None):
                 break
     
     # Sales by hour today (for chart) - Database agnostic
-    hourly_sales = today_sales.annotate(
+    hourly_sales_qs = today_sales.annotate(
         hour=ExtractHour('date')
     ).values('hour').annotate(
         count=Count('id'),
         revenue=Sum('total')
     ).order_by('hour')
+    # Convert Decimal to float so it serializes to valid JSON in the template
+    hourly_sales = [{'hour': r['hour'], 'count': r['count'], 'revenue': float(r['revenue'] or 0)} for r in hourly_sales_qs]
     
     context = {
         # Product stats
@@ -484,6 +597,9 @@ def dashboard(request, slug=None):
         # Support Access (for business owners)
         'pending_support_requests_count': pending_support_requests_count,
         
+        # Trial/License Information
+        'trial_info': trial_info,
+        
         # Expiry alerts
         'expired_count': expired_count,
         'expiring_soon_count': expiring_soon_count,
@@ -494,7 +610,7 @@ def dashboard(request, slug=None):
         'top_products_today': top_products_today,
         'recent_sales': recent_sales,
         'payment_breakdown': payment_breakdown,
-        'hourly_sales': list(hourly_sales),
+        'hourly_sales': hourly_sales,
     }
     
     # Cache the dashboard data for 5 minutes
@@ -507,10 +623,50 @@ def dashboard(request, slug=None):
 @login_required
 @business_required
 def product_list(request, slug=None):
-    """List all products"""
-    products = Product.objects.filter(business=request.business).select_related('category').all()
-    categories = Category.objects.filter(business=request.business).all()
-    return render(request, 'pos/product_list.html', {'products': products, 'categories': categories})
+    """List all products with filtering"""
+    from .models import Brand
+    products = Product.objects.filter(business=request.business).select_related('category', 'brand').all()
+
+    # Filters
+    category_filter = request.GET.get('category', '')
+    brand_filter = request.GET.get('brand', '')
+    type_filter = request.GET.get('type', '')
+    status_filter = request.GET.get('status', '')
+    search = request.GET.get('q', '').strip()
+
+    if category_filter:
+        products = products.filter(category_id=category_filter)
+    if brand_filter:
+        products = products.filter(brand_id=brand_filter)
+    if type_filter:
+        products = products.filter(product_type=type_filter)
+    if status_filter == 'active':
+        products = products.filter(is_active=True)
+    elif status_filter == 'inactive':
+        products = products.filter(is_active=False)
+    elif status_filter == 'low_stock':
+        products = products.filter(stock_quantity__lte=models.F('low_stock_threshold'), stock_quantity__gt=0)
+    elif status_filter == 'out_of_stock':
+        products = products.filter(stock_quantity=0)
+    if search:
+        products = products.filter(
+            models.Q(name__icontains=search) |
+            models.Q(product_code__icontains=search) |
+            models.Q(barcode__icontains=search)
+        )
+
+    context = {
+        'products': products,
+        'categories': Category.objects.filter(business=request.business).order_by('name'),
+        'brands': Brand.objects.filter(business=request.business).order_by('name'),
+        'product_types': Product.PRODUCT_TYPE_CHOICES,
+        'category_filter': category_filter,
+        'brand_filter': brand_filter,
+        'type_filter': type_filter,
+        'status_filter': status_filter,
+        'search': search,
+    }
+    return render(request, 'pos/product_list.html', context)
 
 
 @business_required
@@ -634,6 +790,21 @@ def product_bulk_upload(request, slug=None):
     return render(request, 'pos/product_bulk_upload.html')
 
 
+@login_required
+@business_required
+def product_toggle_active(request, slug=None, pk=None):
+    """Toggle product active/inactive status via AJAX or POST"""
+    product = get_object_or_404(Product, business=request.business, pk=pk)
+    if request.method == 'POST':
+        product.is_active = not product.is_active
+        product.save()
+        status = 'activated' if product.is_active else 'deactivated'
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'is_active': product.is_active, 'status': status})
+        messages.success(request, f'Product "{product.name}" has been {status}.')
+    return redirect('product_list', slug=request.business.slug)
+
+
 @business_required
 def product_export_csv(request, slug=None):
     """Export products as CSV"""
@@ -678,6 +849,18 @@ def product_download_template(request):
     return response
 
 
+def _product_form_context(request):
+    """Shared context builder for product create/edit forms"""
+    from .models import UnitOfMeasurement, Brand
+    return {
+        'categories': Category.objects.filter(business=request.business).order_by('name'),
+        'brands': Brand.objects.filter(business=request.business).order_by('name'),
+        'units': UnitOfMeasurement.objects.filter(business=request.business, is_active=True),
+        'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
+        'product_types': Product.PRODUCT_TYPE_CHOICES,
+    }
+
+
 @business_required
 def product_create(request, slug=None):
     """Create new product"""
@@ -704,53 +887,65 @@ def product_create(request, slug=None):
             # Validate cost_price is provided and greater than 0
             if not cost_price:
                 messages.error(request, 'Cost Price is required. This is needed for profit tracking and financial reporting.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+                return render(request, 'pos/product_form.html', _product_form_context(request))
             
             cost = Decimal(cost_price)
             if cost <= 0:
                 messages.error(request, 'Cost Price must be greater than 0.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+                return render(request, 'pos/product_form.html', _product_form_context(request))
             
             # Validate unit_price
             if not unit_price:
                 messages.error(request, 'Selling Price is required.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+                return render(request, 'pos/product_form.html', _product_form_context(request))
             
             selling_price = Decimal(unit_price)
             if selling_price <= 0:
                 messages.error(request, 'Selling Price must be greater than 0.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+                return render(request, 'pos/product_form.html', _product_form_context(request))
             
             category = Category.objects.get(id=category_id, business=request.business) if category_id else None
             unit = UnitOfMeasurement.objects.get(id=unit_id, business=request.business) if unit_id else None
-            
+
+            # New fields
+            from .models import Brand
+            brand_id = request.POST.get('brand')
+            brand = Brand.objects.get(id=brand_id, business=request.business) if brand_id else None
+            preferred_supplier_id = request.POST.get('preferred_supplier')
+            preferred_supplier = Supplier.objects.get(id=preferred_supplier_id, business=request.business) if preferred_supplier_id else None
+
             # Convert empty strings to default values
             low_stock = Decimal(low_stock_threshold) if low_stock_threshold else Decimal('10')
-            
+
             product = Product.objects.create(
                 business=request.business,
-                name=name, 
+                name=name,
+                description=request.POST.get('description', ''),
                 product_code=product_code if product_code else None,
                 barcode=barcode if barcode else '',
+                product_type=request.POST.get('product_type', 'stock'),
                 category=category,
+                brand=brand,
                 unit=unit,
+                is_active=request.POST.get('is_active', '1') == '1',
                 cost_price=cost,
                 unit_price=selling_price,
+                wholesale_price=Decimal(request.POST.get('wholesale_price')) if request.POST.get('wholesale_price') else None,
+                minimum_price=Decimal(request.POST.get('minimum_price')) if request.POST.get('minimum_price') else None,
                 tax_class=tax_class,
-                stock_quantity=0,  # Always 0 for new products
+                stock_quantity=0,
                 low_stock_threshold=low_stock,
-                image=image if image else None,  # Add image
+                reorder_quantity=Decimal(request.POST.get('reorder_quantity') or '0'),
+                preferred_supplier=preferred_supplier,
+                lead_time_days=int(request.POST.get('lead_time_days') or '0'),
+                image=image if image else None,
                 bulk_unit_name=bulk_unit_name if bulk_unit_name else '',
                 bulk_unit_quantity=Decimal(bulk_unit_quantity) if bulk_unit_quantity else None,
                 bulk_unit_price=Decimal(bulk_unit_price) if bulk_unit_price else None,
+                hs_code=request.POST.get('hs_code', ''),
+                hs_code_description=request.POST.get('hs_code_description', ''),
+                is_excisable=request.POST.get('is_excisable', '0') == '1',
+                excise_rate=Decimal(request.POST.get('excise_rate') or '0'),
             )
             
             # Create initial stock adjustment record
@@ -769,10 +964,8 @@ def product_create(request, slug=None):
             messages.error(request, f'Invalid price value: {str(e)}')
         except Exception as e:
             messages.error(request, f'Error creating product: {str(e)}')
-    
-    categories = Category.objects.filter(business=request.business).all()
-    units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-    return render(request, 'pos/product_form.html', {'categories': categories, 'units': units})
+
+    return render(request, 'pos/product_form.html', _product_form_context(request))
 
 
 
@@ -788,53 +981,67 @@ def product_edit(request, slug=None, pk=None):
             cost_price = request.POST.get('cost_price', '').strip()
             if not cost_price:
                 messages.error(request, 'Cost Price is required. This is needed for profit tracking and financial reporting.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
             
             cost = Decimal(cost_price)
             if cost <= 0:
                 messages.error(request, 'Cost Price must be greater than 0.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
             
             # Validate unit_price
             unit_price = request.POST.get('unit_price', '').strip()
             if not unit_price:
                 messages.error(request, 'Selling Price is required.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
             
             selling_price = Decimal(unit_price)
             if selling_price <= 0:
                 messages.error(request, 'Selling Price must be greater than 0.')
-                categories = Category.objects.filter(business=request.business).all()
-                units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-                return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
             
             product.name = request.POST.get('name')
+            product.description = request.POST.get('description', '')
             product.product_code = request.POST.get('product_code') if request.POST.get('product_code') else None
             product.barcode = request.POST.get('barcode', '')
+            product.product_type = request.POST.get('product_type', 'stock')
+            product.is_active = request.POST.get('is_active', '1') == '1'
             category_id = request.POST.get('category')
             product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
-            
+
+            from .models import Brand
+            brand_id = request.POST.get('brand')
+            product.brand = Brand.objects.get(business=request.business, id=brand_id) if brand_id else None
+
             # Update unit
             unit_id = request.POST.get('unit')
             product.unit = UnitOfMeasurement.objects.get(business=request.business, id=unit_id) if unit_id else None
-            
+
+            preferred_supplier_id = request.POST.get('preferred_supplier')
+            product.preferred_supplier = Supplier.objects.get(business=request.business, id=preferred_supplier_id) if preferred_supplier_id else None
+
             # Update cost price and selling price
             product.cost_price = cost
             product.unit_price = selling_price
-            
+            product.wholesale_price = Decimal(request.POST.get('wholesale_price')) if request.POST.get('wholesale_price') else None
+            product.minimum_price = Decimal(request.POST.get('minimum_price')) if request.POST.get('minimum_price') else None
+
             # Update tax class
             product.tax_class = request.POST.get('tax_class', 'standard')
-            
+
             # Convert empty strings to default values
             low_stock = request.POST.get('low_stock_threshold')
             product.low_stock_threshold = Decimal(low_stock) if low_stock else Decimal('10')
-            
+            product.reorder_quantity = Decimal(request.POST.get('reorder_quantity') or '0')
+            product.lead_time_days = int(request.POST.get('lead_time_days') or '0')
+
             # Update bulk unit fields
             bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
             bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
@@ -843,7 +1050,13 @@ def product_edit(request, slug=None, pk=None):
             product.bulk_unit_name = bulk_unit_name if bulk_unit_name else ''
             product.bulk_unit_quantity = Decimal(bulk_unit_quantity) if bulk_unit_quantity else None
             product.bulk_unit_price = Decimal(bulk_unit_price) if bulk_unit_price else None
-            
+
+            # HS Code / excise
+            product.hs_code = request.POST.get('hs_code', '')
+            product.hs_code_description = request.POST.get('hs_code_description', '')
+            product.is_excisable = request.POST.get('is_excisable', '0') == '1'
+            product.excise_rate = Decimal(request.POST.get('excise_rate') or '0')
+
             # Handle image upload
             image = request.FILES.get('image')
             if image:
@@ -869,10 +1082,11 @@ def product_edit(request, slug=None, pk=None):
             messages.error(request, f'Invalid price value: {str(e)}')
         except Exception as e:
             messages.error(request, f'Error updating product: {str(e)}')
-    
-    categories = Category.objects.filter(business=request.business).all()
-    units = UnitOfMeasurement.objects.filter(business=request.business, is_active=True).all()
-    return render(request, 'pos/product_form.html', {'product': product, 'categories': categories, 'units': units})
+
+    ctx = _product_form_context(request)
+    ctx['product'] = product
+    ctx['stock_history'] = product.stock_adjustments.order_by('-created_at')[:50]
+    return render(request, 'pos/product_form.html', ctx)
 
 
 @business_required
@@ -1407,7 +1621,12 @@ def complete_sale(request, slug=None):
             sale_items = []
             
             for item_str in items_data:
-                product_id, quantity, price = item_str.split(',')
+                parts = item_str.split(',')
+                product_id, quantity, price = parts[0], parts[1], parts[2]
+                item_note = ''
+                if len(parts) > 3:
+                    from urllib.parse import unquote
+                    item_note = unquote(parts[3])
                 product = Product.objects.get(id=product_id, business=request.business)
                 quantity = int(quantity)
                 unit_price = Decimal(price)  # This is tax-inclusive price
@@ -1423,7 +1642,8 @@ def complete_sale(request, slug=None):
                     'product': product,
                     'quantity': quantity,
                     'unit_price': unit_price,
-                    'total_price': total_price
+                    'total_price': total_price,
+                    'note': item_note,
                 })
             
             # Calculate discount on tax-inclusive amount
@@ -1463,7 +1683,8 @@ def complete_sale(request, slug=None):
                     sale=sale,
                     product=item['product'],
                     quantity=item['quantity'],
-                    unit_price=item['unit_price']
+                    unit_price=item['unit_price'],
+                    note=item.get('note', ''),
                 )
                 
                 # Deduct stock and create adjustment record
@@ -1829,6 +2050,11 @@ def sales_list(request, slug=None):
     if search:
         sales = sales.filter(invoice_number__icontains=search)
     
+    # Category filter
+    category_id = request.GET.get('category')
+    if category_id:
+        sales = sales.filter(items__product__category_id=category_id).distinct()
+
     # Payment method filter
     payment_method_id = request.GET.get('payment_method')
     if payment_method_id:
@@ -1881,6 +2107,7 @@ def sales_list(request, slug=None):
     cashiers = User.objects.filter(business_memberships__business=request.business).distinct()
     customers = Customer.objects.filter(business=request.business)
     payment_methods = PaymentMethod.objects.filter(business=request.business)
+    categories = Category.objects.filter(business=request.business).order_by('name')
     
     context = {
         'sales': sales_page,
@@ -1888,6 +2115,7 @@ def sales_list(request, slug=None):
         'cashiers': cashiers,
         'customers': customers,
         'payment_methods': payment_methods,
+        'categories': categories,
         'search': search,
         'start_date': start_date or '',
         'end_date': end_date or '',
@@ -1895,12 +2123,48 @@ def sales_list(request, slug=None):
         'cashier_id': cashier_id,
         'customer_id': customer_id,
         'payment_method_id': payment_method_id,
+        'category_id': category_id,
         'min_amount': min_amount or '',
         'max_amount': max_amount or '',
         'order_by': order_by,
         'per_page': per_page,
     }
     return render(request, 'pos/sales_list.html', context)
+
+
+# ==================== PRODUCT QUICK-ADD APIs ====================
+
+@login_required
+@business_required
+def api_create_category(request, slug=None):
+    """AJAX: Quick-create a category from the product form"""
+    from django.http import JsonResponse
+    import json
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    data = json.loads(request.body)
+    name = data.get('name', '').strip()
+    if not name:
+        return JsonResponse({'error': 'Name required'}, status=400)
+    cat, created = Category.objects.get_or_create(business=request.business, name=name)
+    return JsonResponse({'id': cat.pk, 'name': cat.name})
+
+
+@login_required
+@business_required
+def api_create_brand(request, slug=None):
+    """AJAX: Quick-create a brand from the product form"""
+    from django.http import JsonResponse
+    from .models import Brand
+    import json
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    data = json.loads(request.body)
+    name = data.get('name', '').strip()
+    if not name:
+        return JsonResponse({'error': 'Name required'}, status=400)
+    brand, created = Brand.objects.get_or_create(business=request.business, name=name)
+    return JsonResponse({'id': brand.pk, 'name': brand.name})
 
 
 @business_required
@@ -2243,90 +2507,102 @@ def purchase_create(request, slug=None):
         supplier_id = request.POST.get('supplier')
         expected_delivery = request.POST.get('expected_delivery')
         notes = request.POST.get('notes', '')
-        
+        action = request.POST.get('action', 'draft')  # 'draft' or 'submit'
+
         # Get product items from POST data
         product_ids = request.POST.getlist('product_id[]')
         quantities = request.POST.getlist('quantity[]')
         unit_costs = request.POST.getlist('unit_cost[]')
-        
+        discounts = request.POST.getlist('discount[]')
+        descriptions = request.POST.getlist('description[]')
+
         if not supplier_id:
             messages.error(request, 'Please select a supplier!')
             return redirect('purchase_create', slug=request.business.slug)
-        
+
         if not product_ids or not any(product_ids):
             messages.error(request, 'Please add at least one product!')
             return redirect('purchase_create', slug=request.business.slug)
-        
-        # Create purchase
+
+        # Create purchase as draft first
         supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
         purchase = Purchase.objects.create(
             business=request.business,
             supplier=supplier,
             expected_delivery=expected_delivery if expected_delivery else None,
             notes=notes,
-            status='pending'
+            status='draft',
+            created_by=request.user,
         )
-        
+
         # Add purchase items and calculate totals
         subtotal = Decimal('0.00')
+        total_discount = Decimal('0.00')
         items_added = 0
         for i, product_id in enumerate(product_ids):
             if product_id and quantities[i] and unit_costs[i]:
                 product = get_object_or_404(Product, pk=product_id, business=request.business)
                 quantity = int(quantities[i])
                 unit_cost = Decimal(unit_costs[i])
-                
-                # Validate quantity and cost are positive
+                discount = Decimal(discounts[i]) if i < len(discounts) and discounts[i] else Decimal('0')
+                description = descriptions[i] if i < len(descriptions) else ''
+
                 if quantity <= 0 or unit_cost < 0:
                     purchase.delete()
                     messages.error(request, 'All quantities must be greater than zero and costs cannot be negative!')
                     return redirect('purchase_create', slug=request.business.slug)
-                
+
+                line_gross = quantity * unit_cost
+                line_discount = line_gross * (discount / Decimal('100'))
+
                 PurchaseItem.objects.create(
                     purchase=purchase,
                     product=product,
+                    description=description,
                     quantity=quantity,
-                    unit_cost=unit_cost
+                    unit_cost=unit_cost,
+                    discount=discount,
                 )
-                
-                subtotal += quantity * unit_cost
+
+                subtotal += line_gross
+                total_discount += line_discount
                 items_added += 1
-        
-        # Validate that we have items and non-zero total
+
         if items_added == 0:
             purchase.delete()
             messages.error(request, 'Please add at least one valid item to the purchase!')
             return redirect('purchase_create', slug=request.business.slug)
-        
+
         if subtotal <= 0:
             purchase.delete()
             messages.error(request, 'Purchase total must be greater than zero!')
             return redirect('purchase_create', slug=request.business.slug)
-        
+
         # Update purchase totals
         purchase.subtotal = subtotal
-        purchase.tax_amount = Decimal('0.00')  # Can be customized
-        purchase.total_amount = subtotal + purchase.tax_amount
+        purchase.discount_amount = total_discount
+        purchase.tax_amount = Decimal('0.00')
+        purchase.total_amount = subtotal - total_discount + purchase.tax_amount
+
+        # Handle action: submit for approval immediately?
+        if action == 'submit':
+            purchase.status = 'pending_approval'
+            purchase.submitted_by = request.user
+            purchase.submitted_at = timezone.now()
+
         purchase.save()
-        
-        # Send email to supplier
-        from .email_service import EmailService
-        email_sent = EmailService.send_purchase_order(purchase)
-        
-        if email_sent:
-            messages.success(request, f'Purchase order {purchase.purchase_number} created and emailed to supplier!')
+
+        if action == 'submit':
+            messages.success(request, f'Purchase order {purchase.purchase_number} submitted for approval.')
         else:
-            messages.success(request, f'Purchase order {purchase.purchase_number} created successfully!')
-            if purchase.supplier.email:
-                messages.info(request, 'Email notification could not be sent. Check email settings.')
-        
+            messages.success(request, f'Purchase order {purchase.purchase_number} saved as draft.')
+
         return redirect('purchase_detail', slug=request.business.slug, pk=purchase.pk)
-    
+
     # GET request
     suppliers = Supplier.objects.filter(business=request.business, is_active=True)
     products = Product.objects.filter(business=request.business).select_related('category').all()
-    
-    # Check if a product is pre-selected (from low stock alert)
+
     prefill_product_id = request.GET.get('product')
     prefill_product = None
     if prefill_product_id:
@@ -2334,7 +2610,7 @@ def purchase_create(request, slug=None):
             prefill_product = Product.objects.get(pk=prefill_product_id, business=request.business)
         except Product.DoesNotExist:
             pass
-    
+
     context = {
         'suppliers': suppliers,
         'products': products,
@@ -2360,9 +2636,15 @@ def purchase_detail(request, slug=None, pk=None):
 def purchase_receive(request, slug=None, pk=None):
     """Enhanced purchase receiving with item-level details"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
-    
+
     if purchase.status == 'received':
         messages.warning(request, 'This purchase has already been received!')
+        return redirect('purchase_detail', slug=request.business.slug, pk=pk)
+
+    # Allow receiving for approved/sent/ordered/pending statuses
+    receivable_statuses = ('approved', 'sent', 'ordered', 'pending', 'partially_received')
+    if purchase.status not in receivable_statuses:
+        messages.error(request, f'Cannot receive goods for a PO with status "{purchase.get_status_display()}". It must be approved first.')
         return redirect('purchase_detail', slug=request.business.slug, pk=pk)
     
     if request.method == 'POST':
@@ -2441,7 +2723,49 @@ def purchase_receive(request, slug=None, pk=None):
                 from datetime import datetime
                 cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
                 cache.delete(cache_key)
-                
+
+                # Auto-create Goods Received Note document
+                try:
+                    grn_doc = GoodsReceivedNote.objects.create(
+                        business=request.business,
+                        purchase=purchase,
+                        supplier=purchase.supplier,
+                        received_date=timezone.now().date(),
+                        received_by=request.user,
+                        delivery_note_number=request.POST.get('delivery_note_number', ''),
+                        vehicle_number=request.POST.get('vehicle_number', ''),
+                        driver_name=request.POST.get('driver_name', ''),
+                        notes=request.POST.get('receiving_notes', ''),
+                    )
+                    total_ordered = total_received = total_damaged = 0
+                    total_value = Decimal('0.00')
+                    for item in purchase.items.all():
+                        GoodsReceivedNoteItem.objects.create(
+                            grn=grn_doc,
+                            product=item.product,
+                            quantity_ordered=item.quantity,
+                            quantity_received=item.quantity_received,
+                            quantity_damaged=item.quantity_damaged,
+                            unit_cost=item.unit_cost,
+                            batch_number=item.batch_number,
+                            expiry_date=item.expiry_date,
+                            notes=item.receiving_notes,
+                        )
+                        total_ordered += item.quantity
+                        total_received += item.quantity_received
+                        total_damaged += item.quantity_damaged
+                        total_value += Decimal(item.quantity_received) * item.unit_cost
+
+                    has_discrepancy = total_damaged > 0 or total_received < total_ordered
+                    grn_doc.total_ordered_qty = total_ordered
+                    grn_doc.total_received_qty = total_received
+                    grn_doc.total_damaged_qty = total_damaged
+                    grn_doc.total_value = total_value
+                    grn_doc.status = 'discrepancy' if has_discrepancy else 'confirmed'
+                    grn_doc.save()
+                except Exception:
+                    pass  # GRN doc creation is non-blocking
+
                 # Count discrepancies
                 total_damaged = sum(d['quantity_damaged'] for d in receiving_data['items'])
                 if total_damaged > 0:
@@ -2465,10 +2789,10 @@ def purchase_cancel(request, slug=None, pk=None):
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     
     if request.method == 'POST':
-        # Check 1: Cannot cancel if received
-        if purchase.status == 'received':
+        # Check 1: Cannot cancel if received/closed
+        if purchase.status in ('received', 'closed'):
             messages.error(
-                request, 
+                request,
                 'Cannot cancel a received purchase! Please create a Goods Returned Note (GRN) to return items.'
             )
             return redirect('purchase_detail', slug=request.business.slug, pk=pk)
@@ -2525,9 +2849,113 @@ def purchase_cancel(request, slug=None, pk=None):
         'purchase': purchase,
         'has_payments': has_payments,
         'is_ordered': purchase.status == 'ordered',
-        'can_cancel': purchase.status in ['pending', 'ordered'] and not has_payments,
+        'can_cancel': purchase.status in ['pending', 'ordered', 'draft', 'approved', 'sent'] and not has_payments,
     }
     return render(request, 'pos/purchase_cancel_confirm.html', context)
+
+
+# ==================== PURCHASE WORKFLOW ACTIONS ====================
+
+@login_required
+@business_required
+@can_manage_purchases
+def purchase_submit(request, slug=None, pk=None):
+    """Submit a draft PO for approval"""
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
+    if purchase.status not in ('draft', 'pending'):
+        messages.error(request, 'Only draft purchase orders can be submitted for approval.')
+        return redirect('purchase_detail', slug=slug, pk=pk)
+    purchase.status = 'pending_approval'
+    purchase.submitted_by = request.user
+    purchase.submitted_at = timezone.now()
+    purchase.save()
+    messages.success(request, f'{purchase.purchase_number} submitted for approval.')
+    return redirect('purchase_detail', slug=slug, pk=pk)
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def purchase_approve(request, slug=None, pk=None):
+    """Approve a PO that is pending approval"""
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
+    if purchase.status != 'pending_approval':
+        messages.error(request, 'Only purchase orders pending approval can be approved.')
+        return redirect('purchase_detail', slug=slug, pk=pk)
+    purchase.status = 'approved'
+    purchase.approved_by = request.user
+    purchase.approved_at = timezone.now()
+    purchase.save()
+    messages.success(request, f'{purchase.purchase_number} approved.')
+    return redirect('purchase_detail', slug=slug, pk=pk)
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def purchase_send_to_supplier(request, slug=None, pk=None):
+    """Mark PO as sent to supplier and optionally email it"""
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
+    if purchase.status not in ('approved', 'ordered', 'pending'):
+        messages.error(request, 'Purchase order must be approved before sending to supplier.')
+        return redirect('purchase_detail', slug=slug, pk=pk)
+    purchase.status = 'sent'
+    purchase.sent_at = timezone.now()
+    purchase.save()
+    # Try to email supplier
+    try:
+        from .email_service import EmailService
+        EmailService.send_purchase_order(purchase)
+        messages.success(request, f'{purchase.purchase_number} marked as sent and emailed to supplier.')
+    except Exception:
+        messages.success(request, f'{purchase.purchase_number} marked as sent to supplier.')
+    return redirect('purchase_detail', slug=slug, pk=pk)
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def purchase_duplicate(request, slug=None, pk=None):
+    """Duplicate a PO as a new draft"""
+    original = get_object_or_404(Purchase, business=request.business, pk=pk)
+    new_po = Purchase.objects.create(
+        business=request.business,
+        supplier=original.supplier,
+        expected_delivery=original.expected_delivery,
+        notes=f'Duplicated from {original.purchase_number}\n{original.notes}'.strip(),
+        status='draft',
+        created_by=request.user,
+        subtotal=original.subtotal,
+        discount_amount=original.discount_amount,
+        tax_amount=original.tax_amount,
+        total_amount=original.total_amount,
+    )
+    for item in original.items.all():
+        PurchaseItem.objects.create(
+            purchase=new_po,
+            product=item.product,
+            description=item.description,
+            quantity=item.quantity,
+            unit_cost=item.unit_cost,
+            discount=item.discount,
+        )
+    messages.success(request, f'Duplicated as {new_po.purchase_number}.')
+    return redirect('purchase_detail', slug=slug, pk=new_po.pk)
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def purchase_close(request, slug=None, pk=None):
+    """Close a fully received and paid PO"""
+    purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
+    if purchase.status not in ('received', 'partially_received'):
+        messages.error(request, 'Only received purchase orders can be closed.')
+        return redirect('purchase_detail', slug=slug, pk=pk)
+    purchase.status = 'closed'
+    purchase.save()
+    messages.success(request, f'{purchase.purchase_number} closed.')
+    return redirect('purchase_detail', slug=slug, pk=pk)
 
 
 
@@ -2676,6 +3104,19 @@ def login_view(request):
                 user = None
         
         if user is not None:
+            # Check if user has any active businesses
+            from .models import Business
+            user_businesses = Business.objects.filter(owner=user)
+            
+            if user_businesses.exists() and not user_businesses.filter(is_active=True).exists():
+                # User has businesses but none are active (pending activation)
+                messages.warning(
+                    request, 
+                    'Your account is pending activation. Our team will review and activate your account within 24 hours. '
+                    'You will receive an email notification once activated.'
+                )
+                return render(request, 'pos/login.html')
+            
             auth_login(request, user)
             
             # Log login activity
@@ -2744,7 +3185,7 @@ def password_reset_request(request):
                     )
                     
                     # Send email
-                    subject = 'Password Reset Request - POS System'
+                    subject = 'Password Reset Request - Marid POS'
                     message = f'''Hello {user.get_full_name() or user.username},
 
 You requested a password reset for your POS account.
@@ -2757,7 +3198,7 @@ This link will expire in 24 hours.
 If you didn't request this, please ignore this email.
 
 Best regards,
-POS System Team'''
+Marid POS Team'''
                     
                     try:
                         send_mail(
@@ -3626,6 +4067,9 @@ def customer_create(request, slug=None):
                 messages.error(request, 'Invalid date of birth format.')
                 return render(request, 'pos/customer_form.html')
         
+        credit_limit = request.POST.get('credit_limit', '0') or '0'
+        tags = request.POST.get('tags', '')
+
         try:
             customer = Customer.objects.create(
                 business=request.business,
@@ -3636,7 +4080,9 @@ def customer_create(request, slug=None):
                 date_of_birth=date_of_birth if date_of_birth else None,
                 customer_type=customer_type,
                 is_active=is_active,
-                notes=notes
+                notes=notes,
+                credit_limit=credit_limit,
+                tags=tags,
             )
             
             # Log activity
@@ -3680,6 +4126,8 @@ def customer_edit(request, slug=None, pk=None):
         customer.customer_type = request.POST.get('customer_type', 'regular')
         customer.is_active = request.POST.get('is_active') == 'on'
         customer.notes = request.POST.get('notes', '')
+        customer.credit_limit = request.POST.get('credit_limit', '0') or '0'
+        customer.tags = request.POST.get('tags', '')
         
         # Validate age if date of birth is provided
         if date_of_birth:
@@ -5920,6 +6368,63 @@ def payment_method_delete(request, slug, pk):
     return render(request, 'pos/payment_method_confirm_delete.html', context)
 
 
+# ==================== GOODS RECEIVED NOTE VIEWS ====================
+
+@login_required
+@business_required
+@can_manage_purchases
+def goods_received_list(request, slug=None):
+    """List all Goods Received Notes"""
+    notes = GoodsReceivedNote.objects.filter(
+        business=request.business
+    ).select_related('supplier', 'purchase', 'received_by')
+
+    status_filter = request.GET.get('status', '')
+    supplier_filter = request.GET.get('supplier', '')
+    from_date = request.GET.get('from_date', '')
+    to_date = request.GET.get('to_date', '')
+
+    if status_filter:
+        notes = notes.filter(status=status_filter)
+    if supplier_filter:
+        notes = notes.filter(supplier_id=supplier_filter)
+    if from_date:
+        notes = notes.filter(received_date__gte=from_date)
+    if to_date:
+        notes = notes.filter(received_date__lte=to_date)
+
+    context = {
+        'notes': notes,
+        'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
+        'status_filter': status_filter,
+        'supplier_filter': supplier_filter,
+        'from_date': from_date,
+        'to_date': to_date,
+    }
+    return render(request, 'pos/goods_received_list.html', context)
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def goods_received_detail(request, slug=None, pk=None):
+    """View a Goods Received Note"""
+    note = get_object_or_404(GoodsReceivedNote, business=request.business, pk=pk)
+    items = note.items.select_related('product').all()
+    context = {'note': note, 'items': items}
+    return render(request, 'pos/goods_received_detail.html', context)
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def goods_received_print(request, slug=None, pk=None):
+    """Print-friendly Goods Received Note"""
+    note = get_object_or_404(GoodsReceivedNote, business=request.business, pk=pk)
+    items = note.items.select_related('product').all()
+    return render(request, 'pos/goods_received_print.html', {'note': note, 'items': items})
+
+
 # ==================== GOODS RETURNED NOTE (GRN) VIEWS ====================
 
 @login_required
@@ -5939,11 +6444,21 @@ def grn_list(request, slug=None):
     if supplier_filter:
         grns = grns.filter(supplier_id=supplier_filter)
     
+    # Filter by date range
+    from_date = request.GET.get('from_date')
+    to_date = request.GET.get('to_date')
+    if from_date:
+        grns = grns.filter(return_date__gte=from_date)
+    if to_date:
+        grns = grns.filter(return_date__lte=to_date)
+    
     context = {
         'grns': grns,
         'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
         'status_filter': status_filter,
         'supplier_filter': supplier_filter,
+        'from_date': from_date or '',
+        'to_date': to_date or '',
     }
     return render(request, 'pos/grn_list.html', context)
 
@@ -6025,8 +6540,11 @@ def grn_create(request, slug=None):
                 return redirect('grn_create', slug=slug)
             
             # Check if should submit immediately
-            if request.POST.get('submit_now') == 'yes':
+            action = request.POST.get('action', 'draft')
+            if action == 'submit':
                 grn.submit_to_supplier()
+                from .email_service import EmailService
+                EmailService.send_grn_notification(grn)
                 messages.success(request, f'GRN {grn.grn_number} created and submitted to supplier!')
             else:
                 messages.success(request, f'GRN {grn.grn_number} created as draft.')
@@ -6077,12 +6595,12 @@ def grn_submit(request, slug=None, pk=None):
             # Send email to supplier
             from .email_service import EmailService
             email_sent = EmailService.send_grn_notification(grn)
-            
+
             if email_sent:
                 messages.success(request, f'GRN {grn.grn_number} submitted and emailed to supplier.')
             else:
                 messages.success(request, f'GRN {grn.grn_number} submitted to supplier.')
-                if grn.purchase.supplier.email:
+                if grn.supplier.email:
                     messages.info(request, 'Email notification could not be sent. Check email settings.')
         else:
             messages.error(request, 'GRN cannot be submitted (already submitted or wrong status).')
@@ -6152,6 +6670,7 @@ def grn_apply_credit(request, slug=None, pk=None):
     return render(request, 'pos/grn_apply_credit.html', {
         'grn': grn,
         'today': timezone.now().date(),
+        'suggested_cn_number': f'CN-{grn.grn_number}',
     })
 
 
@@ -6191,6 +6710,61 @@ def grn_cancel(request, slug=None, pk=None):
 
 @login_required
 @business_required
+@can_manage_purchases
+def grn_acknowledge(request, slug=None, pk=None):
+    """Mark GRN as acknowledged by supplier"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+
+    if request.method == 'POST':
+        if grn.status == 'submitted':
+            grn.status = 'acknowledged'
+            grn.save()
+            messages.success(request, f'GRN {grn.grn_number} marked as acknowledged by supplier.')
+        else:
+            messages.error(request, 'Only submitted GRNs can be acknowledged.')
+        return redirect('grn_detail', slug=slug, pk=pk)
+
+    return render(request, 'pos/grn_acknowledge_confirm.html', {'grn': grn})
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def grn_print(request, slug=None, pk=None):
+    """Print-friendly GRN view"""
+    grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
+    items = grn.items.select_related('product').all()
+    return render(request, 'pos/grn_print.html', {'grn': grn, 'items': items})
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def api_grn_supplier_purchases(request, slug=None):
+    """AJAX: Return received purchases for a given supplier"""
+    from django.http import JsonResponse
+    supplier_id = request.GET.get('supplier_id')
+    if not supplier_id:
+        return JsonResponse({'purchases': []})
+
+    purchases = Purchase.objects.filter(
+        business=request.business,
+        supplier_id=supplier_id,
+        status='received'
+    ).order_by('-date').values('id', 'purchase_number', 'date', 'total_amount')[:50]
+
+    data = [
+        {
+            'id': p['id'],
+            'text': f"{p['purchase_number']} — KES {p['total_amount']:,.2f}",
+        }
+        for p in purchases
+    ]
+    return JsonResponse({'purchases': data})
+
+
+@login_required
+@business_required
 def subscription(request, slug=None):
     """Subscription and billing page for businesses"""
     # Superusers have lifetime access, no subscription needed
@@ -6213,12 +6787,52 @@ def subscription(request, slug=None):
 
 # ==================== ADVANCED ANALYTICS ====================
 
+@login_required
+@business_required
+def global_search(request, slug=None):
+    """Global search across products, customers, and invoices"""
+    query = request.GET.get('q', '').strip()
+    products = customers = sales = []
+
+    if query:
+        products = Product.objects.filter(
+            business=request.business, is_active=True
+        ).filter(
+            Q(name__icontains=query) |
+            Q(product_code__icontains=query) |
+            Q(barcode__icontains=query)
+        ).select_related('category')[:20]
+
+        customers = Customer.objects.filter(
+            business=request.business
+        ).filter(
+            Q(name__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(email__icontains=query)
+        )[:20]
+
+        sales = Sale.objects.filter(
+            business=request.business
+        ).filter(
+            Q(invoice_number__icontains=query) |
+            Q(customer__name__icontains=query)
+        ).select_related('customer', 'cashier').order_by('-date')[:20]
+
+    return render(request, 'pos/global_search.html', {
+        'query': query,
+        'products': products,
+        'customers': customers,
+        'sales': sales,
+    })
+
+
 @business_required
 @business_permission_required('can_view_reports')
 def analytics_dashboard(request, slug=None):
     """Advanced analytics dashboard with charts and insights"""
     from .analytics_service import AnalyticsService
     from django.utils import timezone
+    import json
     
     # Get date range from request (default to last 30 days)
     days = int(request.GET.get('days', 30))
@@ -6230,16 +6844,34 @@ def analytics_dashboard(request, slug=None):
     summary = analytics.get_dashboard_summary(days=days)
     
     # Get sales trends for chart
-    sales_trends = analytics.get_sales_trends(days=days)
+    sales_trends_raw = analytics.get_sales_trends(days=days)
+    sales_trends = {
+        'dates': json.dumps(sales_trends_raw['dates']),
+        'totals': json.dumps(sales_trends_raw['totals']),
+        'profits': json.dumps(sales_trends_raw['profits']),
+    }
     
     # Get best sellers
     best_sellers = analytics.get_best_sellers(limit=10, days=days)
     
-    # Get sales by category
-    category_sales = analytics.get_sales_by_category()
+    # Get sales by category — serialize to JSON for Chart.js
+    cat_start = timezone.now().date() - timedelta(days=days)
+    category_sales_raw = analytics.get_sales_by_category(start_date=cat_start)
+    category_sales = [
+        {**item, 'total_revenue': float(item['total_revenue'] or 0)}
+        for item in category_sales_raw
+    ]
+    category_chart = {
+        'labels': json.dumps([item['product__category__name'] or 'Uncategorized' for item in category_sales]),
+        'data': json.dumps([item['total_revenue'] for item in category_sales]),
+    }
     
     # Get payment method breakdown
-    payment_breakdown = analytics.get_payment_method_breakdown(days=days)
+    payment_breakdown_raw = analytics.get_payment_method_breakdown(days=days)
+    payment_breakdown = {
+        'labels': json.dumps(payment_breakdown_raw['labels']),
+        'amounts': json.dumps(payment_breakdown_raw['amounts']),
+    }
     
     # Get profit margin analysis
     profit_analysis = analytics.get_profit_margin_analysis()
@@ -6255,6 +6887,7 @@ def analytics_dashboard(request, slug=None):
         'sales_trends': sales_trends,
         'best_sellers': best_sellers,
         'category_sales': category_sales,
+        'category_chart': category_chart,
         'payment_breakdown': payment_breakdown,
         'profit_analysis': profit_analysis,
         'retention': retention,
@@ -6270,18 +6903,33 @@ def analytics_dashboard(request, slug=None):
 def analytics_sales_trends(request, slug=None):
     """Detailed sales trends analysis"""
     from .analytics_service import AnalyticsService
+    import json
     
     days = int(request.GET.get('days', 30))
     analytics = AnalyticsService(request.business)
     
     # Get sales trends
-    sales_trends = analytics.get_sales_trends(days=days)
+    st = analytics.get_sales_trends(days=days)
+    sales_trends = {
+        'dates': json.dumps(st['dates']),
+        'totals': json.dumps(st['totals']),
+        'profits': json.dumps(st['profits']),
+    }
     
     # Get hourly patterns
-    hourly_patterns = analytics.get_hourly_sales_pattern(days=7)
+    hp = analytics.get_hourly_sales_pattern(days=7)
+    hourly_patterns = {
+        'hours': json.dumps(hp['hours']),
+        'totals': json.dumps(hp['totals']),
+    }
     
     # Get revenue vs profit
-    revenue_profit = analytics.get_revenue_vs_profit_trend(days=days)
+    rp = analytics.get_revenue_vs_profit_trend(days=days)
+    revenue_profit = {
+        'dates': json.dumps(rp['dates']),
+        'revenue': json.dumps(rp['revenue']),
+        'profit': json.dumps(rp['profit']),
+    }
     
     context = {
         'sales_trends': sales_trends,

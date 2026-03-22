@@ -1,709 +1,565 @@
 {% extends 'pos/base.html' %}
-
-{% block title %}Dashboard - POS System{% endblock %}
+{% block title %}Dashboard - {{ request.business.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .stat-card {
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-        border: none;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: transform 0.2s, box-shadow 0.2s;
-        position: relative;
-        overflow: hidden;
-    }
-    .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    }
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 100px;
-        height: 100px;
-        background: rgba(255,255,255,0.1);
-        border-radius: 50%;
-        transform: translate(30%, -30%);
-    }
-    .stat-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        margin-bottom: 12px;
-    }
-    .stat-value {
-        font-size: 32px;
-        font-weight: 700;
-        margin: 8px 0;
-        color: #2c3e50;
-    }
-    .stat-label {
-        font-size: 13px;
-        color: #7f8c8d;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .stat-change {
-        font-size: 13px;
-        margin-top: 8px;
-        font-weight: 600;
-    }
-    .stat-change.positive {
-        color: #27ae60;
-    }
-    .stat-change.negative {
-        color: #e74c3c;
-    }
-    .section-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #2c3e50;
-        margin-bottom: 20px;
-    }
-    .chart-card {
-        border-radius: 12px;
-        border: none;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        margin-bottom: 20px;
-    }
-    .quick-action-btn {
-        border-radius: 8px;
-        padding: 10px 20px;
-        font-weight: 500;
-        border: none;
-        transition: all 0.2s;
-        font-size: 14px;
-    }
-    .quick-action-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .quick-actions-container {
-        position: sticky;
-        bottom: 0;
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-        z-index: 100;
-        margin-top: 30px;
-    }
-    .quick-actions-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 15px;
-    }
-    .page-header {
-        margin-bottom: 30px;
-    }
-    .page-title {
-        font-size: 28px;
-        font-weight: 700;
-        color: #2c3e50;
-    }
-    .mini-stat {
-        font-size: 12px;
-        color: #7f8c8d;
-        margin-top: 5px;
-    }
-    .payment-badge {
-        display: inline-block;
-        padding: 8px 15px;
-        border-radius: 8px;
-        margin: 5px;
-        font-weight: 600;
-    }
-    .top-product-item {
-        padding: 12px;
-        border-bottom: 1px solid #ecf0f1;
-        transition: background 0.2s;
-    }
-    .top-product-item:hover {
-        background: #f8f9fa;
-    }
-    .top-product-item:last-child {
-        border-bottom: none;
-    }
-    .recent-sale-item {
-        padding: 10px;
-        border-bottom: 1px solid #ecf0f1;
-        transition: background 0.2s;
-    }
-    .recent-sale-item:hover {
-        background: #f8f9fa;
-    }
-    .recent-sale-item:last-child {
-        border-bottom: none;
-    }
+/* ── Trial Banner ─────────────────────────────────────────── */
+.trial-banner{border-radius:12px;padding:18px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px;animation:slideDown .4s ease-out}
+@keyframes slideDown{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+.trial-banner-info{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.trial-banner-warning{background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff}
+.trial-banner-danger{background:linear-gradient(135deg,#fa709a,#fee140);color:#2c3e50}
+.trial-banner-content{display:flex;align-items:center;gap:14px}
+.trial-icon{width:50px;height:50px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.trial-text h4{margin:0 0 3px;font-size:16px;font-weight:700}
+.trial-text p{margin:0;font-size:13px;opacity:.9}
+.trial-actions{display:flex;gap:10px;flex-shrink:0}
+.btn-trial{padding:8px 20px;border-radius:8px;font-weight:600;text-decoration:none;transition:all .2s;white-space:nowrap;font-size:13px}
+.btn-trial-primary{background:#fff;color:#667eea;border:2px solid #fff}
+.btn-trial-secondary{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.5)}
+@media(max-width:768px){.trial-banner{flex-direction:column;text-align:center}.trial-actions{flex-direction:column;width:100%}.btn-trial{width:100%}}
+
+/* ── Stat Cards ───────────────────────────────────────────── */
+.stat-card{background:#fff;border-radius:14px;padding:20px 22px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);transition:box-shadow .2s,transform .2s;display:flex;align-items:center;gap:18px}
+.stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.11);transform:translateY(-2px)}
+.stat-icon-box{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.stat-body{flex:1;min-width:0}
+.stat-label{font-size:12px;color:#8a94a6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.stat-value{font-size:26px;font-weight:700;color:#1a202c;line-height:1.1;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-sub{font-size:12px;color:#8a94a6}
+.stat-change{font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px}
+.stat-change.up{background:#e6f9f0;color:#1a9e5c}
+.stat-change.down{background:#fef0f0;color:#e53e3e}
+
+/* ── Section Title ────────────────────────────────────────── */
+.section-title{font-size:15px;font-weight:700;color:#1a202c;margin-bottom:0}
+
+/* ── Chart Cards ──────────────────────────────────────────── */
+.dash-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.dash-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:16px 20px}
+.dash-card .card-body{padding:16px 20px}
+
+/* ── Tables ───────────────────────────────────────────────── */
+.dash-table{font-size:13.5px}
+.dash-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8a94a6;border-bottom:1px solid #f0f2f5;padding:10px 12px;background:#fafbfc}
+.dash-table tbody td{padding:10px 12px;vertical-align:middle;border-bottom:1px solid #f7f8fa;color:#374151}
+.dash-table tbody tr:last-child td{border-bottom:none}
+.dash-table tbody tr:hover td{background:#fafbfc}
+
+/* ── Quick Actions ────────────────────────────────────────── */
+.qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.qa-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:18px 12px;border-radius:12px;border:1.5px solid #e8ecf0;background:#fff;color:#374151;font-size:13px;font-weight:600;text-decoration:none;transition:all .2s;cursor:pointer}
+.qa-btn i{font-size:22px}
+.qa-btn:hover{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195);background:#f0f4ff;transform:translateY(-2px);box-shadow:0 4px 12px rgba(34,65,149,.12)}
+.qa-btn.qa-primary{background:var(--primary-color,#224195);color:#fff;border-color:var(--primary-color,#224195)}
+.qa-btn.qa-primary:hover{background:#1a3278;color:#fff;border-color:#1a3278}
+
+/* ── Alert Badges ─────────────────────────────────────────── */
+.alert-strip{border-radius:12px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);padding:14px 20px}
+
+/* ── Product rank bar ─────────────────────────────────────── */
+.rank-bar-wrap{height:6px;background:#f0f2f5;border-radius:3px;margin-top:4px}
+.rank-bar{height:6px;border-radius:3px;background:var(--primary-color,#224195)}
+
+/* ── Payment method pill ──────────────────────────────────── */
+.pm-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f7f8fa}
+.pm-row:last-child{border-bottom:none}
+.pm-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.pm-bar-wrap{flex:1;height:6px;background:#f0f2f5;border-radius:3px}
+.pm-bar{height:6px;border-radius:3px}
+
+/* ── Empty state ──────────────────────────────────────────── */
+.empty-state{text-align:center;padding:32px 16px;color:#8a94a6}
+.empty-state i{font-size:2.5rem;opacity:.4;display:block;margin-bottom:8px}
+.empty-state p{margin:0;font-size:13px}
+
+@media(max-width:576px){.stat-value{font-size:20px}.qa-grid{grid-template-columns:repeat(3,1fr)}.qa-btn{padding:12px 8px;font-size:11px}.qa-btn i{font-size:18px}}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1 class="page-title">Dashboard</h1>
-        <p class="text-muted">Welcome back! Here's your business overview for today.</p>
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<!-- ── Trial Banner ──────────────────────────────────────── -->
+{% if trial_info.show_warning %}
+<div class="trial-banner trial-banner-{{ trial_info.warning_level }} mb-3">
+  <div class="trial-banner-content">
+    <div class="trial-icon">{% if trial_info.is_expired %}⏰{% elif trial_info.days_remaining <= 3 %}⚠️{% else %}🎁{% endif %}</div>
+    <div class="trial-text">
+      {% if trial_info.is_expired %}<h4>Your Trial Has Expired</h4><p>Upgrade now to continue using all features.</p>
+      {% elif trial_info.days_remaining == 0 %}<h4>Trial Expires Today!</h4><p>Upgrade now to avoid interruption.</p>
+      {% elif trial_info.days_remaining == 1 %}<h4>Trial Expires Tomorrow</h4><p>Only 1 day left. Upgrade now.</p>
+      {% elif trial_info.days_remaining <= 7 %}<h4>Trial Expires in {{ trial_info.days_remaining }} Days</h4><p>Upgrade anytime to keep all features.</p>
+      {% else %}<h4>{{ trial_info.days_remaining }} Days Left in Trial</h4><p>Enjoying the system? Upgrade and save 10% on your first year.</p>{% endif %}
     </div>
+  </div>
+  <div class="trial-actions">
+    <a href="{% url 'subscription' slug=request.business.slug %}" class="btn-trial btn-trial-primary"><i class="bi bi-rocket-takeoff"></i> Upgrade Now</a>
+    <a href="{% url 'subscription' slug=request.business.slug %}" class="btn-trial btn-trial-secondary"><i class="bi bi-info-circle"></i> Learn More</a>
+  </div>
+</div>
+{% endif %}
 
-    <!-- Today's Statistics -->
-    <div class="row">
-        <!-- Today's Sales -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
-                    <i class="bi bi-receipt"></i>
-                </div>
-                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Today's Sales</div>
-                <div class="stat-value" style="color: white;">{{ today_sales_count }}</div>
-                <div class="stat-change {% if sales_change >= 0 %}positive{% else %}negative{% endif %}" style="color: rgba(255,255,255,0.9);">
-                    <i class="bi bi-arrow-{% if sales_change >= 0 %}up{% else %}down{% endif %}"></i> 
-                    {{ sales_change|floatformat:1 }}% vs yesterday
-                </div>
-                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
-                    Week: {{ week_count }} | Month: {{ month_count }}
-                </div>
-            </div>
-        </div>
+<!-- ── Support Access Alert ──────────────────────────────── -->
+{% if pending_support_requests_count > 0 %}
+<div class="alert alert-info alert-strip d-flex align-items-center gap-3 mb-3">
+  <i class="bi bi-shield-lock-fill fs-3 text-primary flex-shrink-0"></i>
+  <div class="flex-grow-1">
+    <strong>{{ pending_support_requests_count }} Support Access Request{% if pending_support_requests_count > 1 %}s{% endif %} Pending</strong>
+    <div class="text-muted small">The support team is requesting access to help you.</div>
+  </div>
+  <a href="{% url 'view_support_access_requests' slug=request.business.slug %}" class="btn btn-sm btn-primary flex-shrink-0">Review</a>
+</div>
+{% endif %}
 
-        <!-- Today's Revenue -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
-                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
-                    <i class="bi bi-cash-stack"></i>
-                </div>
-                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Today's Revenue</div>
-                <div class="stat-value" style="color: white;">KES {{ today_revenue|floatformat:0 }}</div>
-                <div class="stat-change {% if revenue_change >= 0 %}positive{% else %}negative{% endif %}" style="color: rgba(255,255,255,0.9);">
-                    <i class="bi bi-arrow-{% if revenue_change >= 0 %}up{% else %}down{% endif %}"></i> 
-                    {{ revenue_change|floatformat:1 }}% vs yesterday
-                </div>
-                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
-                    Week: KES {{ week_revenue|floatformat:0 }} | Month: KES {{ month_revenue|floatformat:0 }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Items Sold Today -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
-                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Items Sold Today</div>
-                <div class="stat-value" style="color: white;">{{ today_items_sold }}</div>
-                <div class="mini-stat" style="color: rgba(255,255,255,0.8); margin-top: 12px;">
-                    Total Products: {{ total_products }}
-                </div>
-                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
-                    Stock Value: KES {{ total_stock_value|floatformat:0 }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Customers -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
-                <div class="stat-icon" style="background: rgba(255,255,255,0.2);">
-                    <i class="bi bi-people"></i>
-                </div>
-                <div class="stat-label" style="color: rgba(255,255,255,0.9);">Total Customers</div>
-                <div class="stat-value" style="color: white;">{{ total_customers }}</div>
-                <div class="stat-change" style="color: rgba(255,255,255,0.9);">
-                    <i class="bi bi-plus-circle"></i> {{ today_new_customers }} new today
-                </div>
-                <div class="mini-stat" style="color: rgba(255,255,255,0.8);">
-                    Suppliers: {{ total_suppliers }}
-                </div>
-            </div>
-        </div>
+<!-- ── Alerts Strip ───────────────────────────────────────── -->
+{% if low_stock_count > 0 or out_of_stock_count > 0 or expired_count > 0 or expiring_soon_count > 0 or pending_purchases > 0 %}
+<div class="alert alert-warning alert-strip d-flex align-items-start gap-3 mb-3">
+  <i class="bi bi-exclamation-triangle-fill fs-4 flex-shrink-0 mt-1"></i>
+  <div class="flex-grow-1">
+    <strong class="d-block mb-2">Attention Required</strong>
+    <div class="d-flex flex-wrap gap-2">
+      {% if out_of_stock_count > 0 %}<span class="badge bg-danger px-3 py-2">{{ out_of_stock_count }} Out of Stock</span>{% endif %}
+      {% if low_stock_count > 0 %}<span class="badge bg-warning text-dark px-3 py-2">{{ low_stock_count }} Low Stock</span>{% endif %}
+      {% if expired_count > 0 %}<span class="badge bg-danger px-3 py-2">{{ expired_count }} Expired</span>{% endif %}
+      {% if expiring_soon_count > 0 %}<span class="badge bg-warning text-dark px-3 py-2">{{ expiring_soon_count }} Expiring Soon</span>{% endif %}
+      {% if pending_purchases > 0 %}<span class="badge bg-info px-3 py-2">{{ pending_purchases }} Pending POs</span>{% endif %}
     </div>
-
-    <!-- Support Access Requests Alert (Business Owners Only) -->
-    {% if pending_support_requests_count > 0 %}
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="alert alert-info" style="border-radius: 12px; border: none; box-shadow: 0 2px 12px rgba(0,123,255,0.15); border-left: 4px solid #007bff;">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-shield-lock-fill" style="font-size: 40px; color: #007bff;"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-4">
-                        <h5 class="mb-2"><strong><i class="bi bi-bell-fill"></i> Support Access Request{% if pending_support_requests_count > 1 %}s{% endif %} Pending</strong></h5>
-                        <p class="mb-2">
-                            You have <strong>{{ pending_support_requests_count }}</strong> pending support access request{% if pending_support_requests_count > 1 %}s{% endif %} from platform support team.
-                            {% if pending_support_requests_count == 1 %}
-                            The support team is requesting access to help you with your business.
-                            {% else %}
-                            The support team has requested access to help you with your business.
-                            {% endif %}
-                        </p>
-                        <a href="{% url 'view_support_access_requests' slug=request.business.slug %}" class="btn btn-primary">
-                            <i class="bi bi-eye"></i> Review Request{% if pending_support_requests_count > 1 %}s{% endif %} Now
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="mt-2 d-flex flex-wrap gap-2">
+      <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-sm btn-warning">View Stock Alerts</a>
+      {% if expired_count > 0 or expiring_soon_count > 0 %}<a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-danger">View Expiry Alerts</a>{% endif %}
+      {% if pending_purchases > 0 %}<a href="{% url 'purchase_list' slug=request.business.slug %}" class="btn btn-sm btn-info">View Purchases</a>{% endif %}
     </div>
-    {% endif %}
+  </div>
+</div>
+{% endif %}
 
-    <!-- Alerts Section -->
-    {% if low_stock_count > 0 or out_of_stock_count > 0 or expired_count > 0 or expiring_soon_count > 0 or pending_purchases > 0 %}
-    <div class="row">
-        <div class="col-12">
-            <div class="alert alert-warning" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-exclamation-triangle-fill" style="font-size: 32px;"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h5 class="mb-2"><strong>Attention Required</strong></h5>
-                        <div class="row">
-                            {% if out_of_stock_count > 0 %}
-                            <div class="col-md-2">
-                                <span class="badge bg-danger" style="font-size: 14px; padding: 8px 12px;">
-                                    {{ out_of_stock_count }} Out of Stock
-                                </span>
-                            </div>
-                            {% endif %}
-                            {% if low_stock_count > 0 %}
-                            <div class="col-md-2">
-                                <span class="badge bg-warning text-dark" style="font-size: 14px; padding: 8px 12px;">
-                                    {{ low_stock_count }} Low Stock
-                                </span>
-                            </div>
-                            {% endif %}
-                            {% if expired_count > 0 %}
-                            <div class="col-md-2">
-                                <span class="badge bg-danger" style="font-size: 14px; padding: 8px 12px;">
-                                    {{ expired_count }} Expired
-                                </span>
-                            </div>
-                            {% endif %}
-                            {% if expiring_soon_count > 0 %}
-                            <div class="col-md-2">
-                                <span class="badge bg-warning text-dark" style="font-size: 14px; padding: 8px 12px;">
-                                    {{ expiring_soon_count }} Expiring Soon
-                                </span>
-                            </div>
-                            {% endif %}
-                            {% if pending_purchases > 0 %}
-                            <div class="col-md-2">
-                                <span class="badge bg-info" style="font-size: 14px; padding: 8px 12px;">
-                                    {{ pending_purchases }} Pending Orders
-                                </span>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="mt-3">
-                            <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-sm btn-warning me-2">
-                                <i class="bi bi-eye"></i> View Stock Alerts
-                            </a>
-                            {% if expired_count > 0 or expiring_soon_count > 0 %}
-                            <a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-danger me-2">
-                                <i class="bi bi-calendar-x"></i> View Expiry Alerts
-                            </a>
-                            {% endif %}
-                            {% if pending_purchases > 0 %}
-                            <a href="{% url 'purchase_list' slug=request.business.slug %}" class="btn btn-sm btn-info">
-                                <i class="bi bi-bag-check"></i> View Purchases
-                            </a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Top Selling and Payment Methods Row -->
-    <div class="row mt-4">
-        <!-- Top Selling Products Today -->
-        <div class="col-xl-6 col-lg-6">
-            <div class="chart-card card">
-                <div class="card-header bg-white border-0 pt-3">
-                    <h5 class="section-title mb-0">
-                        <i class="bi bi-trophy text-warning"></i> Top Selling Today
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% if top_products_today %}
-                        {% for product in top_products_today %}
-                        <div class="top-product-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ product.product__name }}</strong>
-                                    <div class="text-muted small">{{ product.total_quantity }} units sold</div>
-                                </div>
-                                <div class="text-end">
-                                    <strong class="text-success">KES {{ product.total_revenue|floatformat:0 }}</strong>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="text-center text-muted py-4">
-                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
-                            <p class="mt-2">No sales yet today</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Payment Methods Breakdown -->
-        <div class="col-xl-6 col-lg-6">
-            <div class="chart-card card">
-                <div class="card-header bg-white border-0 pt-3">
-                    <h5 class="section-title mb-0">
-                        <i class="bi bi-credit-card text-primary"></i> Payment Methods Today
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% if payment_breakdown %}
-                        {% for payment in payment_breakdown %}
-                        <div class="top-product-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ payment.payment_method__name }}</strong>
-                                    <div class="text-muted small">{{ payment.count }} transaction{{ payment.count|pluralize }}</div>
-                                </div>
-                                <div class="text-end">
-                                    <strong class="text-primary">KES {{ payment.total|floatformat:0 }}</strong>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="text-center text-muted py-4">
-                            <i class="bi bi-credit-card-2-front" style="font-size: 3rem;"></i>
-                            <p class="mt-2">No payments yet today</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Sales - Full Width -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="chart-card card">
-                <div class="card-header bg-white border-0 pt-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="section-title mb-0">
-                            <i class="bi bi-clock-history text-info"></i> Recent Sales
-                        </h5>
-                        <a href="{% url 'sales_list' slug=request.business.slug %}" class="btn btn-sm btn-outline-primary">
-                            View All
-                        </a>
-                    </div>
-                </div>
-                <div class="card-body">
-                    {% if recent_sales %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Invoice #</th>
-                                        <th>Date & Time</th>
-                                        <th>Customer</th>
-                                        <th>Cashier</th>
-                                        <th>Items</th>
-                                        <th>Payment Method</th>
-                                        <th class="text-end">Total</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for sale in recent_sales %}
-                                    <tr>
-                                        <td><strong>{{ sale.invoice_number }}</strong></td>
-                                        <td>{{ sale.date|date:"d/m/Y H:i" }}</td>
-                                        <td>
-                                            {% if sale.customer %}
-                                                {{ sale.customer.name }}
-                                            {% else %}
-                                                <span class="text-muted">Walk-in</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ sale.cashier.username }}</td>
-                                        <td>{{ sale.items.count }}</td>
-                                        <td>
-                                            {% for payment in sale.payments.all %}
-                                                <span class="badge bg-info">{{ payment.payment_method.name }}</span>
-                                            {% endfor %}
-                                        </td>
-                                        <td class="text-end"><strong class="text-success">KES {{ sale.total|floatformat:0 }}</strong></td>
-                                        <td>
-                                            <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-outline-primary" title="View Receipt">
-                                                <i class="bi bi-receipt"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="text-center text-muted py-4">
-                            <i class="bi bi-receipt" style="font-size: 3rem;"></i>
-                            <p class="mt-2">No recent sales</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Out of Stock & Expiring Products -->
-    <div class="row mt-4">
-        <!-- Out of Stock Products -->
-        {% if out_of_stock_list %}
-        <div class="col-xl-6">
-            <div class="chart-card card">
-                <div class="card-header bg-white border-0 pt-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="section-title mb-0">
-                            <i class="bi bi-exclamation-octagon text-danger"></i> Out of Stock
-                        </h5>
-                        {% if out_of_stock_count > 5 %}
-                        <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-sm btn-outline-danger">
-                            View All ({{ out_of_stock_count }})
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Category</th>
-                                    <th>Price</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for product in out_of_stock_list %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ product.name }}</strong>
-                                        {% if product.product_code %}
-                                        <br><small class="text-muted">{{ product.product_code }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ product.category.name|default:"-" }}</td>
-                                    <td>KES {{ product.unit_price|floatformat:2 }}</td>
-                                    <td>
-                                        <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-plus-circle"></i> Restock
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Expiring Soon Products -->
-        {% if expiring_soon_list %}
-        <div class="col-xl-6">
-            <div class="chart-card card">
-                <div class="card-header bg-white border-0 pt-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="section-title mb-0">
-                            <i class="bi bi-calendar-x text-warning"></i> Expiring Soon
-                        </h5>
-                        {% if expiring_soon_count > 5 %}
-                        <a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-outline-warning">
-                            View All ({{ expiring_soon_count }})
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Expiry Date</th>
-                                    <th>Days Left</th>
-                                    <th>Stock</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for product in expiring_soon_list %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ product.name }}</strong>
-                                        {% if product.product_code %}
-                                        <br><small class="text-muted">{{ product.product_code }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ product.expiry_date|date:"d M Y" }}</td>
-                                    <td>
-                                        <span class="badge bg-warning text-dark">
-                                            {{ product.days_until_expiry }} day{{ product.days_until_expiry|pluralize }}
-                                        </span>
-                                    </td>
-                                    <td>{{ product.stock_quantity }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Expired Products (if any) -->
-    {% if expired_list %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="chart-card card border-danger">
-                <div class="card-header bg-danger text-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-exclamation-triangle"></i> Expired Products - Remove Immediately!
-                        </h5>
-                        {% if expired_count > 5 %}
-                        <a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-light">
-                            View All ({{ expired_count }})
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Category</th>
-                                    <th>Expiry Date</th>
-                                    <th>Days Overdue</th>
-                                    <th>Stock</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for product in expired_list %}
-                                <tr class="table-danger">
-                                    <td>
-                                        <strong>{{ product.name }}</strong>
-                                        {% if product.product_code %}
-                                        <br><small>{{ product.product_code }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ product.category.name|default:"-" }}</td>
-                                    <td>{{ product.expiry_date|date:"d M Y" }}</td>
-                                    <td>
-                                        <span class="badge bg-danger">
-                                            {% widthratio product.days_until_expiry -1 1 %} days ago
-                                        </span>
-                                    </td>
-                                    <td><strong>{{ product.stock_quantity }}</strong></td>
-                                    <td>
-                                        <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-danger">
-                                            <i class="bi bi-trash"></i> Remove
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Quick Actions - Sticky Footer -->
-    <div class="quick-actions-container">
-        <h5 class="section-title text-center mb-3">Quick Actions</h5>
-        <div class="quick-actions-grid">
-            {% if user_permissions.can_make_sales %}
-            <a href="{% url 'pos_screen' slug=request.business.slug %}" class="quick-action-btn btn btn-primary">
-                <i class="bi bi-cart-plus"></i> New Sale
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_make_sales %}
-            <a href="{% url 'sales_list' slug=request.business.slug %}" class="quick-action-btn btn btn-outline-primary">
-                <i class="bi bi-receipt"></i> All Sales
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_manage_products %}
-            <a href="{% url 'product_create' slug=request.business.slug %}" class="quick-action-btn btn btn-success">
-                <i class="bi bi-plus-circle"></i> Add Product
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_manage_suppliers %}
-            <a href="{% url 'purchase_create' slug=request.business.slug %}" class="quick-action-btn btn btn-info">
-                <i class="bi bi-bag-plus"></i> New Purchase
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_adjust_stock %}
-            <a href="{% url 'stock_list' slug=request.business.slug %}" class="quick-action-btn btn btn-secondary">
-                <i class="bi bi-boxes"></i> Manage Stock
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_view_reports %}
-            <a href="{% url 'analytics_dashboard' slug=request.business.slug %}" class="quick-action-btn btn btn-purple" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                <i class="bi bi-graph-up"></i> Analytics
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_make_sales %}
-            <a href="{% url 'payment_transactions_report' slug=request.business.slug %}" class="quick-action-btn btn btn-dark">
-                <i class="bi bi-credit-card-2-front"></i> Transactions
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_manage_settings %}
-            <a href="{% url 'payment_method_list' slug=request.business.slug %}" class="quick-action-btn btn btn-outline-primary">
-                <i class="bi bi-credit-card"></i> Payment Methods
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_view_reports %}
-            <a href="{% url 'sales_report' slug=request.business.slug %}" class="quick-action-btn btn btn-warning">
-                <i class="bi bi-file-earmark-text"></i> Reports
-            </a>
-            {% endif %}
-            
-            {% if user_permissions.can_view_reports %}
-            <a href="{% url 'zreport_session_status' slug=request.business.slug %}" class="quick-action-btn btn btn-danger">
-                <i class="bi bi-calculator-fill"></i> Z-Report
-            </a>
-            {% endif %}
-        </div>
-    </div>
+<!-- ── Page Header ────────────────────────────────────────── -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0">Dashboard</h1>
+    <p class="text-muted small mb-0">Welcome back, {{ user.get_full_name|default:user.username }}. Here's your business overview.</p>
+  </div>
+  <span class="text-muted small d-none d-md-block" id="dashClock"></span>
 </div>
 
+<!-- ── Stat Cards ─────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
+  <!-- Sales Today -->
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-receipt"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Sales Today</div>
+        <div class="stat-value">{{ today_sales_count }}</div>
+        <span class="stat-change {% if sales_change >= 0 %}up{% else %}down{% endif %}">
+          <i class="bi bi-arrow-{% if sales_change >= 0 %}up{% else %}down{% endif %}"></i>{{ sales_change|floatformat:1 }}%
+        </span>
+      </div>
+    </div>
+  </div>
+  <!-- Revenue Today -->
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a"><i class="bi bi-cash-stack"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Revenue Today</div>
+        <div class="stat-value" style="font-size:20px">KES {{ today_revenue|floatformat:0 }}</div>
+        <span class="stat-change {% if revenue_change >= 0 %}up{% else %}down{% endif %}">
+          <i class="bi bi-arrow-{% if revenue_change >= 0 %}up{% else %}down{% endif %}"></i>{{ revenue_change|floatformat:1 }}%
+        </span>
+      </div>
+    </div>
+  </div>
+  <!-- Items Sold -->
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb"><i class="bi bi-box-seam"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Items Sold</div>
+        <div class="stat-value">{{ today_items_sold }}</div>
+        <div class="stat-sub">{{ total_products }} products total</div>
+      </div>
+    </div>
+  </div>
+  <!-- Customers -->
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fef9c3;color:#ca8a04"><i class="bi bi-people"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Customers</div>
+        <div class="stat-value">{{ total_customers }}</div>
+        <div class="stat-sub">+{{ today_new_customers }} new today</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Secondary Stats Row ────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fee2e2;color:#dc2626"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Low Stock</div>
+        <div class="stat-value">{{ low_stock_count }}</div>
+        <div class="stat-sub">{{ out_of_stock_count }} out of stock</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#e0f2fe;color:#0284c7"><i class="bi bi-bag-check"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Pending POs</div>
+        <div class="stat-value">{{ pending_purchases }}</div>
+        <div class="stat-sub">Purchase orders</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fce7f3;color:#db2777"><i class="bi bi-truck"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Suppliers</div>
+        <div class="stat-value">{{ total_suppliers }}</div>
+        <div class="stat-sub">Active suppliers</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#f0fdf4;color:#15803d"><i class="bi bi-archive"></i></div>
+      <div class="stat-body">
+        <div class="stat-label">Stock Value</div>
+        <div class="stat-value" style="font-size:18px">KES {{ total_stock_value|floatformat:0 }}</div>
+        <div class="stat-sub">Inventory value</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Charts Row ─────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- Sales Sparkline -->
+  <div class="col-12 col-lg-8">
+    <div class="dash-card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="section-title"><i class="bi bi-graph-up text-primary me-2"></i>Sales Overview — Today</span>
+        <div class="d-flex gap-2">
+          <span class="badge bg-light text-dark">Week: KES {{ week_revenue|floatformat:0 }}</span>
+          <span class="badge bg-light text-dark">Month: KES {{ month_revenue|floatformat:0 }}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <canvas id="salesChart" height="90"></canvas>
+      </div>
+    </div>
+  </div>
+  <!-- Payment Methods -->
+  <div class="col-12 col-lg-4">
+    <div class="dash-card h-100">
+      <div class="card-header">
+        <span class="section-title"><i class="bi bi-credit-card text-success me-2"></i>Payment Methods</span>
+      </div>
+      <div class="card-body">
+        {% if payment_breakdown %}
+          {% for payment in payment_breakdown %}
+          {% with colors="#7c3aed,#2563eb,#16a34a,#ca8a04,#dc2626,#0284c7" %}
+          {% with cidx=forloop.counter0|divisibleby:1 %}
+          <div class="pm-row">
+            <div class="pm-dot" style="background:{% cycle '#7c3aed' '#2563eb' '#16a34a' '#ca8a04' '#dc2626' '#0284c7' as pmcolor %}"></div>
+            <div class="flex-grow-1">
+              <div class="d-flex justify-content-between mb-1">
+                <span style="font-size:13px;font-weight:600">{{ payment.payment_method__name }}</span>
+                <span style="font-size:12px;color:#8a94a6">KES {{ payment.total|floatformat:0 }}</span>
+              </div>
+              <div class="pm-bar-wrap">
+                <div class="pm-bar" style="width:{% widthratio payment.count payment_breakdown|length 100 %}%;background:{{ pmcolor }}"></div>
+              </div>
+            </div>
+            <span style="font-size:11px;color:#8a94a6;min-width:28px;text-align:right">{{ payment.count }}</span>
+          </div>
+          {% endwith %}{% endwith %}
+          {% endfor %}
+        {% else %}
+          <div class="empty-state"><i class="bi bi-credit-card-2-front"></i><p>No payments yet today</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Top Products + Recent Sales ───────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- Top Selling Today -->
+  <div class="col-12 col-lg-5">
+    <div class="dash-card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="section-title"><i class="bi bi-trophy text-warning me-2"></i>Top Selling Today</span>
+        <a href="{% url 'analytics_dashboard' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary">Analytics</a>
+      </div>
+      <div class="card-body p-0">
+        {% if top_products_today %}
+          {% for product in top_products_today %}
+          <div style="padding:12px 20px;border-bottom:1px solid #f7f8fa">
+            <div class="d-flex justify-content-between align-items-start">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13.5px;font-weight:600;color:#1a202c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ product.product__name }}</div>
+                <div style="font-size:12px;color:#8a94a6">{{ product.total_quantity }} units</div>
+                <div class="rank-bar-wrap mt-1"><div class="rank-bar" style="width:{% widthratio product.total_quantity top_products_today.0.total_quantity 100 %}%"></div></div>
+              </div>
+              <div style="font-size:13px;font-weight:700;color:#16a34a;margin-left:12px;white-space:nowrap">KES {{ product.total_revenue|floatformat:0 }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state"><i class="bi bi-inbox"></i><p>No sales yet today</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Sales -->
+  <div class="col-12 col-lg-7">
+    <div class="dash-card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="section-title"><i class="bi bi-clock-history text-info me-2"></i>Recent Transactions</span>
+        <a href="{% url 'sales_list' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_sales %}
+        <div class="table-responsive">
+          <table class="table dash-table mb-0">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th>Cashier</th>
+                <th>Payment</th>
+                <th class="text-end">Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sale in recent_sales %}
+              <tr>
+                <td>
+                  <div style="font-weight:600;color:#1a202c">{{ sale.invoice_number }}</div>
+                  <div style="font-size:11px;color:#8a94a6">{{ sale.date|date:"d/m H:i" }}</div>
+                </td>
+                <td>{% if sale.customer %}{{ sale.customer.name }}{% else %}<span class="text-muted">Walk-in</span>{% endif %}</td>
+                <td>{{ sale.cashier.username }}</td>
+                <td>
+                  {% for payment in sale.payments.all %}
+                  <span class="badge bg-light text-dark" style="font-size:11px">{{ payment.payment_method.name }}</span>
+                  {% endfor %}
+                </td>
+                <td class="text-end fw-bold" style="color:#16a34a">KES {{ sale.total|floatformat:0 }}</td>
+                <td>
+                  <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-outline-secondary" title="Receipt"><i class="bi bi-receipt"></i></a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <div class="empty-state"><i class="bi bi-receipt"></i><p>No recent sales</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stock Alerts Row ────────────────────────────────────── -->
+{% if out_of_stock_list or expiring_soon_list %}
+<div class="row g-3 mb-4">
+  {% if out_of_stock_list %}
+  <div class="col-12 col-lg-6">
+    <div class="dash-card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="section-title"><i class="bi bi-exclamation-octagon text-danger me-2"></i>Out of Stock</span>
+        {% if out_of_stock_count > 5 %}<a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-sm btn-outline-danger">View All ({{ out_of_stock_count }})</a>{% endif %}
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table dash-table mb-0">
+            <thead><tr><th>Product</th><th>Category</th><th>Price</th><th></th></tr></thead>
+            <tbody>
+              {% for product in out_of_stock_list %}
+              <tr>
+                <td><div style="font-weight:600">{{ product.name }}</div>{% if product.product_code %}<div style="font-size:11px;color:#8a94a6">{{ product.product_code }}</div>{% endif %}</td>
+                <td>{{ product.category.name|default:"-" }}</td>
+                <td>KES {{ product.unit_price|floatformat:0 }}</td>
+                <td><a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle"></i> Restock</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if expiring_soon_list %}
+  <div class="col-12 col-lg-6">
+    <div class="dash-card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="section-title"><i class="bi bi-calendar-x text-warning me-2"></i>Expiring Soon</span>
+        {% if expiring_soon_count > 5 %}<a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-outline-warning">View All ({{ expiring_soon_count }})</a>{% endif %}
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table dash-table mb-0">
+            <thead><tr><th>Product</th><th>Expiry</th><th>Days Left</th><th>Stock</th></tr></thead>
+            <tbody>
+              {% for product in expiring_soon_list %}
+              <tr>
+                <td><div style="font-weight:600">{{ product.name }}</div>{% if product.product_code %}<div style="font-size:11px;color:#8a94a6">{{ product.product_code }}</div>{% endif %}</td>
+                <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                <td><span class="badge bg-warning text-dark">{{ product.days_until_expiry }}d</span></td>
+                <td>{{ product.stock_quantity }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ── Expired Products ────────────────────────────────────── -->
+{% if expired_list %}
+<div class="dash-card mb-4" style="border:1.5px solid #fee2e2">
+  <div class="card-header d-flex align-items-center justify-content-between" style="background:#fef2f2">
+    <span class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Expired Products — Remove Immediately</span>
+    {% if expired_count > 5 %}<a href="{% url 'expiry_alert' slug=request.business.slug %}" class="btn btn-sm btn-danger">View All ({{ expired_count }})</a>{% endif %}
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table dash-table mb-0">
+        <thead><tr><th>Product</th><th>Category</th><th>Expiry Date</th><th>Overdue</th><th>Stock</th><th></th></tr></thead>
+        <tbody>
+          {% for product in expired_list %}
+          <tr style="background:#fff5f5">
+            <td><div style="font-weight:600">{{ product.name }}</div>{% if product.product_code %}<div style="font-size:11px;color:#8a94a6">{{ product.product_code }}</div>{% endif %}</td>
+            <td>{{ product.category.name|default:"-" }}</td>
+            <td>{{ product.expiry_date|date:"d M Y" }}</td>
+            <td><span class="badge bg-danger">{% widthratio product.days_until_expiry -1 1 %}d ago</span></td>
+            <td>{{ product.stock_quantity }}</td>
+            <td><a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Remove</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Quick Actions ──────────────────────────────────────── -->
+<div class="dash-card mb-4">
+  <div class="card-header"><span class="section-title"><i class="bi bi-lightning-charge text-warning me-2"></i>Quick Actions</span></div>
+  <div class="card-body">
+    <div class="qa-grid">
+      {% if user_permissions.can_make_sales %}
+      <a href="{% url 'pos_screen' slug=request.business.slug %}" class="qa-btn qa-primary"><i class="bi bi-cart-plus"></i>New Sale</a>
+      {% endif %}
+      {% if user_permissions.can_manage_products %}
+      <a href="{% url 'product_create' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-plus-circle text-success"></i>Add Product</a>
+      {% endif %}
+      <a href="{% url 'customer_list' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-person-plus text-info"></i>Customers</a>
+      {% if user_permissions.can_manage_suppliers %}
+      <a href="{% url 'purchase_create' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-bag-plus text-primary"></i>Create PO</a>
+      {% endif %}
+      {% if user_permissions.can_adjust_stock %}
+      <a href="{% url 'stock_list' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-boxes text-secondary"></i>Stock Adjust</a>
+      {% endif %}
+      {% if user_permissions.can_view_reports %}
+      <a href="{% url 'sales_report' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-file-earmark-bar-graph text-warning"></i>Reports</a>
+      <a href="{% url 'analytics_dashboard' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-graph-up-arrow" style="color:#7c3aed"></i>Analytics</a>
+      <a href="{% url 'zreport_session_status' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-calculator-fill text-danger"></i>Z-Report</a>
+      {% endif %}
+      {% if user_permissions.can_make_sales %}
+      <a href="{% url 'sales_list' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-receipt text-dark"></i>All Sales</a>
+      {% endif %}
+      {% if user_permissions.can_manage_settings %}
+      <a href="{% url 'payment_method_list' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-credit-card text-primary"></i>Payments</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+</div><!-- /container-fluid -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Live clock
+(function(){
+  const el = document.getElementById('dashClock');
+  if(!el) return;
+  function tick(){
+    const now = new Date();
+    el.textContent = now.toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short'}) + '  ' +
+      now.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'});
+  }
+  tick(); setInterval(tick, 1000);
+})();
+
+// Sales sparkline
+(function(){
+  const ctx = document.getElementById('salesChart');
+  if(!ctx) return;
+  const rawData = {{ hourly_sales|safe }};
+  // Build full 24-hour array
+  const hourMap = {};
+  rawData.forEach(d => { hourMap[d.hour] = parseFloat(d.revenue) || 0; });
+  const labels = Array.from({length:24}, (_,i) => i + ':00');
+  const values = Array.from({length:24}, (_,i) => hourMap[i] || 0);
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Revenue (KES)',
+        data: values,
+        backgroundColor: 'rgba(34,65,149,0.15)',
+        borderColor: 'rgba(34,65,149,0.8)',
+        borderWidth: 2,
+        borderRadius: 4,
+        hoverBackgroundColor: 'rgba(34,65,149,0.3)',
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => 'KES ' + ctx.parsed.y.toLocaleString()
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: {
+          grid: { color: '#f0f2f5' },
+          ticks: {
+            font: { size: 11 },
+            callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v
+          }
+        }
+      }
+    }
+  });
+})();
+</script>
 {% endblock %}

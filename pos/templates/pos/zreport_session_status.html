@@ -1,155 +1,120 @@
 {% extends 'pos/base.html' %}
 {% load static %}
 
-{% block title %}Session Status - {{ business.name }}{% endblock %}
+{% block title %}Session Status — {{ business.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-md-10 offset-md-1">
-            {% if current_session %}
-            <!-- Active Session -->
-            <div class="card shadow border-success">
-                <div class="card-header bg-success text-white">
-                    <h4 class="mb-0">
-                        <i class="fas fa-circle blink"></i> Session #{{ current_session.session_number }} - OPEN
-                    </h4>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="font-weight-bold">Session Information</h6>
-                            <table class="table table-sm">
-                                <tr>
-                                    <td class="font-weight-bold">Session Number:</td>
-                                    <td>#{{ current_session.session_number }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-weight-bold">Opened By:</td>
-                                    <td>{{ current_session.opened_by.get_full_name|default:current_session.opened_by.username }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-weight-bold">Opened At:</td>
-                                    <td>{{ current_session.opened_at|date:"Y-m-d H:i:s" }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-weight-bold">Duration:</td>
-                                    <td id="sessionDuration">{{ session_stats.duration }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-weight-bold">Opening Cash:</td>
-                                    <td class="text-success">KES {{ current_session.opening_cash|floatformat:2 }}</td>
-                                </tr>
-                            </table>
-                        </div>
-                        <div class="col-md-6">
-                            <h6 class="font-weight-bold">Session Statistics</h6>
-                            <div class="row text-center">
-                                <div class="col-6 mb-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h2 class="mb-0" id="totalTransactions">{{ session_stats.total_transactions }}</h2>
-                                            <small class="text-muted">Transactions</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-6 mb-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h2 class="mb-0 text-success" id="totalSales">KES {{ session_stats.total_sales|floatformat:2 }}</h2>
-                                            <small class="text-muted">Total Sales</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-                    {% if current_session.notes %}
-                    <div class="alert alert-info mt-3">
-                        <strong>Notes:</strong> {{ current_session.notes }}
-                    </div>
-                    {% endif %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-circle-fill me-2 {% if current_session %}text-success{% else %}text-warning{% endif %}"></i>Session Status</h1>
+    <p class="page-subtitle">POS session management for {{ business.name }}</p>
+  </div>
+  <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-list me-1"></i>All Z-Reports
+  </a>
+</div>
 
-                    <div class="mt-4">
-                        <a href="{% url 'zreport_session_close' slug=business.slug %}" class="btn btn-danger btn-lg">
-                            <i class="fas fa-stop-circle"></i> Close Session & Generate Z-Report
-                        </a>
-                        <a href="{% url 'pos_screen' slug=business.slug %}" class="btn btn-primary btn-lg">
-                            <i class="fas fa-cash-register"></i> Go to POS
-                        </a>
-                        <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-home"></i> Dashboard
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            {% else %}
-            <!-- No Active Session -->
-            <div class="card shadow border-warning">
-                <div class="card-header bg-warning text-dark">
-                    <h4 class="mb-0">
-                        <i class="fas fa-exclamation-triangle"></i> No Active Session
-                    </h4>
-                </div>
-                <div class="card-body text-center py-5">
-                    <i class="fas fa-cash-register fa-5x text-muted mb-4"></i>
-                    <h5>No POS session is currently open</h5>
-                    <p class="text-muted">You need to open a session before making sales</p>
-                    
-                    <div class="mt-4">
-                        <a href="{% url 'zreport_session_open' slug=business.slug %}" class="btn btn-success btn-lg">
-                            <i class="fas fa-play-circle"></i> Open New Session
-                        </a>
-                        <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-primary btn-lg">
-                            <i class="fas fa-file-alt"></i> View Z-Reports
-                        </a>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Recent Z-Reports -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-history"></i> Recent Z-Reports
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-primary">
-                        <i class="fas fa-list"></i> View All Z-Reports
-                    </a>
-                </div>
-            </div>
-        </div>
+{% if current_session %}
+<div class="ui-card mb-3" style="border-left:4px solid #16a34a;">
+  <div class="ui-card-header">
+    <div class="d-flex align-items-center gap-2">
+      <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;animation:blink 2s infinite;display:inline-block;"></span>
+      <span class="ui-card-title">Session #{{ current_session.session_number }} — OPEN</span>
     </div>
+    <span class="status-badge status-success">Active</span>
+  </div>
+  <div class="ui-card-body">
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-receipt"></i></div>
+          <div><div class="stat-label">Transactions</div><div class="stat-value" id="totalTransactions">{{ session_stats.total_transactions }}</div></div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb;"><i class="bi bi-cash-stack"></i></div>
+          <div><div class="stat-label">Total Sales</div><div class="stat-value" style="font-size:16px;" id="totalSales">KES {{ session_stats.total_sales|floatformat:0 }}</div></div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon-box" style="background:#fef9c3;color:#ca8a04;"><i class="bi bi-clock"></i></div>
+          <div><div class="stat-label">Duration</div><div class="stat-value" style="font-size:16px;" id="sessionDuration">{{ session_stats.duration }}</div></div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed;"><i class="bi bi-wallet2"></i></div>
+          <div><div class="stat-label">Opening Cash</div><div class="stat-value" style="font-size:16px;">KES {{ current_session.opening_cash|floatformat:0 }}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <table class="table ui-table mb-4" style="max-width:480px;">
+      <tr><td style="color:#8a94a6;font-size:12px;">Opened By</td><td>{{ current_session.opened_by.get_full_name|default:current_session.opened_by.username }}</td></tr>
+      <tr><td style="color:#8a94a6;font-size:12px;">Opened At</td><td>{{ current_session.opened_at|date:"Y-m-d H:i:s" }}</td></tr>
+    </table>
+
+    {% if current_session.notes %}
+    <div class="alert alert-info" style="font-size:13px;"><i class="bi bi-chat-text me-1"></i>{{ current_session.notes }}</div>
+    {% endif %}
+
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'zreport_session_close' slug=business.slug %}" class="btn btn-danger">
+        <i class="bi bi-stop-circle me-1"></i>Close Session & Generate Z-Report
+      </a>
+      <a href="{% url 'pos_screen' slug=business.slug %}" class="btn btn-primary">
+        <i class="bi bi-cart-plus me-1"></i>Go to POS
+      </a>
+      <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary">
+        <i class="bi bi-speedometer2 me-1"></i>Dashboard
+      </a>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="ui-card mb-3" style="border-left:4px solid #ca8a04;">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-exclamation-triangle me-2"></i>No Active Session</span>
+    <span class="status-badge status-warning">Closed</span>
+  </div>
+  <div class="ui-card-body text-center py-4">
+    <i class="bi bi-cash-register" style="font-size:3rem;color:#d0d5dd;display:block;margin-bottom:12px;"></i>
+    <p style="font-size:14px;color:#374151;font-weight:600;">No POS session is currently open</p>
+    <p style="font-size:13px;color:#8a94a6;">You need to open a session before making sales</p>
+    <div class="d-flex gap-2 justify-content-center mt-3">
+      <a href="{% url 'zreport_session_open' slug=business.slug %}" class="btn btn-success">
+        <i class="bi bi-play-circle me-1"></i>Open New Session
+      </a>
+      <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-secondary">
+        <i class="bi bi-list me-1"></i>View Z-Reports
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 </div>
 
 <style>
-@keyframes blink {
-    0%, 50%, 100% { opacity: 1; }
-    25%, 75% { opacity: 0.5; }
-}
-.blink {
-    animation: blink 2s infinite;
-}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 </style>
 
 {% if current_session %}
 <script>
-// Auto-refresh session stats every 30 seconds
 setInterval(function() {
-    fetch('{% url "api_session_status" slug=business.slug %}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'open') {
-                document.getElementById('totalTransactions').textContent = data.session.total_transactions;
-                document.getElementById('totalSales').textContent = 'KES ' + parseFloat(data.session.total_sales).toFixed(2);
-            }
-        })
-        .catch(error => console.error('Error fetching session status:', error));
+  fetch('{% url "api_session_status" slug=business.slug %}')
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'open') {
+        document.getElementById('totalTransactions').textContent = data.session.total_transactions;
+        document.getElementById('totalSales').textContent = 'KES ' + parseFloat(data.session.total_sales).toFixed(0);
+      }
+    }).catch(() => {});
 }, 30000);
 </script>
 {% endif %}

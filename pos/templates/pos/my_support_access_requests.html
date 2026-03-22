@@ -3,174 +3,120 @@
 {% block title %}My Support Access Requests{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-shield-lock"></i> My Support Access Requests</h2>
-        <a href="{% url 'platform_admin_dashboard' %}" class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i> Back to Admin Dashboard
-        </a>
-    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-    <!-- Active Access -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0">
-                <i class="bi bi-unlock"></i> Active Access
-                {% if active %}
-                <span class="badge bg-dark">{{ active.count }}</span>
-                {% endif %}
-            </h5>
-        </div>
-        <div class="card-body">
-            {% if active %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Business</th>
-                                <th>Approved At</th>
-                                <th>Expires At</th>
-                                <th>Time Remaining</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for access in active %}
-                            <tr>
-                                <td>
-                                    <strong>{{ access.business.name }}</strong><br>
-                                    <small class="text-muted">Owner: {{ access.business.owner.get_full_name|default:access.business.owner.username }}</small>
-                                </td>
-                                <td>{{ access.approved_at|date:"M d, Y H:i" }}</td>
-                                <td>{{ access.expires_at|date:"M d, Y H:i" }}</td>
-                                <td>
-                                    {% if access.expires_at %}
-                                        <span class="badge bg-info">
-                                            {{ access.expires_at|timeuntil }}
-                                        </span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">No expiry</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{% url 'dashboard' slug=access.business.slug %}" 
-                                       class="btn btn-sm btn-primary">
-                                        <i class="bi bi-box-arrow-in-right"></i> Access Dashboard
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="text-muted mb-0">
-                    <i class="bi bi-info-circle"></i> You don't have any active support access.
-                </p>
-            {% endif %}
-        </div>
-    </div>
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-shield-lock me-2 text-primary"></i>My Support Access Requests</h1>
+    <p class="page-subtitle">Businesses you have or have requested access to</p>
+  </div>
+  <a href="{% url 'platform_admin_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Admin Dashboard
+  </a>
+</div>
 
-    <!-- Pending Requests -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0">
-                <i class="bi bi-hourglass-split"></i> Pending Requests
-                {% if pending %}
-                <span class="badge bg-dark">{{ pending.count }}</span>
-                {% endif %}
-            </h5>
-        </div>
-        <div class="card-body">
-            {% if pending %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Business</th>
-                                <th>Reason</th>
-                                <th>Requested At</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for req in pending %}
-                            <tr>
-                                <td>
-                                    <strong>{{ req.business.name }}</strong><br>
-                                    <small class="text-muted">Owner: {{ req.business.owner.get_full_name|default:req.business.owner.username }}</small>
-                                </td>
-                                <td>{{ req.reason }}</td>
-                                <td>{{ req.requested_at|date:"M d, Y H:i" }}</td>
-                                <td>
-                                    <span class="badge bg-warning">Awaiting Approval</span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="text-muted mb-0">
-                    <i class="bi bi-info-circle"></i> No pending requests.
-                </p>
-            {% endif %}
-        </div>
+<!-- Active -->
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-unlock me-2"></i>Active Access</span>
+    {% if active %}<span class="status-badge status-success">{{ active.count }}</span>{% endif %}
+  </div>
+  <div class="ui-card-body p-0">
+    {% if active %}
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Business</th><th>Approved At</th><th>Expires At</th><th>Remaining</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for access in active %}
+          <tr>
+            <td>
+              <div style="font-weight:600;font-size:13px;">{{ access.business.name }}</div>
+              <div style="font-size:11px;color:#8a94a6;">Owner: {{ access.business.owner.get_full_name|default:access.business.owner.username }}</div>
+            </td>
+            <td style="font-size:12px;">{{ access.approved_at|date:"M d, Y H:i" }}</td>
+            <td style="font-size:12px;">{{ access.expires_at|date:"M d, Y H:i" }}</td>
+            <td>
+              {% if access.expires_at %}<span class="status-badge status-info">{{ access.expires_at|timeuntil }}</span>
+              {% else %}<span class="status-badge status-gray">No expiry</span>{% endif %}
+            </td>
+            <td>
+              <a href="{% url 'dashboard' slug=access.business.slug %}" class="btn-action btn-action-primary">
+                <i class="bi bi-box-arrow-in-right me-1"></i>Access Dashboard
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-unlock"></i><p>No active support access.</p></div>
+    {% endif %}
+  </div>
+</div>
 
-    <!-- Request History -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0">
-                <i class="bi bi-clock-history"></i> Request History
-            </h5>
-        </div>
-        <div class="card-body">
-            {% if history %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Business</th>
-                                <th>Requested At</th>
-                                <th>Status</th>
-                                <th>Processed By</th>
-                                <th>Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for req in history %}
-                            <tr>
-                                <td>{{ req.business.name }}</td>
-                                <td>{{ req.requested_at|date:"M d, Y H:i" }}</td>
-                                <td>
-                                    {% if req.status == 'denied' %}
-                                        <span class="badge bg-danger">Denied</span>
-                                    {% elif req.status == 'expired' %}
-                                        <span class="badge bg-warning">Expired</span>
-                                    {% elif req.status == 'revoked' %}
-                                        <span class="badge bg-dark">Revoked</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if req.approved_by %}
-                                        {{ req.approved_by.get_full_name|default:req.approved_by.username }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                                <td>{{ req.notes|default:"-" }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="text-muted mb-0">
-                    <i class="bi bi-info-circle"></i> No request history.
-                </p>
-            {% endif %}
-        </div>
+<!-- Pending -->
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-hourglass-split me-2"></i>Pending Requests</span>
+    {% if pending %}<span class="status-badge status-warning">{{ pending.count }}</span>{% endif %}
+  </div>
+  <div class="ui-card-body p-0">
+    {% if pending %}
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Business</th><th>Reason</th><th>Requested At</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for req in pending %}
+          <tr>
+            <td>
+              <div style="font-weight:600;font-size:13px;">{{ req.business.name }}</div>
+              <div style="font-size:11px;color:#8a94a6;">Owner: {{ req.business.owner.get_full_name|default:req.business.owner.username }}</div>
+            </td>
+            <td style="font-size:13px;">{{ req.reason }}</td>
+            <td style="font-size:12px;">{{ req.requested_at|date:"M d, Y H:i" }}</td>
+            <td><span class="status-badge status-warning">Awaiting Approval</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-hourglass"></i><p>No pending requests.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- History -->
+<div class="ui-card">
+  <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-clock-history me-2"></i>Request History</span></div>
+  <div class="ui-card-body p-0">
+    {% if history %}
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Business</th><th>Requested At</th><th>Status</th><th>Processed By</th><th>Notes</th></tr></thead>
+        <tbody>
+          {% for req in history %}
+          <tr>
+            <td style="font-size:13px;">{{ req.business.name }}</td>
+            <td style="font-size:12px;">{{ req.requested_at|date:"M d, Y H:i" }}</td>
+            <td>
+              {% if req.status == 'denied' %}<span class="status-badge status-danger">Denied</span>
+              {% elif req.status == 'expired' %}<span class="status-badge status-warning">Expired</span>
+              {% elif req.status == 'revoked' %}<span class="status-badge status-gray">Revoked</span>{% endif %}
+            </td>
+            <td style="font-size:12px;">{% if req.approved_by %}{{ req.approved_by.get_full_name|default:req.approved_by.username }}{% else %}—{% endif %}</td>
+            <td style="font-size:12px;">{{ req.notes|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-clock-history"></i><p>No request history.</p></div>
+    {% endif %}
+  </div>
+</div>
+
 </div>
 {% endblock %}

@@ -114,6 +114,69 @@
         width: 60%;
     }
 
+    /* Search bar */
+    .pos-search-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 0 10px;
+    }
+    .pos-search-wrap:focus-within {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13,110,253,.15);
+    }
+    .pos-search-icon {
+        color: #6c757d;
+        font-size: 0.95rem;
+        flex-shrink: 0;
+        margin-right: 8px;
+    }
+    .pos-search-input {
+        border: none !important;
+        box-shadow: none !important;
+        padding-left: 0 !important;
+        background: transparent !important;
+        font-size: 0.95rem;
+    }
+    .pos-search-clear {
+        flex-shrink: 0;
+        padding: 0 4px;
+        text-decoration: none;
+    }
+
+    /* Category Pills */
+    .category-pills {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+    }
+    .category-pills::-webkit-scrollbar { height: 4px; }
+    .category-pills::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 2px; }
+    .cat-pill {
+        white-space: nowrap;
+        padding: 5px 14px;
+        border-radius: 20px;
+        border: 1.5px solid #dee2e6;
+        background: #fff;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: all 0.15s;
+        flex-shrink: 0;
+    }
+    .cat-pill:hover { border-color: #0d6efd; background: #f0f8ff; }
+    .cat-pill.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+
+    /* POS info bar */
+    .pos-info-bar { font-size: 0.82rem; }
+
+    /* btn-xs */
+    .btn-xs { font-size: 0.75rem; line-height: 1.2; }
+
 </style>
 {% endblock %}
 
@@ -128,6 +191,18 @@
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 {% endif %}
+
+<!-- POS Top Info Bar -->
+<div class="pos-info-bar d-flex justify-content-between align-items-center mb-3 px-2 py-2 bg-dark text-white rounded">
+    <div class="d-flex align-items-center gap-3">
+        <span class="fw-bold text-warning"><i class="bi bi-shop"></i> {{ request.business.name }}</span>
+        <span class="text-light small"><i class="bi bi-person-badge"></i> {{ request.user.get_full_name|default:request.user.username }}</span>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-light small"><i class="bi bi-receipt"></i> Order #<span id="pos-order-number">---</span></span>
+        <span class="text-light small" id="pos-clock"><i class="bi bi-clock"></i> --:--</span>
+    </div>
+</div>
 
 <!-- Mobile Cart Toggle Button -->
 <button class="cart-toggle-btn d-md-none" onclick="toggleMobileCart()" id="cartToggleBtn">
@@ -290,77 +365,41 @@
             </div>
         </div>
 
-        <!-- Product Search and Filter Section -->
-        <div class="card mb-3 border-info">
-            <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-md-5">
-                        <label class="form-label"><i class="bi bi-search"></i> Search Products</label>
-                        <div class="input-group">
-                            <input type="text" id="search-input" class="form-control" 
-                                   placeholder="Search by name, barcode, or code..." 
-                                   value="{{ search_query }}"
-                                   oninput="handleSearchInput()"
-                                   onkeypress="if(event.key === 'Enter') searchProducts()"
-                                   autofocus>
-                            <button class="btn btn-primary" type="button" onclick="searchProducts()">
-                                <i class="bi bi-search"></i> Search
-                            </button>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label"><i class="bi bi-funnel"></i> Filter by Category</label>
-                        <select id="category-filter" class="form-select" onchange="handleCategoryChange()">
-                            <option value="">All Categories</option>
-                            {% for category in categories %}
-                            <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>
-                                {{ category.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="button" class="btn btn-outline-secondary w-100" onclick="clearFilters()" id="clear-filters-btn" style="display: none;">
-                            <i class="bi bi-x-circle"></i> Clear
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="alert alert-info mt-3 mb-0" id="filter-info">
-                    <i class="bi bi-lightbulb"></i> 
-                    <strong>Tip:</strong> 
-                    <span id="filter-info-text">
-                        {% if search_query %}
-                            Showing search results for "{{ search_query }}"
-                        {% elif category_filter %}
-                            Showing products in selected category
-                        {% else %}
-                            Showing {{ products|length }} of {{ total_products }} products. 
-                            Use search or barcode scanner to find specific items quickly.
-                        {% endif %}
-                    </span>
-                </div>
-            </div>
+        <!-- Product Search Bar -->
+        <div class="pos-search-wrap mb-2">
+            <i class="bi bi-search pos-search-icon"></i>
+            <input type="text" id="search-input" class="form-control pos-search-input"
+                   placeholder="Search by name, SKU, barcode..."
+                   value="{{ search_query }}"
+                   oninput="handleSearchInput()"
+                   onkeypress="if(event.key === 'Enter') searchProducts()"
+                   autofocus>
+            <button class="btn btn-sm btn-link pos-search-clear" type="button" onclick="clearFilters()" id="clear-filters-btn" style="display:none;" title="Clear">
+                <i class="bi bi-x-lg text-muted"></i>
+            </button>
         </div>
 
-        <!-- View Toggle -->
-        <div class="card mb-3">
-            <div class="card-body py-2">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>View:</strong>
-                    </div>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button type="button" class="btn btn-outline-primary" id="grid-view-btn" onclick="switchView('grid')">
-                            <i class="bi bi-grid-3x3"></i> Grid
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" id="list-view-btn" onclick="switchView('list')">
-                            <i class="bi bi-list-ul"></i> List
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <!-- Category Pill Buttons -->
+        <div class="category-pills mb-3" id="category-pills">
+            <button class="cat-pill active" onclick="filterByCategory('')" data-cat="">
+                <i class="bi bi-grid-3x3-gap"></i> All
+            </button>
+            {% for category in categories %}
+            <button class="cat-pill" onclick="filterByCategory('{{ category.id }}')" data-cat="{{ category.id }}">
+                {{ category.name }}
+            </button>
+            {% endfor %}
         </div>
+
+        <!-- Hidden select for compatibility -->
+        <select id="category-filter" style="display:none;" onchange="handleCategoryChange()">
+            <option value="">All Categories</option>
+            {% for category in categories %}
+            <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+        </select>
+
+        <!-- View Toggle removed - list view only -->
 
         <!-- Products Loading Skeleton -->
         <div id="products-loading" class="py-3">
@@ -418,11 +457,6 @@
                 </div>
                 <p class="mt-2 text-muted small">Loading products...</p>
             </div>
-        </div>
-        
-        <!-- Products Grid View -->
-        <div class="row" id="products-grid" style="display: none;">
-            <!-- Products will be loaded here via AJAX -->
         </div>
         
         <!-- Products List View -->
@@ -537,6 +571,12 @@
                     <small class="text-muted">1 point per KES 100 spent (with tier multiplier)</small>
                 </div>
 
+                <!-- Order Notes -->
+                <div class="mb-2">
+                    <label class="form-label small text-muted"><i class="bi bi-chat-left-text"></i> Order Notes</label>
+                    <textarea id="order-notes" class="form-control form-control-sm" rows="2" placeholder="Add note for this order..."></textarea>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="d-grid gap-2">
                     <!-- Complete Sale - Full Width -->
@@ -568,6 +608,7 @@
     <input type="hidden" name="customer_id" id="form-customer-id">
     <input type="hidden" name="discount_type" id="form-discount-type">
     <input type="hidden" name="discount_value" id="form-discount-value">
+    <input type="hidden" name="order_notes" id="form-order-notes">
     <div id="form-items"></div>
     <div id="form-payments"></div>
 </form>
@@ -646,7 +687,7 @@
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <label class="form-label">Payment Method</label>
-                        <select class="form-select" id="payment-method-select">
+                        <select class="form-select" id="payment-method-select" onchange="onPaymentMethodChange()">
                             <option value="">Select method...</option>
                             {% for method in payment_methods %}
                             <option value="{{ method.id }}" data-code="{{ method.code }}" data-requires-ref="{{ method.requires_reference }}">
@@ -657,13 +698,30 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Amount</label>
-                        <input type="number" class="form-control" id="payment-amount-input" step="0.01" min="0" placeholder="0.00">
+                        <input type="number" class="form-control" id="payment-amount-input" step="0.01" min="0" placeholder="0.00" oninput="updateCashChange()">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Reference (Optional)</label>
                         <input type="text" class="form-control" id="payment-reference-input" placeholder="Transaction ID, Check #, etc.">
                     </div>
                 </div>
+
+                <!-- Cash Received / Change Calculator (shown for cash payments) -->
+                <div id="cash-change-section" class="alert alert-info py-2 mb-3" style="display:none;">
+                    <div class="row align-items-center g-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-1 fw-bold">Cash Received</label>
+                            <input type="number" class="form-control form-control-sm" id="cash-received-input" step="0.01" min="0" placeholder="0.00" oninput="updateCashChange()">
+                        </div>
+                        <div class="col-6 text-center">
+                            <div class="small text-muted">Change Due</div>
+                            <div class="fs-4 fw-bold text-success" id="cash-change-display">KES 0.00</div>
+                        </div>
+                    </div>
+                    <!-- Quick cash buttons -->
+                    <div class="d-flex gap-1 mt-2 flex-wrap" id="quick-cash-btns"></div>
+                </div>
+
                 <div class="row">
                     <div class="col-md-12">
                         <button type="button" class="btn btn-primary" onclick="addPaymentMethod()">
@@ -732,26 +790,10 @@ let productsHasMore = true;
 let currentSearchQuery = '';
 let currentCategoryFilter = '';
 
-// ==================== VIEW SWITCHING ====================
-let currentView = localStorage.getItem('pos_view') || 'grid';
+// ==================== VIEW (LIST ONLY) ====================
+const currentView = 'list';
 
-function switchView(view) {
-    currentView = view;
-    localStorage.setItem('pos_view', view);
-    
-    // Update button states
-    document.getElementById('grid-view-btn').classList.toggle('active', view === 'grid');
-    document.getElementById('list-view-btn').classList.toggle('active', view === 'list');
-    
-    // Show/hide appropriate view
-    if (view === 'grid') {
-        document.getElementById('products-grid').style.display = 'flex';
-        document.getElementById('products-list').style.display = 'none';
-    } else {
-        document.getElementById('products-grid').style.display = 'none';
-        document.getElementById('products-list').style.display = 'block';
-    }
-}
+function switchView(view) { /* no-op, list view only */ }
 
 // Initialize view on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -762,8 +804,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // DON'T load cart here - it's handled in window.load event
     // This prevents duplicate loading and race conditions
     
-    // Set initial view
-    switchView(currentView);
+    // Set initial view (list only)
+    document.getElementById('products-list').style.display = 'block';
     
     // Update filter info on page load
     updateFilterInfo();
@@ -774,6 +816,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update held orders count
     updateHeldOrdersCount();
+
+    // Live clock
+    function updateClock() {
+        const el = document.getElementById('pos-clock');
+        if (el) {
+            const now = new Date();
+            el.innerHTML = `<i class="bi bi-clock"></i> ${now.toLocaleTimeString('en-KE', {hour:'2-digit', minute:'2-digit'})} &nbsp; ${now.toLocaleDateString('en-KE', {day:'2-digit', month:'short', year:'numeric'})}`;
+        }
+    }
+    updateClock();
+    setInterval(updateClock, 30000);
+
+    // Generate order number
+    const orderNum = document.getElementById('pos-order-number');
+    if (orderNum) {
+        const ts = Date.now().toString().slice(-6);
+        orderNum.textContent = ts;
+    }
 });
 
 // ==================== LAZY LOADING PRODUCTS ====================
@@ -787,10 +847,8 @@ function loadProducts(reset = false) {
     if (reset) {
         productsOffset = 0;
         productsHasMore = true;
-        // Clear both views
-        const grid = document.getElementById('products-grid');
+        // Clear list view only
         const listBody = document.getElementById('products-list-body');
-        if (grid) grid.innerHTML = '';
         if (listBody) listBody.innerHTML = '';
         console.log('Products cleared for reset');
     }
@@ -892,17 +950,10 @@ function loadProducts(reset = false) {
             productsOffset += data.products.length;
             productsHasMore = data.has_more;
             
-            // Update UI
+            // Show list view
             if (loadingEl) loadingEl.style.display = 'none';
-            
-            // Show appropriate view
-            if (currentView === 'grid') {
-                const gridEl = document.getElementById('products-grid');
-                if (gridEl) gridEl.style.display = 'flex';
-            } else {
-                const listEl = document.getElementById('products-list');
-                if (listEl) listEl.style.display = 'block';
-            }
+            const listEl = document.getElementById('products-list');
+            if (listEl) listEl.style.display = 'block';
             
             const emptyEl = document.getElementById('products-empty');
             const loadMoreContainer = document.getElementById('load-more-container');
@@ -955,7 +1006,6 @@ function loadProducts(reset = false) {
 }
 
 function renderProducts(products) {
-    const grid = document.getElementById('products-grid');
     const listBody = document.getElementById('products-list-body');
     
     products.forEach(product => {
@@ -965,51 +1015,6 @@ function renderProducts(products) {
         // Determine stock status
         const isOutOfStock = product.stock_quantity <= 0;
         const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= 10;
-        
-        // Render Grid View Card
-        const col = document.createElement('div');
-        col.className = 'col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3 product-item';
-        col.setAttribute('data-category', product.category_name);
-        col.setAttribute('data-name', product.name.toLowerCase());
-        
-        let borderClass = '';
-        if (isOutOfStock) borderClass = 'border-danger';
-        else if (isLowStock) borderClass = 'border-warning';
-        
-        let stockBadge = '';
-        if (isOutOfStock) {
-            stockBadge = '<span class="badge bg-danger">Out of Stock</span>';
-        } else if (isLowStock) {
-            stockBadge = `<span class="badge bg-warning text-dark">Low Stock: ${product.stock_quantity} ${product.unit_name}</span>`;
-        } else {
-            stockBadge = `<span class="badge bg-success">In Stock: ${product.stock_quantity} ${product.unit_name}</span>`;
-        }
-        
-        const onclick = isOutOfStock ? 
-            `alert('This product is out of stock!')` :
-            `addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, '${product.tax_class || 'standard'}')`;
-        
-        col.innerHTML = `
-            <div class="card product-card h-100 ${borderClass}" onclick="${onclick}">
-                <div class="product-placeholder">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <div class="card-body text-center p-2">
-                    <h6 class="card-title mb-1">${product.name}</h6>
-                    ${product.product_code ? `<p class="text-muted small mb-1"><i class="bi bi-upc"></i> ${product.product_code}</p>` : ''}
-                    <p class="text-muted small mb-1">${product.category_name || 'Uncategorized'}</p>
-                    <h5 class="text-primary mb-1">
-                        KES ${product.unit_price.toFixed(2)}
-                        <small class="text-muted">/ ${product.unit_name}</small>
-                    </h5>
-                    ${product.has_bulk ? `<p class="text-info small mb-1"><i class="bi bi-box"></i> Bulk: ${product.bulk_unit_name}</p>` : ''}
-                    <div class="mt-1">
-                        ${stockBadge}
-                    </div>
-                </div>
-            </div>
-        `;
-        grid.appendChild(col);
         
         // Render List View Row
         const row = document.createElement('tr');
@@ -1111,6 +1116,11 @@ function clearFilters() {
     document.getElementById('category-filter').value = '';
     currentCategoryFilter = '';
     
+    // Reset pill buttons
+    document.querySelectorAll('.cat-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-cat') === '');
+    });
+    
     // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
@@ -1166,6 +1176,10 @@ function searchProducts() {
 function filterByCategory(categoryId) {
     currentCategoryFilter = categoryId;
     document.getElementById('category-filter').value = categoryId;
+    // Update pill active state
+    document.querySelectorAll('.cat-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-cat') === String(categoryId));
+    });
     updateFilterInfo();
     loadProducts(true);
 }
@@ -1710,6 +1724,89 @@ function removeFromCart(id) {
     saveCartToStorage(); // Save after removing from cart
 }
 
+function adjustQty(id, delta) {
+    const item = cart.find(i => i.id === id);
+    if (!item) return;
+    const newQty = item.quantity + delta;
+    if (newQty < 1) { removeFromCart(id); return; }
+    if (newQty > item.availableStock) {
+        showNotification(`Only ${item.availableStock} in stock`, 'error');
+        return;
+    }
+    item.quantity = newQty;
+    updateCart();
+    saveCartToStorage();
+}
+
+function setItemDiscount(id, value) {
+    const item = cart.find(i => i.id === id);
+    if (!item) return;
+    const disc = parseFloat(value) || 0;
+    item.discount = Math.min(100, Math.max(0, disc));
+    calculateTotal();
+    saveCartToStorage();
+}
+
+function setItemNote(id, value) {
+    const item = cart.find(i => i.id === id);
+    if (!item) return;
+    item.note = value;
+    saveCartToStorage();
+}
+
+// Cash change calculator
+function onPaymentMethodChange() {
+    const sel = document.getElementById('payment-method-select');
+    const opt = sel.options[sel.selectedIndex];
+    const code = opt ? opt.getAttribute('data-code') : '';
+    const isCash = code === 'cash' || (opt && opt.text.toLowerCase().includes('cash'));
+    const section = document.getElementById('cash-change-section');
+    if (section) {
+        section.style.display = isCash ? 'block' : 'none';
+        if (isCash) {
+            buildQuickCashButtons();
+            document.getElementById('cash-received-input').value = '';
+            document.getElementById('cash-change-display').textContent = 'KES 0.00';
+            // Auto-fill remaining
+            const remaining = totalDue - paymentMethods.reduce((s, m) => s + m.amount, 0);
+            if (remaining > 0) document.getElementById('payment-amount-input').value = remaining.toFixed(2);
+        }
+    }
+}
+
+function buildQuickCashButtons() {
+    const remaining = totalDue - paymentMethods.reduce((s, m) => s + m.amount, 0);
+    const denominations = [50, 100, 200, 500, 1000, 2000, 5000];
+    const btns = document.getElementById('quick-cash-btns');
+    if (!btns) return;
+    btns.innerHTML = '';
+    denominations.forEach(d => {
+        if (d >= remaining * 0.8) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn btn-sm btn-outline-primary';
+            b.textContent = d >= 1000 ? `${d/1000}K` : d;
+            b.onclick = () => {
+                document.getElementById('cash-received-input').value = d;
+                document.getElementById('payment-amount-input').value = Math.min(d, remaining).toFixed(2);
+                updateCashChange();
+            };
+            btns.appendChild(b);
+        }
+    });
+}
+
+function updateCashChange() {
+    const received = parseFloat(document.getElementById('cash-received-input')?.value) || 0;
+    const amount = parseFloat(document.getElementById('payment-amount-input')?.value) || 0;
+    const change = received - amount;
+    const display = document.getElementById('cash-change-display');
+    if (display) {
+        display.textContent = `KES ${Math.max(0, change).toFixed(2)}`;
+        display.className = change >= 0 ? 'fs-4 fw-bold text-success' : 'fs-4 fw-bold text-danger';
+    }
+}
+
 function updateQuantity(id, quantity) {
     const item = cart.find(item => item.id === id);
     if (item) {
@@ -1744,8 +1841,9 @@ function updateCart() {
         console.log('Cart is empty, button disabled');
     } else {
         let html = '';
-        cart.forEach(item => {
-            const total = item.price * item.quantity;
+        cart.forEach((item, idx) => {
+            const itemDiscount = item.discount || 0;
+            const itemTotal = (item.price * item.quantity) * (1 - itemDiscount / 100);
             const qtyDisplay = item.isVariable ? 
                 `${item.quantity.toFixed(3)} ${item.unitName}` : 
                 item.quantity;
@@ -1754,29 +1852,42 @@ function updateCart() {
                 `KES ${item.price.toFixed(2)} each`;
             
             html += `
-                <div class="cart-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
+                <div class="cart-item" id="cart-item-${item.id}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1 me-2">
                             <strong>${item.name}</strong>
                             ${item.isVariable ? '<span class="badge bg-info ms-1">Variable</span>' : ''}
-                            <br>
-                            <small>${priceDisplay}</small>
+                            <br><small class="text-muted">${priceDisplay}</small>
                         </div>
-                        <button class="btn btn-sm btn-danger" onclick="removeFromCart(${item.id})">
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart(${item.id})" title="Remove">
                             <i class="bi bi-x"></i>
                         </button>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mt-2">
+                    <div class="d-flex justify-content-between align-items-center mt-1">
                         ${item.isVariable ? 
-                            `<span class="text-muted">${qtyDisplay}</span>` :
-                            `<div class="d-flex align-items-center gap-2">
-                                <input type="number" class="form-control form-control-sm" style="width: 80px;" 
+                            `<span class="text-muted small">${qtyDisplay}</span>` :
+                            `<div class="d-flex align-items-center gap-1">
+                                <button class="btn btn-xs btn-outline-secondary px-1 py-0" onclick="adjustQty(${item.id}, -1)"><i class="bi bi-dash"></i></button>
+                                <input type="number" class="form-control form-control-sm text-center" style="width:60px;"
                                        value="${item.quantity}" min="1" max="${item.availableStock}"
                                        onchange="updateQuantity(${item.id}, this.value)">
-                                <small class="text-muted">(${item.availableStock} avail.)</small>
+                                <button class="btn btn-xs btn-outline-secondary px-1 py-0" onclick="adjustQty(${item.id}, 1)"><i class="bi bi-plus"></i></button>
                             </div>`
                         }
-                        <strong>KES ${total.toFixed(2)}</strong>
+                        <strong class="text-primary">KES ${itemTotal.toFixed(2)}</strong>
+                    </div>
+                    <!-- Per-item discount + note (collapsible) -->
+                    <div class="d-flex gap-1 mt-1">
+                        <input type="number" class="form-control form-control-sm" style="width:90px;" 
+                               placeholder="Disc %" min="0" max="100" step="0.1"
+                               value="${itemDiscount > 0 ? itemDiscount : ''}"
+                               oninput="setItemDiscount(${item.id}, this.value)"
+                               title="Item discount %">
+                        <input type="text" class="form-control form-control-sm"
+                               placeholder="Item note..."
+                               value="${item.note || ''}"
+                               oninput="setItemNote(${item.id}, this.value)"
+                               title="Note for this item">
                     </div>
                 </div>
             `;
@@ -1797,7 +1908,8 @@ function calculateTotal() {
         let nonTaxableTotal = 0;
         
         cart.forEach(item => {
-            const itemTotal = item.price * item.quantity;
+            const itemDiscount = item.discount || 0;
+            const itemTotal = (item.price * item.quantity) * (1 - itemDiscount / 100);
             const taxClass = item.taxClass || 'standard'; // Default to standard if not set
             
             if (taxClass === 'standard') {
@@ -2606,7 +2718,7 @@ function confirmPaymentAndComplete() {
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'items';
-        input.value = `${item.id},${item.quantity},${item.price}`;
+        input.value = `${item.id},${item.quantity},${item.price},${encodeURIComponent(item.note || '')}`;
         formItems.appendChild(input);
         console.log('Added item:', input.value);
     });
@@ -2646,6 +2758,10 @@ function confirmPaymentAndComplete() {
     if (customerIdInput) customerIdInput.value = selectedCustomer ? selectedCustomer.id : '';
     if (discountTypeInput) discountTypeInput.value = document.getElementById('discount-type').value;
     if (discountValueInput) discountValueInput.value = document.getElementById('discount-value').value;
+    
+    // Order notes
+    const orderNotesInput = document.getElementById('form-order-notes');
+    if (orderNotesInput) orderNotesInput.value = document.getElementById('order-notes')?.value || '';
     
     console.log('Customer ID:', customerIdInput ? customerIdInput.value : 'N/A');
     console.log('Discount type:', discountTypeInput ? discountTypeInput.value : 'N/A');

@@ -5,12 +5,29 @@
     const statusElement = document.getElementById('connectionStatus');
     
     if (!statusElement) return;
+
+    let _isOnline = true; // tracked state
+
+    // Real connectivity check via fetch ping
+    async function checkRealConnectivity() {
+        try {
+            const res = await fetch('/favicon.ico?_=' + Date.now(), {
+                method: 'HEAD',
+                cache: 'no-store',
+                signal: AbortSignal.timeout(4000)
+            });
+            return res.ok || res.status < 500;
+        } catch {
+            return false;
+        }
+    }
     
     // Update connection status
-    function updateConnectionStatus() {
-        const isOnline = navigator.onLine;
+    async function updateConnectionStatus(notify) {
+        const wasOnline = _isOnline;
+        _isOnline = await checkRealConnectivity();
         
-        if (isOnline) {
+        if (_isOnline) {
             statusElement.classList.remove('offline');
             statusElement.setAttribute('data-status', 'Online');
             statusElement.querySelector('i').className = 'fas fa-wifi';
@@ -19,11 +36,17 @@
             statusElement.setAttribute('data-status', 'Offline');
             statusElement.querySelector('i').className = 'fas fa-wifi-slash';
         }
+
+        if (notify && wasOnline !== _isOnline) {
+            showConnectionNotification(_isOnline);
+        }
+
+        // Expose real status for sync-manager
+        window._realOnline = _isOnline;
     }
     
     // Show notification when connection changes
     function showConnectionNotification(isOnline) {
-        // Create toast notification
         const toast = document.createElement('div');
         toast.className = `alert alert-${isOnline ? 'success' : 'warning'} alert-dismissible fade show`;
         toast.style.position = 'fixed';
@@ -37,41 +60,23 @@
             <p class="mb-0 small">${isOnline ? 'You are now connected' : 'Working in offline mode'}</p>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
         document.body.appendChild(toast);
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
-        }, 5000);
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
     }
     
-    // Listen for connection changes
-    window.addEventListener('online', function() {
-        updateConnectionStatus();
-        showConnectionNotification(true);
-        
-        // Trigger sync when back online (Phase 2)
-        // syncPendingData();
-    });
+    // Listen for browser online/offline events as triggers for re-check
+    window.addEventListener('online', () => updateConnectionStatus(true));
+    window.addEventListener('offline', () => updateConnectionStatus(true));
     
-    window.addEventListener('offline', function() {
-        updateConnectionStatus();
-        showConnectionNotification(false);
-    });
+    // Initial check
+    updateConnectionStatus(false);
     
-    // Initial status check
-    updateConnectionStatus();
+    // Re-check every 15 seconds
+    setInterval(() => updateConnectionStatus(true), 15000);
     
-    // Periodic status check (every 30 seconds)
-    setInterval(updateConnectionStatus, 30000);
-    
-    // Expose to global scope for other scripts
     window.ConnectionStatus = {
-        isOnline: () => navigator.onLine,
-        updateStatus: updateConnectionStatus
+        isOnline: () => window._realOnline,
+        updateStatus: () => updateConnectionStatus(true)
     };
 })();
 </script>

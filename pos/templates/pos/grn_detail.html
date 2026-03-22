@@ -25,6 +25,7 @@
                     <span class="badge 
                         {% if grn.status == 'draft' %}bg-secondary
                         {% elif grn.status == 'submitted' %}bg-info
+                        {% elif grn.status == 'acknowledged' %}bg-primary
                         {% elif grn.status == 'collected' %}bg-warning
                         {% elif grn.status == 'credited' %}bg-success
                         {% elif grn.status == 'cancelled' %}bg-danger
@@ -181,6 +182,9 @@
                         <i class="bi bi-x-circle"></i> Cancel GRN
                     </a>
                     {% elif grn.status == 'submitted' %}
+                    <a href="{% url 'grn_acknowledge' slug=business_slug pk=grn.pk %}" class="btn btn-info w-100 mb-2">
+                        <i class="bi bi-check2-circle"></i> Mark Acknowledged
+                    </a>
                     <a href="{% url 'grn_mark_collected' slug=business_slug pk=grn.pk %}" class="btn btn-warning w-100 mb-2">
                         <i class="bi bi-check-circle"></i> Mark as Collected
                     </a>
@@ -190,11 +194,22 @@
                     <a href="{% url 'grn_cancel' slug=business_slug pk=grn.pk %}" class="btn btn-danger w-100">
                         <i class="bi bi-x-circle"></i> Cancel GRN
                     </a>
+                    {% elif grn.status == 'acknowledged' %}
+                    <a href="{% url 'grn_mark_collected' slug=business_slug pk=grn.pk %}" class="btn btn-warning w-100 mb-2">
+                        <i class="bi bi-check-circle"></i> Mark as Collected
+                    </a>
+                    <a href="{% url 'grn_apply_credit' slug=business_slug pk=grn.pk %}" class="btn btn-success w-100 mb-2">
+                        <i class="bi bi-receipt"></i> Apply Credit Note
+                    </a>
                     {% elif grn.status == 'collected' %}
                     <a href="{% url 'grn_apply_credit' slug=business_slug pk=grn.pk %}" class="btn btn-success w-100">
                         <i class="bi bi-receipt"></i> Apply Credit Note
                     </a>
                     {% endif %}
+                    <hr>
+                    <a href="{% url 'grn_print' slug=business_slug pk=grn.pk %}" class="btn btn-outline-secondary w-100" target="_blank">
+                        <i class="bi bi-printer"></i> Print GRN
+                    </a>
                 </div>
             </div>
         </div>

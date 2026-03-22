@@ -1,0 +1,85 @@
+{% extends 'pos/base.html' %}
+{% block title %}Credit Report{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div><h1 class="h4 fw-bold mb-0"><i class="bi bi-credit-card-2-back me-2"></i>Customer Credit Report</h1></div>
+    <a href="?export=csv" class="btn-action btn-action-secondary"><i class="bi bi-download me-1"></i>Export CSV</a>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#e74a3b22;"><i class="bi bi-exclamation-circle" style="color:#e74a3b;"></i></div>
+        <div class="stat-value">KES {{ total_outstanding|floatformat:2 }}</div>
+        <div class="stat-label">Total Outstanding</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#4e73df22;"><i class="bi bi-shield-check" style="color:#4e73df;"></i></div>
+        <div class="stat-value">KES {{ total_limit|floatformat:2 }}</div>
+        <div class="stat-label">Total Credit Limit</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#1cc88a22;"><i class="bi bi-people" style="color:#1cc88a;"></i></div>
+        <div class="stat-value">{{ customers|length }}</div>
+        <div class="stat-label">Customers with Balance</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-7">
+      <div class="ui-card">
+        <div class="ui-card-body p-0">
+          <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Outstanding Balances</h6></div>
+          <div class="table-responsive">
+            <table class="ui-table">
+              <thead><tr><th>Customer</th><th>Credit Limit</th><th>Outstanding</th><th>Available</th><th></th></tr></thead>
+              <tbody>
+                {% for c in customers %}
+                <tr>
+                  <td><strong>{{ c.name }}</strong><br><small class="text-muted">{{ c.phone }}</small></td>
+                  <td>KES {{ c.credit_limit|floatformat:2 }}</td>
+                  <td class="text-danger fw-bold">KES {{ c.credit_balance|floatformat:2 }}</td>
+                  <td>KES {{ c.get_available_credit|floatformat:2 }}</td>
+                  <td><a href="{% url 'customer_credit_detail' slug=business_slug pk=c.pk %}" class="btn-action btn-action-primary btn-sm">View</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5"><div class="empty-state"><i class="bi bi-check-circle"></i><p>No outstanding balances</p></div></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <div class="ui-card">
+        <div class="ui-card-body p-0">
+          <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Recent Payments</h6></div>
+          <div class="table-responsive">
+            <table class="ui-table">
+              <thead><tr><th>Customer</th><th>Amount</th><th>Date</th></tr></thead>
+              <tbody>
+                {% for p in recent_payments %}
+                <tr>
+                  <td>{{ p.customer.name }}</td>
+                  <td class="text-success fw-bold">KES {{ p.amount|floatformat:2 }}</td>
+                  <td>{{ p.created_at|date:"d M Y" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="text-center text-muted py-3">No payments yet</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

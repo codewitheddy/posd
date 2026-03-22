@@ -1,0 +1,42 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Reject Registration - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="form-card">
+                <h5 class="mb-3" style="color:#dc2626;"><i class="fas fa-times-circle"></i> Reject Registration</h5>
+                <h6>Registration Details</h6>
+                <table class="table mb-4">
+                    <tr><th>Business Name:</th><td>{{ registration.business_name }}</td></tr>
+                    <tr><th>Owner:</th><td>{{ registration.first_name }} {{ registration.last_name }}</td></tr>
+                    <tr><th>Email:</th><td>{{ registration.email }}</td></tr>
+                </table>
+
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Rejection Reason</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="4"
+                                      placeholder="Explain why this registration is being rejected..." required></textarea>
+                            <small class="text-muted">This will be sent to the applicant</small>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-danger btn-lg">
+                                <i class="fas fa-times"></i> Reject Registration
+                            </button>
+                            <a href="{% url 'registrations_list' %}" class="btn-action">
+                                <i class="fas fa-arrow-left"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

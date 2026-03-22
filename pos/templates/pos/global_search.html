@@ -1,0 +1,148 @@
+{% extends 'pos/base.html' %}
+{% block title %}Search: "{{ query }}" — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-search me-2 text-primary"></i>Search Results</h1>
+    <p class="page-subtitle">
+      {% if query %}Results for "{{ query }}"{% else %}Enter a search term above{% endif %}
+    </p>
+  </div>
+</div>
+
+{% if query %}
+
+<!-- Search form (re-search) -->
+<div class="filter-bar mb-3">
+  <form method="get" class="d-flex gap-2">
+    <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search products, customers, invoices…" autofocus>
+    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-search"></i></button>
+  </form>
+</div>
+
+<!-- Summary -->
+{% with total=products|length|add:customers|length|add:sales|length %}
+<p class="text-muted small mb-3">{{ total }} result{{ total|pluralize }} found</p>
+{% endwith %}
+
+<!-- Products -->
+{% if products %}
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-box-seam me-2 text-success"></i>Products ({{ products|length }})</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Name</th><th>Code</th><th>Category</th><th class="text-end">Price</th><th class="text-end">Stock</th><th></th></tr></thead>
+        <tbody>
+          {% for p in products %}
+          <tr>
+            <td style="font-weight:600">{{ p.name }}</td>
+            <td><span class="text-muted">{{ p.product_code|default:"—" }}</span></td>
+            <td>{{ p.category.name|default:"—" }}</td>
+            <td class="text-end">KES {{ p.unit_price|floatformat:0 }}</td>
+            <td class="text-end">
+              {% if p.stock_quantity == 0 %}<span class="status-badge status-danger">Out</span>
+              {% elif p.stock_quantity <= p.low_stock_threshold %}<span class="status-badge status-warning">{{ p.stock_quantity }}</span>
+              {% else %}<span class="status-badge status-success">{{ p.stock_quantity }}</span>{% endif %}
+            </td>
+            <td>
+              <a href="{% url 'product_edit' slug=request.business.slug pk=p.pk %}" class="btn-action btn-action-primary"><i class="bi bi-pencil"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Customers -->
+{% if customers %}
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-people me-2 text-info"></i>Customers ({{ customers|length }})</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th class="text-end">Total Spent</th><th></th></tr></thead>
+        <tbody>
+          {% for c in customers %}
+          <tr>
+            <td style="font-weight:600">{{ c.name }}</td>
+            <td>{{ c.phone|default:"—" }}</td>
+            <td>{{ c.email|default:"—" }}</td>
+            <td class="text-end">KES {{ c.total_spent|default:0|floatformat:0 }}</td>
+            <td>
+              <a href="{% url 'customer_detail' slug=request.business.slug pk=c.pk %}" class="btn-action btn-action-primary"><i class="bi bi-eye"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Sales / Invoices -->
+{% if sales %}
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-receipt me-2 text-purple" style="color:#7c3aed"></i>Invoices ({{ sales|length }})</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>Cashier</th><th class="text-end">Total</th><th></th></tr></thead>
+        <tbody>
+          {% for s in sales %}
+          <tr>
+            <td style="font-weight:600;color:#7c3aed">{{ s.invoice_number }}</td>
+            <td>{{ s.date|date:"d M Y H:i" }}</td>
+            <td>{{ s.customer.name|default:"Walk-in" }}</td>
+            <td>{{ s.cashier.username|default:"—" }}</td>
+            <td class="text-end fw-bold" style="color:#16a34a">KES {{ s.total|floatformat:0 }}</td>
+            <td>
+              <a href="{% url 'thermal_receipt' slug=request.business.slug pk=s.pk %}" class="btn-action btn-action-primary"><i class="bi bi-receipt"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if not products and not customers and not sales %}
+<div class="ui-card">
+  <div class="ui-card-body">
+    <div class="empty-state">
+      <i class="bi bi-search"></i>
+      <p>No results found for "{{ query }}"</p>
+      <small class="text-muted">Try searching by product name, barcode, customer name, phone, or invoice number.</small>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="ui-card">
+  <div class="ui-card-body">
+    <div class="empty-state">
+      <i class="bi bi-search"></i>
+      <p>Type something in the search bar above to get started.</p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

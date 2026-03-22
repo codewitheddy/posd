@@ -1,5 +1,5 @@
 """
-Email notification service for POS system
+Email notification service for Marid POS
 Handles sending emails for purchase orders, payments, GRNs, etc.
 """
 
@@ -226,7 +226,7 @@ class EmailService:
                 <p>Best regards,<br><strong>{context['business_name']}</strong></p>
             </div>
             <div class="footer">
-                <p>This is an automated email from {context['business_name']} POS System</p>
+                <p>This is an automated email from {context['business_name']} Marid POS</p>
             </div>
         </body>
         </html>
@@ -355,7 +355,7 @@ Best regards,
                 <p>Best regards,<br><strong>{context['business_name']}</strong></p>
             </div>
             <div class="footer">
-                <p>This is an automated cancellation notice from {context['business_name']} POS System</p>
+                <p>This is an automated cancellation notice from {context['business_name']} Marid POS</p>
             </div>
         </body>
         </html>
@@ -465,7 +465,7 @@ Best regards,
                 <p>Best regards,<br><strong>{context['business_name']}</strong></p>
             </div>
             <div class="footer">
-                <p>This is an automated email from {context['business_name']} POS System</p>
+                <p>This is an automated email from {context['business_name']} Marid POS</p>
             </div>
         </body>
         </html>
@@ -606,7 +606,7 @@ Best regards,
                 <p>Best regards,<br><strong>{context['business_name']}</strong></p>
             </div>
             <div class="footer">
-                <p>This is an automated email from {context['business_name']} POS System</p>
+                <p>This is an automated email from {context['business_name']} Marid POS</p>
             </div>
         </body>
         </html>
@@ -699,10 +699,10 @@ Best regards,
                 
                 <p>Contact your system administrator or support team to renew your license.</p>
                 
-                <p>Thank you for using our POS system.</p>
+                <p>Thank you for using our Marid POS.</p>
             </div>
             <div class="footer">
-                <p>This is an automated reminder from POS System</p>
+                <p>This is an automated reminder from Marid POS</p>
             </div>
         </body>
         </html>
@@ -721,7 +721,7 @@ To avoid service interruption, please renew your license before the expiry date.
 
 Contact your system administrator or support team to renew your license.
 
-Thank you for using our POS system.
+Thank you for using our Marid POS.
         """
         
         return EmailService.send_email(
@@ -967,10 +967,10 @@ Best regards,
                 
                 <p>Please create purchase orders to restock these items.</p>
                 
-                <p>Best regards,<br><strong>{context['business_name']} POS System</strong></p>
+                <p>Best regards,<br><strong>{context['business_name']} Marid POS</strong></p>
             </div>
             <div class="footer">
-                <p>This is an automated alert from {context['business_name']} POS System</p>
+                <p>This is an automated alert from {context['business_name']} Marid POS</p>
             </div>
         </body>
         </html>
@@ -984,7 +984,7 @@ Low Stock Alert - {context['business_name']}
 Please create purchase orders to restock these items.
 
 Best regards,
-{context['business_name']} POS System
+{context['business_name']} Marid POS
         """
         
         return EmailService.send_email(
@@ -1127,10 +1127,10 @@ Best regards,
                 
                 <p>Have a great day!</p>
                 
-                <p>Best regards,<br><strong>{context['business_name']} POS System</strong></p>
+                <p>Best regards,<br><strong>{context['business_name']} Marid POS</strong></p>
             </div>
             <div class="footer">
-                <p>This is an automated daily summary from {context['business_name']} POS System</p>
+                <p>This is an automated daily summary from {context['business_name']} Marid POS</p>
             </div>
         </body>
         </html>
@@ -1150,7 +1150,7 @@ Total Revenue: {context['total_revenue']}
 Have a great day!
 
 Best regards,
-{context['business_name']} POS System
+{context['business_name']} Marid POS
         """
         
         return EmailService.send_email(
@@ -1162,3 +1162,21 @@ Best regards,
             html_body=html_body,
             text_body=text_body
         )
+
+    @staticmethod
+    def send_custom_email(to_email, subject, message, customer_name=''):
+        """Send a custom campaign/marketing email to a customer"""
+        try:
+            from django.core.mail import send_mail
+            body = f"Dear {customer_name},\n\n{message}"
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[to_email],
+                fail_silently=False,
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send campaign email to {to_email}: {e}")
+            raise

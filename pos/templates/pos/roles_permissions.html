@@ -12,8 +12,8 @@
         cursor: pointer;
     }
     .role-card:hover {
-        border-color: #4e73df;
-        box-shadow: 0 4px 12px rgba(78, 115, 223, 0.2);
+        border-color: var(--primary-color, #224195);
+        box-shadow: 0 4px 16px rgba(0,0,0,.11);
         transform: translateY(-2px);
     }
     .role-card.selected {
@@ -43,58 +43,56 @@
         font-size: 0.85rem;
         font-weight: 600;
     }
-    .role-owner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-    .role-admin { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
-    .role-manager { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
-    .role-stock_manager { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
-    .role-cashier { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
-    .role-sales { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white; }
-    .role-viewer { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }
+    .role-owner        { background: #3b4fd8; color: #fff; }
+    .role-admin        { background: #e0245e; color: #fff; }
+    .role-manager      { background: #0284c7; color: #fff; }
+    .role-stock_manager{ background: #059669; color: #fff; }
+    .role-cashier      { background: #d97706; color: #fff; }
+    .role-sales        { background: #7c3aed; color: #fff; }
+    .role-viewer       { background: #64748b; color: #fff; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2><i class="bi bi-shield-check"></i> Roles & Permissions</h2>
-            <p class="text-muted">Manage user roles and their permissions</p>
-        </div>
-        <a href="{% url 'user_management_list' slug=business_slug %}" class="btn btn-primary">
-            <i class="bi bi-people"></i> Manage Users
-        </a>
-    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-    <!-- Role Overview Cards -->
-    <div class="row mb-4">
-        {% for role_key, role_name in roles %}
-        <div class="col-md-4 col-lg-3 mb-3">
-            <div class="card role-card" onclick="showRoleDetails('{{ role_key }}')">
-                <div class="card-body text-center">
-                    <span class="role-badge role-{{ role_key }}">{{ role_name }}</span>
-                    <h3 class="mt-3">{{ role_counts|get_item:role_key|default:0 }}</h3>
-                    <small class="text-muted">Users with this role</small>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-shield-check me-2 text-primary"></i>Roles &amp; Permissions</h1>
+    <p class="page-subtitle">Manage user roles and their permissions</p>
+  </div>
+  <a href="{% url 'user_management_list' slug=business_slug %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-people me-1"></i>Manage Users
+  </a>
+</div>
 
-    <!-- Permissions Matrix -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-table"></i> Permissions Matrix</h5>
-        </div>
-        <div class="card-body">
+<!-- Role Overview Cards -->
+<div class="row g-3 mb-3">
+  {% for role_key, role_name in roles %}
+  <div class="col-6 col-md-4 col-lg-3">
+    <div class="role-card" onclick="showRoleDetails('{{ role_key }}')" style="background:#fff; border-radius:14px; border:1.5px solid #e8ecf0; padding:18px 20px; box-shadow:0 1px 4px rgba(0,0,0,.07); transition:all .2s; cursor:pointer;">
+      <div class="mb-2"><span class="role-badge role-{{ role_key }}">{{ role_name }}</span></div>
+      <div class="stat-label">Users</div>
+      <div class="stat-value">{{ role_counts|get_item:role_key|default:0 }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Permissions Matrix -->
+<div class="ui-card mb-3">
+  <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-table me-2"></i>Permissions Matrix</span></div>
+  <div class="ui-card-body p-0">
+        <div class="table-responsive">
             <div class="table-responsive">
-                <table class="table table-bordered">
-                    <thead class="table-light">
+                <table class="table ui-table mb-0">
+                    <thead>
                         <tr>
                             <th>Permission</th>
                             <th class="text-center">Owner</th>
                             <th class="text-center">Admin</th>
                             <th class="text-center">Manager</th>
-                            <th class="text-center">Stock Manager</th>
+                            <th class="text-center">Stock Mgr</th>
                             <th class="text-center">Cashier</th>
                             <th class="text-center">Sales</th>
                             <th class="text-center">Viewer</th>
@@ -103,13 +101,13 @@
                     <tbody>
                         {% for perm in permissions %}
                         <tr>
-                            <td><strong>{{ perm.name }}</strong><br><small class="text-muted">{{ perm.description }}</small></td>
+                            <td><div style="font-weight:600;font-size:13px;">{{ perm.name }}</div><div style="font-size:11px;color:#8a94a6;">{{ perm.description }}</div></td>
                             {% for role in perm.roles %}
                             <td class="text-center">
                                 {% if role %}
-                                <i class="bi bi-check-circle-fill text-success" style="font-size: 1.5rem;"></i>
+                                <i class="bi bi-check-circle-fill text-success"></i>
                                 {% else %}
-                                <i class="bi bi-x-circle text-muted" style="font-size: 1.5rem;"></i>
+                                <i class="bi bi-x-circle text-muted"></i>
                                 {% endif %}
                             </td>
                             {% endfor %}
@@ -118,17 +116,13 @@
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
+  </div>
+</div>
 
-    <!-- Role Details Section -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Role Descriptions</h5>
-                </div>
-                <div class="card-body">
+<!-- Role Details -->
+<div class="ui-card">
+  <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-info-circle me-2"></i>Role Descriptions</span></div>
+  <div class="ui-card-body">
                     <div class="accordion" id="roleAccordion">
                         {% for role_key, role_name in roles %}
                         <div class="accordion-item">
@@ -172,10 +166,9 @@
                         </div>
                         {% endfor %}
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
+  </div>
+</div>
+
 </div>
 
 <script>

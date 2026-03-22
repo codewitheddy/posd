@@ -1,0 +1,173 @@
+{% extends 'pos/base.html' %}
+{% block title %}P&L Statement — {{ request.business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.fin-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.fin-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.fin-card .card-body{padding:16px 20px}
+.fin-title{font-size:14px;font-weight:700;color:#1a202c;margin:0}
+.period-btn{padding:6px 14px;border:1.5px solid #e8ecf0;background:#fff;border-radius:8px;font-size:13px;font-weight:500;color:#374151;text-decoration:none;transition:all .2s;display:inline-block}
+.period-btn.active,.period-btn:hover{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195)}
+.period-btn.active{background:var(--primary-color,#224195);color:#fff}
+.pl-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f7f8fa;font-size:14px}
+.pl-row:last-child{border-bottom:none}
+.pl-row.total{font-weight:700;font-size:15px;border-top:2px solid #e8ecf0;border-bottom:none;padding-top:14px;margin-top:4px}
+.pl-row.section-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8a94a6;padding-bottom:4px;border-bottom:none}
+.pl-row.sub{padding-left:16px;color:#374151}
+.kpi-box{border-radius:12px;padding:16px 20px;text-align:center}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0"><i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>Profit & Loss Statement</h1>
+    <p class="text-muted small mb-0">{{ request.business.name }} · {{ date_from }} to {{ date_to }}</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="?period={{ period }}&export=csv" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
+    <button onclick="window.print()" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>Print</button>
+  </div>
+</div>
+
+<!-- Period Selector -->
+<div class="fin-card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+      <a href="?period=today" class="period-btn {% if period == 'today' %}active{% endif %}">Today</a>
+      <a href="?period=week" class="period-btn {% if period == 'week' %}active{% endif %}">Week</a>
+      <a href="?period=month" class="period-btn {% if period == 'month' %}active{% endif %}">Month</a>
+      <a href="?period=quarter" class="period-btn {% if period == 'quarter' %}active{% endif %}">Quarter</a>
+      <a href="?period=year" class="period-btn {% if period == 'year' %}active{% endif %}">Year</a>
+      <a href="?period=custom" class="period-btn {% if period == 'custom' %}active{% endif %}">Custom</a>
+      {% if period == 'custom' %}
+      <input type="date" name="date_from" class="form-control form-control-sm" style="width:auto" value="{{ date_from }}">
+      <span class="text-muted small">to</span>
+      <input type="date" name="date_to" class="form-control form-control-sm" style="width:auto" value="{{ date_to }}">
+      <input type="hidden" name="period" value="custom">
+      <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- KPI Summary -->
+  <div class="col-12 col-md-4">
+    <div class="kpi-box mb-3" style="background:#dbeafe">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#2563eb;margin-bottom:4px">Total Revenue</div>
+      <div style="font-size:28px;font-weight:700;color:#1e40af">KES {{ revenue|floatformat:0 }}</div>
+    </div>
+    <div class="kpi-box mb-3" style="background:#dcfce7">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#16a34a;margin-bottom:4px">Gross Profit</div>
+      <div style="font-size:28px;font-weight:700;color:#15803d">KES {{ gross_profit|floatformat:0 }}</div>
+      <div style="font-size:12px;color:#16a34a">Margin: {{ gross_margin|floatformat:1 }}%</div>
+    </div>
+    <div class="kpi-box" {% if net_profit >= 0 %}style="background:#f0fdf4"{% else %}style="background:#fef2f2"{% endif %}>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;{% if net_profit >= 0 %}color:#16a34a{% else %}color:#dc2626{% endif %};margin-bottom:4px">Net Profit</div>
+      <div style="font-size:28px;font-weight:700;{% if net_profit >= 0 %}color:#15803d{% else %}color:#dc2626{% endif %}">KES {{ net_profit|floatformat:0 }}</div>
+      <div style="font-size:12px;{% if net_profit >= 0 %}color:#16a34a{% else %}color:#dc2626{% endif %}">Margin: {{ net_margin|floatformat:1 }}%</div>
+    </div>
+  </div>
+
+  <!-- P&L Statement -->
+  <div class="col-12 col-md-8">
+    <div class="fin-card h-100">
+      <div class="card-header"><span class="fin-title"><i class="bi bi-file-text me-2"></i>Statement of Profit & Loss</span></div>
+      <div class="card-body">
+        <div class="pl-row section-head"><span>Income</span></div>
+        <div class="pl-row sub"><span>Sales Revenue</span><span style="font-weight:600">KES {{ revenue|floatformat:2 }}</span></div>
+        <div class="pl-row total"><span>Total Revenue</span><span style="color:#2563eb">KES {{ revenue|floatformat:2 }}</span></div>
+
+        <div class="pl-row section-head mt-3"><span>Cost of Goods Sold</span></div>
+        <div class="pl-row sub"><span>Cost of Products Sold</span><span style="color:#dc2626">KES {{ cogs|floatformat:2 }}</span></div>
+        <div class="pl-row total"><span>Gross Profit</span><span style="color:#16a34a">KES {{ gross_profit|floatformat:2 }}</span></div>
+
+        <div class="pl-row section-head mt-3"><span>Operating Expenses</span></div>
+        {% for e in expense_by_cat %}
+        <div class="pl-row sub"><span>{{ e.category__name }}</span><span style="color:#dc2626">KES {{ e.total|floatformat:2 }}</span></div>
+        {% empty %}
+        <div class="pl-row sub text-muted"><span>No expenses recorded</span><span>KES 0.00</span></div>
+        {% endfor %}
+        <div class="pl-row total"><span>Total Expenses</span><span style="color:#dc2626">KES {{ total_expenses|floatformat:2 }}</span></div>
+
+        <div class="pl-row total mt-2" style="background:#f8f9fa;border-radius:8px;padding:14px 12px;margin:0 -4px">
+          <span style="font-size:16px">Net Profit / (Loss)</span>
+          <span style="font-size:18px;{% if net_profit >= 0 %}color:#16a34a{% else %}color:#dc2626{% endif %}">KES {{ net_profit|floatformat:2 }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-8">
+    <div class="fin-card">
+      <div class="card-header"><span class="fin-title"><i class="bi bi-bar-chart me-2 text-primary"></i>Monthly Revenue, Profit & Expenses</span></div>
+      <div class="card-body"><canvas id="plTrendChart" height="100"></canvas></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-4">
+    <div class="fin-card">
+      <div class="card-header"><span class="fin-title"><i class="bi bi-pie-chart me-2 text-danger"></i>Expense Distribution</span></div>
+      <div class="card-body">
+        {% if pie_values %}
+        <canvas id="expensePieChart" height="200"></canvas>
+        {% else %}
+        <div class="text-center py-4 text-muted small">No expense data</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const gridColor = '#f0f2f5';
+const tickFont = { size: 11 };
+const kesFormatter = v => 'KES ' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toLocaleString());
+const PALETTE = ['#7c3aed','#2563eb','#16a34a','#ca8a04','#dc2626','#0284c7','#db2777','#059669','#d97706','#6366f1'];
+
+new Chart(document.getElementById('plTrendChart'), {
+  type: 'bar',
+  data: {
+    labels: {{ chart_labels|safe }},
+    datasets: [
+      { label:'Revenue',  data:{{ chart_rev|safe }},    backgroundColor:'rgba(37,99,235,.2)',  borderColor:'#2563eb', borderWidth:2, borderRadius:4 },
+      { label:'Net Profit', data:{{ chart_profit|safe }}, backgroundColor:'rgba(22,163,74,.2)', borderColor:'#16a34a', borderWidth:2, borderRadius:4 },
+      { label:'Expenses', data:{{ chart_exp|safe }},   backgroundColor:'rgba(220,38,38,.15)', borderColor:'#dc2626', borderWidth:2, borderRadius:4 },
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ position:'top', labels:{ font:{ size:12 }, boxWidth:12 } },
+              tooltip:{ callbacks:{ label: c => c.dataset.label+': KES '+c.parsed.y.toLocaleString() } } },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+             y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+  }
+});
+
+{% if pie_values %}
+new Chart(document.getElementById('expensePieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: {{ pie_labels|safe }},
+    datasets:[{ data:{{ pie_values|safe }}, backgroundColor:PALETTE, borderWidth:2, borderColor:'#fff' }]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 }, boxWidth:10, padding:8 } },
+              tooltip:{ callbacks:{ label: c => c.label+': KES '+c.parsed.toLocaleString() } } }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

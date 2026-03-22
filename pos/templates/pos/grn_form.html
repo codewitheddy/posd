@@ -274,9 +274,25 @@ document.getElementById('supplierSelect').addEventListener('change', function() 
         return;
     }
     
-    // In a real implementation, this would fetch via AJAX
-    // For now, we'll just show a placeholder
-    purchaseSelect.innerHTML = '<option value="">Loading purchases...</option>';
+    purchaseSelect.innerHTML = '<option value="">Loading...</option>';
+    
+    fetch(`{% url 'api_grn_supplier_purchases' slug=business_slug %}?supplier_id=${supplierId}`)
+        .then(r => r.json())
+        .then(data => {
+            purchaseSelect.innerHTML = '<option value="">-- No linked purchase --</option>';
+            data.purchases.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.text;
+                purchaseSelect.appendChild(opt);
+            });
+            if (data.purchases.length === 0) {
+                purchaseSelect.innerHTML = '<option value="">No received purchases found</option>';
+            }
+        })
+        .catch(() => {
+            purchaseSelect.innerHTML = '<option value="">Error loading purchases</option>';
+        });
 });
 </script>
 {% endblock %}

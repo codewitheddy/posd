@@ -1,109 +1,79 @@
 {% extends 'pos/base.html' %}
 {% load static %}
 
-{% block title %}Open POS Session - {{ business.name }}{% endblock %}
+{% block title %}Open POS Session — {{ business.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-md-8 offset-md-2">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">
-                        <i class="fas fa-cash-register"></i> Open New POS Session
-                    </h4>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Starting a New Session</strong><br>
-                        Enter the opening cash amount in the drawer to begin a new POS session. All sales will be tracked under this session until you close it and generate a Z-Report.
-                    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-                    <form method="post" id="openSessionForm">
-                        {% csrf_token %}
-                        
-                        <div class="form-group">
-                            <label for="opening_cash" class="font-weight-bold">
-                                Opening Cash Amount <span class="text-danger">*</span>
-                            </label>
-                            <div class="input-group input-group-lg">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text">KES</span>
-                                </div>
-                                <input 
-                                    type="number" 
-                                    class="form-control" 
-                                    id="opening_cash" 
-                                    name="opening_cash" 
-                                    step="0.01" 
-                                    min="0" 
-                                    value="0.00"
-                                    required
-                                    autofocus
-                                >
-                            </div>
-                            <small class="form-text text-muted">
-                                Enter the total cash in the drawer at the start of this session
-                            </small>
-                        </div>
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-play-circle me-2 text-success"></i>Open New Session</h1>
+    <p class="page-subtitle">Start a new POS session for {{ business.name }}</p>
+  </div>
+  <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
 
-                        <div class="form-group">
-                            <label for="notes">Notes (Optional)</label>
-                            <textarea 
-                                class="form-control" 
-                                id="notes" 
-                                name="notes" 
-                                rows="3"
-                                placeholder="Any notes about this session (e.g., Morning shift, Weekend shift)"
-                            ></textarea>
-                        </div>
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="form-card mb-3">
+      <div class="alert alert-info mb-4" style="font-size:13px;">
+        <i class="bi bi-info-circle me-1"></i>
+        Enter the opening cash amount in the drawer to begin. All sales will be tracked under this session until you close it and generate a Z-Report.
+      </div>
 
-                        <div class="form-group mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg btn-block">
-                                <i class="fas fa-play-circle"></i> Open Session
-                            </button>
-                            <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-secondary btn-block">
-                                <i class="fas fa-times"></i> Cancel
-                            </a>
-                        </div>
-                    </form>
-                </div>
-            </div>
+      <form method="post" id="openSessionForm">
+        {% csrf_token %}
 
-            <div class="card mt-3">
-                <div class="card-body">
-                    <h6 class="font-weight-bold">
-                        <i class="fas fa-question-circle text-info"></i> What is a POS Session?
-                    </h6>
-                    <p class="mb-2">
-                        A POS session represents a business day or shift. It tracks all sales from opening to closing and generates an immutable Z-Report when closed.
-                    </p>
-                    <ul class="mb-0">
-                        <li>Only one session can be open at a time</li>
-                        <li>All sales are linked to the current session</li>
-                        <li>Sessions must be closed to generate Z-Reports</li>
-                        <li>Z-Reports are permanent and cannot be edited</li>
-                    </ul>
-                </div>
-            </div>
+        <div class="mb-3">
+          <label for="opening_cash" class="form-label">Opening Cash Amount <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" class="form-control" id="opening_cash" name="opening_cash"
+                   step="0.01" min="0" value="0.00" required autofocus>
+          </div>
+          <small class="text-muted">Enter the total cash in the drawer at the start of this session</small>
         </div>
+
+        <div class="mb-4">
+          <label for="notes" class="form-label">Notes (Optional)</label>
+          <textarea class="form-control" id="notes" name="notes" rows="3"
+                    placeholder="e.g. Morning shift, Weekend shift"></textarea>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-play-circle me-1"></i>Open Session
+          </button>
+          <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
     </div>
+
+    <div class="ui-card">
+      <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-question-circle me-2"></i>What is a POS Session?</span></div>
+      <div class="ui-card-body" style="font-size:13px;">
+        <p class="mb-2">A POS session represents a business day or shift. It tracks all sales from opening to closing and generates an immutable Z-Report when closed.</p>
+        <ul class="mb-0" style="color:#374151;">
+          <li>Only one session can be open at a time</li>
+          <li>All sales are linked to the current session</li>
+          <li>Sessions must be closed to generate Z-Reports</li>
+          <li>Z-Reports are permanent and cannot be edited</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
 document.getElementById('openSessionForm').addEventListener('submit', function(e) {
-    const openingCash = parseFloat(document.getElementById('opening_cash').value);
-    if (openingCash < 0) {
-        e.preventDefault();
-        alert('Opening cash cannot be negative');
-        return false;
-    }
-    
-    if (!confirm(`Open new session with KES ${openingCash.toFixed(2)} opening cash?`)) {
-        e.preventDefault();
-        return false;
-    }
+  const cash = parseFloat(document.getElementById('opening_cash').value);
+  if (cash < 0) { e.preventDefault(); alert('Opening cash cannot be negative'); return; }
+  if (!confirm(`Open new session with KES ${cash.toFixed(2)} opening cash?`)) e.preventDefault();
 });
 </script>
 {% endblock %}

@@ -20,11 +20,12 @@
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
                         <option value="">All Status</option>
-                        <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Draft</option>
-                        <option value="submitted" {% if request.GET.status == 'submitted' %}selected{% endif %}>Submitted</option>
-                        <option value="collected" {% if request.GET.status == 'collected' %}selected{% endif %}>Collected</option>
-                        <option value="credited" {% if request.GET.status == 'credited' %}selected{% endif %}>Credited</option>
-                        <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
+                        <option value="submitted" {% if status_filter == 'submitted' %}selected{% endif %}>Submitted</option>
+                        <option value="acknowledged" {% if status_filter == 'acknowledged' %}selected{% endif %}>Acknowledged</option>
+                        <option value="collected" {% if status_filter == 'collected' %}selected{% endif %}>Collected</option>
+                        <option value="credited" {% if status_filter == 'credited' %}selected{% endif %}>Credited</option>
+                        <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -40,11 +41,11 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">From Date</label>
-                    <input type="date" name="from_date" class="form-control" value="{{ request.GET.from_date|default:'' }}">
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">To Date</label>
-                    <input type="date" name="to_date" class="form-control" value="{{ request.GET.to_date|default:'' }}">
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-secondary w-100">
@@ -67,6 +68,7 @@
                         <span class="badge 
                             {% if grn.status == 'draft' %}bg-secondary
                             {% elif grn.status == 'submitted' %}bg-info
+                            {% elif grn.status == 'acknowledged' %}bg-primary
                             {% elif grn.status == 'collected' %}bg-warning
                             {% elif grn.status == 'credited' %}bg-success
                             {% elif grn.status == 'cancelled' %}bg-danger

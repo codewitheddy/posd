@@ -6,116 +6,108 @@
 <div class="container-fluid mt-4">
     <div class="row">
         <div class="col-md-8 offset-md-2">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">
-                        <i class="bi bi-credit-card"></i> 
-                        {% if payment_method %}Edit{% else %}Create{% endif %} Payment Method
-                    </h4>
-                </div>
-                <div class="card-body">
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+            <div class="page-header mb-3">
+                <h2><i class="bi bi-credit-card"></i> {% if payment_method %}Edit{% else %}Create{% endif %} Payment Method</h2>
+            </div>
 
-                    <form method="POST">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="name" name="name" 
-                                   value="{{ payment_method.name|default:'' }}" required
-                                   placeholder="e.g., M-Pesa, Cash, Card">
-                            <small class="form-text text-muted">The display name for this payment method</small>
+            <div class="form-card">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
+                    {% endfor %}
+                {% endif %}
 
-                        <div class="mb-3">
-                            <label for="code" class="form-label">Code <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="code" name="code" 
-                                   value="{{ payment_method.code|default:'' }}" required
-                                   placeholder="e.g., MPESA, CASH, CARD" style="text-transform: uppercase;">
-                            <small class="form-text text-muted">Unique identifier (uppercase, no spaces)</small>
-                        </div>
+                <form method="POST">
+                    {% csrf_token %}
 
-                        <div class="mb-3">
-                            <label for="icon" class="form-label">Icon (Bootstrap Icon Class)</label>
-                            <input type="text" class="form-control" id="icon" name="icon" 
-                                   value="{{ payment_method.icon|default:'' }}"
-                                   placeholder="e.g., bi-cash-coin">
-                            <small class="form-text text-muted">
-                                Optional. Use Bootstrap Icons class names. 
-                                <a href="https://icons.getbootstrap.com/" target="_blank">Browse icons</a>
-                            </small>
-                            
-                            <div class="mt-2">
-                                <strong>Quick suggestions:</strong>
-                                <div class="btn-group btn-group-sm mt-1" role="group">
-                                    {% for suggestion in icon_suggestions %}
-                                    <button type="button" class="btn btn-outline-secondary" 
-                                            onclick="document.getElementById('icon').value='{{ suggestion.icon }}'; updateIconPreview();">
-                                        <i class="{{ suggestion.icon }}"></i> {{ suggestion.name }}
-                                    </button>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            
-                            <div class="mt-2" id="icon-preview">
-                                {% if payment_method.icon %}
-                                <strong>Preview:</strong> <i class="{{ payment_method.icon }} fs-3"></i>
-                                {% endif %}
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="{{ payment_method.name|default:'' }}" required
+                               placeholder="e.g., M-Pesa, Cash, Card">
+                        <small class="form-text text-muted">The display name for this payment method</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="code" class="form-label">Code <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="code" name="code"
+                               value="{{ payment_method.code|default:'' }}" required
+                               placeholder="e.g., MPESA, CASH, CARD" style="text-transform: uppercase;">
+                        <small class="form-text text-muted">Unique identifier (uppercase, no spaces)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="icon" class="form-label">Icon (Bootstrap Icon Class)</label>
+                        <input type="text" class="form-control" id="icon" name="icon"
+                               value="{{ payment_method.icon|default:'' }}"
+                               placeholder="e.g., bi-cash-coin">
+                        <small class="form-text text-muted">
+                            Optional. Use Bootstrap Icons class names.
+                            <a href="https://icons.getbootstrap.com/" target="_blank">Browse icons</a>
+                        </small>
+
+                        <div class="mt-2">
+                            <strong>Quick suggestions:</strong>
+                            <div class="btn-group btn-group-sm mt-1" role="group">
+                                {% for suggestion in icon_suggestions %}
+                                <button type="button" class="btn btn-outline-secondary"
+                                        onclick="document.getElementById('icon').value='{{ suggestion.icon }}'; updateIconPreview();">
+                                    <i class="{{ suggestion.icon }}"></i> {{ suggestion.name }}
+                                </button>
+                                {% endfor %}
                             </div>
                         </div>
 
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
-                                   {% if not payment_method or payment_method.is_active %}checked{% endif %}>
-                            <label class="form-check-label" for="is_active">
-                                Active
-                            </label>
-                            <small class="form-text text-muted d-block">
-                                Only active payment methods will be available at checkout
-                            </small>
+                        <div class="mt-2" id="icon-preview">
+                            {% if payment_method.icon %}
+                            <strong>Preview:</strong> <i class="{{ payment_method.icon }} fs-3"></i>
+                            {% endif %}
                         </div>
+                    </div>
 
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="requires_reference" name="requires_reference"
-                                   {% if payment_method.requires_reference %}checked{% endif %}>
-                            <label class="form-check-label" for="requires_reference">
-                                Requires Transaction Reference
-                            </label>
-                            <small class="form-text text-muted d-block">
-                                Enable this for payment methods that need a transaction code (e.g., M-Pesa confirmation code)
-                            </small>
-                        </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
+                               {% if not payment_method or payment_method.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">Active</label>
+                        <small class="form-text text-muted d-block">
+                            Only active payment methods will be available at checkout
+                        </small>
+                    </div>
 
-                        <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'payment_method_list' slug=request.business.slug %}" class="btn btn-secondary">
-                                <i class="bi bi-x-circle"></i> Cancel
-                            </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle"></i> 
-                                {% if payment_method %}Update{% else %}Create{% endif %} Payment Method
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="requires_reference" name="requires_reference"
+                               {% if payment_method.requires_reference %}checked{% endif %}>
+                        <label class="form-check-label" for="requires_reference">
+                            Requires Transaction Reference
+                        </label>
+                        <small class="form-text text-muted d-block">
+                            Enable this for payment methods that need a transaction code (e.g., M-Pesa confirmation code)
+                        </small>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'payment_method_list' slug=request.business.slug %}" class="btn-action">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            {% if payment_method %}Update{% else %}Create{% endif %} Payment Method
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// Auto-uppercase code field
 document.getElementById('code').addEventListener('input', function(e) {
     e.target.value = e.target.value.toUpperCase().replace(/\s/g, '');
 });
 
-// Icon preview
 function updateIconPreview() {
     const iconClass = document.getElementById('icon').value;
     const preview = document.getElementById('icon-preview');

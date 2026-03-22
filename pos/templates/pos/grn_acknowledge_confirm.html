@@ -1,0 +1,32 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Acknowledge GRN - {{ grn.grn_number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-check2-circle"></i> Acknowledge GRN</h5>
+                </div>
+                <div class="card-body">
+                    <p>Mark <strong>{{ grn.grn_number }}</strong> as acknowledged by supplier <strong>{{ grn.supplier.name }}</strong>?</p>
+                    <p class="text-muted">This confirms the supplier has received and acknowledged the return request.</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-info">
+                                <i class="bi bi-check2-circle"></i> Yes, Mark Acknowledged
+                            </button>
+                            <a href="{% url 'grn_detail' slug=business_slug pk=grn.pk %}" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends 'pos/base.html' %}
+{% block title %}CRM Reports{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div><h1 class="h4 fw-bold mb-0"><i class="bi bi-bar-chart-line me-2"></i>CRM Reports</h1></div>
+  </div>
+  <div class="row g-4">
+    <div class="col-md-4">
+      <a href="{% url 'report_top_customers' slug=business_slug %}" class="text-decoration-none">
+        <div class="ui-card h-100 text-center p-4" style="transition: box-shadow .2s;" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+          <i class="bi bi-trophy" style="font-size:2.5rem; color:#f6c23e;"></i>
+          <h5 class="fw-bold mt-3 mb-1">Top Customers</h5>
+          <p class="text-muted small mb-0">Highest spending customers by period</p>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-4">
+      <a href="{% url 'report_loyalty' slug=business_slug %}" class="text-decoration-none">
+        <div class="ui-card h-100 text-center p-4" style="transition: box-shadow .2s;" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+          <i class="bi bi-star-fill" style="font-size:2.5rem; color:#1cc88a;"></i>
+          <h5 class="fw-bold mt-3 mb-1">Loyalty Report</h5>
+          <p class="text-muted small mb-0">Points earned, redeemed, and tier breakdown</p>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-4">
+      <a href="{% url 'report_credit' slug=business_slug %}" class="text-decoration-none">
+        <div class="ui-card h-100 text-center p-4" style="transition: box-shadow .2s;" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+          <i class="bi bi-credit-card-2-back" style="font-size:2.5rem; color:#e74a3b;"></i>
+          <h5 class="fw-bold mt-3 mb-1">Credit Report</h5>
+          <p class="text-muted small mb-0">Outstanding balances and recent payments</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

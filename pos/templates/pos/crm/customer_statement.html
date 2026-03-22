@@ -1,0 +1,52 @@
+{% extends 'pos/base.html' %}
+{% block title %}Statement — {{ customer.name }}{% endblock %}
+{% block extra_css %}
+<style>
+@media print { .no-print { display: none !important; } body { font-size: 12px; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <div class="no-print d-flex gap-2 mb-3">
+    <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="bi bi-printer"></i> Print</button>
+    <a href="{% url 'customer_credit_detail' slug=business_slug pk=customer.pk %}" class="btn btn-secondary btn-sm">Back</a>
+    <form method="get" class="d-flex gap-2 ms-auto">
+      <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+      <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+      <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
+    </form>
+  </div>
+
+  <div class="text-center mb-4">
+    <h4>{{ request.business.name }}</h4>
+    <h5>Customer Statement</h5>
+    <p class="mb-0">{{ customer.name }} ({{ customer.customer_code }}) | {{ customer.phone }}</p>
+    {% if date_from or date_to %}<small class="text-muted">Period: {{ date_from|default:"All" }} to {{ date_to|default:"All" }}</small>{% endif %}
+  </div>
+
+  <table class="table table-sm table-bordered">
+    <thead class="table-light">
+      <tr><th>Date</th><th>Description</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th class="text-end">Balance</th></tr>
+    </thead>
+    <tbody>
+      {% for row in timeline %}
+      <tr>
+        <td>{{ row.date|date:"d M Y" }}</td>
+        <td>{{ row.description }}</td>
+        <td class="text-end">{% if row.debit > 0 %}KES {{ row.debit|floatformat:2 }}{% endif %}</td>
+        <td class="text-end text-success">{% if row.credit > 0 %}KES {{ row.credit|floatformat:2 }}{% endif %}</td>
+        <td class="text-end fw-bold {% if row.balance > 0 %}text-danger{% endif %}">KES {{ row.balance|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted">No transactions in this period</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="table-dark">
+        <td colspan="4" class="fw-bold text-end">Closing Balance</td>
+        <td class="fw-bold text-end {% if closing_balance > 0 %}text-warning{% endif %}">KES {{ closing_balance|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

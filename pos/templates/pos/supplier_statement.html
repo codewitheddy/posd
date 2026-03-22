@@ -4,19 +4,19 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col">
+    <div class="page-header">
+        <div>
             <h2><i class="bi bi-file-text"></i> Supplier Statement - {{ supplier.name }}</h2>
             <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug  %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug  %}">Suppliers</a></li>
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug %}">Suppliers</a></li>
                     <li class="breadcrumb-item active">Statement</li>
                 </ol>
             </nav>
         </div>
-        <div class="col-auto">
-            <button onclick="location.reload(true)" class="btn btn-secondary me-2" title="Refresh statement">
+        <div class="d-flex gap-2">
+            <button onclick="location.reload(true)" class="btn-action" title="Refresh statement">
                 <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
             <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
@@ -26,129 +26,104 @@
     </div>
 
     <!-- Date Filter -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <div class="col-md-5">
-                    <label class="form-label">Start Date</label>
-                    <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d'|default:'' }}">
+    <div class="filter-bar mb-4">
+        <form method="get" class="row g-3">
+            <div class="col-md-5">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d'|default:'' }}">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d'|default:'' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel"></i> Filter
+                    </button>
                 </div>
-                <div class="col-md-5">
-                    <label class="form-label">End Date</label>
-                    <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d'|default:'' }}">
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Opening Balance</div>
+                    <div class="stat-value" style="font-size:16px;">KES {{ opening_balance|floatformat:2 }}</div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <div>
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-funnel"></i> Filter
-                        </button>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Total Purchases</div>
+                    <div class="stat-value text-loss" style="font-size:16px;">KES {{ total_purchases|floatformat:2 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Total Payments</div>
+                    <div class="stat-value text-profit" style="font-size:16px;">KES {{ total_payments|floatformat:2 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Total Returns</div>
+                    <div class="stat-value" style="font-size:16px; color:#2563eb;">KES {{ total_returns|floatformat:2|default:"0.00" }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Net Credits</div>
+                    <div class="stat-value text-profit" style="font-size:16px;">KES {{ total_payments|add:total_returns|floatformat:2 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Closing Balance</div>
+                    <div class="stat-value {% if closing_balance > 0 %}text-loss{% elif closing_balance < 0 %}text-profit{% endif %}" style="font-size:16px;">
+                        KES {{ closing_balance|floatformat:2 }}
+                    </div>
+                    <div class="stat-sub">
+                        {% if closing_balance > 0 %}You owe{% elif closing_balance < 0 %}Credit{% else %}Settled{% endif %}
                     </div>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 
-    <!-- Statement -->
-    <div class="card">
-        <div class="card-header bg-primary text-white">
-            <div class="row">
-                <div class="col-md-6">
-                    <h5 class="mb-0">Statement of Account</h5>
-                    <small>
-                        {% if start_date %}
-                            From {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}
-                        {% else %}
-                            Up to {{ end_date|date:"d M Y" }}
-                        {% endif %}
-                    </small>
+    <!-- Statement Card -->
+    <div class="ui-card">
+        <div class="ui-card-header">
+            <div>
+                <span class="ui-card-title">Statement of Account</span>
+                <div class="text-muted" style="font-size:12px;">
+                    {% if start_date %}From {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}
+                    {% else %}Up to {{ end_date|date:"d M Y" }}{% endif %}
                 </div>
-                <div class="col-md-6 text-end">
-                    <h5 class="mb-0">{{ supplier.name }}</h5>
-                    <small>
-                        {{ supplier.contact_person }}<br>
-                        {{ supplier.phone }} | {{ supplier.email }}
-                    </small>
-                </div>
+            </div>
+            <div class="text-end">
+                <strong>{{ supplier.name }}</strong>
+                <div class="text-muted" style="font-size:12px;">{{ supplier.contact_person }} &middot; {{ supplier.phone }}</div>
             </div>
         </div>
-        <div class="card-body">
-            <!-- Summary -->
-            <div class="row mb-4">
-                <div class="col-md-2">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h6 class="text-muted small">Opening Balance</h6>
-                            <h5 class="mb-0">KES {{ opening_balance|floatformat:2 }}</h5>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h6 class="text-muted small">Total Purchases</h6>
-                            <h5 class="mb-0 text-danger">KES {{ total_purchases|floatformat:2 }}</h5>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h6 class="text-muted small">Total Payments</h6>
-                            <h5 class="mb-0 text-success">KES {{ total_payments|floatformat:2 }}</h5>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h6 class="text-muted small">Total Returns</h6>
-                            <h5 class="mb-0 text-info">KES {{ total_returns|floatformat:2|default:"0.00" }}</h5>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h6 class="text-muted small">Net Credits</h6>
-                            <h5 class="mb-0 text-success">KES {{ total_payments|add:total_returns|floatformat:2 }}</h5>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    {% if closing_balance > 0 %}
-                        <div class="card bg-danger text-white">
-                            <div class="card-body text-center">
-                                <h6 class="small">Closing Balance</h6>
-                                <h5 class="mb-0">KES {{ closing_balance|floatformat:2 }}</h5>
-                                <small>You owe</small>
-                            </div>
-                        </div>
-                    {% elif closing_balance < 0 %}
-                        <div class="card bg-info text-white">
-                            <div class="card-body text-center">
-                                <h6 class="small">Closing Balance</h6>
-                                <h5 class="mb-0">KES {{ closing_balance|floatformat:2 }}</h5>
-                                <small>Credit (They owe you)</small>
-                            </div>
-                        </div>
-                    {% else %}
-                        <div class="card bg-success text-white">
-                            <div class="card-body text-center">
-                                <h6 class="small">Closing Balance</h6>
-                                <h5 class="mb-0">KES 0.00</h5>
-                                <small>Fully settled</small>
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Transactions Table -->
+        <div class="ui-card-body p-0">
             {% if transactions %}
             <div class="table-responsive">
-                <table class="table table-bordered table-hover">
-                    <thead class="table-light">
+                <table class="ui-table">
+                    <thead>
                         <tr>
                             <th>Date</th>
                             <th>Reference</th>
@@ -160,60 +135,38 @@
                     </thead>
                     <tbody>
                         {% if opening_balance != 0 %}
-                        <tr class="table-info">
+                        <tr style="background:#dbeafe;">
                             <td colspan="3"><strong>Opening Balance</strong></td>
                             <td class="text-end">-</td>
                             <td class="text-end">-</td>
                             <td class="text-end"><strong>KES {{ opening_balance|floatformat:2 }}</strong></td>
                         </tr>
                         {% endif %}
-                        
+
                         {% for trans in transactions %}
-                        <tr {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}class="table-warning"{% elif trans.type == 'grn' %}class="table-info"{% endif %}>
+                        <tr>
                             <td>{{ trans.date|date:"Y-m-d" }}</td>
                             <td>
                                 {{ trans.reference }}
                                 {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
-                                    <span class="badge bg-warning text-dark" title="Partial delivery">
-                                        <i class="bi bi-exclamation-triangle"></i> Partial
-                                    </span>
+                                    <span class="status-badge status-warning ms-1">Partial</span>
                                 {% elif trans.type == 'grn' %}
-                                    <span class="badge bg-info text-dark" title="Goods Return">
-                                        <i class="bi bi-arrow-return-left"></i> Return
-                                    </span>
+                                    <span class="status-badge status-info ms-1">Return</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {{ trans.description }}
                                 {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
-                                    <br><small class="text-muted">
-                                        Ordered: KES {{ trans.ordered_amount|floatformat:2 }} | 
-                                        Received: KES {{ trans.received_amount|floatformat:2 }}
-                                    </small>
+                                    <br><small class="text-muted">Ordered: KES {{ trans.ordered_amount|floatformat:2 }} | Received: KES {{ trans.received_amount|floatformat:2 }}</small>
                                 {% elif trans.type == 'grn' and trans.credit_note %}
-                                    <br><small class="text-muted">
-                                        Credit Note: {{ trans.credit_note }}
-                                    </small>
+                                    <br><small class="text-muted">Credit Note: {{ trans.credit_note }}</small>
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                {% if trans.debit > 0 %}
-                                    <span class="text-danger">KES {{ trans.debit|floatformat:2 }}</span>
-                                    {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
-                                        <br><small class="text-muted">
-                                            (Ordered: {{ trans.ordered_amount|floatformat:2 }})
-                                        </small>
-                                    {% endif %}
-                                {% else %}
-                                    -
-                                {% endif %}
+                                {% if trans.debit > 0 %}<span class="text-danger">KES {{ trans.debit|floatformat:2 }}</span>{% else %}-{% endif %}
                             </td>
                             <td class="text-end">
-                                {% if trans.credit > 0 %}
-                                    <span class="text-success">KES {{ trans.credit|floatformat:2 }}</span>
-                                {% else %}
-                                    -
-                                {% endif %}
+                                {% if trans.credit > 0 %}<span class="text-success">KES {{ trans.credit|floatformat:2 }}</span>{% else %}-{% endif %}
                             </td>
                             <td class="text-end">
                                 <strong class="{% if trans.balance > 0 %}text-danger{% else %}text-success{% endif %}">
@@ -222,26 +175,25 @@
                             </td>
                         </tr>
                         {% endfor %}
-                        
-                        <tr class="table-primary">
-                            <td colspan="3"><strong>Totals</strong></td>
-                            <td class="text-end"><strong class="text-danger">KES {{ total_purchases|floatformat:2 }}</strong></td>
-                            <td class="text-end">
-                                <strong class="text-success">KES {{ total_payments|add:total_returns|floatformat:2 }}</strong>
-                                <br><small class="text-muted">(Payments: {{ total_payments|floatformat:2 }} + Returns: {{ total_returns|floatformat:2|default:"0.00" }})</small>
+
+                        <tr style="background:#ede9fe; font-weight:700;">
+                            <td colspan="3">Totals</td>
+                            <td class="text-end text-danger">KES {{ total_purchases|floatformat:2 }}</td>
+                            <td class="text-end text-success">
+                                KES {{ total_payments|add:total_returns|floatformat:2 }}
+                                <br><small class="text-muted fw-normal">(Payments: {{ total_payments|floatformat:2 }} + Returns: {{ total_returns|floatformat:2|default:"0.00" }})</small>
                             </td>
-                            <td class="text-end">
-                                <strong class="{% if closing_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                    KES {{ closing_balance|floatformat:2 }}
-                                </strong>
+                            <td class="text-end {% if closing_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                KES {{ closing_balance|floatformat:2 }}
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> No transactions found for the selected period.
+            <div class="empty-state">
+                <i class="bi bi-file-text"></i>
+                <p>No transactions found for the selected period.</p>
             </div>
             {% endif %}
         </div>

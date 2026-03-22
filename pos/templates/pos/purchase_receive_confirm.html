@@ -1,66 +1,48 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Receive Purchase - POS System{% endblock %}
+{% block title %}Confirm Receipt — {{ purchase.purchase_number }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card border-success">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-check-circle"></i> Confirm Receipt</h5>
-            </div>
-            <div class="card-body">
-                <p>Are you sure you want to mark this purchase order as received?</p>
-                <h4>{{ purchase.purchase_number }}</h4>
-                <p><strong>Supplier:</strong> {{ purchase.supplier.name }}</p>
-                
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i>
-                    <strong>Note:</strong> This action will:
-                    <ul class="mb-0 mt-2">
-                        <li>Update the purchase status to "Received"</li>
-                        <li>Automatically add stock quantities for all items</li>
-                        <li>Create stock adjustment records for audit trail</li>
-                    </ul>
-                </div>
-                
-                <h6 class="mt-3">Items to be received:</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th class="text-end">Quantity</th>
-                                <th class="text-end">Current Stock</th>
-                                <th class="text-end">New Stock</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in purchase.items.all %}
-                            <tr>
-                                <td>{{ item.product.name }}</td>
-                                <td class="text-end">+{{ item.quantity }}</td>
-                                <td class="text-end">{{ item.product.stock_quantity }}</td>
-                                <td class="text-end"><strong>{{ item.product.stock_quantity|add:item.quantity }}</strong></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                <form method="post" class="mt-4">
-                    {% csrf_token %}
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-check-circle"></i> Yes, Mark as Received
-                        </button>
-                        <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle"></i> Cancel
-                        </a>
-                    </div>
-                </form>
-            </div>
-        </div>
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<div class="confirm-card" style="max-width:600px;margin:40px auto;">
+  <div class="confirm-card-header" style="background:#dcfce7;color:#15803d;">
+    <i class="bi bi-check-circle-fill"></i> Confirm Receipt
+  </div>
+  <div class="confirm-card-body">
+    <p style="font-size:13px;">Mark this purchase order as received?</p>
+    <p style="font-size:16px;font-weight:700;margin-bottom:4px;">{{ purchase.purchase_number }}</p>
+    <p style="font-size:13px;color:#8a94a6;margin-bottom:20px;">{{ purchase.supplier.name }}</p>
+
+    <div class="alert alert-info mb-3" style="font-size:13px;">
+      <i class="bi bi-info-circle me-1"></i>This will update the purchase status to "Received", add stock quantities for all items, and create stock adjustment records for the audit trail.
     </div>
+
+    <div class="table-responsive mb-4">
+      <table class="table ui-table mb-0">
+        <thead><tr><th>Product</th><th class="text-end">Qty</th><th class="text-end">Current Stock</th><th class="text-end">New Stock</th></tr></thead>
+        <tbody>
+          {% for item in purchase.items.all %}
+          <tr>
+            <td style="font-size:13px;">{{ item.product.name }}</td>
+            <td class="text-end" style="color:#16a34a;font-weight:600;">+{{ item.quantity }}</td>
+            <td class="text-end">{{ item.product.stock_quantity }}</td>
+            <td class="text-end"><strong>{{ item.product.stock_quantity|add:item.quantity }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Yes, Mark as Received</button>
+        <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
 </div>
 {% endblock %}

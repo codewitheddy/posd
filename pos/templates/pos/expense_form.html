@@ -1,0 +1,92 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if expense %}Edit{% else %}Add{% endif %} Expense — {{ request.business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.fin-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.fin-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:14px 20px}
+.fin-card .card-body{padding:24px}
+.fin-title{font-size:15px;font-weight:700;color:#1a202c;margin:0}
+.form-label{font-size:13px;font-weight:600;color:#374151;margin-bottom:4px}
+.form-control,.form-select{border-radius:8px;border:1.5px solid #e8ecf0;font-size:13px;padding:9px 12px}
+.form-control:focus,.form-select:focus{border-color:var(--primary-color,#224195);box-shadow:0 0 0 3px rgba(34,65,149,.1)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="row justify-content-center">
+<div class="col-12 col-lg-7">
+
+<div class="d-flex align-items-center gap-3 mb-3">
+  <a href="{% url 'expense_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0">{% if expense %}Edit Expense{% else %}Add Expense{% endif %}</h1>
+    <p class="text-muted small mb-0">{% if expense %}Update expense record {{ expense.expense_number }}{% else %}Record a new business expense{% endif %}</p>
+  </div>
+</div>
+
+<div class="fin-card">
+  <div class="card-header"><span class="fin-title"><i class="bi bi-wallet2 me-2 text-danger"></i>Expense Details</span></div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label">Category *</label>
+          <select name="category" class="form-select" required>
+            <option value="">Select category...</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}" {% if expense and expense.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Amount (KES) *</label>
+          <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required
+            value="{{ expense.amount|default:'' }}" placeholder="0.00">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Description *</label>
+          <input type="text" name="description" class="form-control" required maxlength="200"
+            value="{{ expense.description|default:'' }}" placeholder="Brief description of the expense">
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Date *</label>
+          <input type="date" name="expense_date" class="form-control" required
+            value="{{ expense.expense_date|date:'Y-m-d'|default:today }}">
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Payment Method *</label>
+          <select name="payment_method" class="form-select" required>
+            {% for code, label in payment_choices %}
+            <option value="{{ code }}" {% if expense and expense.payment_method == code %}selected{% elif not expense and code == 'cash' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Reference / Receipt No.</label>
+          <input type="text" name="reference_number" class="form-control" maxlength="100"
+            value="{{ expense.reference_number|default:'' }}" placeholder="e.g. M-Pesa code, receipt #">
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Attachment (optional)</label>
+          <input type="file" name="attachment" class="form-control" accept="image/*,.pdf">
+          {% if expense.attachment %}<div class="mt-1 small text-muted">Current: <a href="{{ expense.attachment.url }}" target="_blank">View file</a></div>{% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" rows="3" placeholder="Additional notes...">{{ expense.notes|default:'' }}</textarea>
+        </div>
+        <div class="col-12 d-flex gap-2 justify-content-end pt-2">
+          <a href="{% url 'expense_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if expense %}Update{% else %}Save{% endif %} Expense</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+</div>
+</div>
+</div>
+{% endblock %}

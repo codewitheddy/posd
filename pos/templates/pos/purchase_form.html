@@ -1,6 +1,6 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}New Purchase Order - POS System{% endblock %}
+{% block title %}New Purchase Order{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
@@ -11,37 +11,35 @@
 
 <form method="post" id="purchaseForm">
     {% csrf_token %}
-    
+    <input type="hidden" name="action" id="formAction" value="draft">
+
     <div class="row">
         <div class="col-md-8">
             <div class="card mb-3">
-                <div class="card-header">
-                    <h5 class="mb-0">Purchase Information</h5>
-                </div>
+                <div class="card-header"><h5 class="mb-0">Purchase Information</h5></div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="supplier" class="form-label">Supplier <span class="text-danger">*</span></label>
-                            <select class="form-select" id="supplier" name="supplier" required>
+                            <label class="form-label">Supplier <span class="text-danger">*</span></label>
+                            <select class="form-select" name="supplier" required>
                                 <option value="">Select Supplier</option>
                                 {% for supplier in suppliers %}
-                                    <option value="{{ supplier.pk }}">{{ supplier.name }}</option>
+                                <option value="{{ supplier.pk }}">{{ supplier.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="expected_delivery" class="form-label">Expected Delivery</label>
-                            <input type="date" class="form-control" id="expected_delivery" name="expected_delivery">
+                            <label class="form-label">Expected Delivery</label>
+                            <input type="date" class="form-control" name="expected_delivery">
                         </div>
                     </div>
-                    
                     <div class="mb-3">
-                        <label for="notes" class="form-label">Notes</label>
-                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
                     </div>
                 </div>
             </div>
-            
+
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Purchase Items</h5>
@@ -50,37 +48,37 @@
                     </button>
                 </div>
                 <div class="card-body">
-                    <div id="itemsContainer">
-                        <!-- Items will be added here -->
-                    </div>
+                    <div id="itemsContainer"></div>
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-4">
-            <div class="card sticky-top" style="top: 80px;">
-                <div class="card-header">
-                    <h5 class="mb-0">Summary</h5>
-                </div>
+            <div class="card sticky-top" style="top:80px;">
+                <div class="card-header"><h5 class="mb-0">Summary</h5></div>
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
-                        <span>Subtotal:</span>
-                        <strong id="subtotal">KES 0.00</strong>
+                        <span>Subtotal:</span><strong id="subtotal">KES 0.00</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-success">
+                        <span>Discount:</span><strong id="discount">KES 0.00</strong>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
-                        <span>Tax:</span>
-                        <strong id="tax">KES 0.00</strong>
+                        <span>Tax:</span><strong id="tax">KES 0.00</strong>
                     </div>
                     <hr>
                     <div class="d-flex justify-content-between mb-3">
-                        <strong>Total:</strong>
-                        <strong id="total" class="text-primary">KES 0.00</strong>
+                        <strong>Grand Total:</strong>
+                        <strong id="total" class="text-primary fs-5">KES 0.00</strong>
                     </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100 mb-2">
-                        <i class="bi bi-check-circle"></i> Create Purchase Order
+
+                    <button type="button" class="btn btn-outline-secondary w-100 mb-2" onclick="submitForm('draft')">
+                        <i class="bi bi-floppy"></i> Save as Draft
                     </button>
-                    <a href="{% url 'purchase_list' slug=request.business.slug  %}" class="btn btn-secondary w-100">
+                    <button type="button" class="btn btn-warning w-100 mb-2" onclick="submitForm('submit')">
+                        <i class="bi bi-send"></i> Submit for Approval
+                    </button>
+                    <a href="{% url 'purchase_list' slug=request.business.slug %}" class="btn btn-secondary w-100">
                         <i class="bi bi-x-circle"></i> Cancel
                     </a>
                 </div>
@@ -94,7 +92,6 @@
 <script>
 let itemCount = 0;
 
-// Convert products to JSON for JavaScript
 const productsData = [
     {% for product in products %}
     {
@@ -109,140 +106,108 @@ const productsData = [
 function addItem() {
     itemCount++;
     const container = document.getElementById('itemsContainer');
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'border rounded p-3 mb-3';
-    itemDiv.id = `item-${itemCount}`;
-    
-    // Build product options
-    let productOptions = '<option value="">Select Product</option>';
-    productsData.forEach(product => {
-        const code = product.code ? ` (${product.code})` : '';
-        productOptions += `<option value="${product.id}" data-price="${product.price}">${product.name}${code}</option>`;
+    const div = document.createElement('div');
+    div.className = 'border rounded p-3 mb-3';
+    div.id = `item-${itemCount}`;
+
+    let opts = '<option value="">Select Product</option>';
+    productsData.forEach(p => {
+        const code = p.code ? ` (${p.code})` : '';
+        opts += `<option value="${p.id}" data-price="${p.price}">${p.name}${code}</option>`;
     });
-    
-    itemDiv.innerHTML = `
+
+    div.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0">Item #${itemCount}</h6>
-            <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${itemCount})">
-                <i class="bi bi-trash"></i>
-            </button>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${itemCount})"><i class="bi bi-trash"></i></button>
         </div>
-        <div class="row">
-            <div class="col-md-6 mb-2">
+        <div class="row g-2">
+            <div class="col-md-5">
                 <label class="form-label">Product</label>
-                <select class="form-select" name="product_id[]" onchange="updatePrice(${itemCount})" id="product-${itemCount}" required>
-                    ${productOptions}
-                </select>
+                <select class="form-select" name="product_id[]" id="product-${itemCount}" onchange="updatePrice(${itemCount})" required>${opts}</select>
             </div>
-            <div class="col-md-3 mb-2">
+            <div class="col-md-7">
+                <label class="form-label">Description (optional)</label>
+                <input type="text" class="form-control" name="description[]" placeholder="Item description or override">
+            </div>
+            <div class="col-md-3">
                 <label class="form-label">Quantity</label>
-                <input type="number" class="form-control" name="quantity[]" min="1" value="1" 
-                       onchange="calculateTotal()" required>
+                <input type="number" class="form-control" name="quantity[]" min="1" value="1" onchange="calculateTotal()" required>
             </div>
-            <div class="col-md-3 mb-2">
+            <div class="col-md-3">
                 <label class="form-label">Unit Cost</label>
-                <input type="number" class="form-control" name="unit_cost[]" step="0.01" min="0" 
-                       id="cost-${itemCount}" onchange="calculateTotal()" required>
+                <input type="number" class="form-control" name="unit_cost[]" step="0.01" min="0" id="cost-${itemCount}" onchange="calculateTotal()" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Discount %</label>
+                <input type="number" class="form-control" name="discount[]" step="0.01" min="0" max="100" value="0" onchange="calculateTotal()">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Line Total</label>
+                <input type="text" class="form-control bg-light" id="linetotal-${itemCount}" readonly value="0.00">
             </div>
         </div>
     `;
-    
-    container.appendChild(itemDiv);
+    container.appendChild(div);
 }
 
 function removeItem(id) {
-    const item = document.getElementById(`item-${id}`);
-    if (item) {
-        item.remove();
-        calculateTotal();
-    }
+    const el = document.getElementById(`item-${id}`);
+    if (el) { el.remove(); calculateTotal(); }
 }
 
 function updatePrice(id) {
-    const select = document.getElementById(`product-${id}`);
+    const sel = document.getElementById(`product-${id}`);
     const costInput = document.getElementById(`cost-${id}`);
-    const selectedOption = select.options[select.selectedIndex];
-    const price = selectedOption.getAttribute('data-price');
-    
-    if (price) {
-        costInput.value = price;
-        calculateTotal();
-    }
+    const price = sel.options[sel.selectedIndex].getAttribute('data-price');
+    if (price) { costInput.value = price; calculateTotal(); }
 }
 
 function calculateTotal() {
     const quantities = document.getElementsByName('quantity[]');
     const costs = document.getElementsByName('unit_cost[]');
-    let subtotal = 0;
-    
+    const discounts = document.getElementsByName('discount[]');
+    let subtotal = 0, totalDiscount = 0;
+
     for (let i = 0; i < quantities.length; i++) {
         const qty = parseFloat(quantities[i].value) || 0;
         const cost = parseFloat(costs[i].value) || 0;
-        subtotal += qty * cost;
+        const disc = parseFloat(discounts[i].value) || 0;
+        const lineGross = qty * cost;
+        const lineDisc = lineGross * (disc / 100);
+        const lineNet = lineGross - lineDisc;
+        subtotal += lineGross;
+        totalDiscount += lineDisc;
+
+        // Update line total display
+        const itemEl = quantities[i].closest('.border.rounded');
+        if (itemEl) {
+            const ltInput = itemEl.querySelector('[id^="linetotal-"]');
+            if (ltInput) ltInput.value = lineNet.toFixed(2);
+        }
     }
-    
-    const tax = 0; // Can be customized
-    const total = subtotal + tax;
-    
+
+    const tax = 0;
+    const total = subtotal - totalDiscount + tax;
+
     document.getElementById('subtotal').textContent = `KES ${subtotal.toFixed(2)}`;
+    document.getElementById('discount').textContent = `- KES ${totalDiscount.toFixed(2)}`;
     document.getElementById('tax').textContent = `KES ${tax.toFixed(2)}`;
     document.getElementById('total').textContent = `KES ${total.toFixed(2)}`;
 }
 
-// Validate form before submission
-document.getElementById('purchaseForm').addEventListener('submit', function(e) {
+function submitForm(action) {
     const quantities = document.getElementsByName('quantity[]');
-    const costs = document.getElementsByName('unit_cost[]');
-    let subtotal = 0;
-    let hasItems = false;
-    
-    for (let i = 0; i < quantities.length; i++) {
-        const qty = parseFloat(quantities[i].value) || 0;
-        const cost = parseFloat(costs[i].value) || 0;
-        
-        if (qty > 0 && cost > 0) {
-            hasItems = true;
-            subtotal += qty * cost;
-        }
-    }
-    
-    if (!hasItems) {
-        e.preventDefault();
-        alert('Please add at least one item with quantity and cost greater than zero!');
-        return false;
-    }
-    
-    if (subtotal <= 0) {
-        e.preventDefault();
-        alert('Purchase total must be greater than zero! Please check your quantities and costs.');
-        return false;
-    }
-    
-    return true;
-});
+    if (quantities.length === 0) { alert('Please add at least one item.'); return; }
+    document.getElementById('formAction').value = action;
+    document.getElementById('purchaseForm').submit();
+}
 
-// Add first item on page load
 document.addEventListener('DOMContentLoaded', function() {
     addItem();
-    
-    // Pre-fill product if specified
     {% if prefill_product %}
-    const firstProductSelect = document.getElementById('product-1');
-    if (firstProductSelect) {
-        firstProductSelect.value = '{{ prefill_product.pk }}';
-        updatePrice(1);
-        
-        // Show helpful message
-        const container = document.getElementById('itemsContainer');
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-info alert-dismissible fade show';
-        alertDiv.innerHTML = `
-            <i class="bi bi-info-circle"></i> 
-            <strong>{{ prefill_product.name }}</strong> has been pre-selected because it's {% if prefill_product.is_out_of_stock %}out of stock{% else %}low on stock{% endif %}.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        container.insertBefore(alertDiv, container.firstChild);
-    }
+    const sel = document.getElementById('product-1');
+    if (sel) { sel.value = '{{ prefill_product.pk }}'; updatePrice(1); }
     {% endif %}
 });
 </script>

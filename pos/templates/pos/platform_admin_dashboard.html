@@ -149,6 +149,24 @@
 
     <!-- Additional Metrics -->
     <div class="row mt-3">
+        <!-- Pending Activations -->
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); color: #2c3e50;">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+                <div class="stat-label">Pending Activations</div>
+                <div class="stat-value">{{ pending_activations }}</div>
+                <div class="stat-sublabel">
+                    {% if pending_activations > 0 %}
+                        <a href="/admin/pos/business/?is_active__exact=0" class="text-warning">Review Now →</a>
+                    {% else %}
+                        All caught up!
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
         <!-- Total Products -->
         <div class="col-xl-3 col-md-6">
             <div class="stat-card">
@@ -258,7 +276,7 @@
                                     <h6 class="mb-1">
                                         <strong>{{ business.name }}</strong>
                                         {% if not business.is_active %}
-                                        <span class="badge bg-secondary badge-custom ms-2">Inactive</span>
+                                        <span class="badge bg-warning badge-custom ms-2">⏳ Pending Activation</span>
                                         {% endif %}
                                         {% if business.license_status == 'expired' %}
                                         <span class="badge bg-danger badge-custom ms-2">License Expired</span>
@@ -293,11 +311,21 @@
                                     <strong>{{ business.get_subscription_plan_display }}</strong>
                                 </div>
                                 <div class="col-md-3 text-end">
+                                    {% if not business.is_active %}
+                                    <form method="post" action="{% url 'activate_business' business.id %}" style="display: inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-success me-2" onclick="return confirm('Activate {{ business.name }}? The owner will receive an email notification.')">
+                                            <i class="bi bi-check-circle"></i> Activate Business
+                                        </button>
+                                    </form>
+                                    {% else %}
                                     <a href="{% url 'request_support_access' business_id=business.id %}" 
                                        class="btn btn-sm btn-success me-2">
                                         <i class="bi bi-shield-lock"></i> Request Access
                                     </a>
-                                    <button class="btn btn-sm btn-primary" onclick="showExtendLicenseModal({{ business.id }}, '{{ business.name|escapejs }}', '{% if business.license_expires_at %}{{ business.license_expires_at|date:"Y-m-d" }}{% else %}Not set{% endif %}')">
+                                    {% endif %}
+                                    <button class="btn btn-sm btn-primary" 
+                                            onclick="showExtendLicenseModal({{ business.id }}, '{{ business.name|escapejs }}', '{% if business.license_expires_at %}{{ business.license_expires_at|date:'Y-m-d' }}{% else %}Not set{% endif %}')">
                                         <i class="bi bi-calendar-plus"></i> Extend License
                                     </button>
                                 </div>
@@ -324,6 +352,12 @@
                     <div class="mt-3">
                         <a href="{% url 'my_support_access_requests' %}" class="btn btn-success btn-lg me-2 mb-2">
                             <i class="bi bi-shield-lock"></i> My Support Access
+                        </a>
+                        <a href="{% url 'registrations_list' %}" class="btn btn-warning btn-lg me-2 mb-2">
+                            <i class="bi bi-person-check"></i> Registration Requests
+                        </a>
+                        <a href="{% url 'invitation_codes_list' %}" class="btn btn-info btn-lg me-2 mb-2">
+                            <i class="bi bi-ticket"></i> Invitation Codes
                         </a>
                         <a href="/admin/" class="btn btn-dark btn-lg me-2 mb-2">
                             <i class="bi bi-shield-lock"></i> Django Admin

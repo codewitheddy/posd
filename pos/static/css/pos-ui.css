@@ -1,0 +1,291 @@
+/*
+ * POS UI Design System
+ * Consistent styling across all pages — matches dashboard style
+ */
+
+/* ── Page background ─────────────────────────────────────────────────────── */
+body { background: #f4f6fb; }
+
+/* ── Page header ─────────────────────────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.page-header h1, .page-header h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+.page-header .page-subtitle {
+  font-size: 13px;
+  color: #8a94a6;
+  margin: 2px 0 0;
+}
+
+/* ── Stat cards ──────────────────────────────────────────────────────────── */
+.stat-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px 20px;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: box-shadow .2s, transform .2s;
+}
+.stat-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.11);
+  transform: translateY(-2px);
+}
+.stat-icon-box {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.stat-label {
+  font-size: 11px;
+  color: #8a94a6;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 3px;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a202c;
+  line-height: 1.1;
+}
+.stat-sub { font-size: 12px; color: #8a94a6; }
+
+/* ── UI Card ─────────────────────────────────────────────────────────────── */
+.ui-card {
+  background: #fff;
+  border-radius: 14px;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.ui-card-header {
+  background: #fff;
+  border-bottom: 1px solid #f0f2f5;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ui-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+.ui-card-body { padding: 16px 20px; }
+.ui-card-body.p-0 { padding: 0; }
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.ui-table { font-size: 13px; width: 100%; }
+.ui-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: #8a94a6;
+  border-bottom: 1px solid #f0f2f5;
+  padding: 9px 14px;
+  background: #fafbfc;
+  white-space: nowrap;
+}
+.ui-table tbody td {
+  padding: 10px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f7f8fa;
+  color: #374151;
+}
+.ui-table tbody tr:last-child td { border-bottom: none; }
+.ui-table tbody tr:hover td { background: #fafbfc; }
+
+/* ── Filter bar ──────────────────────────────────────────────────────────── */
+.filter-bar {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  padding: 14px 20px;
+  margin-bottom: 16px;
+}
+
+/* ── Period buttons ──────────────────────────────────────────────────────── */
+.period-btn {
+  padding: 5px 13px;
+  border: 1.5px solid #e8ecf0;
+  background: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  text-decoration: none;
+  transition: all .2s;
+  display: inline-block;
+  cursor: pointer;
+}
+.period-btn.active, .period-btn:hover {
+  border-color: var(--primary-color, #224195);
+  color: var(--primary-color, #224195);
+}
+.period-btn.active {
+  background: var(--primary-color, #224195);
+  color: #fff;
+}
+
+/* ── Status badges ───────────────────────────────────────────────────────── */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-success { background: #dcfce7; color: #16a34a; }
+.status-warning { background: #fef9c3; color: #ca8a04; }
+.status-danger  { background: #fee2e2; color: #dc2626; }
+.status-info    { background: #dbeafe; color: #2563eb; }
+.status-purple  { background: #ede9fe; color: #7c3aed; }
+.status-gray    { background: #f0f2f5; color: #374151; }
+
+/* ── Action buttons ──────────────────────────────────────────────────────── */
+.btn-action {
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  border: 1.5px solid #e8ecf0;
+  background: #fff;
+  color: #374151;
+  transition: all .15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-action:hover { background: #f4f6fb; color: #1a202c; border-color: #d0d5dd; }
+.btn-action.btn-action-primary { border-color: var(--primary-color,#224195); color: var(--primary-color,#224195); }
+.btn-action.btn-action-primary:hover { background: var(--primary-color,#224195); color: #fff; }
+.btn-action.btn-action-danger { border-color: #dc2626; color: #dc2626; }
+.btn-action.btn-action-danger:hover { background: #dc2626; color: #fff; }
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: #8a94a6;
+}
+.empty-state i { font-size: 2.5rem; opacity: .3; display: block; margin-bottom: 10px; }
+.empty-state p { margin: 0 0 12px; }
+
+/* ── Confirm / delete cards ──────────────────────────────────────────────── */
+.confirm-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  overflow: hidden;
+  max-width: 560px;
+  margin: 40px auto;
+}
+.confirm-card-header {
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.confirm-card-body { padding: 22px; }
+
+/* ── Form card ───────────────────────────────────────────────────────────── */
+.form-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.form-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; }
+.form-control, .form-select {
+  border-radius: 8px;
+  border: 1.5px solid #e8ecf0;
+  font-size: 13px;
+  padding: 8px 12px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-color, #224195);
+  box-shadow: 0 0 0 3px rgba(34,65,149,.1);
+}
+
+/* ── Override Bootstrap card to match ───────────────────────────────────── */
+.card {
+  border: none !important;
+  border-radius: 14px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07) !important;
+}
+.card-header {
+  background: #fff !important;
+  border-bottom: 1px solid #f0f2f5 !important;
+  font-weight: 600;
+}
+.table-light th { background: #fafbfc !important; }
+.table > :not(caption) > * > * { padding: 10px 14px; }
+.table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: #8a94a6;
+}
+.table tbody tr:hover td { background: #fafbfc; }
+
+/* ── Pagination ──────────────────────────────────────────────────────────── */
+.pagination .page-link {
+  border-radius: 8px !important;
+  margin: 0 2px;
+  border: 1.5px solid #e8ecf0;
+  color: #374151;
+  font-size: 13px;
+  padding: 5px 12px;
+}
+.pagination .page-item.active .page-link {
+  background: var(--primary-color, #224195);
+  border-color: var(--primary-color, #224195);
+  color: #fff;
+}
+.pagination .page-link:hover { background: #f4f6fb; }
+
+/* ── Alert overrides ─────────────────────────────────────────────────────── */
+.alert { border-radius: 10px; border: none; font-size: 13px; }
+.alert-success { background: #dcfce7; color: #15803d; }
+.alert-danger  { background: #fee2e2; color: #b91c1c; }
+.alert-warning { background: #fef9c3; color: #92400e; }
+.alert-info    { background: #dbeafe; color: #1e40af; }
+
+/* ── Modal overrides ─────────────────────────────────────────────────────── */
+.modal-content { border-radius: 14px; border: none; box-shadow: 0 8px 32px rgba(0,0,0,.15); }
+.modal-header { border-bottom: 1px solid #f0f2f5; padding: 16px 20px; }
+.modal-footer { border-top: 1px solid #f0f2f5; padding: 12px 20px; }
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+.text-kes { color: #1a202c; font-weight: 700; }
+.text-profit { color: #16a34a; font-weight: 700; }
+.text-loss   { color: #dc2626; font-weight: 700; }

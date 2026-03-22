@@ -4,171 +4,121 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <h2><i class="bi bi-cash-stack"></i> Float {{ cash_float.float_number }}</h2>
-        <div>
+        <div class="d-flex gap-2">
             {% if cash_float.status == 'active' %}
-            <a href="{% url 'cash_float_return' slug=request.business.slug pk=cash_float.pk %}" 
-               class="btn btn-success">
+            <a href="{% url 'cash_float_return' slug=request.business.slug pk=cash_float.pk %}" class="btn btn-success btn-sm">
                 <i class="bi bi-arrow-return-left"></i> Return Float
             </a>
             {% elif cash_float.status == 'returned' %}
-            <a href="{% url 'cash_float_reconcile' slug=request.business.slug pk=cash_float.pk %}" 
-               class="btn btn-primary">
+            <a href="{% url 'cash_float_reconcile' slug=request.business.slug pk=cash_float.pk %}" class="btn btn-primary btn-sm">
                 <i class="bi bi-check2-circle"></i> Reconcile
             </a>
             {% endif %}
-            <a href="{% url 'cash_float_list' slug=request.business.slug %}" class="btn btn-secondary">
+            <a href="{% url 'cash_float_list' slug=request.business.slug %}" class="btn-action">
                 <i class="bi bi-arrow-left"></i> Back to List
             </a>
         </div>
     </div>
 
     <div class="row">
-        <!-- Float Information -->
         <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Float Information</h5>
+            <div class="ui-card mb-4">
+                <div class="ui-card-header">
+                    <span class="ui-card-title">Float Information</span>
                 </div>
-                <div class="card-body">
-                    <table class="table table-sm">
-                        <tr>
-                            <td><strong>Float Number:</strong></td>
-                            <td>{{ cash_float.float_number }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Type:</strong></td>
-                            <td>
-                                <span class="badge bg-{% if cash_float.float_type == 'opening' %}primary{% else %}info{% endif %}">
-                                    {{ cash_float.get_float_type_display }}
-                                </span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><strong>Status:</strong></td>
-                            <td>
-                                {% if cash_float.status == 'active' %}
-                                <span class="badge bg-warning">Active</span>
-                                {% elif cash_float.status == 'returned' %}
-                                <span class="badge bg-info">Returned</span>
-                                {% else %}
-                                <span class="badge bg-success">Reconciled</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><strong>Cashier:</strong></td>
-                            <td>{{ cash_float.cashier.username }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Given By:</strong></td>
-                            <td>{{ cash_float.given_by.username }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Given At:</strong></td>
-                            <td>{{ cash_float.given_at|date:"M d, Y H:i" }}</td>
-                        </tr>
-                        {% if cash_float.returned_at %}
-                        <tr>
-                            <td><strong>Returned At:</strong></td>
-                            <td>{{ cash_float.returned_at|date:"M d, Y H:i" }}</td>
-                        </tr>
-                        {% endif %}
+                <div class="ui-card-body p-0">
+                    <table class="ui-table">
+                        <tbody>
+                            <tr><td><strong>Float Number:</strong></td><td>{{ cash_float.float_number }}</td></tr>
+                            <tr><td><strong>Type:</strong></td>
+                                <td><span class="status-badge status-{% if cash_float.float_type == 'opening' %}info{% else %}purple{% endif %}">{{ cash_float.get_float_type_display }}</span></td>
+                            </tr>
+                            <tr><td><strong>Status:</strong></td>
+                                <td>
+                                    {% if cash_float.status == 'active' %}<span class="status-badge status-warning">Active</span>
+                                    {% elif cash_float.status == 'returned' %}<span class="status-badge status-info">Returned</span>
+                                    {% else %}<span class="status-badge status-success">Reconciled</span>{% endif %}
+                                </td>
+                            </tr>
+                            <tr><td><strong>Cashier:</strong></td><td>{{ cash_float.cashier.username }}</td></tr>
+                            <tr><td><strong>Given By:</strong></td><td>{{ cash_float.given_by.username }}</td></tr>
+                            <tr><td><strong>Given At:</strong></td><td>{{ cash_float.given_at|date:"M d, Y H:i" }}</td></tr>
+                            {% if cash_float.returned_at %}
+                            <tr><td><strong>Returned At:</strong></td><td>{{ cash_float.returned_at|date:"M d, Y H:i" }}</td></tr>
+                            {% endif %}
+                        </tbody>
                     </table>
-
                     {% if cash_float.notes %}
-                    <div class="mt-3">
+                    <div class="ui-card-body" style="padding-top:8px;">
                         <strong>Notes:</strong>
-                        <p class="text-muted">{{ cash_float.notes }}</p>
+                        <p class="text-muted mb-0">{{ cash_float.notes }}</p>
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- Financial Summary -->
         <div class="col-md-8">
-            <div class="card mb-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Financial Summary</h5>
+            <div class="ui-card mb-4">
+                <div class="ui-card-header">
+                    <span class="ui-card-title">Financial Summary</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body">
                     <div class="row">
                         <div class="col-md-6">
                             <h6>Float Details</h6>
-                            <table class="table">
-                                <tr>
-                                    <td><strong>Opening Float:</strong></td>
-                                    <td class="text-end">KES {{ cash_float.amount|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Cash Sales:</strong></td>
-                                    <td class="text-end text-success">+ KES {{ cash_received|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Change Given:</strong></td>
-                                    <td class="text-end text-danger">- KES {{ total_change|floatformat:2 }}</td>
-                                </tr>
-                                <tr class="table-light">
-                                    <td><strong>Expected Return:</strong></td>
-                                    <td class="text-end"><strong>KES {{ expected_return|floatformat:2 }}</strong></td>
-                                </tr>
+                            <table class="ui-table">
+                                <tbody>
+                                    <tr><td>Opening Float:</td><td class="text-end">KES {{ cash_float.amount|floatformat:2 }}</td></tr>
+                                    <tr><td>Cash Sales:</td><td class="text-end text-success">+ KES {{ cash_received|floatformat:2 }}</td></tr>
+                                    <tr><td>Change Given:</td><td class="text-end text-danger">- KES {{ total_change|floatformat:2 }}</td></tr>
+                                    <tr style="background:#fafbfc;"><td><strong>Expected Return:</strong></td><td class="text-end fw-bold">KES {{ expected_return|floatformat:2 }}</td></tr>
+                                </tbody>
                             </table>
                         </div>
                         <div class="col-md-6">
                             <h6>Return Details</h6>
-                            <table class="table">
-                                {% if cash_float.returned_amount is not None %}
-                                <tr>
-                                    <td><strong>Actual Returned:</strong></td>
-                                    <td class="text-end">KES {{ cash_float.returned_amount|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Variance:</strong></td>
-                                    <td class="text-end">
-                                        {% if cash_float.variance == 0 %}
-                                        <span class="badge bg-success">KES 0.00 (Perfect!)</span>
-                                        {% elif cash_float.variance > 0 %}
-                                        <span class="badge bg-primary">+KES {{ cash_float.variance|floatformat:2 }} (Surplus)</span>
-                                        {% else %}
-                                        <span class="badge bg-danger">KES {{ cash_float.variance|floatformat:2 }} (Shortage)</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="2" class="text-center text-muted">
-                                        <i class="bi bi-hourglass-split"></i> Float not yet returned
-                                    </td>
-                                </tr>
-                                {% endif %}
+                            <table class="ui-table">
+                                <tbody>
+                                    {% if cash_float.returned_amount is not None %}
+                                    <tr><td>Actual Returned:</td><td class="text-end">KES {{ cash_float.returned_amount|floatformat:2 }}</td></tr>
+                                    <tr><td>Variance:</td>
+                                        <td class="text-end">
+                                            {% if cash_float.variance == 0 %}<span class="status-badge status-success">KES 0.00 (Perfect!)</span>
+                                            {% elif cash_float.variance > 0 %}<span class="status-badge status-info">+KES {{ cash_float.variance|floatformat:2 }} (Surplus)</span>
+                                            {% else %}<span class="status-badge status-danger">KES {{ cash_float.variance|floatformat:2 }} (Shortage)</span>{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="2" class="text-center text-muted"><i class="bi bi-hourglass-split"></i> Float not yet returned</td></tr>
+                                    {% endif %}
+                                </tbody>
                             </table>
                         </div>
                     </div>
-
-                    <div class="alert alert-info mt-3">
+                    <div class="alert alert-info mt-3 mb-0">
                         <i class="bi bi-info-circle"></i>
                         <strong>Sales During Float Period:</strong> {{ sales_count }} transaction(s)
                     </div>
                 </div>
             </div>
 
-            <!-- Sales List -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Sales During Float Period</h5>
+            <div class="ui-card">
+                <div class="ui-card-header">
+                    <span class="ui-card-title">Sales During Float Period</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-sm table-hover">
+                        <table class="ui-table">
                             <thead>
                                 <tr>
                                     <th>Invoice</th>
                                     <th>Date</th>
-                                    <th>Total</th>
-                                    <th>Cash Paid</th>
-                                    <th>Change</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Cash Paid</th>
+                                    <th class="text-end">Change</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -176,13 +126,13 @@
                                 <tr>
                                     <td>{{ sale.invoice_number }}</td>
                                     <td>{{ sale.created_at|date:"M d, H:i" }}</td>
-                                    <td>KES {{ sale.total|floatformat:2 }}</td>
-                                    <td>
+                                    <td class="text-end">KES {{ sale.total|floatformat:2 }}</td>
+                                    <td class="text-end">
                                         {% with cash_payment=sale.payments.filter|first %}
                                         KES {{ cash_payment.amount|default:0|floatformat:2 }}
                                         {% endwith %}
                                     </td>
-                                    <td>KES {{ sale.change_given|floatformat:2 }}</td>
+                                    <td class="text-end">KES {{ sale.change_given|floatformat:2 }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>

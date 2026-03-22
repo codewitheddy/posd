@@ -4,67 +4,51 @@
 {% block title %}Delete Unit{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card border-danger">
-                <div class="card-header bg-danger text-white">
-                    <h4><i class="bi bi-exclamation-triangle"></i> Delete Unit</h4>
-                </div>
-                <div class="card-body">
-                    {% if has_products %}
-                        <div class="alert alert-warning">
-                            <i class="bi bi-exclamation-circle"></i>
-                            <strong>Warning!</strong> This unit is used by <strong>{{ product_count }}</strong> product(s).
-                        </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-                        <p>You have two options:</p>
+<div class="confirm-card" style="max-width:480px;margin:40px auto;">
+  <div class="confirm-card-header" style="background:#fee2e2;color:#b91c1c;">
+    <i class="bi bi-exclamation-triangle-fill"></i> Delete Unit
+  </div>
+  <div class="confirm-card-body">
 
-                        <form method="post" class="mb-3">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="reassign">
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Reassign products to:</label>
-                                <select name="new_unit" class="form-select">
-                                    <option value="">No Unit</option>
-                                    {% for other_unit in other_units %}
-                                        <option value="{{ other_unit.pk }}">{{ other_unit.name }} ({{ other_unit.abbreviation }})</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <button type="submit" class="btn btn-warning w-100">
-                                <i class="bi bi-arrow-repeat"></i> Reassign Products & Delete Unit
-                            </button>
-                        </form>
-
-                        <div class="text-center my-2">OR</div>
-
-                        <a href="{% url 'unit_list' slug=request.business.slug %}" class="btn btn-secondary w-100">
-                            <i class="bi bi-arrow-left"></i> Cancel
-                        </a>
-                    {% else %}
-                        <p>Are you sure you want to delete the unit <strong>"{{ unit.name }}"</strong>?</p>
-                        <p class="text-muted">This action cannot be undone.</p>
-
-                        <form method="post">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="delete">
-                            
-                            <div class="d-flex justify-content-between">
-                                <a href="{% url 'unit_list' slug=request.business.slug %}" class="btn btn-secondary">
-                                    <i class="bi bi-arrow-left"></i> Cancel
-                                </a>
-                                <button type="submit" class="btn btn-danger">
-                                    <i class="bi bi-trash"></i> Delete Unit
-                                </button>
-                            </div>
-                        </form>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+    {% if has_products %}
+    <div class="alert alert-warning mb-3" style="font-size:13px;">
+      <i class="bi bi-exclamation-circle me-1"></i>
+      This unit is used by <strong>{{ product_count }}</strong> product{{ product_count|pluralize }}. Reassign them before deleting.
     </div>
+
+    <form method="post" class="mb-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reassign">
+      <div class="mb-3">
+        <label class="form-label">Reassign products to:</label>
+        <select name="new_unit" class="form-select">
+          <option value="">No Unit</option>
+          {% for other_unit in other_units %}
+          <option value="{{ other_unit.pk }}">{{ other_unit.name }} ({{ other_unit.abbreviation }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-warning w-100"><i class="bi bi-arrow-repeat me-1"></i>Reassign Products &amp; Delete Unit</button>
+    </form>
+
+    <a href="{% url 'unit_list' slug=request.business.slug %}" class="btn btn-outline-secondary w-100">Cancel</a>
+
+    {% else %}
+    <p style="font-size:13px;">Are you sure you want to delete the unit <strong>"{{ unit.name }}"</strong>? This action cannot be undone.</p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete">
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Unit</button>
+        <a href="{% url 'unit_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
 </div>
 {% endblock %}

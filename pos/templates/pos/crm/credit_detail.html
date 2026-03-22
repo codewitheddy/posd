@@ -1,0 +1,106 @@
+{% extends 'pos/base.html' %}
+{% block title %}Credit — {{ customer.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div>
+      <h1 class="h4 fw-bold mb-0">{{ customer.name }} — Credit Account</h1>
+      <small class="text-muted">{{ customer.customer_code }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'customer_credit_payment' slug=business_slug pk=customer.pk %}" class="btn-action btn-action-primary"><i class="bi bi-plus-circle"></i> Record Payment</a>
+      <a href="{% url 'customer_statement' slug=business_slug pk=customer.pk %}" class="btn-action" target="_blank"><i class="bi bi-printer"></i> Statement</a>
+      <a href="{% url 'customer_credit_list' slug=business_slug %}" class="btn-action"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="bi bi-credit-card"></i></div>
+        <div><div class="stat-label">Credit Limit</div><div class="stat-value">KES {{ customer.credit_limit|floatformat:0 }}</div></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#fee2e2;color:#dc2626"><i class="bi bi-exclamation-circle"></i></div>
+        <div><div class="stat-label">Outstanding</div><div class="stat-value text-danger">KES {{ customer.credit_balance|floatformat:0 }}</div></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="bi bi-check-circle"></i></div>
+        <div><div class="stat-label">Available</div><div class="stat-value text-success">KES {{ customer.get_available_credit|floatformat:0 }}</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aging -->
+  <div class="ui-card mb-4">
+    <div class="ui-card-header"><span class="ui-card-title">Aging Analysis</span></div>
+    <div class="ui-card-body">
+      <div class="row text-center g-2">
+        <div class="col-3"><div class="fw-bold text-success">KES {{ aging.current|floatformat:0 }}</div><small class="text-muted">0–30 Days</small></div>
+        <div class="col-3"><div class="fw-bold text-warning">KES {{ aging.30|floatformat:0 }}</div><small class="text-muted">31–60 Days</small></div>
+        <div class="col-3"><div class="fw-bold text-orange">KES {{ aging.60|floatformat:0 }}</div><small class="text-muted">61–90 Days</small></div>
+        <div class="col-3"><div class="fw-bold text-danger">KES {{ aging.90plus|floatformat:0 }}</div><small class="text-muted">90+ Days</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Credit Sales -->
+    <div class="col-md-7">
+      <div class="ui-card">
+        <div class="ui-card-header"><span class="ui-card-title">Credit Sales</span></div>
+        <div class="ui-card-body p-0">
+          {% if credit_sales %}
+          <div class="table-responsive">
+            <table class="ui-table">
+              <thead><tr><th>Invoice</th><th>Date</th><th class="text-end">Total</th><th class="text-end">Paid</th><th class="text-end">Balance</th></tr></thead>
+              <tbody>
+                {% for sale in credit_sales %}
+                <tr>
+                  <td><strong>{{ sale.invoice_number }}</strong></td>
+                  <td>{{ sale.date|date:"d M Y" }}</td>
+                  <td class="text-end">KES {{ sale.total|floatformat:2 }}</td>
+                  <td class="text-end text-success">KES {{ sale.credit_paid|floatformat:2 }}</td>
+                  <td class="text-end {% if sale.total > sale.credit_paid %}text-danger fw-bold{% endif %}">KES {{ sale.total|add:"-"|add:sale.credit_paid|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}<div class="empty-state"><i class="bi bi-receipt"></i><p>No credit sales</p></div>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Payments -->
+    <div class="col-md-5">
+      <div class="ui-card">
+        <div class="ui-card-header"><span class="ui-card-title">Payments Received</span></div>
+        <div class="ui-card-body p-0">
+          {% if payments %}
+          <div class="table-responsive">
+            <table class="ui-table">
+              <thead><tr><th>Date</th><th class="text-end">Amount</th><th>Ref</th></tr></thead>
+              <tbody>
+                {% for p in payments %}
+                <tr>
+                  <td>{{ p.created_at|date:"d M Y" }}</td>
+                  <td class="text-end text-success fw-bold">KES {{ p.amount|floatformat:2 }}</td>
+                  <td>{{ p.reference|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}<div class="empty-state"><i class="bi bi-cash"></i><p>No payments yet</p></div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

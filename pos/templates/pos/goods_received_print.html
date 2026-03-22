@@ -1,0 +1,166 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ note.grn_number }} - Goods Received Note</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #222; padding-bottom: 14px; margin-bottom: 20px; }
+        .biz-name { font-size: 20px; font-weight: bold; }
+        .doc-title { text-align: right; }
+        .doc-title h2 { font-size: 18px; color: #1a5276; }
+        .doc-title .num { font-size: 14px; font-weight: bold; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+        .badge-ok { background: #d5f5e3; color: #1e8449; border: 1px solid #82e0aa; }
+        .badge-warn { background: #fef9e7; color: #9a7d0a; border: 1px solid #f9e79f; }
+        .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+        .meta-box { border: 1px solid #ddd; padding: 8px 10px; border-radius: 4px; }
+        .meta-box label { font-size: 10px; text-transform: uppercase; color: #777; display: block; margin-bottom: 3px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+        th { background: #eaf2ff; border: 1px solid #bbb; padding: 7px 8px; font-size: 11px; text-transform: uppercase; text-align: left; }
+        td { border: 1px solid #ccc; padding: 7px 8px; vertical-align: top; }
+        .tr { text-align: right; }
+        .tc { text-align: center; }
+        .tfoot td { font-weight: bold; background: #f4f6f7; }
+        .disc-row { background: #fef9e7; }
+        .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+        .sum-box { border: 1px solid #ddd; padding: 10px; border-radius: 4px; text-align: center; }
+        .sum-box .val { font-size: 20px; font-weight: bold; }
+        .sum-box .lbl { font-size: 10px; color: #777; text-transform: uppercase; }
+        .warn-box { background: #fef9e7; border: 1px solid #f9e79f; padding: 10px; border-radius: 4px; margin-bottom: 14px; }
+        .sigs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 40px; }
+        .sig { border-top: 1px solid #333; padding-top: 6px; text-align: center; font-size: 11px; color: #555; }
+        @media print { .no-print { display: none; } body { padding: 10px; } }
+    </style>
+</head>
+<body>
+
+<div class="no-print" style="margin-bottom:14px;">
+    <button onclick="window.print()" style="padding:7px 16px;background:#1a5276;color:#fff;border:none;border-radius:4px;cursor:pointer;">🖨 Print</button>
+    <a href="{% url 'goods_received_detail' slug=business_slug pk=note.pk %}" style="margin-left:10px;color:#333;">← Back</a>
+</div>
+
+<div class="header">
+    <div>
+        <div class="biz-name">{{ note.business.name }}</div>
+        {% if note.business.address %}<div>{{ note.business.address }}</div>{% endif %}
+        {% if note.business.phone %}<div>Tel: {{ note.business.phone }}</div>{% endif %}
+    </div>
+    <div class="doc-title">
+        <h2>GOODS RECEIVED NOTE</h2>
+        <div class="num">{{ note.grn_number }}</div>
+        <div style="margin-top:6px;">
+            {% if note.status == 'confirmed' %}
+            <span class="badge badge-ok">✓ Confirmed</span>
+            {% else %}
+            <span class="badge badge-warn">⚠ Discrepancy</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="meta">
+    <div class="meta-box">
+        <label>Supplier</label>
+        <strong>{{ note.supplier.name }}</strong>
+        {% if note.supplier.contact_person %}<br>{{ note.supplier.contact_person }}{% endif %}
+        {% if note.supplier.phone %}<br>{{ note.supplier.phone }}{% endif %}
+    </div>
+    <div class="meta-box">
+        <label>Purchase Order</label>
+        <strong>{{ note.purchase.purchase_number }}</strong>
+        <br><label style="margin-top:6px;">Received Date</label>
+        <strong>{{ note.received_date|date:"d M Y" }}</strong>
+    </div>
+    <div class="meta-box">
+        <label>Received By</label>
+        <strong>{{ note.received_by.get_full_name|default:note.received_by.username }}</strong>
+        {% if note.delivery_note_number %}<br><label style="margin-top:6px;">Delivery Note #</label><strong>{{ note.delivery_note_number }}</strong>{% endif %}
+        {% if note.vehicle_number %}<br><label style="margin-top:6px;">Vehicle</label><strong>{{ note.vehicle_number }}</strong>{% endif %}
+        {% if note.driver_name %}<br><label style="margin-top:6px;">Driver</label><strong>{{ note.driver_name }}</strong>{% endif %}
+    </div>
+</div>
+
+<div class="summary">
+    <div class="sum-box">
+        <div class="val">{{ note.total_ordered_qty }}</div>
+        <div class="lbl">Units Ordered</div>
+    </div>
+    <div class="sum-box" style="border-color:#82e0aa;">
+        <div class="val" style="color:#1e8449;">{{ note.total_received_qty }}</div>
+        <div class="lbl">Units Received</div>
+    </div>
+    <div class="sum-box" style="border-color:{% if note.total_damaged_qty > 0 %}#f1948a{% else %}#ddd{% endif %};">
+        <div class="val" style="color:{% if note.total_damaged_qty > 0 %}#c0392b{% else %}#222{% endif %};">{{ note.total_damaged_qty }}</div>
+        <div class="lbl">Damaged / Missing</div>
+    </div>
+</div>
+
+{% if note.has_discrepancy %}
+<div class="warn-box">
+    <strong>⚠ Discrepancy noted.</strong> Some items were not received in full or were damaged. Please follow up with the supplier.
+</div>
+{% endif %}
+
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Product</th>
+            <th class="tc">Ordered</th>
+            <th class="tc">Received</th>
+            <th class="tc">Damaged</th>
+            <th class="tc">Missing</th>
+            <th>Batch</th>
+            <th>Expiry</th>
+            <th class="tr">Unit Cost</th>
+            <th class="tr">Total</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr {% if item.has_discrepancy %}class="disc-row"{% endif %}>
+            <td>{{ forloop.counter }}</td>
+            <td><strong>{{ item.product.name }}</strong></td>
+            <td class="tc">{{ item.quantity_ordered }}</td>
+            <td class="tc">{{ item.quantity_received }}</td>
+            <td class="tc">{{ item.quantity_damaged }}</td>
+            <td class="tc">{{ item.quantity_missing }}</td>
+            <td>{{ item.batch_number|default:"-" }}</td>
+            <td>{{ item.expiry_date|date:"d/m/Y"|default:"-" }}</td>
+            <td class="tr">KES {{ item.unit_cost|floatformat:2 }}</td>
+            <td class="tr">KES {{ item.total_cost|floatformat:2 }}</td>
+            <td>{{ item.notes|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="2"><strong>TOTALS</strong></td>
+            <td class="tc"><strong>{{ note.total_ordered_qty }}</strong></td>
+            <td class="tc"><strong>{{ note.total_received_qty }}</strong></td>
+            <td class="tc"><strong>{{ note.total_damaged_qty }}</strong></td>
+            <td colspan="5"></td>
+            <td class="tr"><strong>KES {{ note.total_value|floatformat:2 }}</strong></td>
+            <td></td>
+        </tr>
+    </tfoot>
+</table>
+
+{% if note.notes %}
+<div style="border:1px solid #ddd;padding:10px;border-radius:4px;margin-bottom:14px;">
+    <strong>Notes:</strong> {{ note.notes }}
+</div>
+{% endif %}
+
+<div class="sigs">
+    <div class="sig">Received By<br><small>{{ note.received_by.get_full_name|default:note.received_by.username }}</small></div>
+    <div class="sig">Verified By</div>
+    <div class="sig">Supplier Representative</div>
+</div>
+
+</body>
+</html>

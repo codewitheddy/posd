@@ -1,0 +1,125 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Invitation Codes - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-ticket-alt"></i> Invitation Codes</h2>
+            <p class="text-muted">Manage registration invitation codes</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'invitation_code_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Generate Codes
+            </a>
+            <a href="{% url 'registration_settings' %}" class="btn btn-secondary">
+                <i class="fas fa-cog"></i> Settings
+            </a>
+        </div>
+    </div>
+    
+    <!-- Filter tabs -->
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link {% if status_filter == 'all' %}active{% endif %}" 
+               href="?status=all">All Codes</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if status_filter == 'active' %}active{% endif %}" 
+               href="?status=active">Active</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if status_filter == 'expired' %}active{% endif %}" 
+               href="?status=expired">Expired/Used</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if status_filter == 'inactive' %}active{% endif %}" 
+               href="?status=inactive">Inactive</a>
+        </li>
+    </ul>
+    
+    <div class="ui-card">
+        <div class="ui-card-body p-0">
+            <div class="table-responsive">
+                <table class="ui-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Usage</th>
+                            <th>Valid Period</th>
+                            <th>Allowed Domains</th>
+                            <th>Created By</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for code in codes %}
+                        <tr>
+                            <td><code>{{ code.code }}</code></td>
+                            <td>
+                                <span class="status-badge status-info">
+                                    {{ code.uses_count }}/{{ code.max_uses }}
+                                </span>
+                            </td>
+                            <td>
+                                <small>
+                                    From: {{ code.valid_from|date:"Y-m-d H:i" }}<br>
+                                    {% if code.valid_until %}
+                                        Until: {{ code.valid_until|date:"Y-m-d H:i" }}
+                                    {% else %}
+                                        No expiry
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                {% if code.allowed_email_domains %}
+                                    <small>{{ code.allowed_email_domains }}</small>
+                                {% else %}
+                                    <span class="text-muted">Any</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if code.created_by %}
+                                    {{ code.created_by.username }}
+                                {% else %}
+                                    <span class="text-muted">System</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if code.is_active and code.uses_count < code.max_uses %}
+                                    <span class="status-badge status-success">Active</span>
+                                {% elif code.uses_count >= code.max_uses %}
+                                    <span class="status-badge status-gray">Used Up</span>
+                                {% elif not code.is_active %}
+                                    <span class="status-badge status-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'invitation_code_toggle' code.id %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    {% if code.is_active %}
+                                        <i class="fas fa-ban"></i> Deactivate
+                                    {% else %}
+                                        <i class="fas fa-check"></i> Activate
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                No invitation codes found. Create some to get started.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

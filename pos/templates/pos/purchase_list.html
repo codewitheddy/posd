@@ -1,14 +1,14 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Purchases - POS System{% endblock %}
+{% block title %}Purchase Orders{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
+<div class="row mb-4 align-items-center">
     <div class="col">
         <h2><i class="bi bi-bag-check"></i> Purchase Orders</h2>
     </div>
-    <div class="col text-end">
-        <a href="{% url 'purchase_create' slug=request.business.slug  %}" class="btn btn-primary">
+    <div class="col-auto">
+        <a href="{% url 'purchase_create' slug=request.business.slug %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> New Purchase Order
         </a>
     </div>
@@ -16,15 +16,19 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        <form method="get" class="row g-3">
+        <form method="get" class="row g-2 align-items-end">
             <div class="col-md-4">
-                <label for="status" class="form-label">Filter by Status</label>
-                <select class="form-select" id="status" name="status" onchange="this.form.submit()">
+                <label class="form-label">Filter by Status</label>
+                <select class="form-select" name="status" onchange="this.form.submit()">
                     <option value="">All Statuses</option>
-                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
-                    <option value="ordered" {% if status_filter == 'ordered' %}selected{% endif %}>Ordered</option>
+                    <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
+                    <option value="pending_approval" {% if status_filter == 'pending_approval' %}selected{% endif %}>Pending Approval</option>
+                    <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+                    <option value="sent" {% if status_filter == 'sent' %}selected{% endif %}>Sent to Supplier</option>
+                    <option value="partially_received" {% if status_filter == 'partially_received' %}selected{% endif %}>Partially Received</option>
                     <option value="received" {% if status_filter == 'received' %}selected{% endif %}>Received</option>
                     <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
                 </select>
             </div>
         </form>
@@ -34,61 +38,75 @@
 <div class="card">
     <div class="card-body">
         {% if purchases %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Purchase #</th>
-                            <th>Supplier</th>
-                            <th>Date</th>
-                            <th>Expected Delivery</th>
-                            <th>Status</th>
-                            <th>Total Amount</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for purchase in purchases %}
-                        <tr>
-                            <td><strong>{{ purchase.purchase_number }}</strong></td>
-                            <td>{{ purchase.supplier.name }}</td>
-                            <td>{{ purchase.date|date:"d M Y" }}</td>
-                            <td>{{ purchase.expected_delivery|date:"d M Y"|default:"-" }}</td>
-                            <td>
-                                {% if purchase.status == 'pending' %}
-                                    <span class="badge bg-warning text-dark">Pending</span>
-                                {% elif purchase.status == 'ordered' %}
-                                    <span class="badge bg-info">Ordered</span>
-                                {% elif purchase.status == 'received' %}
-                                    <span class="badge bg-success">Received</span>
-                                {% elif purchase.status == 'cancelled' %}
-                                    <span class="badge bg-danger">Cancelled</span>
-                                {% endif %}
-                            </td>
-                            <td><strong>KES {{ purchase.total_amount|floatformat:2 }}</strong></td>
-                            <td>
-                                <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i> View
-                                </a>
-                                {% if purchase.status == 'received' %}
-                                    <a href="{% url 'create_payment' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-sm btn-success" title="Make Payment">
-                                        <i class="bi bi-cash-coin"></i>
-                                    </a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>PO #</th>
+                        <th>Supplier</th>
+                        <th>Date</th>
+                        <th>Expected Delivery</th>
+                        <th>Status</th>
+                        <th class="text-end">Total</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for purchase in purchases %}
+                    <tr>
+                        <td><strong>{{ purchase.purchase_number }}</strong></td>
+                        <td>{{ purchase.supplier.name }}</td>
+                        <td>{{ purchase.date|date:"d M Y" }}</td>
+                        <td>{{ purchase.expected_delivery|date:"d M Y"|default:"-" }}</td>
+                        <td>
+                            {% if purchase.status == 'draft' %}<span class="badge bg-secondary">Draft</span>
+                            {% elif purchase.status == 'pending_approval' %}<span class="badge bg-warning text-dark">Pending Approval</span>
+                            {% elif purchase.status == 'approved' %}<span class="badge bg-info">Approved</span>
+                            {% elif purchase.status == 'sent' %}<span class="badge bg-primary">Sent</span>
+                            {% elif purchase.status == 'pending' %}<span class="badge bg-warning text-dark">Pending</span>
+                            {% elif purchase.status == 'ordered' %}<span class="badge bg-info">Ordered</span>
+                            {% elif purchase.status == 'partially_received' %}<span class="badge bg-warning text-dark">Partial</span>
+                            {% elif purchase.status == 'received' %}<span class="badge bg-success">Received</span>
+                            {% elif purchase.status == 'cancelled' %}<span class="badge bg-danger">Cancelled</span>
+                            {% elif purchase.status == 'closed' %}<span class="badge bg-dark">Closed</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end"><strong>KES {{ purchase.total_amount|floatformat:2 }}</strong></td>
+                        <td>
+                            <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            {% if purchase.status == 'draft' %}
+                            <form method="post" action="{% url 'purchase_submit' slug=request.business.slug pk=purchase.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-warning" title="Submit for Approval"><i class="bi bi-send"></i></button>
+                            </form>
+                            {% endif %}
+                            {% if purchase.status == 'pending_approval' %}
+                            <form method="post" action="{% url 'purchase_approve' slug=request.business.slug pk=purchase.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-success" title="Approve"><i class="bi bi-check2-circle"></i></button>
+                            </form>
+                            {% endif %}
+                            {% if purchase.status in 'received,partially_received' %}
+                            <a href="{% url 'create_payment' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-sm btn-success" title="Make Payment">
+                                <i class="bi bi-cash-coin"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
-            <div class="text-center py-5">
-                <i class="bi bi-bag-check" style="font-size: 4rem; color: #ccc;"></i>
-                <p class="text-muted mt-3">No purchase orders found. Create your first purchase order!</p>
-                <a href="{% url 'purchase_create' slug=request.business.slug  %}" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> New Purchase Order
-                </a>
-            </div>
+        <div class="text-center py-5">
+            <i class="bi bi-bag-check" style="font-size:4rem;color:#ccc;"></i>
+            <p class="text-muted mt-3">No purchase orders found.</p>
+            <a href="{% url 'purchase_create' slug=request.business.slug %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> New Purchase Order
+            </a>
+        </div>
         {% endif %}
     </div>
 </div>

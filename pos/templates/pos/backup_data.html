@@ -26,41 +26,48 @@
         {% endfor %}
     {% endif %}
 
-    <!-- Data Statistics -->
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-box-seam" style="font-size: 2rem; color: #4e73df;"></i>
-                    <h3 class="mt-2">{{ stats.products }}</h3>
-                    <p class="text-muted mb-0">Products</p>
+            <div class="stat-card">
+                <div class="stat-icon-box" style="background:#dbeafe; color:#2563eb;">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div>
+                    <div class="stat-label">Products</div>
+                    <div class="stat-value">{{ stats.products }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-receipt" style="font-size: 2rem; color: #1cc88a;"></i>
-                    <h3 class="mt-2">{{ stats.sales }}</h3>
-                    <p class="text-muted mb-0">Sales</p>
+            <div class="stat-card">
+                <div class="stat-icon-box" style="background:#dcfce7; color:#16a34a;">
+                    <i class="bi bi-receipt"></i>
+                </div>
+                <div>
+                    <div class="stat-label">Sales</div>
+                    <div class="stat-value">{{ stats.sales }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-people" style="font-size: 2rem; color: #36b9cc;"></i>
-                    <h3 class="mt-2">{{ stats.customers }}</h3>
-                    <p class="text-muted mb-0">Customers</p>
+            <div class="stat-card">
+                <div class="stat-icon-box" style="background:#dbeafe; color:#2563eb;">
+                    <i class="bi bi-people"></i>
+                </div>
+                <div>
+                    <div class="stat-label">Customers</div>
+                    <div class="stat-value">{{ stats.customers }}</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-truck" style="font-size: 2rem; color: #f6c23e;"></i>
-                    <h3 class="mt-2">{{ stats.suppliers }}</h3>
-                    <p class="text-muted mb-0">Suppliers</p>
+            <div class="stat-card">
+                <div class="stat-icon-box" style="background:#fef9c3; color:#ca8a04;">
+                    <i class="bi bi-truck"></i>
+                </div>
+                <div>
+                    <div class="stat-label">Suppliers</div>
+                    <div class="stat-value">{{ stats.suppliers }}</div>
                 </div>
             </div>
         </div>
@@ -69,11 +76,11 @@
     <!-- Backup Info Cards -->
     <div class="row mb-4">
         <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> What's Included in Backup</h5>
+            <div class="ui-card h-100">
+                <div class="ui-card-header">
+                    <span class="ui-card-title"><i class="bi bi-info-circle"></i> What's Included in Backup</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body">
                     <ul class="list-unstyled">
                         <li class="mb-2"><i class="bi bi-check-circle text-success"></i> All products and inventory data</li>
                         <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Complete sales history</li>
@@ -90,11 +97,11 @@
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card h-100 bg-light">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-shield-check"></i> Data Security</h5>
+            <div class="ui-card h-100">
+                <div class="ui-card-header">
+                    <span class="ui-card-title"><i class="bi bi-shield-check"></i> Data Security</span>
                 </div>
-                <div class="card-body">
+                <div class="ui-card-body">
                     <ul class="list-unstyled">
                         <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Automated daily backups by platform</li>
                         <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 30-day retention period</li>
@@ -111,11 +118,11 @@
     </div>
 
     <!-- How to Use -->
-    <div class="card mb-4">
+    <div class="ui-card mb-4">
         <div class="card-header">
             <h5 class="mb-0"><i class="bi bi-question-circle"></i> How to Use Your Backup</h5>
         </div>
-        <div class="card-body">
+        <div class="ui-card-body">
             <div class="row">
                 <div class="col-md-4">
                     <div class="text-center mb-3">
@@ -149,11 +156,11 @@
     </div>
 
     <!-- Backup History -->
-    <div class="card">
+    <div class="ui-card">
         <div class="card-header">
             <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Backup Activity</h5>
         </div>
-        <div class="card-body">
+        <div class="ui-card-body">
             {% if backups %}
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -196,11 +203,11 @@
     </div>
 
     <!-- Help Section -->
-    <div class="card mt-4">
-        <div class="card-header bg-warning">
-            <h5 class="mb-0"><i class="bi bi-life-preserver"></i> Need Help?</h5>
-        </div>
-        <div class="card-body">
+        <div class="ui-card mb-4">
+            <div class="ui-card-header">
+                <span class="ui-card-title"><i class="bi bi-life-preserver"></i> Need Help?</span>
+            </div>
+        <div class="ui-card-body">
             <p class="mb-3">If you need assistance with backups, data restoration, or have any questions:</p>
             <div class="row">
                 <div class="col-md-4">
@@ -235,3 +242,4 @@
     </div>
 </div>
 {% endblock %}
+

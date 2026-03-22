@@ -157,7 +157,7 @@ class PurchaseSerializer(serializers.ModelSerializer):
         model = Purchase
         fields = [
             'id', 'purchase_number', 'supplier', 'supplier_name', 'total_amount',
-            'status', 'notes', 'order_date', 'expected_date', 'received_date',
+            'status', 'notes', 'date', 'expected_delivery', 'received_date',
             'created_at', 'updated_at', 'items'
         ]
         read_only_fields = ['id', 'purchase_number', 'created_at', 'updated_at']

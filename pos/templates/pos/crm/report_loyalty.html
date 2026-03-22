@@ -1,0 +1,89 @@
+{% extends 'pos/base.html' %}
+{% block title %}Loyalty Report{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div><h1 class="h4 fw-bold mb-0"><i class="bi bi-star-fill me-2"></i>Loyalty Report</h1></div>
+    <form method="get" class="d-flex gap-2">
+      <select name="days" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+        <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+        <option value="365" {% if days == 365 %}selected{% endif %}>Last year</option>
+      </select>
+    </form>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#1cc88a22;"><i class="bi bi-star-fill" style="color:#1cc88a;"></i></div>
+        <div class="stat-value">{{ earned.total|default:0 }}</div>
+        <div class="stat-label">Points Earned</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#4e73df22;"><i class="bi bi-gift" style="color:#4e73df;"></i></div>
+        <div class="stat-value">{{ redeemed.total|default:0 }}</div>
+        <div class="stat-label">Points Redeemed</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#f6c23e22;"><i class="bi bi-receipt" style="color:#f6c23e;"></i></div>
+        <div class="stat-value">{{ earned.count|default:0 }}</div>
+        <div class="stat-label">Earn Transactions</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#e74a3b22;"><i class="bi bi-arrow-down-circle" style="color:#e74a3b;"></i></div>
+        <div class="stat-value">{{ redeemed.count|default:0 }}</div>
+        <div class="stat-label">Redeem Transactions</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="ui-card">
+        <div class="ui-card-body">
+          <h6 class="fw-bold mb-3">Tier Breakdown</h6>
+          {% for t in tier_breakdown %}
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-capitalize">{{ t.tier|default:"Standard" }}</span>
+            <span class="status-badge status-info">{{ t.count }} customers</span>
+          </div>
+          {% empty %}
+          <p class="text-muted small">No tier data</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="ui-card">
+        <div class="ui-card-body p-0">
+          <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Top Earners</h6></div>
+          <div class="table-responsive">
+            <table class="ui-table">
+              <thead><tr><th>Customer</th><th>Tier</th><th>Points Balance</th><th>Lifetime Points</th></tr></thead>
+              <tbody>
+                {% for c in top_earners %}
+                <tr>
+                  <td><strong>{{ c.name }}</strong><br><small class="text-muted">{{ c.phone }}</small></td>
+                  <td><span class="status-badge status-success text-capitalize">{{ c.tier|default:"standard" }}</span></td>
+                  <td>{{ c.loyalty_points }}</td>
+                  <td>{{ c.lifetime_points }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-muted py-3">No data</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

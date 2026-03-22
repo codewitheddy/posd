@@ -16,6 +16,28 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from .env file
+def load_env_file():
+    """Load .env file manually if python-dotenv is not available"""
+    env_file = BASE_DIR / '.env'
+    if env_file.exists():
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and value:
+                        os.environ.setdefault(key, value)
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    # python-dotenv not installed, load manually
+    load_env_file()
+
 # ==================== SENTRY ERROR TRACKING ====================
 # Initialize Sentry for error tracking and performance monitoring
 try:
@@ -151,8 +173,9 @@ WSGI_APPLICATION = 'pos_system.wsgi.application'
 
 import dj_database_url
 
-# Use PostgreSQL in production (Render), SQLite in development
+# Database configuration with support for PostgreSQL, MySQL, and SQLite
 if os.environ.get('DATABASE_URL'):
+    # Use DATABASE_URL if provided (Heroku, Render, etc.)
     DATABASES = {
         'default': dj_database_url.config(
             default=os.environ.get('DATABASE_URL'),
@@ -160,7 +183,51 @@ if os.environ.get('DATABASE_URL'):
             conn_health_checks=True,
         )
     }
+elif os.environ.get('DATABASE_ENGINE'):
+    # Use environment variables for database configuration
+    db_engine = os.environ.get('DATABASE_ENGINE', 'postgresql').lower()
+    
+    if db_engine == 'postgresql':
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': os.environ.get('DATABASE_NAME', 'pos_db'),
+                'USER': os.environ.get('DATABASE_USER', 'pos_user'),
+                'PASSWORD': os.environ.get('DATABASE_PASSWORD', ''),
+                'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
+                'PORT': os.environ.get('DATABASE_PORT', '5432'),
+                'CONN_MAX_AGE': 600,
+                'OPTIONS': {
+                    'connect_timeout': 10,
+                },
+            }
+        }
+    elif db_engine == 'mysql':
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.mysql',
+                'NAME': os.environ.get('DATABASE_NAME', 'pos_db'),
+                'USER': os.environ.get('DATABASE_USER', 'pos_user'),
+                'PASSWORD': os.environ.get('DATABASE_PASSWORD', ''),
+                'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
+                'PORT': os.environ.get('DATABASE_PORT', '3306'),
+                'CONN_MAX_AGE': 600,
+                'OPTIONS': {
+                    'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                    'charset': 'utf8mb4',
+                },
+            }
+        }
+    else:
+        # Fallback to SQLite
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 else:
+    # Default to SQLite for development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -313,7 +380,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# POS System Settings
+# Marid POS Settings
 VAT_RATE = 16  # Kenya VAT rate
 SHOP_NAME = 'My Retail Shop'
 
@@ -322,19 +389,6 @@ SHOP_NAME = 'My Retail Shop'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
-
-# Email Configuration for Password Reset
-# For development: Console backend (prints emails to console)
-# For production: Configure SMTP settings via environment variables
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-
-# SMTP Settings (for production)
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yourpos.com')
 
 # Password Reset Token Expiry (in seconds)
 PASSWORD_RESET_TIMEOUT = 86400  # 24 hours
@@ -394,8 +448,8 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 # API Documentation
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'POS System API',
-    'DESCRIPTION': 'REST API for offline-first POS system with cloud sync',
+    'TITLE': 'Marid POS API',
+    'DESCRIPTION': 'REST API for offline-first Marid POS with cloud sync',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
@@ -406,9 +460,9 @@ SPECTACULAR_SETTINGS = {
 
 JAZZMIN_SETTINGS = {
     # Title on the login screen and header
-    "site_title": "POS System",
+    "site_title": "Marid POS",
     "site_header": "General Admin",
-    "site_brand": "POS System",
+    "site_brand": "Marid POS",
     "site_logo": None,  # Can add logo path here later
     "login_logo": None,
     "site_logo_classes": "img-circle",
@@ -418,7 +472,7 @@ JAZZMIN_SETTINGS = {
     "welcome_sign": "Welcome to General Admin",
     
     # Copyright on the footer
-    "copyright": "POS System",
+    "copyright": "Marid POS",
     
     # The model admin to search from the search bar, search bar omitted if excluded
     "search_model": ["auth.User", "pos.Product", "pos.Customer"],
@@ -591,3 +645,7 @@ JAZZMIN_UI_TWEAKS = {
         "success": "btn-success"
     }
 }
+
+
+# Site URL for email links
+SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')

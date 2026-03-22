@@ -1,0 +1,34 @@
+{% extends 'pos/base.html' %}
+{% block title %}Customer Segments{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div><h1 class="h4 fw-bold mb-0"><i class="bi bi-funnel me-2"></i>Customer Segments</h1></div>
+    <a href="{% url 'segment_create' slug=business_slug %}" class="btn-action btn-action-primary"><i class="bi bi-plus"></i> New Segment</a>
+  </div>
+  <div class="ui-card">
+    <div class="ui-card-body p-0">
+      {% if segments %}
+      <div class="table-responsive">
+        <table class="ui-table">
+          <thead><tr><th>Name</th><th>Criteria</th><th>Description</th><th></th></tr></thead>
+          <tbody>
+            {% for seg in segments %}
+            <tr>
+              <td><strong>{{ seg.name }}</strong></td>
+              <td><span class="status-badge status-info">{{ seg.get_criteria_display }}</span></td>
+              <td>{{ seg.description|default:"-" }}</td>
+              <td>
+                <a href="{% url 'segment_customers' slug=business_slug pk=seg.pk %}" class="btn-action btn-action-primary btn-sm">Preview</a>
+                <a href="{% url 'segment_edit' slug=business_slug pk=seg.pk %}" class="btn-action btn-sm">Edit</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<div class="empty-state"><i class="bi bi-funnel"></i><p>No segments yet. Create one to target customers.</p></div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

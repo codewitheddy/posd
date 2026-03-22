@@ -1,196 +1,253 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Purchase Order {{ purchase.purchase_number }} - POS System{% endblock %}
+{% block title %}Purchase Order {{ purchase.purchase_number }}{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
+<div class="row mb-3 align-items-center">
     <div class="col">
-        <h2><i class="bi bi-bag-check"></i> Purchase Order Details</h2>
+        <h2><i class="bi bi-bag-check"></i> {{ purchase.purchase_number }}</h2>
     </div>
-    <div class="col text-end">
-        {% if purchase.status == 'pending' or purchase.status == 'ordered' %}
+    <div class="col-auto d-flex flex-wrap gap-2 justify-content-end">
+
+        {# ---- WORKFLOW ACTIONS ---- #}
+        {% if purchase.status == 'draft' %}
+            <form method="post" action="{% url 'purchase_submit' slug=request.business.slug pk=purchase.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-warning"><i class="bi bi-send"></i> Submit for Approval</button>
+            </form>
+        {% endif %}
+
+        {% if purchase.status == 'pending_approval' %}
+            <form method="post" action="{% url 'purchase_approve' slug=request.business.slug pk=purchase.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-success"><i class="bi bi-check2-circle"></i> Approve</button>
+            </form>
+        {% endif %}
+
+        {% if purchase.status == 'approved' %}
+            <form method="post" action="{% url 'purchase_send_to_supplier' slug=request.business.slug pk=purchase.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-primary"><i class="bi bi-envelope-arrow-up"></i> Send to Supplier</button>
+            </form>
+        {% endif %}
+
+        {% if purchase.status in 'sent,approved,ordered,pending,partially_received' %}
             <a href="{% url 'purchase_receive' slug=request.business.slug pk=purchase.pk %}" class="btn btn-success">
-                <i class="bi bi-check-circle"></i> Mark as Received
+                <i class="bi bi-box-seam"></i> Create GRN
             </a>
-            <a href="{% url 'purchase_cancel' slug=request.business.slug pk=purchase.pk %}" class="btn btn-danger">
-                <i class="bi bi-x-circle"></i> Cancel
+        {% endif %}
+
+        {% if purchase.status == 'received' or purchase.status == 'partially_received' %}
+            {% if purchase.goods_received_note %}
+            <a href="{% url 'goods_received_detail' slug=request.business.slug pk=purchase.goods_received_note.pk %}" class="btn btn-outline-info">
+                <i class="bi bi-box-seam"></i> View GRN
             </a>
-        {% elif purchase.status == 'received' %}
+            {% else %}
+            <a href="{% url 'goods_received_list' slug=request.business.slug %}" class="btn btn-outline-info">
+                <i class="bi bi-box-seam"></i> View GRNs
+            </a>
+            {% endif %}
             <a href="{% url 'create_payment' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-success">
                 <i class="bi bi-cash-coin"></i> Make Payment
             </a>
-            <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-info">
-                <i class="bi bi-list-ul"></i> View Payments
+        {% endif %}
+
+        {% if purchase.status == 'received' %}
+            <form method="post" action="{% url 'purchase_close' slug=request.business.slug pk=purchase.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-secondary"><i class="bi bi-archive"></i> Close PO</button>
+            </form>
+        {% endif %}
+
+        {# ---- UTILITY ACTIONS ---- #}
+        <form method="post" action="{% url 'purchase_duplicate' slug=request.business.slug pk=purchase.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary"><i class="bi bi-copy"></i> Duplicate</button>
+        </form>
+
+        {% if purchase.status not in 'received,cancelled,closed' %}
+            <a href="{% url 'purchase_cancel' slug=request.business.slug pk=purchase.pk %}" class="btn btn-danger">
+                <i class="bi bi-x-circle"></i> Cancel
             </a>
         {% endif %}
-        <a href="{% url 'purchase_list' slug=request.business.slug  %}" class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i> Back to List
+
+        <a href="{% url 'purchase_list' slug=request.business.slug %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back
         </a>
+    </div>
+</div>
+
+{# Status timeline #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% for s, label in purchase.STATUS_CHOICES %}
+                {% if s not in 'pending,ordered' %}
+                <span class="badge rounded-pill
+                    {% if purchase.status == s %}bg-primary fs-6
+                    {% else %}bg-light text-muted{% endif %}">
+                    {{ label }}
+                </span>
+                {% if not forloop.last %}<i class="bi bi-chevron-right text-muted"></i>{% endif %}
+                {% endif %}
+            {% endfor %}
+        </div>
     </div>
 </div>
 
 <div class="row">
     <div class="col-md-8">
         <div class="card mb-3">
-            <div class="card-header">
-                <h5 class="mb-0">Purchase Information</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0">Purchase Information</h5></div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <p><strong>Purchase Number:</strong> {{ purchase.purchase_number }}</p>
+                        <p><strong>PO Number:</strong> {{ purchase.purchase_number }}</p>
                         <p><strong>Supplier:</strong> {{ purchase.supplier.name }}</p>
-                        <p><strong>Date:</strong> {{ purchase.date|date:"d M Y, H:i" }}</p>
+                        <p><strong>Order Date:</strong> {{ purchase.date|date:"d M Y, H:i" }}</p>
+                        {% if purchase.created_by %}
+                        <p><strong>Created By:</strong> {{ purchase.created_by.get_full_name|default:purchase.created_by.username }}</p>
+                        {% endif %}
                     </div>
                     <div class="col-md-6">
                         <p><strong>Expected Delivery:</strong> {{ purchase.expected_delivery|date:"d M Y"|default:"-" }}</p>
-                        <p><strong>Status:</strong> 
-                            {% if purchase.status == 'pending' %}
-                                <span class="badge bg-warning text-dark">Pending</span>
-                            {% elif purchase.status == 'ordered' %}
-                                <span class="badge bg-info">Ordered</span>
-                            {% elif purchase.status == 'received' %}
-                                <span class="badge bg-success">Received</span>
-                            {% elif purchase.status == 'cancelled' %}
-                                <span class="badge bg-danger">Cancelled</span>
+                        <p><strong>Status:</strong>
+                            {% if purchase.status == 'draft' %}<span class="badge bg-secondary">Draft</span>
+                            {% elif purchase.status == 'pending_approval' %}<span class="badge bg-warning text-dark">Pending Approval</span>
+                            {% elif purchase.status == 'approved' %}<span class="badge bg-info">Approved</span>
+                            {% elif purchase.status == 'sent' %}<span class="badge bg-primary">Sent to Supplier</span>
+                            {% elif purchase.status == 'pending' %}<span class="badge bg-warning text-dark">Pending</span>
+                            {% elif purchase.status == 'ordered' %}<span class="badge bg-info">Ordered</span>
+                            {% elif purchase.status == 'partially_received' %}<span class="badge bg-warning text-dark">Partially Received</span>
+                            {% elif purchase.status == 'received' %}<span class="badge bg-success">Received</span>
+                            {% elif purchase.status == 'cancelled' %}<span class="badge bg-danger">Cancelled</span>
+                            {% elif purchase.status == 'closed' %}<span class="badge bg-dark">Closed</span>
                             {% endif %}
                         </p>
+                        {% if purchase.approved_by %}
+                        <p><strong>Approved By:</strong> {{ purchase.approved_by.get_full_name|default:purchase.approved_by.username }}
+                            <small class="text-muted">{{ purchase.approved_at|date:"d M Y" }}</small></p>
+                        {% endif %}
                         {% if purchase.received_date %}
-                            <p><strong>Received Date:</strong> {{ purchase.received_date|date:"d M Y, H:i" }}</p>
+                        <p><strong>Received Date:</strong> {{ purchase.received_date|date:"d M Y, H:i" }}</p>
                         {% endif %}
                     </div>
                 </div>
-                
                 {% if purchase.notes %}
-                    <hr>
-                    <p><strong>Notes:</strong></p>
-                    <p>{{ purchase.notes }}</p>
+                <hr>
+                <p><strong>Notes:</strong> {{ purchase.notes }}</p>
                 {% endif %}
             </div>
         </div>
-        
+
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Purchase Items</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0">Purchase Items</h5></div>
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
                             <tr>
                                 <th>Product</th>
-                                <th>Product Code</th>
-                                <th class="text-end">Ordered</th>
-                                {% if purchase.status == 'received' %}
+                                <th>Code</th>
+                                <th class="text-end">Qty</th>
+                                {% if purchase.status == 'received' or purchase.status == 'partially_received' %}
                                 <th class="text-end">Received</th>
                                 <th class="text-end">Damaged</th>
                                 {% endif %}
                                 <th class="text-end">Unit Cost</th>
+                                <th class="text-end">Disc%</th>
                                 <th class="text-end">Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in items %}
-                            <tr {% if item.has_discrepancy and purchase.status == 'received' %}class="table-warning"{% endif %}>
+                            <tr {% if item.has_discrepancy and purchase.status in 'received,partially_received' %}class="table-warning"{% endif %}>
                                 <td>
                                     {{ item.product.name }}
-                                    {% if item.receiving_notes and purchase.status == 'received' %}
-                                        <br><small class="text-muted"><i class="bi bi-info-circle"></i> {{ item.receiving_notes }}</small>
+                                    {% if item.description %}<br><small class="text-muted">{{ item.description }}</small>{% endif %}
+                                    {% if item.receiving_notes and purchase.status in 'received,partially_received' %}
+                                    <br><small class="text-muted"><i class="bi bi-info-circle"></i> {{ item.receiving_notes }}</small>
                                     {% endif %}
                                 </td>
                                 <td>{{ item.product.product_code|default:"-" }}</td>
                                 <td class="text-end">{{ item.quantity }}</td>
-                                {% if purchase.status == 'received' %}
+                                {% if purchase.status == 'received' or purchase.status == 'partially_received' %}
+                                <td class="text-end"><span class="badge bg-success">{{ item.quantity_received }}</span></td>
                                 <td class="text-end">
-                                    <span class="badge bg-success">{{ item.quantity_received }}</span>
-                                </td>
-                                <td class="text-end">
-                                    {% if item.quantity_damaged > 0 %}
-                                        <span class="badge bg-danger">{{ item.quantity_damaged }}</span>
-                                    {% else %}
-                                        <span class="text-muted">0</span>
-                                    {% endif %}
+                                    {% if item.quantity_damaged > 0 %}<span class="badge bg-danger">{{ item.quantity_damaged }}</span>
+                                    {% else %}<span class="text-muted">0</span>{% endif %}
                                 </td>
                                 {% endif %}
                                 <td class="text-end">KES {{ item.unit_cost|floatformat:2 }}</td>
+                                <td class="text-end">{% if item.discount > 0 %}{{ item.discount }}%{% else %}-{% endif %}</td>
                                 <td class="text-end"><strong>KES {{ item.total_cost|floatformat:2 }}</strong></td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                
-                {% if purchase.status == 'received' %}
-                    {% with total_damaged=items|length %}
-                    {% if total_damaged > 0 %}
-                    <div class="alert alert-warning mt-3">
-                        <i class="bi bi-exclamation-triangle"></i> <strong>Receiving Notes:</strong>
-                        <ul class="mb-0 mt-2">
-                            {% for item in items %}
-                                {% if item.quantity_damaged > 0 %}
-                                <li>
-                                    <strong>{{ item.product.name }}:</strong> 
-                                    {{ item.quantity_damaged }} damaged/missing
-                                    {% if item.receiving_notes %}
-                                        - {{ item.receiving_notes }}
-                                    {% endif %}
-                                </li>
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
-                        <small class="text-muted mt-2 d-block">
-                            <i class="bi bi-lightbulb"></i> Contact supplier for credit note or replacement for damaged items.
-                        </small>
-                    </div>
-                    {% endif %}
-                    {% endwith %}
-                {% endif %}
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Summary</h5>
-            </div>
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0">Summary</h5></div>
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-2">
-                    <span>Subtotal:</span>
-                    <strong>KES {{ purchase.subtotal|floatformat:2 }}</strong>
+                    <span>Subtotal:</span><strong>KES {{ purchase.subtotal|floatformat:2 }}</strong>
                 </div>
+                {% if purchase.discount_amount > 0 %}
+                <div class="d-flex justify-content-between mb-2 text-success">
+                    <span>Discount:</span><strong>- KES {{ purchase.discount_amount|floatformat:2 }}</strong>
+                </div>
+                {% endif %}
                 <div class="d-flex justify-content-between mb-2">
-                    <span>Tax:</span>
-                    <strong>KES {{ purchase.tax_amount|floatformat:2 }}</strong>
+                    <span>Tax:</span><strong>KES {{ purchase.tax_amount|floatformat:2 }}</strong>
                 </div>
                 <hr>
                 <div class="d-flex justify-content-between mb-3">
-                    <strong>Total:</strong>
+                    <strong>Grand Total:</strong>
                     <strong class="text-primary fs-5">KES {{ purchase.total_amount|floatformat:2 }}</strong>
                 </div>
             </div>
         </div>
-        
-        <div class="card mt-3">
-            <div class="card-header">
-                <h5 class="mb-0">Supplier Details</h5>
-            </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0">Supplier</h5></div>
             <div class="card-body">
-                <p><strong>{{ purchase.supplier.name }}</strong></p>
-                {% if purchase.supplier.contact_person %}
-                    <p class="mb-1"><i class="bi bi-person"></i> {{ purchase.supplier.contact_person }}</p>
-                {% endif %}
-                {% if purchase.supplier.phone %}
-                    <p class="mb-1"><i class="bi bi-telephone"></i> {{ purchase.supplier.phone }}</p>
-                {% endif %}
-                {% if purchase.supplier.email %}
-                    <p class="mb-1"><i class="bi bi-envelope"></i> {{ purchase.supplier.email }}</p>
-                {% endif %}
-                {% if purchase.supplier.address %}
-                    <p class="mb-1"><i class="bi bi-geo-alt"></i> {{ purchase.supplier.address }}</p>
-                {% endif %}
+                <p class="mb-1"><strong>{{ purchase.supplier.name }}</strong></p>
+                {% if purchase.supplier.contact_person %}<p class="mb-1"><i class="bi bi-person"></i> {{ purchase.supplier.contact_person }}</p>{% endif %}
+                {% if purchase.supplier.phone %}<p class="mb-1"><i class="bi bi-telephone"></i> {{ purchase.supplier.phone }}</p>{% endif %}
+                {% if purchase.supplier.email %}<p class="mb-1"><i class="bi bi-envelope"></i> {{ purchase.supplier.email }}</p>{% endif %}
             </div>
         </div>
+
+        {% if purchase.status in 'received,partially_received,closed' %}
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">Payment Status</h5></div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Total:</span><strong>KES {{ purchase.total_amount|floatformat:2 }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2 text-success">
+                    <span>Paid:</span><strong>KES {{ purchase.total_allocated|floatformat:2 }}</strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <strong>Balance:</strong>
+                    <strong class="{% if purchase.remaining_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ purchase.remaining_balance|floatformat:2 }}
+                    </strong>
+                </div>
+                <div class="mt-3">
+                    <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-sm btn-outline-info w-100">
+                        <i class="bi bi-list-ul"></i> View Payments
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

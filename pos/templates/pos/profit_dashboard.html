@@ -1,0 +1,165 @@
+{% extends 'pos/base.html' %}
+{% block title %}Profit Dashboard — {{ request.business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.fin-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.fin-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.fin-card .card-body{padding:16px 20px}
+.fin-title{font-size:14px;font-weight:700;color:#1a202c;margin:0}
+.stat-card{background:#fff;border-radius:14px;padding:18px 20px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:16px;transition:box-shadow .2s,transform .2s}
+.stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.11);transform:translateY(-2px)}
+.stat-icon-box{width:50px;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-label{font-size:11px;color:#8a94a6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.stat-value{font-size:20px;font-weight:700;color:#1a202c;line-height:1.1}
+.stat-sub{font-size:12px;color:#8a94a6}
+.period-btn{padding:6px 14px;border:1.5px solid #e8ecf0;background:#fff;border-radius:8px;font-size:13px;font-weight:500;color:#374151;text-decoration:none;transition:all .2s;display:inline-block}
+.period-btn.active,.period-btn:hover{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195)}
+.period-btn.active{background:var(--primary-color,#224195);color:#fff}
+.fin-table{font-size:13px}
+.fin-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8a94a6;border-bottom:1px solid #f0f2f5;padding:9px 12px;background:#fafbfc}
+.fin-table tbody td{padding:9px 12px;vertical-align:middle;border-bottom:1px solid #f7f8fa;color:#374151}
+.fin-table tbody tr:last-child td{border-bottom:none}
+.fin-table tbody tr:hover td{background:#fafbfc}
+.quick-card{background:#fff;border-radius:12px;padding:14px 16px;border:1.5px solid #f0f2f5;text-align:center}
+.quick-card .label{font-size:11px;color:#8a94a6;font-weight:600;text-transform:uppercase;margin-bottom:4px}
+.quick-card .val{font-size:16px;font-weight:700}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0"><i class="bi bi-graph-up-arrow me-2 text-success"></i>Profit Dashboard</h1>
+    <p class="text-muted small mb-0">Real-time profit analysis — {{ date_from }} to {{ date_to }}</p>
+  </div>
+  <div class="d-flex gap-1 flex-wrap">
+    <a href="?period=today" class="period-btn {% if period == 'today' %}active{% endif %}">Today</a>
+    <a href="?period=week" class="period-btn {% if period == 'week' %}active{% endif %}">Week</a>
+    <a href="?period=month" class="period-btn {% if period == 'month' %}active{% endif %}">Month</a>
+    <a href="?period=quarter" class="period-btn {% if period == 'quarter' %}active{% endif %}">Quarter</a>
+    <a href="?period=year" class="period-btn {% if period == 'year' %}active{% endif %}">Year</a>
+  </div>
+</div>
+
+<!-- Main KPI Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb"><i class="bi bi-cash-stack"></i></div>
+      <div><div class="stat-label">Revenue</div><div class="stat-value">KES {{ revenue|floatformat:0 }}</div><div class="stat-sub">Total sales</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fee2e2;color:#dc2626"><i class="bi bi-box-seam"></i></div>
+      <div><div class="stat-label">COGS</div><div class="stat-value">KES {{ cogs|floatformat:0 }}</div><div class="stat-sub">Cost of goods sold</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a"><i class="bi bi-graph-up"></i></div>
+      <div><div class="stat-label">Gross Profit</div><div class="stat-value">KES {{ gross_profit|floatformat:0 }}</div><div class="stat-sub">Revenue − COGS</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" {% if net_profit >= 0 %}style="background:#dcfce7;color:#16a34a"{% else %}style="background:#fee2e2;color:#dc2626"{% endif %}><i class="bi bi-currency-exchange"></i></div>
+      <div>
+        <div class="stat-label">Net Profit</div>
+        <div class="stat-value" {% if net_profit < 0 %}style="color:#dc2626"{% endif %}>KES {{ net_profit|floatformat:0 }}</div>
+        <div class="stat-sub">Margin: {{ margin|floatformat:1 }}%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Period Comparison -->
+<div class="row g-3 mb-4">
+  {% for label, data in cards.items %}
+  <div class="col-6 col-md-3">
+    <div class="quick-card">
+      <div class="label">{{ label|capfirst }}</div>
+      <div class="val" style="color:#16a34a">KES {{ data.net|floatformat:0 }}</div>
+      <div style="font-size:11px;color:#8a94a6">Net · Rev KES {{ data.revenue|floatformat:0 }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Trend Chart -->
+<div class="fin-card mb-4">
+  <div class="card-header"><span class="fin-title"><i class="bi bi-graph-up text-success me-2"></i>30-Day Revenue vs Profit Trend</span></div>
+  <div class="card-body"><canvas id="profitChart" height="80"></canvas></div>
+</div>
+
+<!-- Product Profit Table -->
+<div class="fin-card mb-4">
+  <div class="card-header">
+    <span class="fin-title"><i class="bi bi-trophy text-warning me-2"></i>Product Profit Breakdown</span>
+    <span class="badge bg-light text-dark">Top 20</span>
+  </div>
+  <div class="card-body p-0">
+    {% if product_profit %}
+    <div class="table-responsive">
+      <table class="table fin-table mb-0">
+        <thead><tr><th>#</th><th>Product</th><th>Category</th><th class="text-end">Units</th><th class="text-end">Revenue</th><th class="text-end">COGS</th><th class="text-end">Profit</th><th class="text-end">Margin</th></tr></thead>
+        <tbody>
+          {% for p in product_profit %}
+          <tr>
+            <td style="color:#8a94a6;font-weight:600">{{ forloop.counter }}</td>
+            <td style="font-weight:600">{{ p.product__name }}</td>
+            <td style="color:#8a94a6">{{ p.product__category__name|default:"—" }}</td>
+            <td class="text-end">{{ p.units|floatformat:0 }}</td>
+            <td class="text-end">KES {{ p.revenue|floatformat:0 }}</td>
+            <td class="text-end" style="color:#dc2626">KES {{ p.cogs|floatformat:0 }}</td>
+            <td class="text-end fw-bold" {% if p.profit >= 0 %}style="color:#16a34a"{% else %}style="color:#dc2626"{% endif %}>KES {{ p.profit|floatformat:0 }}</td>
+            <td class="text-end">
+              {% if p.revenue %}
+              <span class="badge {% if p.profit >= 0 %}bg-success{% else %}bg-danger{% endif %}">
+                {% widthratio p.profit p.revenue 100 %}%
+              </span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:8px"></i><p>No sales data for this period</p></div>
+    {% endif %}
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const gridColor = '#f0f2f5';
+const tickFont = { size: 11 };
+const kesFormatter = v => 'KES ' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toLocaleString());
+
+new Chart(document.getElementById('profitChart'), {
+  type: 'line',
+  data: {
+    labels: {{ chart_labels|safe }},
+    datasets: [
+      { label:'Revenue', data:{{ chart_revenue|safe }}, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.07)', tension:.4, fill:true, pointRadius:2 },
+      { label:'Profit',  data:{{ chart_profit|safe }},  borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.07)',  tension:.4, fill:true, pointRadius:2 }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ position:'top', labels:{ font:{ size:12 }, boxWidth:12 } },
+              tooltip:{ callbacks:{ label: c => c.dataset.label+': KES '+c.parsed.y.toLocaleString() } } },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+             y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+  }
+});
+</script>
+{% endblock %}

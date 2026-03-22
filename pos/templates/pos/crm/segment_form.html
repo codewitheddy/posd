@@ -1,0 +1,58 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if segment %}Edit{% else %}New{% endif %} Segment{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="form-card">
+        <div class="form-card-header"><h5 class="mb-0">{% if segment %}Edit{% else %}New{% endif %} Customer Segment</h5></div>
+        <div class="form-card-body">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" value="{{ segment.name|default:'' }}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Criteria <span class="text-danger">*</span></label>
+              <select name="criteria" class="form-select" id="criteriaSelect">
+                <option value="all" {% if segment.criteria == 'all' %}selected{% endif %}>All Customers</option>
+                <option value="vip" {% if segment.criteria == 'vip' %}selected{% endif %}>VIP Customers</option>
+                <option value="wholesale" {% if segment.criteria == 'wholesale' %}selected{% endif %}>Wholesale Customers</option>
+                <option value="high_value" {% if segment.criteria == 'high_value' %}selected{% endif %}>High Value (Top Spenders)</option>
+                <option value="inactive" {% if segment.criteria == 'inactive' %}selected{% endif %}>Inactive (90+ days)</option>
+                <option value="loyalty_tier" {% if segment.criteria == 'loyalty_tier' %}selected{% endif %}>By Loyalty Tier</option>
+                <option value="credit_overdue" {% if segment.criteria == 'credit_overdue' %}selected{% endif %}>Credit Overdue</option>
+              </select>
+            </div>
+            <div class="mb-3" id="criteriaValueRow" style="display:none">
+              <label class="form-label fw-semibold">Tier Value</label>
+              <select name="criteria_value" class="form-select">
+                <option value="bronze" {% if segment.criteria_value == 'bronze' %}selected{% endif %}>Bronze</option>
+                <option value="silver" {% if segment.criteria_value == 'silver' %}selected{% endif %}>Silver</option>
+                <option value="gold" {% if segment.criteria_value == 'gold' %}selected{% endif %}>Gold</option>
+                <option value="platinum" {% if segment.criteria_value == 'platinum' %}selected{% endif %}>Platinum</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Description</label>
+              <textarea name="description" class="form-control" rows="2">{{ segment.description|default:'' }}</textarea>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">Save</button>
+              <a href="{% url 'segment_list' slug=business_slug %}" class="btn btn-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const sel = document.getElementById('criteriaSelect');
+const row = document.getElementById('criteriaValueRow');
+function toggle() { row.style.display = sel.value === 'loyalty_tier' ? 'block' : 'none'; }
+sel.addEventListener('change', toggle);
+toggle();
+</script>
+{% endblock %}

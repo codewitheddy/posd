@@ -1,6 +1,8 @@
 """
 Context processors for multi-tenant POS system
 """
+from django.utils import timezone
+
 
 def business_context(request):
     """
@@ -13,6 +15,29 @@ def business_context(request):
     if context['has_business']:
         context['business'] = request.business  # Add business object to context
         context['business_slug'] = request.business.slug
+
+        # Compute alert count for bell badge
+        try:
+            from .models import Product, PurchaseItem
+            from django.db import models as db_models
+            today = timezone.now().date()
+
+            low_stock_count = Product.objects.filter(
+                business=request.business,
+                is_active=True,
+                stock_quantity__lte=db_models.F('low_stock_threshold'),
+            ).count()
+
+            expiring_count = PurchaseItem.objects.filter(
+                business=request.business,
+                expiry_date__isnull=False,
+                expiry_date__lte=today + timezone.timedelta(days=30),
+                expiry_date__gte=today,
+            ).values('product').distinct().count()
+
+            context['alert_count'] = low_stock_count + expiring_count
+        except Exception:
+            context['alert_count'] = 0
         
         # Add user permissions
         if hasattr(request, 'business_membership') and request.business_membership:

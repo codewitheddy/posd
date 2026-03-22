@@ -93,6 +93,8 @@ class AnalyticsService:
     
     def get_sales_by_category(self, start_date=None, end_date=None):
         """Get sales breakdown by product category"""
+        from django.db.models.functions import Coalesce
+        from django.db.models import Value
         if not start_date:
             start_date = timezone.now().date() - timedelta(days=30)
         if not end_date:
@@ -100,26 +102,14 @@ class AnalyticsService:
         
         category_sales = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date,
-            sale__date__lte=end_date
+            sale__date__date__gte=start_date,
+            sale__date__date__lte=end_date
         ).values(
             'product__category__name'
         ).annotate(
             total_revenue=Sum(
                 ExpressionWrapper(
                     F('quantity') * F('unit_price'),
-                    output_field=DecimalField()
-                )
-            ),
-            total_cost=Sum(
-                ExpressionWrapper(
-                    F('quantity') * F('product__cost_price'),
-                    output_field=DecimalField()
-                )
-            ),
-            total_profit=Sum(
-                ExpressionWrapper(
-                    F('quantity') * (F('unit_price') - F('product__cost_price')),
                     output_field=DecimalField()
                 )
             ),

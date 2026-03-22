@@ -1,0 +1,33 @@
+{% extends 'pos/base.html' %}
+{% block title %}{{ segment.name }} — Customers{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="page-header mb-4">
+    <div><h1 class="h4 fw-bold mb-0">{{ segment.name }}</h1><small class="text-muted">{{ customers.count }} customers</small></div>
+    <a href="{% url 'segment_list' slug=business_slug %}" class="btn-action"><i class="bi bi-arrow-left"></i> Back</a>
+  </div>
+  <div class="ui-card">
+    <div class="ui-card-body p-0">
+      {% if customers %}
+      <div class="table-responsive">
+        <table class="ui-table">
+          <thead><tr><th>Name</th><th>Phone</th><th>Type</th><th>Tier</th><th class="text-end">Total Spent</th><th>Points</th></tr></thead>
+          <tbody>
+            {% for c in customers %}
+            <tr>
+              <td><a href="{% url 'customer_detail' slug=business_slug pk=c.pk %}" class="fw-bold text-decoration-none">{{ c.name }}</a></td>
+              <td>{{ c.phone }}</td>
+              <td>{{ c.get_customer_type_display }}</td>
+              <td>{{ c.get_tier_display }}</td>
+              <td class="text-end">KES {{ c.total_purchases|floatformat:0 }}</td>
+              <td>{{ c.loyalty_points }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<div class="empty-state"><i class="bi bi-people"></i><p>No customers match this segment</p></div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

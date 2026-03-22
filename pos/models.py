@@ -324,6 +324,20 @@ class Category(models.Model):
         return self.name
 
 
+class Brand(models.Model):
+    """Product brands"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='brands')
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [['business', 'name']]
+
+    def __str__(self):
+        return self.name
+
+
 class UnitOfMeasurement(models.Model):
     """Units of measurement for products (kg, L, m, etc.)"""
     UNIT_TYPE_CHOICES = [
@@ -373,32 +387,52 @@ def product_image_path(instance, filename):
 
 class Product(models.Model):
     """Products available for sale"""
+    PRODUCT_TYPE_CHOICES = [
+        ('stock', 'Stock Product'),
+        ('service', 'Service (No Inventory)'),
+        ('variant', 'Variant Product'),
+        ('bundle', 'Bundle / Combo'),
+        ('weighted', 'Weighted (kg/L)'),
+        ('serialized', 'Serialized (IMEI/Serial)'),
+        ('batch', 'Batch / Expiry Tracked'),
+    ]
+
     TAX_CLASS_CHOICES = [
         ('standard', 'Standard (16% VAT)'),
         ('zero_rated', 'Zero Rated (0% VAT)'),
         ('exempt', 'Exempt (No VAT)'),
     ]
-    
+
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, help_text="Product description")
     product_code = models.CharField(max_length=50, blank=True, null=True, help_text="Internal product code or SKU")
     barcode = models.CharField(max_length=100, blank=True, help_text="Barcode for scanning (EAN, UPC, etc.)")
+    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPE_CHOICES, default='stock')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
-    unit = models.ForeignKey(UnitOfMeasurement, on_delete=models.SET_NULL, null=True, blank=True, 
+    brand = models.ForeignKey('Brand', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    unit = models.ForeignKey(UnitOfMeasurement, on_delete=models.SET_NULL, null=True, blank=True,
                             related_name='products', help_text="Unit of measurement (e.g., kg, L, pcs)")
+    is_active = models.BooleanField(default=True, help_text="Active products appear in POS and reports")
     cost_price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
+        max_digits=10,
+        decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         help_text="Cost price (what you pay to stock the product) - REQUIRED"
     )
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price (what customers pay)")
+    wholesale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Wholesale / bulk customer price")
+    minimum_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Minimum allowed selling price")
     tax_class = models.CharField(max_length=20, choices=TAX_CLASS_CHOICES, default='standard', help_text="Tax classification for this product")
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, help_text="Current stock quantity")
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=3, default=10, help_text="Alert when stock falls below this level")
+    reorder_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, blank=True, help_text="Suggested reorder quantity")
+    preferred_supplier = models.ForeignKey('Supplier', on_delete=models.SET_NULL, null=True, blank=True,
+                                           related_name='preferred_products', help_text="Default supplier for reordering")
+    lead_time_days = models.PositiveIntegerField(default=0, blank=True, help_text="Expected lead time from supplier in days")
     expiry_date = models.DateField(blank=True, null=True, help_text="Product expiry date (optional)")
     expiry_alert_days = models.IntegerField(default=7, help_text="Alert X days before expiry")
-    
+
     # Multi-unit selling (e.g., sell by piece or by carton)
     bulk_unit_name = models.CharField(max_length=50, blank=True, help_text="Name of bulk unit (e.g., Carton, Box, Sack)")
     bulk_unit_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True,
@@ -680,6 +714,10 @@ class Sale(models.Model):
     # Payment tracking
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     change_given = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Credit sale tracking
+    is_credit_sale = models.BooleanField(default=False, help_text="Sale made on credit")
+    credit_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Amount paid against credit")
     
     # Promotion tracking
     promotion = models.ForeignKey('Promotion', on_delete=models.SET_NULL, null=True, blank=True)
@@ -756,6 +794,7 @@ class SaleItem(models.Model):
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True, default='', help_text='Per-item note (e.g. no onions, gift wrap)')
     
     # Multi-unit tracking
     unit_type = models.CharField(max_length=10, choices=UNIT_TYPE_CHOICES, default='base',
@@ -890,26 +929,50 @@ class Supplier(models.Model):
 class Purchase(models.Model):
     """Purchase orders from suppliers"""
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('ordered', 'Ordered'),
+        ('draft', 'Draft'),
+        ('pending_approval', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('sent', 'Sent to Supplier'),
+        ('pending', 'Pending'),          # legacy / backward compat
+        ('ordered', 'Ordered'),          # legacy / backward compat
+        ('partially_received', 'Partially Received'),
         ('received', 'Received'),
         ('cancelled', 'Cancelled'),
+        ('closed', 'Closed'),
     ]
-    
+
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='purchases')
     purchase_number = models.CharField(max_length=20, editable=False)
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='purchases')
     date = models.DateTimeField(default=timezone.now)
     expected_delivery = models.DateField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
     received_date = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    # Workflow tracking
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='created_purchases',
+    )
+    submitted_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='submitted_purchases',
+    )
+    submitted_at = models.DateTimeField(blank=True, null=True)
+    approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='approved_purchases',
+    )
+    approved_at = models.DateTimeField(blank=True, null=True)
+    sent_at = models.DateTimeField(blank=True, null=True)
+
     # Cancellation tracking
     cancellation_reason = models.TextField(blank=True, help_text='Reason for cancelling this purchase order')
     cancelled_by = models.ForeignKey(
@@ -1113,8 +1176,10 @@ class PurchaseItem(models.Model):
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='purchase_items')
     purchase = models.ForeignKey(Purchase, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    description = models.CharField(max_length=255, blank=True, help_text='Optional item description / override')
     quantity = models.PositiveIntegerField(help_text='Quantity ordered')
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='Discount percentage (0-100)')
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     expiry_date = models.DateField(blank=True, null=True, help_text='Expiry date for this batch of products')
     batch_number = models.CharField(max_length=100, blank=True, help_text='Batch or lot number for tracking')
@@ -1128,7 +1193,8 @@ class PurchaseItem(models.Model):
         return f"{self.product.name} x {self.quantity}"
     
     def save(self, *args, **kwargs):
-        self.total_cost = Decimal(self.quantity) * self.unit_cost
+        discount_factor = Decimal('1') - (self.discount / Decimal('100'))
+        self.total_cost = Decimal(self.quantity) * self.unit_cost * discount_factor
         if not self.business_id and self.purchase:
             self.business = self.purchase.business
         super().save(*args, **kwargs)
@@ -1782,6 +1848,98 @@ class ActivityLog(models.Model):
         )
 
 
+# ==================== GOODS RECEIVED NOTE ====================
+
+class GoodsReceivedNote(models.Model):
+    """Formal document generated when goods are received from a supplier"""
+
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('confirmed', 'Confirmed'),
+        ('discrepancy', 'Discrepancy Noted'),
+    ]
+
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='goods_received_notes')
+    grn_number = models.CharField(max_length=20, editable=False)
+    purchase = models.OneToOneField('Purchase', on_delete=models.PROTECT, related_name='goods_received_note')
+    supplier = models.ForeignKey('Supplier', on_delete=models.PROTECT, related_name='goods_received_notes')
+
+    received_date = models.DateField(default=timezone.now)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='confirmed')
+
+    # Delivery reference
+    delivery_note_number = models.CharField(max_length=100, blank=True, help_text='Supplier delivery note / waybill number')
+    vehicle_number = models.CharField(max_length=50, blank=True)
+    driver_name = models.CharField(max_length=100, blank=True)
+
+    # Totals (denormalised for fast reporting)
+    total_ordered_qty = models.PositiveIntegerField(default=0)
+    total_received_qty = models.PositiveIntegerField(default=0)
+    total_damaged_qty = models.PositiveIntegerField(default=0)
+    total_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+
+    notes = models.TextField(blank=True)
+
+    received_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='goods_received_notes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-received_date', '-created_at']
+        unique_together = [['business', 'grn_number']]
+        verbose_name = 'Goods Received Note'
+        verbose_name_plural = 'Goods Received Notes'
+
+    def __str__(self):
+        return f"{self.grn_number} — {self.supplier.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.grn_number:
+            today = timezone.now()
+            date_str = today.strftime('%Y%m%d')
+            last = GoodsReceivedNote.objects.filter(
+                business=self.business,
+                grn_number__startswith=f'GRNR-{date_str}'
+            ).order_by('-grn_number').first()
+            new_num = (int(last.grn_number.split('-')[-1]) + 1) if last else 1
+            self.grn_number = f'GRNR-{date_str}-{new_num:04d}'
+        super().save(*args, **kwargs)
+
+    @property
+    def has_discrepancy(self):
+        return self.total_damaged_qty > 0 or self.total_received_qty < self.total_ordered_qty
+
+
+class GoodsReceivedNoteItem(models.Model):
+    """Line items on a Goods Received Note"""
+
+    grn = models.ForeignKey(GoodsReceivedNote, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey('Product', on_delete=models.PROTECT)
+    quantity_ordered = models.PositiveIntegerField()
+    quantity_received = models.PositiveIntegerField()
+    quantity_damaged = models.PositiveIntegerField(default=0)
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    batch_number = models.CharField(max_length=100, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.product.name} — {self.quantity_received}/{self.quantity_ordered}"
+
+    def save(self, *args, **kwargs):
+        self.total_cost = Decimal(self.quantity_received) * self.unit_cost
+        super().save(*args, **kwargs)
+
+    @property
+    def has_discrepancy(self):
+        return self.quantity_damaged > 0 or self.quantity_received < self.quantity_ordered
+
+    @property
+    def quantity_missing(self):
+        return max(0, self.quantity_ordered - self.quantity_received - self.quantity_damaged)
+
+
 # ==================== GOODS RETURNED NOTE (GRN) ====================
 
 class GoodsReturnedNote(models.Model):
@@ -1962,6 +2120,11 @@ class Customer(models.Model):
     # Status
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
+    tags = models.CharField(max_length=500, blank=True, help_text="Comma-separated tags")
+
+    # Credit Management
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Maximum credit allowed")
+    credit_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Current outstanding credit balance")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2069,6 +2232,18 @@ class Customer(models.Model):
             'platinum': {'color': '#E5E4E2', 'icon': 'bi-trophy-fill', 'next': None, 'next_tier': None},
         }
         return tier_info.get(self.tier, tier_info['bronze'])
+
+    def get_available_credit(self):
+        """How much more credit the customer can use"""
+        return max(Decimal('0'), self.credit_limit - self.credit_balance)
+
+    def can_use_credit(self, amount):
+        """Check if customer can make a credit purchase of given amount"""
+        return self.credit_limit > 0 and self.get_available_credit() >= amount
+
+    def get_tags_list(self):
+        """Return tags as a list"""
+        return [t.strip() for t in self.tags.split(',') if t.strip()] if self.tags else []
 
 
 class LoyaltyTransaction(models.Model):
@@ -2508,53 +2683,69 @@ class Promotion(models.Model):
 # ==================== EXPENSE TRACKING ====================
 
 class ExpenseCategory(models.Model):
-    """Categories for business expenses"""
-    name = models.CharField(max_length=100, unique=True)
+    """Categories for business expenses — per-business"""
+    PREDEFINED = [
+        'Rent', 'Salaries/Wages', 'Utilities', 'Marketing',
+        'Maintenance', 'Packaging', 'Transport', 'Miscellaneous',
+    ]
+
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='expense_categories', null=True, blank=True)
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    
+    is_predefined = models.BooleanField(default=False)
+
     class Meta:
         verbose_name_plural = "Expense Categories"
         ordering = ['name']
-    
+        unique_together = [['business', 'name']]
+
     def __str__(self):
         return self.name
 
 
 class Expense(models.Model):
-    """Track business expenses"""
-    expense_number = models.CharField(max_length=20, unique=True, editable=False)
-    category = models.ForeignKey(ExpenseCategory, on_delete=models.PROTECT)
+    """Track business expenses — multi-tenant"""
+    PAYMENT_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank', 'Bank Transfer'),
+        ('mpesa', 'M-Pesa'),
+        ('card', 'Card'),
+        ('other', 'Other'),
+    ]
+
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='expenses')
+    expense_number = models.CharField(max_length=20, editable=False)
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.PROTECT, related_name='expenses')
     description = models.CharField(max_length=200)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+
     expense_date = models.DateField(default=timezone.now)
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default='cash')
     reference_number = models.CharField(max_length=100, blank=True)
-    
-    recorded_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    attachment = models.FileField(upload_to='expenses/attachments/%Y/%m/', blank=True, null=True)
+
+    recorded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='recorded_expenses')
     notes = models.TextField(blank=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        ordering = ['-expense_date']
-    
+        ordering = ['-expense_date', '-created_at']
+        unique_together = [['business', 'expense_number']]
+
     def __str__(self):
         return f"{self.expense_number} - {self.description}"
-    
+
     def save(self, *args, **kwargs):
         if not self.expense_number:
-            # Generate expense number: EXP-YYYYMMDD-XXXX
             today = timezone.now()
             date_str = today.strftime('%Y%m%d')
-            last_expense = Expense.objects.filter(
+            last = Expense.objects.filter(
+                business=self.business,
                 expense_number__startswith=f'EXP-{date_str}'
             ).order_by('-expense_number').first()
-            if last_expense:
-                last_num = int(last_expense.expense_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
+            new_num = (int(last.expense_number.split('-')[-1]) + 1) if last else 1
             self.expense_number = f'EXP-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
 
@@ -3104,3 +3295,406 @@ class ZReportAuditLog(models.Model):
     def delete(self, *args, **kwargs):
         # Audit logs cannot be deleted
         raise ValueError("Audit logs cannot be deleted")
+
+
+# ============================================================================
+# REGISTRATION CONTROL MODELS
+# ============================================================================
+
+class InvitationCode(models.Model):
+    """Invitation codes for controlled registration"""
+    
+    code = models.CharField(max_length=20, unique=True, db_index=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='invitation_codes_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Usage limits
+    max_uses = models.IntegerField(default=1, help_text="Maximum number of times this code can be used")
+    uses_count = models.IntegerField(default=0, help_text="Number of times this code has been used")
+    
+    # Validity
+    valid_from = models.DateTimeField(default=timezone.now)
+    valid_until = models.DateTimeField(null=True, blank=True, help_text="Leave blank for no expiry")
+    is_active = models.BooleanField(default=True)
+    
+    # Restrictions
+    allowed_email_domains = models.TextField(
+        blank=True,
+        help_text="Comma-separated list of allowed email domains (e.g., company.com, partner.co.ke)"
+    )
+    notes = models.TextField(blank=True, help_text="Internal notes about this code")
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['code', 'is_active']),
+            models.Index(fields=['valid_until']),
+        ]
+    
+    def __str__(self):
+        return f"{self.code} ({self.uses_count}/{self.max_uses})"
+    
+    def is_valid(self):
+        """Check if code is currently valid"""
+        now = timezone.now()
+        
+        # Check if active
+        if not self.is_active:
+            return False, "This invitation code has been deactivated"
+        
+        # Check usage limit
+        if self.uses_count >= self.max_uses:
+            return False, "This invitation code has reached its usage limit"
+        
+        # Check validity period
+        if now < self.valid_from:
+            return False, "This invitation code is not yet valid"
+        
+        if self.valid_until and now > self.valid_until:
+            return False, "This invitation code has expired"
+        
+        return True, "Valid"
+    
+    def can_use_with_email(self, email):
+        """Check if email domain is allowed"""
+        if not self.allowed_email_domains:
+            return True, "Valid"
+        
+        email_domain = email.split('@')[1].lower()
+        allowed_domains = [d.strip().lower() for d in self.allowed_email_domains.split(',')]
+        
+        if email_domain in allowed_domains:
+            return True, "Valid"
+        
+        return False, f"Email domain {email_domain} is not allowed for this invitation code"
+    
+    def use(self):
+        """Increment usage count"""
+        self.uses_count += 1
+        self.save()
+
+
+class BusinessRegistration(models.Model):
+    """Track business registration requests"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending Verification'),
+        ('email_verified', 'Email Verified'),
+        ('pending_approval', 'Pending Admin Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('completed', 'Completed'),
+    ]
+    
+    # User info
+    email = models.EmailField(unique=True, db_index=True)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=20)
+    
+    # Business info
+    business_name = models.CharField(max_length=200)
+    business_type = models.CharField(max_length=100, blank=True)
+    kra_pin = models.CharField(max_length=20, blank=True)
+    
+    # Registration tracking
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    invitation_code = models.ForeignKey(InvitationCode, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Verification
+    email_verification_token = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    
+    # Approval
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='registrations_reviewed')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    
+    # Completion
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='registration')
+    business = models.OneToOneField(Business, on_delete=models.SET_NULL, null=True, blank=True, related_name='registration')
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Metadata
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['email']),
+        ]
+    
+    def __str__(self):
+        return f"{self.business_name} - {self.email} ({self.get_status_display()})"
+    
+    def generate_verification_token(self):
+        """Generate email verification token"""
+        import secrets
+        self.email_verification_token = secrets.token_urlsafe(32)
+        self.save()
+        return self.email_verification_token
+    
+    def verify_email(self):
+        """Mark email as verified"""
+        self.email_verified_at = timezone.now()
+        self.status = 'email_verified'
+        self.save()
+
+
+class RegistrationSettings(models.Model):
+    """Global registration control settings"""
+    
+    # Invitation codes
+    require_invitation_code = models.BooleanField(
+        default=False,
+        help_text="Require invitation code for registration"
+    )
+    
+    # Email verification
+    require_email_verification = models.BooleanField(
+        default=True,
+        help_text="Require email verification before activation"
+    )
+    
+    # Admin approval
+    require_admin_approval = models.BooleanField(
+        default=False,
+        help_text="Require admin approval for new registrations"
+    )
+    
+    # Rate limiting
+    max_registrations_per_ip_per_day = models.IntegerField(
+        default=3,
+        help_text="Maximum registrations from same IP per day"
+    )
+    max_registrations_per_email_domain_per_day = models.IntegerField(
+        default=10,
+        help_text="Maximum registrations from same email domain per day"
+    )
+    
+    # Blocked domains
+    blocked_email_domains = models.TextField(
+        blank=True,
+        help_text="Comma-separated list of blocked email domains (e.g., tempmail.com, guerrillamail.com)"
+    )
+    
+    # Allowed domains (whitelist)
+    allowed_email_domains = models.TextField(
+        blank=True,
+        help_text="If set, only these domains are allowed (comma-separated)"
+    )
+    
+    # Business validation
+    require_kra_pin = models.BooleanField(
+        default=False,
+        help_text="Require KRA PIN for registration"
+    )
+    require_phone_verification = models.BooleanField(
+        default=False,
+        help_text="Require phone number verification (SMS)"
+    )
+    
+    # Notifications
+    notify_admin_on_registration = models.BooleanField(
+        default=True,
+        help_text="Send email to admins on new registration"
+    )
+    admin_notification_emails = models.TextField(
+        blank=True,
+        help_text="Comma-separated list of admin emails for notifications"
+    )
+    
+    # Messages
+    registration_closed_message = models.TextField(
+        blank=True,
+        default="Registration is currently closed. Please contact support for access.",
+        help_text="Message shown when registration is disabled"
+    )
+    
+    # Status
+    registration_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable/disable all registrations"
+    )
+    
+    class Meta:
+        verbose_name = "Registration Settings"
+        verbose_name_plural = "Registration Settings"
+    
+    def __str__(self):
+        return "Registration Settings"
+    
+    @classmethod
+    def get_settings(cls):
+        """Get or create settings singleton"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings
+    
+    def is_email_allowed(self, email):
+        """Check if email domain is allowed"""
+        domain = email.split('@')[1].lower()
+        
+        # Check blocked domains
+        if self.blocked_email_domains:
+            blocked = [d.strip().lower() for d in self.blocked_email_domains.split(',')]
+            if domain in blocked:
+                return False, f"Email domain {domain} is not allowed"
+        
+        # Check whitelist
+        if self.allowed_email_domains:
+            allowed = [d.strip().lower() for d in self.allowed_email_domains.split(',')]
+            if domain not in allowed:
+                return False, f"Email domain {domain} is not in the allowed list"
+        
+        return True, "Valid"
+    
+    def check_rate_limit_ip(self, ip_address):
+        """Check if IP has exceeded rate limit"""
+        from datetime import timedelta
+        cutoff = timezone.now() - timedelta(days=1)
+        
+        count = BusinessRegistration.objects.filter(
+            ip_address=ip_address,
+            created_at__gte=cutoff
+        ).count()
+        
+        if count >= self.max_registrations_per_ip_per_day:
+            return False, f"Too many registrations from this IP address. Please try again later."
+        
+        return True, "Valid"
+    
+    def check_rate_limit_domain(self, email):
+        """Check if email domain has exceeded rate limit"""
+        from datetime import timedelta
+        domain = email.split('@')[1].lower()
+        cutoff = timezone.now() - timedelta(days=1)
+        
+        count = BusinessRegistration.objects.filter(
+            email__iendswith=f'@{domain}',
+            created_at__gte=cutoff
+        ).count()
+        
+        if count >= self.max_registrations_per_email_domain_per_day:
+            return False, f"Too many registrations from {domain}. Please try again later."
+        
+        return True, "Valid"
+
+
+# ==================== CUSTOMER CREDIT ====================
+
+class CustomerPayment(models.Model):
+    """Payments made by customers against their credit balance"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='customer_payments')
+    customer = models.ForeignKey('Customer', on_delete=models.CASCADE, related_name='credit_payments')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.ForeignKey('PaymentMethod', on_delete=models.SET_NULL, null=True, blank=True)
+    reference = models.CharField(max_length=100, blank=True, help_text="Cheque/M-Pesa reference")
+    notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.customer.name} - KES {self.amount} on {self.created_at.date()}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Reduce customer credit balance
+        self.customer.credit_balance = max(
+            Decimal('0'),
+            self.customer.credit_balance - self.amount
+        )
+        self.customer.save(update_fields=['credit_balance'])
+
+
+# ==================== MARKETING / CAMPAIGNS ====================
+
+class CustomerSegment(models.Model):
+    """Dynamic customer segments for targeting"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='customer_segments')
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    # Segment criteria
+    CRITERIA_CHOICES = [
+        ('all', 'All Customers'),
+        ('vip', 'VIP Customers'),
+        ('wholesale', 'Wholesale Customers'),
+        ('high_value', 'High Value (Top Spenders)'),
+        ('inactive', 'Inactive (No purchase in 90 days)'),
+        ('loyalty_tier', 'By Loyalty Tier'),
+        ('credit_overdue', 'Credit Overdue'),
+    ]
+    criteria = models.CharField(max_length=30, choices=CRITERIA_CHOICES, default='all')
+    criteria_value = models.CharField(max_length=100, blank=True, help_text="e.g. tier name or threshold")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def get_customers(self):
+        """Return queryset of customers matching this segment"""
+        qs = Customer.objects.filter(business=self.business, is_active=True)
+        if self.criteria == 'vip':
+            return qs.filter(customer_type='vip')
+        elif self.criteria == 'wholesale':
+            return qs.filter(customer_type='wholesale')
+        elif self.criteria == 'high_value':
+            return qs.order_by('-total_purchases')[:50]
+        elif self.criteria == 'inactive':
+            from django.utils import timezone
+            cutoff = timezone.now() - timezone.timedelta(days=90)
+            active_ids = Sale.objects.filter(
+                business=self.business, date__gte=cutoff
+            ).values_list('customer_id', flat=True)
+            return qs.exclude(id__in=active_ids)
+        elif self.criteria == 'loyalty_tier' and self.criteria_value:
+            return qs.filter(tier=self.criteria_value)
+        elif self.criteria == 'credit_overdue':
+            return qs.filter(credit_balance__gt=0)
+        return qs
+
+
+class Campaign(models.Model):
+    """Email/SMS marketing campaigns"""
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='campaigns')
+    name = models.CharField(max_length=200)
+    subject = models.CharField(max_length=300, blank=True, help_text="Email subject line")
+    message = models.TextField(help_text="Campaign message body")
+
+    CHANNEL_CHOICES = [
+        ('email', 'Email'),
+        ('sms', 'SMS'),
+    ]
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, default='email')
+
+    segment = models.ForeignKey(CustomerSegment, on_delete=models.SET_NULL, null=True, blank=True)
+
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('scheduled', 'Scheduled'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    recipients_count = models.IntegerField(default=0)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.channel})"

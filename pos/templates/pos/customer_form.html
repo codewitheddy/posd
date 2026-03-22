@@ -77,6 +77,22 @@
                             </div>
                         </div>
 
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="credit_limit" class="form-label">Credit Limit (KES)</label>
+                                <input type="number" class="form-control" id="credit_limit" name="credit_limit" min="0" step="0.01"
+                                       value="{% if customer %}{{ customer.credit_limit }}{% else %}0{% endif %}">
+                                <small class="text-muted">Set to 0 to disable credit for this customer.</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="tags" class="form-label">Tags</label>
+                                <input type="text" class="form-control" id="tags" name="tags"
+                                       value="{% if customer %}{{ customer.tags }}{% endif %}"
+                                       placeholder="e.g. vip, bulk-buyer, referral">
+                                <small class="text-muted">Comma-separated tags.</small>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="notes" class="form-label">Notes</label>
                             <textarea class="form-control" id="notes" name="notes" rows="3">{% if customer %}{{ customer.notes }}{% endif %}</textarea>

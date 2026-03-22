@@ -1,186 +1,163 @@
 {% extends 'pos/base.html' %}
 {% load static %}
+{% block title %}Product Analytics — {{ business.name }}{% endblock %}
 
-{% block title %}Product Analytics - {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.an-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.an-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.an-card .card-body{padding:16px 20px}
+.an-title{font-size:14px;font-weight:700;color:#1a202c;margin:0}
+.stat-card{background:#fff;border-radius:14px;padding:18px 20px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:16px;transition:box-shadow .2s,transform .2s}
+.stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.11);transform:translateY(-2px)}
+.stat-icon-box{width:50px;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-label{font-size:11px;color:#8a94a6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.stat-value{font-size:24px;font-weight:700;color:#1a202c;line-height:1.1;margin-bottom:3px}
+.stat-sub{font-size:12px;color:#8a94a6}
+.period-btn{padding:6px 14px;border:1.5px solid #e8ecf0;background:#fff;border-radius:8px;font-size:13px;font-weight:500;color:#374151;text-decoration:none;transition:all .2s;display:inline-block}
+.period-btn:hover,.period-btn.active{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195)}
+.period-btn.active{background:var(--primary-color,#224195);color:#fff}
+.an-table{font-size:13px}
+.an-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8a94a6;border-bottom:1px solid #f0f2f5;padding:9px 12px;background:#fafbfc}
+.an-table tbody td{padding:9px 12px;vertical-align:middle;border-bottom:1px solid #f7f8fa;color:#374151}
+.an-table tbody tr:last-child td{border-bottom:none}
+.an-table tbody tr:hover td{background:#fafbfc}
+.abc-card{border-radius:12px;padding:20px;text-align:center;color:#fff}
+.empty-state{text-align:center;padding:28px 16px;color:#8a94a6}
+.empty-state i{font-size:2.2rem;opacity:.35;display:block;margin-bottom:8px}
+.empty-state p{margin:0;font-size:13px}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <h2><i class="bi bi-box-seam"></i> Product Performance Analytics</h2>
-            <p class="text-muted">Insights into product sales and inventory performance</p>
-        </div>
-    </div>
+<div class="container-fluid py-3 px-3 px-md-4">
 
-    <!-- Time Period Filter -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="btn-group" role="group">
-                <a href="?days=7" class="btn btn-outline-primary {% if days == 7 %}active{% endif %}">Last 7 Days</a>
-                <a href="?days=30" class="btn btn-outline-primary {% if days == 30 %}active{% endif %}">Last 30 Days</a>
-                <a href="?days=90" class="btn btn-outline-primary {% if days == 90 %}active{% endif %}">Last 90 Days</a>
-                <a href="?days=365" class="btn btn-outline-primary {% if days == 365 %}active{% endif %}">Last Year</a>
-            </div>
-        </div>
-    </div>
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0"><i class="bi bi-box-seam me-2 text-success"></i>Product Performance</h1>
+    <p class="text-muted small mb-0">Insights into product sales and inventory performance</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="?days=7"   class="period-btn {% if days == 7 %}active{% endif %}">7 Days</a>
+    <a href="?days=30"  class="period-btn {% if days == 30 %}active{% endif %}">30 Days</a>
+    <a href="?days=90"  class="period-btn {% if days == 90 %}active{% endif %}">90 Days</a>
+    <a href="?days=365" class="period-btn {% if days == 365 %}active{% endif %}">1 Year</a>
+  </div>
+</div>
 
-    <!-- Stock Turnover Summary -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body text-center">
-                    <h6 class="text-muted">Stock Turnover Rate</h6>
-                    <h2 class="text-primary">{{ turnover.turnover_rate|floatformat:1 }}x</h2>
-                    <small class="text-muted">{{ turnover.days_to_sell }} days to sell</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body text-center">
-                    <h6 class="text-muted">Average Stock Value</h6>
-                    <h2 class="text-success">KES {{ turnover.avg_stock_value|floatformat:2 }}</h2>
-                    <small class="text-muted">Current period</small>
-                </div>
-            </div>
-        </div>
+<!-- Turnover Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-arrow-repeat"></i></div>
+      <div>
+        <div class="stat-label">Turnover Rate</div>
+        <div class="stat-value">{{ turnover.turnover_rate|floatformat:1 }}x</div>
+        <div class="stat-sub">{{ turnover.days_to_sell }} days to sell</div>
+      </div>
     </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a"><i class="bi bi-archive"></i></div>
+      <div>
+        <div class="stat-label">Avg Stock Value</div>
+        <div class="stat-value" style="font-size:18px">KES {{ turnover.avg_stock_value|floatformat:0 }}</div>
+        <div class="stat-sub">Current period</div>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <!-- Best Sellers -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-trophy-fill text-warning"></i> Top 20 Best Sellers</h5>
-                </div>
-                <div class="card-body">
-                    {% if best_sellers %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Product</th>
-                                    <th class="text-end">Units Sold</th>
-                                    <th class="text-end">Revenue</th>
-                                    <th class="text-end">Profit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for product in best_sellers %}
-                                <tr>
-                                    <td>{{ forloop.counter }}</td>
-                                    <td>{{ product.name }}</td>
-                                    <td class="text-end">{{ product.units_sold|floatformat:0 }}</td>
-                                    <td class="text-end">KES {{ product.revenue|floatformat:2 }}</td>
-                                    <td class="text-end">KES {{ product.profit|floatformat:2 }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> No sales data available for the selected period.
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+<!-- Best Sellers -->
+<div class="an-card mb-3">
+  <div class="card-header"><span class="an-title"><i class="bi bi-trophy text-warning me-2"></i>Top 20 Best Sellers</span></div>
+  <div class="card-body p-0">
+    {% if best_sellers %}
+    <div class="table-responsive">
+      <table class="table an-table mb-0">
+        <thead><tr><th>#</th><th>Product</th><th class="text-end">Units Sold</th><th class="text-end">Revenue</th><th class="text-end">Profit</th></tr></thead>
+        <tbody>
+          {% for product in best_sellers %}
+          <tr>
+            <td style="color:#8a94a6;font-weight:600">{{ forloop.counter }}</td>
+            <td style="font-weight:600">{{ product.name }}</td>
+            <td class="text-end">{{ product.units_sold|floatformat:0 }}</td>
+            <td class="text-end fw-bold">KES {{ product.revenue|floatformat:0 }}</td>
+            <td class="text-end" style="color:#16a34a;font-weight:600">KES {{ product.profit|floatformat:0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-
-    <!-- Slow Movers -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle text-warning"></i> Slow Moving Items</h5>
-                </div>
-                <div class="card-body">
-                    {% if slow_movers %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th class="text-end">Current Stock</th>
-                                    <th class="text-end">Units Sold</th>
-                                    <th class="text-end">Days Since Last Sale</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for product in slow_movers %}
-                                <tr>
-                                    <td>{{ product.name }}</td>
-                                    <td class="text-end">{{ product.stock|floatformat:0 }}</td>
-                                    <td class="text-end">{{ product.units_sold|floatformat:0 }}</td>
-                                    <td class="text-end">{{ product.days_since_sale|default:"Never" }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle"></i> No slow moving items found!
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABC Analysis -->
-    {% if abc_analysis %}
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> ABC Analysis</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="card bg-success text-white">
-                                <div class="card-body text-center">
-                                    <h6>Category A (High Value)</h6>
-                                    <h3>{{ abc_analysis.a_count }} items</h3>
-                                    <p class="mb-0">{{ abc_analysis.a_percentage|floatformat:1 }}% of revenue</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card bg-warning text-white">
-                                <div class="card-body text-center">
-                                    <h6>Category B (Medium Value)</h6>
-                                    <h3>{{ abc_analysis.b_count }} items</h3>
-                                    <p class="mb-0">{{ abc_analysis.b_percentage|floatformat:1 }}% of revenue</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card bg-info text-white">
-                                <div class="card-body text-center">
-                                    <h6>Category C (Low Value)</h6>
-                                    <h3>{{ abc_analysis.c_count }} items</h3>
-                                    <p class="mb-0">{{ abc_analysis.c_percentage|floatformat:1 }}% of revenue</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-inbox"></i><p>No sales data for this period</p></div>
     {% endif %}
+  </div>
+</div>
 
-    <!-- Back Button -->
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Back to Analytics Dashboard
-            </a>
-        </div>
+<!-- Slow Movers -->
+<div class="an-card mb-3">
+  <div class="card-header"><span class="an-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Slow Moving Items</span></div>
+  <div class="card-body p-0">
+    {% if slow_movers %}
+    <div class="table-responsive">
+      <table class="table an-table mb-0">
+        <thead><tr><th>Product</th><th class="text-end">Stock</th><th class="text-end">Units Sold</th><th class="text-end">Days Since Last Sale</th></tr></thead>
+        <tbody>
+          {% for product in slow_movers %}
+          <tr>
+            <td style="font-weight:600">{{ product.name }}</td>
+            <td class="text-end">{{ product.stock|floatformat:0 }}</td>
+            <td class="text-end">{{ product.units_sold|floatformat:0 }}</td>
+            <td class="text-end"><span class="badge bg-warning text-dark">{{ product.days_since_sale|default:"Never" }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% else %}
+    <div class="empty-state" style="padding:20px"><i class="bi bi-check-circle text-success" style="opacity:1;color:#16a34a!important"></i><p class="text-success fw-bold">No slow moving items — great stock health!</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ABC Analysis -->
+{% if abc_analysis %}
+<div class="an-card mb-4">
+  <div class="card-header"><span class="an-title"><i class="bi bi-bar-chart text-primary me-2"></i>ABC Analysis</span></div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-md-4">
+        <div class="abc-card" style="background:linear-gradient(135deg,#16a34a,#15803d)">
+          <div style="font-size:13px;font-weight:600;opacity:.9;margin-bottom:6px">Category A — High Value</div>
+          <div style="font-size:32px;font-weight:700">{{ abc_analysis.a_count }}</div>
+          <div style="font-size:13px;opacity:.85">items · {{ abc_analysis.a_percentage|floatformat:1 }}% of revenue</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="abc-card" style="background:linear-gradient(135deg,#ca8a04,#a16207)">
+          <div style="font-size:13px;font-weight:600;opacity:.9;margin-bottom:6px">Category B — Medium Value</div>
+          <div style="font-size:32px;font-weight:700">{{ abc_analysis.b_count }}</div>
+          <div style="font-size:13px;opacity:.85">items · {{ abc_analysis.b_percentage|floatformat:1 }}% of revenue</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="abc-card" style="background:linear-gradient(135deg,#2563eb,#1d4ed8)">
+          <div style="font-size:13px;font-weight:600;opacity:.9;margin-bottom:6px">Category C — Low Value</div>
+          <div style="font-size:32px;font-weight:700">{{ abc_analysis.c_count }}</div>
+          <div style="font-size:13px;opacity:.85">items · {{ abc_analysis.c_percentage|floatformat:1 }}% of revenue</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<a href="{% url 'analytics_dashboard' slug=business_slug %}" class="btn btn-outline-secondary">
+  <i class="bi bi-arrow-left me-1"></i>Back to Analytics
+</a>
+
 </div>
 {% endblock %}

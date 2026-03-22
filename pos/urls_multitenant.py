@@ -5,7 +5,7 @@ Wraps existing URLs with business slug prefix
 
 from django.urls import path, include
 from django.shortcuts import render, redirect
-from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views
+from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views, registration_admin_views, financial_views, crm_views
 
 
 def landing_page(request):
@@ -55,6 +55,7 @@ public_urlpatterns = [
     path('platform-admin/', views.platform_admin_dashboard, name='platform_admin_dashboard'),
     path('platform-admin/create-business/', views.admin_create_business, name='admin_create_business'),
     path('platform-admin/extend-license/', views.extend_license, name='extend_license'),
+    path('platform-admin/activate-business/<int:business_id>/', views.activate_business, name='activate_business'),
     
     # Support Access Management (platform admin)
     path('support-access/my-requests/', support_access_views.my_support_access_requests, name='my_support_access_requests'),
@@ -68,7 +69,17 @@ public_urlpatterns = [
     
     # Business Management
     path('register/', tenant_views.register_business, name='register_business'),
+    path('verify-email/<str:token>/', tenant_views.verify_email, name='verify_email'),
     path('businesses/', tenant_views.business_list, name='business_list'),
+    
+    # Registration Admin (staff only) - Use 'registration-admin' prefix to avoid conflict with Django admin
+    path('registration-admin/', registration_admin_views.registrations_list, name='registrations_list'),
+    path('registration-admin/<int:registration_id>/approve/', registration_admin_views.registration_approve, name='registration_approve'),
+    path('registration-admin/<int:registration_id>/reject/', registration_admin_views.registration_reject, name='registration_reject'),
+    path('registration-admin/invitation-codes/', registration_admin_views.invitation_codes_list, name='invitation_codes_list'),
+    path('registration-admin/invitation-codes/create/', registration_admin_views.invitation_code_create, name='invitation_code_create'),
+    path('registration-admin/invitation-codes/<int:code_id>/toggle/', registration_admin_views.invitation_code_toggle, name='invitation_code_toggle'),
+    path('registration-admin/settings/', registration_admin_views.registration_settings_view, name='registration_settings'),
 ]
 
 # Business-specific URLs (require business slug)
@@ -101,9 +112,12 @@ business_urlpatterns = [
     path('products/create/', views.product_create, name='product_create'),
     path('products/<int:pk>/edit/', views.product_edit, name='product_edit'),
     path('products/<int:pk>/delete/', views.product_delete, name='product_delete'),
+    path('products/<int:pk>/toggle-active/', views.product_toggle_active, name='product_toggle_active'),
     path('products/bulk-upload/', views.product_bulk_upload, name='product_bulk_upload'),
     path('products/export/', views.product_export_csv, name='product_export_csv'),
     path('products/template/', views.product_download_template, name='product_download_template'),
+    path('api/products/create-category/', views.api_create_category, name='api_create_category'),
+    path('api/products/create-brand/', views.api_create_brand, name='api_create_brand'),
     
     # Categories
     path('categories/', views.category_list, name='category_list'),
@@ -146,15 +160,28 @@ business_urlpatterns = [
     path('purchases/<int:pk>/', views.purchase_detail, name='purchase_detail'),
     path('purchases/<int:pk>/receive/', views.purchase_receive, name='purchase_receive'),
     path('purchases/<int:pk>/cancel/', views.purchase_cancel, name='purchase_cancel'),
+    path('purchases/<int:pk>/submit/', views.purchase_submit, name='purchase_submit'),
+    path('purchases/<int:pk>/approve/', views.purchase_approve, name='purchase_approve'),
+    path('purchases/<int:pk>/send/', views.purchase_send_to_supplier, name='purchase_send_to_supplier'),
+    path('purchases/<int:pk>/duplicate/', views.purchase_duplicate, name='purchase_duplicate'),
+    path('purchases/<int:pk>/close/', views.purchase_close, name='purchase_close'),
     
+    # Goods Received Notes
+    path('goods-received/', views.goods_received_list, name='goods_received_list'),
+    path('goods-received/<int:pk>/', views.goods_received_detail, name='goods_received_detail'),
+    path('goods-received/<int:pk>/print/', views.goods_received_print, name='goods_received_print'),
+
     # Goods Returned Notes (GRN)
     path('grn/', views.grn_list, name='grn_list'),
     path('grn/create/', views.grn_create, name='grn_create'),
     path('grn/<int:pk>/', views.grn_detail, name='grn_detail'),
     path('grn/<int:pk>/submit/', views.grn_submit, name='grn_submit'),
+    path('grn/<int:pk>/acknowledge/', views.grn_acknowledge, name='grn_acknowledge'),
     path('grn/<int:pk>/mark-collected/', views.grn_mark_collected, name='grn_mark_collected'),
     path('grn/<int:pk>/apply-credit/', views.grn_apply_credit, name='grn_apply_credit'),
     path('grn/<int:pk>/cancel/', views.grn_cancel, name='grn_cancel'),
+    path('grn/<int:pk>/print/', views.grn_print, name='grn_print'),
+    path('api/grn/supplier-purchases/', views.api_grn_supplier_purchases, name='api_grn_supplier_purchases'),
     
     # POS
     path('pos/', views.pos_screen, name='pos_screen'),
@@ -220,12 +247,24 @@ business_urlpatterns = [
         path('api/<int:z_number>/data/', zreport_views.api_zreport_data, name='api_zreport_data'),
     ])),
     
+    # Global Search
+    path('search/', views.global_search, name='global_search'),
+
     # Analytics
     path('analytics/', views.analytics_dashboard, name='analytics_dashboard'),
     path('analytics/sales-trends/', views.analytics_sales_trends, name='analytics_sales_trends'),
     path('analytics/products/', views.analytics_products, name='analytics_products'),
     path('analytics/customers/', views.analytics_customers, name='analytics_customers'),
     path('analytics/api/', views.analytics_api, name='analytics_api'),
+
+    # Financial Suite
+    path('finances/expenses/', financial_views.expense_list, name='expense_list'),
+    path('finances/expenses/create/', financial_views.expense_create, name='expense_create'),
+    path('finances/expenses/<int:pk>/edit/', financial_views.expense_edit, name='expense_edit'),
+    path('finances/expenses/<int:pk>/delete/', financial_views.expense_delete, name='expense_delete'),
+    path('finances/expenses/export/', financial_views.expense_export_csv, name='expense_export_csv'),
+    path('finances/profit/', financial_views.profit_dashboard, name='profit_dashboard'),
+    path('finances/pl/', financial_views.pl_statement, name='pl_statement'),
     
     # User Management
     path('users/', include([
@@ -253,7 +292,35 @@ business_urlpatterns = [
     path('customers/create/', views.customer_create, name='customer_create'),
     path('customers/<int:pk>/edit/', views.customer_edit, name='customer_edit'),
     path('customers/<int:pk>/delete/', views.customer_delete, name='customer_delete'),
-    path('customers/<int:pk>/', views.customer_detail, name='customer_detail'),
+    path('customers/<int:pk>/', crm_views.customer_detail_enhanced, name='customer_detail'),
+
+    # Customer Credit
+    path('customers/credit/', crm_views.customer_credit_list, name='customer_credit_list'),
+    path('customers/<int:pk>/credit/', crm_views.customer_credit_detail, name='customer_credit_detail'),
+    path('customers/<int:pk>/credit/payment/', crm_views.customer_credit_payment, name='customer_credit_payment'),
+    path('customers/<int:pk>/statement/', crm_views.customer_statement, name='customer_statement'),
+    path('customers/credit/aging/', crm_views.credit_aging_report, name='credit_aging_report'),
+
+    # Customer Segments
+    path('crm/segments/', crm_views.segment_list, name='segment_list'),
+    path('crm/segments/create/', crm_views.segment_create, name='segment_create'),
+    path('crm/segments/<int:pk>/edit/', crm_views.segment_edit, name='segment_edit'),
+    path('crm/segments/<int:pk>/customers/', crm_views.segment_customers, name='segment_customers'),
+
+    # Campaigns
+    path('crm/campaigns/', crm_views.campaign_list, name='campaign_list'),
+    path('crm/campaigns/create/', crm_views.campaign_create, name='campaign_create'),
+    path('crm/campaigns/<int:pk>/', crm_views.campaign_detail, name='campaign_detail'),
+    path('crm/campaigns/<int:pk>/send/', crm_views.campaign_send, name='campaign_send'),
+
+    # CRM Reports
+    path('crm/reports/', crm_views.crm_reports, name='crm_reports'),
+    path('crm/reports/top-customers/', crm_views.report_top_customers, name='report_top_customers'),
+    path('crm/reports/loyalty/', crm_views.report_loyalty, name='report_loyalty'),
+    path('crm/reports/credit/', crm_views.report_credit, name='report_credit'),
+
+    # CRM API
+    path('api/customer/<int:pk>/credit/', crm_views.api_customer_credit_info, name='api_customer_credit_info'),
     
     # Loyalty Program
     path('customers/<int:pk>/loyalty/', views.loyalty_dashboard, name='loyalty_dashboard'),

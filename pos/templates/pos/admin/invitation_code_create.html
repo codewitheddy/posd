@@ -1,0 +1,66 @@
+{% extends 'pos/base_simple.html' %}
+{% load static %}
+
+{% block title %}Generate Invitation Codes - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-ticket-alt"></i> Generate Invitation Codes</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="count" class="form-label">Number of Codes</label>
+                            <input type="number" class="form-control" id="count" name="count" 
+                                   value="1" min="1" max="100" required>
+                            <small class="text-muted">How many codes to generate (1-100)</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="max_uses" class="form-label">Max Uses Per Code</label>
+                            <input type="number" class="form-control" id="max_uses" name="max_uses" 
+                                   value="1" min="1" max="1000" required>
+                            <small class="text-muted">How many times each code can be used</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="valid_days" class="form-label">Valid For (Days)</label>
+                            <input type="number" class="form-control" id="valid_days" name="valid_days" 
+                                   placeholder="Leave blank for no expiry" min="1">
+                            <small class="text-muted">Leave blank for codes that never expire</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="allowed_domains" class="form-label">Allowed Email Domains</label>
+                            <input type="text" class="form-control" id="allowed_domains" name="allowed_domains" 
+                                   placeholder="company.com, partner.co.ke">
+                            <small class="text-muted">Comma-separated. Leave blank to allow any domain</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                      placeholder="Internal notes about these codes"></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-magic"></i> Generate Codes
+                            </button>
+                            <a href="{% url 'invitation_codes_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to List
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

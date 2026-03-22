@@ -56,6 +56,11 @@ urlpatterns = [
     path('purchases/<int:pk>/', views.purchase_detail, name='purchase_detail'),
     path('purchases/<int:pk>/receive/', views.purchase_receive, name='purchase_receive'),
     path('purchases/<int:pk>/cancel/', views.purchase_cancel, name='purchase_cancel'),
+    path('purchases/<int:pk>/submit/', views.purchase_submit, name='purchase_submit'),
+    path('purchases/<int:pk>/approve/', views.purchase_approve, name='purchase_approve'),
+    path('purchases/<int:pk>/send/', views.purchase_send_to_supplier, name='purchase_send_to_supplier'),
+    path('purchases/<int:pk>/duplicate/', views.purchase_duplicate, name='purchase_duplicate'),
+    path('purchases/<int:pk>/close/', views.purchase_close, name='purchase_close'),
     
     # POS
     path('pos/', views.pos_screen, name='pos_screen'),

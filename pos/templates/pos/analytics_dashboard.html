@@ -1,417 +1,254 @@
 {% extends 'pos/base.html' %}
 {% load static %}
-
-{% block title %}Analytics Dashboard{% endblock %}
+{% block title %}Analytics Dashboard — {{ request.business.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .stat-card {
-        border-left: 4px solid var(--primary-color);
-        transition: transform 0.2s;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary-color);
-    }
-    
-    .stat-label {
-        color: #858796;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .chart-container {
-        position: relative;
-        height: 300px;
-        margin-bottom: 2rem;
-    }
-    
-    .period-selector {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-    }
-    
-    .period-btn {
-        padding: 0.5rem 1rem;
-        border: 1px solid #d1d3e2;
-        background: white;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    
-    .period-btn:hover {
-        background: #f8f9fc;
-    }
-    
-    .period-btn.active {
-        background: var(--primary-color);
-        color: white;
-        border-color: var(--primary-color);
-    }
-    
-    .insight-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin-bottom: 1rem;
-    }
-    
-    .insight-card h5 {
-        color: white;
-        margin-bottom: 0.5rem;
-    }
-    
-    .table-analytics {
-        font-size: 0.9rem;
-    }
-    
-    .table-analytics th {
-        background: #f8f9fc;
-        font-weight: 600;
-        color: #5a5c69;
-    }
-    
-    .badge-performance {
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
-    }
+/* shared analytics style */
+.an-card{background:#fff;border-radius:14px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.an-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.an-card .card-body{padding:16px 20px}
+.an-title{font-size:14px;font-weight:700;color:#1a202c;margin:0}
+.stat-card{background:#fff;border-radius:14px;padding:18px 20px;border:none;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:16px;transition:box-shadow .2s,transform .2s}
+.stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.11);transform:translateY(-2px)}
+.stat-icon-box{width:50px;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-label{font-size:11px;color:#8a94a6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.stat-value{font-size:24px;font-weight:700;color:#1a202c;line-height:1.1;margin-bottom:3px}
+.stat-sub{font-size:12px;color:#8a94a6}
+.period-btn{padding:6px 14px;border:1.5px solid #e8ecf0;background:#fff;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#374151;transition:all .2s}
+.period-btn:hover{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195)}
+.period-btn.active{background:var(--primary-color,#224195);color:#fff;border-color:var(--primary-color,#224195)}
+.an-table{font-size:13px}
+.an-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8a94a6;border-bottom:1px solid #f0f2f5;padding:9px 12px;background:#fafbfc}
+.an-table tbody td{padding:9px 12px;vertical-align:middle;border-bottom:1px solid #f7f8fa;color:#374151}
+.an-table tbody tr:last-child td{border-bottom:none}
+.an-table tbody tr:hover td{background:#fafbfc}
+.insight-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f7f8fa;font-size:13px}
+.insight-row:last-child{border-bottom:none}
+.insight-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pm-bar-wrap{flex:1;height:6px;background:#f0f2f5;border-radius:3px}
+.pm-bar{height:6px;border-radius:3px}
+.empty-state{text-align:center;padding:28px 16px;color:#8a94a6}
+.empty-state i{font-size:2.2rem;opacity:.35;display:block;margin-bottom:8px}
+.empty-state p{margin:0;font-size:13px}
+.nav-link-an{display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:10px;border:1.5px solid #e8ecf0;background:#fff;color:#374151;font-size:13px;font-weight:600;text-decoration:none;transition:all .2s}
+.nav-link-an:hover{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195);background:#f0f4ff}
+.nav-link-an i{font-size:18px}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h3 mb-0"><i class="bi bi-graph-up"></i> Analytics Dashboard</h1>
-            <p class="text-muted mb-0">Business intelligence and insights</p>
-        </div>
-        <div class="period-selector">
-            <button class="period-btn {% if days == 7 %}active{% endif %}" onclick="changePeriod(7)">7 Days</button>
-            <button class="period-btn {% if days == 30 %}active{% endif %}" onclick="changePeriod(30)">30 Days</button>
-            <button class="period-btn {% if days == 90 %}active{% endif %}" onclick="changePeriod(90)">90 Days</button>
-        </div>
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 fw-bold text-dark mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>Analytics Dashboard</h1>
+    <p class="text-muted small mb-0">Business intelligence and insights</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="period-btn {% if days == 7 %}active{% endif %}" onclick="changePeriod(7)">7 Days</button>
+    <button class="period-btn {% if days == 30 %}active{% endif %}" onclick="changePeriod(30)">30 Days</button>
+    <button class="period-btn {% if days == 90 %}active{% endif %}" onclick="changePeriod(90)">90 Days</button>
+  </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-cash-stack"></i></div>
+      <div>
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value" style="font-size:18px">KES {{ summary.sales.total_revenue|default:0|floatformat:0 }}</div>
+        <div class="stat-sub">Last {{ days }} days</div>
+      </div>
     </div>
-
-    <!-- Key Metrics -->
-    <div class="row mb-4">
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-label">Total Revenue</div>
-                    <div class="stat-value">KES {{ summary.sales.total_revenue|default:0|floatformat:2 }}</div>
-                    <small class="text-muted">Last {{ days }} days</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-label">Total Profit</div>
-                    <div class="stat-value">KES {{ summary.profit.total_profit|default:0|floatformat:2 }}</div>
-                    <small class="text-muted">
-                        {% if profit_analysis.profit_margin %}
-                            Margin: {{ profit_analysis.profit_margin|floatformat:1 }}%
-                        {% endif %}
-                    </small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-label">Transactions</div>
-                    <div class="stat-value">{{ summary.sales.total_transactions|default:0 }}</div>
-                    <small class="text-muted">Avg: KES {{ summary.sales.avg_transaction|default:0|floatformat:2 }}</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-label">Active Customers</div>
-                    <div class="stat-value">{{ summary.customers.active_customers|default:0 }}</div>
-                    <small class="text-muted">of {{ summary.customers.total_customers|default:0 }} total</small>
-                </div>
-            </div>
-        </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a"><i class="bi bi-graph-up-arrow"></i></div>
+      <div>
+        <div class="stat-label">Total Profit</div>
+        <div class="stat-value" style="font-size:18px">KES {{ summary.profit.total_profit|default:0|floatformat:0 }}</div>
+        <div class="stat-sub">{% if profit_analysis.profit_margin %}Margin: {{ profit_analysis.profit_margin|floatformat:1 }}%{% else %}—{% endif %}</div>
+      </div>
     </div>
-
-    <!-- Charts Row -->
-    <div class="row mb-4">
-        <!-- Sales Trend Chart -->
-        <div class="col-lg-8 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Sales Trend</h5>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="salesTrendChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Category Breakdown -->
-        <div class="col-lg-4 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Sales by Category</h5>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="categoryChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb"><i class="bi bi-receipt"></i></div>
+      <div>
+        <div class="stat-label">Transactions</div>
+        <div class="stat-value">{{ summary.sales.total_transactions|default:0 }}</div>
+        <div class="stat-sub">Avg KES {{ summary.sales.avg_transaction|default:0|floatformat:0 }}</div>
+      </div>
     </div>
-
-    <!-- Best Sellers & Insights -->
-    <div class="row mb-4">
-        <!-- Best Sellers -->
-        <div class="col-lg-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-trophy"></i> Top 10 Best Sellers</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-analytics table-hover">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Product</th>
-                                    <th>Units Sold</th>
-                                    <th>Revenue</th>
-                                    <th>Profit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for product in best_sellers %}
-                                <tr>
-                                    <td>{{ forloop.counter }}</td>
-                                    <td>
-                                        <strong>{{ product.name }}</strong>
-                                        <br><small class="text-muted">{{ product.category }}</small>
-                                    </td>
-                                    <td>{{ product.units_sold }}</td>
-                                    <td>KES {{ product.revenue|floatformat:2 }}</td>
-                                    <td class="text-success">KES {{ product.profit|floatformat:2 }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted">No sales data available</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Payment Methods & Insights -->
-        <div class="col-lg-6 mb-4">
-            <!-- Payment Methods -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-credit-card"></i> Payment Methods</h5>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container" style="height: 200px;">
-                        <canvas id="paymentMethodChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Key Insights -->
-            <div class="insight-card">
-                <h5><i class="bi bi-lightbulb"></i> Key Insights</h5>
-                <ul class="mb-0">
-                    <li>Stock turnover: {{ turnover.turnover_rate }} times ({{ turnover.days_to_sell }} days to sell)</li>
-                    <li>Customer retention: {{ retention.retention_rate }}%</li>
-                    <li>Profit margin: {{ profit_analysis.profit_margin|floatformat:1 }}%</li>
-                    <li>Low stock items: {{ summary.inventory.low_stock_count }}</li>
-                </ul>
-            </div>
-        </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fef9c3;color:#ca8a04"><i class="bi bi-people"></i></div>
+      <div>
+        <div class="stat-label">Active Customers</div>
+        <div class="stat-value">{{ summary.customers.active_customers|default:0 }}</div>
+        <div class="stat-sub">of {{ summary.customers.total_customers|default:0 }} total</div>
+      </div>
     </div>
+  </div>
+</div>
 
-    <!-- Quick Links -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="mb-3">Detailed Analytics</h5>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="{% url 'analytics_sales_trends' slug=business_slug %}" class="btn btn-outline-primary">
-                            <i class="bi bi-graph-up"></i> Sales Trends
-                        </a>
-                        <a href="{% url 'analytics_products' slug=business_slug %}" class="btn btn-outline-primary">
-                            <i class="bi bi-box-seam"></i> Product Performance
-                        </a>
-                        <a href="{% url 'analytics_customers' slug=business_slug %}" class="btn btn-outline-primary">
-                            <i class="bi bi-people"></i> Customer Analytics
-                        </a>
-                        <a href="{% url 'sales_report' slug=business_slug %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-file-earmark-text"></i> Sales Report
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
+<!-- Charts Row -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-8">
+    <div class="an-card h-100">
+      <div class="card-header">
+        <span class="an-title"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Sales Trend</span>
+        <span class="badge bg-light text-dark" style="font-size:11px">Last {{ days }} days</span>
+      </div>
+      <div class="card-body"><canvas id="salesTrendChart" height="110"></canvas></div>
     </div>
+  </div>
+  <div class="col-12 col-lg-4">
+    <div class="an-card h-100">
+      <div class="card-header"><span class="an-title"><i class="bi bi-pie-chart text-success me-2"></i>Sales by Category</span></div>
+      <div class="card-body"><canvas id="categoryChart" height="180"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- Best Sellers + Payment Methods -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-7">
+    <div class="an-card h-100">
+      <div class="card-header">
+        <span class="an-title"><i class="bi bi-trophy text-warning me-2"></i>Top 10 Best Sellers</span>
+        <a href="{% url 'analytics_products' slug=business_slug %}" class="btn btn-sm btn-outline-secondary">Full Report</a>
+      </div>
+      <div class="card-body p-0">
+        {% if best_sellers %}
+        <div class="table-responsive">
+          <table class="table an-table mb-0">
+            <thead><tr><th>#</th><th>Product</th><th class="text-end">Units</th><th class="text-end">Revenue</th><th class="text-end">Profit</th></tr></thead>
+            <tbody>
+              {% for product in best_sellers %}
+              <tr>
+                <td style="color:#8a94a6;font-weight:600">{{ forloop.counter }}</td>
+                <td><div style="font-weight:600">{{ product.name }}</div><div style="font-size:11px;color:#8a94a6">{{ product.category }}</div></td>
+                <td class="text-end">{{ product.units_sold }}</td>
+                <td class="text-end fw-bold">KES {{ product.revenue|floatformat:0 }}</td>
+                <td class="text-end" style="color:#16a34a;font-weight:600">KES {{ product.profit|floatformat:0 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5"><div class="empty-state"><i class="bi bi-inbox"></i><p>No sales data available</p></div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><i class="bi bi-inbox"></i><p>No sales data for this period</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="an-card mb-3">
+      <div class="card-header"><span class="an-title"><i class="bi bi-credit-card text-info me-2"></i>Payment Methods</span></div>
+      <div class="card-body"><canvas id="paymentMethodChart" height="130"></canvas></div>
+    </div>
+    <div class="an-card">
+      <div class="card-header"><span class="an-title"><i class="bi bi-lightbulb text-warning me-2"></i>Key Insights</span></div>
+      <div class="card-body p-0 px-3">
+        <div class="insight-row"><div class="insight-dot" style="background:#7c3aed"></div><span>Stock turnover: <strong>{{ turnover.turnover_rate }}x</strong> ({{ turnover.days_to_sell }} days to sell)</span></div>
+        <div class="insight-row"><div class="insight-dot" style="background:#16a34a"></div><span>Customer retention: <strong>{{ retention.retention_rate }}%</strong></span></div>
+        <div class="insight-row"><div class="insight-dot" style="background:#2563eb"></div><span>Profit margin: <strong>{{ profit_analysis.profit_margin|floatformat:1 }}%</strong></span></div>
+        <div class="insight-row"><div class="insight-dot" style="background:#dc2626"></div><span>Low stock items: <strong>{{ summary.inventory.low_stock_count }}</strong></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detailed Analytics Links -->
+<div class="an-card mb-4">
+  <div class="card-header"><span class="an-title"><i class="bi bi-grid text-secondary me-2"></i>Detailed Analytics</span></div>
+  <div class="card-body">
+    <div class="d-flex gap-3 flex-wrap">
+      <a href="{% url 'analytics_sales_trends' slug=business_slug %}" class="nav-link-an"><i class="bi bi-graph-up text-primary"></i>Sales Trends</a>
+      <a href="{% url 'analytics_products' slug=business_slug %}" class="nav-link-an"><i class="bi bi-box-seam text-success"></i>Product Performance</a>
+      <a href="{% url 'analytics_customers' slug=business_slug %}" class="nav-link-an"><i class="bi bi-people text-info"></i>Customer Analytics</a>
+      <a href="{% url 'sales_report' slug=business_slug %}" class="nav-link-an"><i class="bi bi-file-earmark-text text-secondary"></i>Sales Report</a>
+    </div>
+  </div>
+</div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
 <script>
-// Change period
-function changePeriod(days) {
-    window.location.href = '?days=' + days;
-}
+function changePeriod(days){ window.location.href = '?days=' + days; }
 
-// Sales Trend Chart
-const salesTrendCtx = document.getElementById('salesTrendChart').getContext('2d');
-const salesTrendDates = {{ sales_trends.dates|safe }};
-const salesTrendTotals = {{ sales_trends.totals|safe }};
-const salesTrendProfits = {{ sales_trends.profits|safe }};
+const PALETTE = ['#7c3aed','#2563eb','#16a34a','#ca8a04','#dc2626','#0284c7','#db2777','#059669'];
+const gridColor = '#f0f2f5';
+const tickFont = { size: 11 };
+const kesFormatter = v => 'KES ' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toLocaleString());
 
-new Chart(salesTrendCtx, {
-    type: 'line',
-    data: {
-        labels: salesTrendDates,
-        datasets: [{
-            label: 'Revenue',
-            data: salesTrendTotals,
-            borderColor: '#4e73df',
-            backgroundColor: 'rgba(78, 115, 223, 0.1)',
-            tension: 0.4,
-            fill: true
-        }, {
-            label: 'Profit',
-            data: salesTrendProfits,
-            borderColor: '#1cc88a',
-            backgroundColor: 'rgba(28, 200, 138, 0.1)',
-            tension: 0.4,
-            fill: true
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: function(value) {
-                        return 'KES ' + value.toLocaleString();
-                    }
-                }
-            }
-        }
-    }
+// Sales Trend
+new Chart(document.getElementById('salesTrendChart'), {
+  type: 'line',
+  data: {
+    labels: {{ sales_trends.dates|safe }},
+    datasets: [
+      { label:'Revenue', data:{{ sales_trends.totals|safe }}, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.08)', tension:.4, fill:true, pointRadius:3 },
+      { label:'Profit',  data:{{ sales_trends.profits|safe }}, borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.08)', tension:.4, fill:true, pointRadius:3 }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ position:'top', labels:{ font:{ size:12 }, boxWidth:12 } },
+              tooltip:{ callbacks:{ label: c => c.dataset.label+': KES '+c.parsed.y.toLocaleString() } } },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+             y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+  }
 });
 
-// Category Sales Chart
-const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-const categoryData = [
-    {% for item in category_sales %}
-    {
-        name: '{{ item.product__category__name|default:"Uncategorized" }}',
-        revenue: {{ item.total_revenue|default:0|floatformat:2 }}
-    }{% if not forloop.last %},{% endif %}
-    {% endfor %}
-];
-
-new Chart(categoryCtx, {
+// Category Doughnut
+const catLabels = {{ category_chart.labels|safe }};
+const catData = {{ category_chart.data|safe }};
+if(catLabels.length){
+  new Chart(document.getElementById('categoryChart'), {
     type: 'doughnut',
     data: {
-        labels: categoryData.map(d => d.name),
-        datasets: [{
-            data: categoryData.map(d => d.revenue),
-            backgroundColor: [
-                '#4e73df',
-                '#1cc88a',
-                '#36b9cc',
-                '#f6c23e',
-                '#e74a3b',
-                '#858796',
-                '#5a5c69'
-            ]
-        }]
+      labels: catLabels,
+      datasets:[{ data: catData, backgroundColor:PALETTE, borderWidth:2, borderColor:'#fff' }]
     },
     options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom',
-            }
-        }
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 }, boxWidth:10, padding:8 } },
+                tooltip:{ callbacks:{ label: c => c.label+': KES '+c.parsed.toLocaleString() } } }
     }
-});
-
-// Payment Method Chart
-const paymentCtx = document.getElementById('paymentMethodChart').getContext('2d');
-const paymentLabels = {{ payment_breakdown.labels|safe }};
-const paymentAmounts = {{ payment_breakdown.amounts|safe }};
-
-if (paymentLabels.length > 0) {
-    new Chart(paymentCtx, {
-        type: 'bar',
-        data: {
-            labels: paymentLabels,
-            datasets: [{
-                label: 'Amount',
-                data: paymentAmounts,
-                backgroundColor: '#4e73df'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'KES ' + value.toLocaleString();
-                        }
-                    }
-                }
-            }
-        }
-    });
+  });
 } else {
-    // Show message if no payment data
-    paymentCtx.canvas.parentElement.innerHTML = '<div class="alert alert-info mb-0">Payment method breakdown not available</div>';
+  document.getElementById('categoryChart').parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-pie-chart"></i><p>No category data available</p></div>';
+}
+
+// Payment Methods Bar
+const pmLabels = {{ payment_breakdown.labels|safe }};
+const pmAmounts = {{ payment_breakdown.amounts|safe }};
+if(pmLabels.length){
+  new Chart(document.getElementById('paymentMethodChart'), {
+    type:'bar',
+    data:{ labels:pmLabels, datasets:[{ data:pmAmounts, backgroundColor:PALETTE, borderRadius:6, borderSkipped:false }] },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => 'KES '+c.parsed.y.toLocaleString() } } },
+      scales:{ x:{ grid:{ display:false }, ticks:{ font:tickFont } },
+               y:{ grid:{ color:gridColor }, ticks:{ font:tickFont, callback:kesFormatter } } }
+    }
+  });
+} else {
+  document.getElementById('paymentMethodChart').parentElement.innerHTML = '<div class="empty-state"><i class="bi bi-credit-card-2-front"></i><p>No payment data available</p></div>';
 }
 </script>
 {% endblock %}
