@@ -1601,6 +1601,7 @@ def complete_sale(request, slug=None):
             discount_value = Decimal(request.POST.get('discount_value', 0))
             amount_paid = Decimal(request.POST.get('amount_paid', 0))
             change_given = Decimal(request.POST.get('change_given', 0))
+            is_credit_sale = request.POST.get('is_credit_sale', '0') == '1'
             vat_rate = Decimal(getattr(settings, 'VAT_RATE', 16))
             
             if not items_data:
@@ -1614,6 +1615,15 @@ def complete_sale(request, slug=None):
                     customer = Customer.objects.get(id=customer_id, business=request.business)
                 except Customer.DoesNotExist:
                     pass
+            
+            # Validate credit sale
+            if is_credit_sale:
+                if not customer:
+                    messages.error(request, 'A customer must be selected for a credit sale.')
+                    return redirect('pos_screen', slug=request.business.slug)
+                if customer.credit_limit <= 0:
+                    messages.error(request, f'{customer.name} does not have a credit limit set.')
+                    return redirect('pos_screen', slug=request.business.slug)
             
             # Calculate totals and check stock
             # Prices are now tax-inclusive (final prices)
@@ -1674,7 +1684,8 @@ def complete_sale(request, slug=None):
                 discount_amount=discount_amount,
                 total=total,
                 amount_paid=amount_paid,
-                change_given=change_given
+                change_given=change_given,
+                is_credit_sale=is_credit_sale,
             )
             
             # Create sale items and deduct stock
@@ -1685,6 +1696,7 @@ def complete_sale(request, slug=None):
                     quantity=item['quantity'],
                     unit_price=item['unit_price'],
                     note=item.get('note', ''),
+                    cost_price_at_sale=item['product'].cost_price,
                 )
                 
                 # Deduct stock and create adjustment record
@@ -1729,6 +1741,16 @@ def complete_sale(request, slug=None):
                         )
                         total_payment_allocated += payment_amount
             
+            # Handle credit sale — update customer balance
+            if is_credit_sale and customer:
+                # Re-validate available credit now that we have the final total
+                if customer.get_available_credit() < total:
+                    sale.delete()  # Roll back the sale
+                    messages.error(request, f'Insufficient credit. Available: KES {customer.get_available_credit()}, Required: KES {total}')
+                    return redirect('pos_screen', slug=request.business.slug)
+                customer.credit_balance += total
+                customer.save(update_fields=['credit_balance'])
+
             # Handle loyalty points
             if customer:
                 # Redeem points if discount type is 'points'
@@ -1762,7 +1784,9 @@ def complete_sale(request, slug=None):
                 
                 # Build success message
                 message_parts = [f'Sale completed! Invoice: {sale.invoice_number}.']
-                if change_given > 0:
+                if is_credit_sale:
+                    message_parts.append(f'Charged KES {total} to credit account.')
+                elif change_given > 0:
                     message_parts.append(f'Change: KES {change_given}.')
                 if discount_type == 'points' and discount_value > 0:
                     message_parts.append(f'{int(discount_value)} points redeemed.')
@@ -2229,6 +2253,9 @@ def search_customer_by_phone(request, slug=None):
                 'tier': customer.tier,
                 'tier_display': customer.get_tier_display(),
                 'customer_type': customer.customer_type,
+                'credit_limit': float(customer.credit_limit),
+                'credit_balance': float(customer.credit_balance),
+                'available_credit': float(customer.get_available_credit()),
             }
         })
     except Customer.DoesNotExist:
@@ -2381,7 +2408,7 @@ def supplier_create(request, slug=None):
     if request.method == 'POST':
         name = request.POST.get('name')
         contact_person = request.POST.get('contact_person', '')
-        email = request.POST.get('email', '')
+        email = request.POST.get('email', '').strip()
         phone = request.POST.get('phone', '')
         address = request.POST.get('address', '')
         notes = request.POST.get('notes', '')
@@ -2389,7 +2416,16 @@ def supplier_create(request, slug=None):
         
         if not name:
             messages.error(request, 'Supplier name is required!')
-            return redirect('supplier_create', slug=request.business.slug)
+            return render(request, 'pos/supplier_form.html')
+        
+        if email:
+            from django.core.validators import validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_email(email)
+            except DjangoValidationError:
+                messages.error(request, f'"{email}" is not a valid email address.')
+                return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
         
         Supplier.objects.create(
             business=request.business,
@@ -2416,7 +2452,7 @@ def supplier_edit(request, slug=None, pk=None):
     if request.method == 'POST':
         supplier.name = request.POST.get('name')
         supplier.contact_person = request.POST.get('contact_person', '')
-        supplier.email = request.POST.get('email', '')
+        supplier.email = request.POST.get('email', '').strip()
         supplier.phone = request.POST.get('phone', '')
         supplier.address = request.POST.get('address', '')
         supplier.notes = request.POST.get('notes', '')
@@ -2424,7 +2460,16 @@ def supplier_edit(request, slug=None, pk=None):
         
         if not supplier.name:
             messages.error(request, 'Supplier name is required!')
-            return redirect('supplier_edit', slug=request.business.slug, pk=pk)
+            return render(request, 'pos/supplier_form.html', {'supplier': supplier})
+        
+        if supplier.email:
+            from django.core.validators import validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_email(supplier.email)
+            except DjangoValidationError:
+                messages.error(request, f'"{supplier.email}" is not a valid email address.')
+                return render(request, 'pos/supplier_form.html', {'supplier': supplier})
         
         supplier.save()
         messages.success(request, f'Supplier "{supplier.name}" updated successfully!')
@@ -2952,6 +2997,25 @@ def purchase_close(request, slug=None, pk=None):
     if purchase.status not in ('received', 'partially_received'):
         messages.error(request, 'Only received purchase orders can be closed.')
         return redirect('purchase_detail', slug=slug, pk=pk)
+
+    remaining = purchase.remaining_balance()
+
+    if request.method == 'GET':
+        # Always show confirmation page
+        return render(request, 'pos/purchase_close_confirm.html', {
+            'purchase': purchase,
+            'remaining_balance': remaining,
+        })
+
+    # POST — check for force_close flag
+    force_close = request.POST.get('force_close') == '1'
+    if remaining > Decimal('0.00') and not force_close:
+        # Redirect back to confirmation page
+        return render(request, 'pos/purchase_close_confirm.html', {
+            'purchase': purchase,
+            'remaining_balance': remaining,
+        })
+
     purchase.status = 'closed'
     purchase.save()
     messages.success(request, f'{purchase.purchase_number} closed.')
@@ -4070,6 +4134,18 @@ def customer_create(request, slug=None):
         credit_limit = request.POST.get('credit_limit', '0') or '0'
         tags = request.POST.get('tags', '')
 
+        if email:
+            from django.core.validators import validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_email(email)
+            except DjangoValidationError:
+                messages.error(request, f'"{email}" is not a valid email address.')
+                from datetime import date
+                today = date.today()
+                max_date = date(today.year - 18, today.month, today.day)
+                return render(request, 'pos/customer_form.html', {'max_date': max_date.strftime('%Y-%m-%d')})
+
         try:
             customer = Customer.objects.create(
                 business=request.business,
@@ -4160,6 +4236,18 @@ def customer_edit(request, slug=None, pk=None):
         
         customer.date_of_birth = date_of_birth if date_of_birth else None
         
+        if customer.email:
+            from django.core.validators import validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_email(customer.email)
+            except DjangoValidationError:
+                messages.error(request, f'"{customer.email}" is not a valid email address.')
+                from datetime import date
+                today = date.today()
+                max_date = date(today.year - 18, today.month, today.day)
+                return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
+
         try:
             customer.save()
             
@@ -4189,22 +4277,6 @@ def customer_edit(request, slug=None, pk=None):
         'max_date': max_date.strftime('%Y-%m-%d')
     }
     return render(request, 'pos/customer_form.html', context)
-
-
-@business_required
-def customer_detail(request, slug=None, pk=None):
-    """View customer details and purchase history"""
-    customer = get_object_or_404(Customer, business=request.business, pk=pk)
-    purchases = Sale.objects.filter(
-        business=request.business, 
-        customer=customer
-    ).prefetch_related('loyalty_transactions').order_by('-date')[:20]
-    
-    context = {
-        'customer': customer,
-        'purchases': purchases,
-    }
-    return render(request, 'pos/customer_detail.html', context)
 
 
 @business_required
@@ -4694,7 +4766,7 @@ def create_payment(request, slug, supplier_id):
                 # Re-render form with error
                 unpaid_purchases = Purchase.objects.filter(
                     supplier=supplier,
-                    status='received'
+                    status__in=('received', 'partially_received')
                 ).annotate(
                     allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
                 ).filter(
@@ -4718,6 +4790,24 @@ def create_payment(request, slug, supplier_id):
             
             payment_method = PaymentMethod.objects.get(id=payment_method_id)
             
+            # Build manual allocations if provided
+            allocations = None
+            allocation_keys = [k for k in request.POST if k.startswith('alloc_amount_')]
+            if allocation_keys:
+                allocations = []
+                for key in allocation_keys:
+                    purchase_id = key.replace('alloc_amount_', '')
+                    alloc_amount_str = request.POST.get(key, '').strip()
+                    if not alloc_amount_str:
+                        continue
+                    alloc_amount = Decimal(alloc_amount_str)
+                    if alloc_amount <= Decimal('0.00'):
+                        continue
+                    purchase = Purchase.objects.get(id=purchase_id, supplier=supplier)
+                    allocations.append({'purchase': purchase, 'amount': alloc_amount})
+                if not allocations:
+                    allocations = None  # fall back to FIFO if nothing selected
+            
             # Create payment using service
             payment = SupplierPaymentService.create_payment(
                 supplier=supplier,
@@ -4726,7 +4816,8 @@ def create_payment(request, slug, supplier_id):
                 payment_method=payment_method,
                 reference_number=reference_number,
                 notes=notes,
-                created_by=request.user
+                created_by=request.user,
+                allocations=allocations
             )
             
             messages.success(request, f'Payment {payment.payment_number} created successfully!')
@@ -4735,10 +4826,10 @@ def create_payment(request, slug, supplier_id):
         except Exception as e:
             messages.error(request, f'Error creating payment: {str(e)}')
     
-    # Get unpaid purchases for this supplier
+    # Get unpaid purchases for this supplier (received or partially received, with remaining balance)
     unpaid_purchases = Purchase.objects.filter(
         supplier=supplier,
-        status='received'
+        status__in=('received', 'partially_received')
     ).annotate(
         allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
     ).filter(
@@ -4924,614 +5015,10 @@ def z_report_redirect(request, slug=None):
 
 
 
-    """Generate Z-Report for end of day closing"""
-    from django.db.models import Sum, Count
-
-    # Get date filter (default to today)
-    report_date = request.GET.get('date')
-    if report_date:
-        report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
-    else:
-        report_date = datetime.now().date()
-
-    # Check if this day has already been officially closed
-    existing_closure = DayClosureReport.objects.filter(
-        business=request.business,
-        report_date=report_date
-    ).first()
-
-    # Get all sales for the date
-    sales = Sale.objects.filter(
-        business=request.business,
-        date__date=report_date
-    ).select_related('cashier')
-
-    # Calculate totals
-    total_sales_count = sales.count()
-    total_revenue = sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-    total_subtotal = sales.aggregate(total=Sum('subtotal'))['total'] or Decimal('0.00')
-    total_vat = sales.aggregate(total=Sum('vat_amount'))['total'] or Decimal('0.00')
-    total_discounts = sales.aggregate(total=Sum('discount_amount'))['total'] or Decimal('0.00')
-
-    # Sales by payment method
-    payment_methods = SalePayment.objects.filter(
-        sale__business=request.business,
-        sale__date__date=report_date
-    ).values('payment_method__name').annotate(
-        total=Sum('amount'),
-        count=Count('id')
-    ).order_by('-total')
-
-    # Sales by cashier
-    cashier_sales = sales.values('cashier__username', 'cashier__first_name', 'cashier__last_name').annotate(
-        total=Sum('total'),
-        count=Count('id')
-    ).order_by('-total')
-
-    # Get shift information if available
-    # Filter shifts by cashiers who are members of this business
-    business_cashiers = User.objects.filter(business_memberships__business=request.business)
-    shifts = Shift.objects.filter(
-        cashier__in=business_cashiers,
-        start_time__date=report_date
-    ).select_related('cashier')
-
-    # Calculate cash drawer summary
-    # Look for cash payment method by code or name
-    from django.db.models import Q
-    cash_payments = SalePayment.objects.filter(
-        sale__business=request.business,
-        sale__date__date=report_date
-    ).filter(
-        Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-
-    # Get cash floats for the day
-    from pos.models import CashFloat
-    cash_floats = CashFloat.objects.filter(
-        business=request.business,
-        given_at__date=report_date
-    ).select_related('cashier', 'given_by')
-    
-    # Calculate total opening floats
-    opening_floats = cash_floats.filter(float_type='opening').aggregate(
-        total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    # Calculate total additional floats
-    additional_floats = cash_floats.filter(float_type='additional').aggregate(
-        total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    total_floats = opening_floats + additional_floats
-
-    # Opening cash (from shifts or floats, whichever is higher)
-    opening_cash = shifts.aggregate(total=Sum('opening_cash'))['total'] or Decimal('0.00')
-    if total_floats > opening_cash:
-        opening_cash = total_floats
-    
-    expected_cash = opening_cash + cash_payments
-
-    # Closing cash (from closed shifts or existing closure)
-    if existing_closure:
-        closing_cash = existing_closure.declared_cash
-        cash_difference = existing_closure.variance
-    else:
-        closing_cash = shifts.filter(status='closed').aggregate(total=Sum('closing_cash'))['total'] or Decimal('0.00')
-        cash_difference = closing_cash - expected_cash if closing_cash > 0 else Decimal('0.00')
-
-    # Top selling products
-    top_products = SaleItem.objects.filter(
-        sale__business=request.business,
-        sale__date__date=report_date
-    ).values('product__name').annotate(
-        quantity=Sum('quantity'),
-        revenue=Sum('total_price')
-    ).order_by('-revenue')[:10]
-
-    # Hourly sales breakdown - Database agnostic
-    hourly_sales = sales.annotate(
-        hour=ExtractHour('date')
-    ).values('hour').annotate(
-        total=Sum('total'),
-        count=Count('id')
-    ).order_by('hour')
-    
-    # Check if day is already closed (all shifts are closed OR existing closure exists)
-    day_is_closed = existing_closure is not None or (shifts.exists() and not shifts.filter(status='open').exists())
-    
-    # Check for auto-print flag (after closing)
-    auto_print = request.GET.get('auto_print', '0') == '1'
-
-    context = {
-        'report_date': report_date,
-        'total_sales_count': total_sales_count,
-        'total_revenue': total_revenue,
-        'total_subtotal': total_subtotal,
-        'total_vat': total_vat,
-        'total_discounts': total_discounts,
-        'payment_methods': payment_methods,
-        'cashier_sales': cashier_sales,
-        'shifts': shifts,
-        'opening_cash': opening_cash,
-        'expected_cash': expected_cash,
-        'closing_cash': closing_cash,
-        'cash_difference': cash_difference,
-        'cash_payments': cash_payments,
-        'top_products': top_products,
-        'hourly_sales': hourly_sales,
-        'day_is_closed': day_is_closed,
-        'existing_closure': existing_closure,
-        'auto_print': auto_print,
-        'cash_floats': cash_floats,
-        'opening_floats': opening_floats,
-        'additional_floats': additional_floats,
-        'total_floats': total_floats,
-    }
-
-    return render(request, 'pos/z_report.html', context)
 
 
 
-@business_required
-@manager_required
-def z_report_pdf(request, slug=None):
-    """Generate Z-Report as PDF"""
-    from django.db.models import Sum, Count
-    
-    # Get date filter (default to today)
-    report_date = request.GET.get('date')
-    if report_date:
-        report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
-    else:
-        report_date = datetime.now().date()
-    
-    # Get all sales for the date
-    sales = Sale.objects.filter(business=request.business, date__date=report_date)
-    
-    # Calculate totals
-    total_sales_count = sales.count()
-    total_revenue = sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-    total_subtotal = sales.aggregate(total=Sum('subtotal'))['total'] or Decimal('0.00')
-    total_vat = sales.aggregate(total=Sum('vat_amount'))['total'] or Decimal('0.00')
-    total_discounts = sales.aggregate(total=Sum('discount_amount'))['total'] or Decimal('0.00')
-    
-    # Sales by payment method
-    payment_methods = SalePayment.objects.filter(
-        sale__business=request.business,
-        sale__date__date=report_date
-    ).values('payment_method__name').annotate(
-        total=Sum('amount'),
-        count=Count('id')
-    )
-    
-    # Create PDF
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # Title
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1a1d29'),
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
-    elements.append(Paragraph(f'Z-REPORT', title_style))
-    elements.append(Paragraph(f'End of Day Report - {report_date.strftime("%d %B %Y")}', styles['Normal']))
-    elements.append(Spacer(1, 20))
-    
-    # Summary table
-    summary_data = [
-        ['SALES SUMMARY', ''],
-        ['Total Transactions', str(total_sales_count)],
-        ['Gross Sales', f'KES {total_subtotal:,.2f}'],
-        ['VAT', f'KES {total_vat:,.2f}'],
-        ['Discounts', f'KES {total_discounts:,.2f}'],
-        ['NET SALES', f'KES {total_revenue:,.2f}'],
-    ]
-    
-    summary_table = Table(summary_data, colWidths=[4*inch, 2*inch])
-    summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4e73df')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e3f2fd')),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 14),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-    ]))
-    elements.append(summary_table)
-    elements.append(Spacer(1, 20))
-    
-    # Payment methods
-    if payment_methods:
-        elements.append(Paragraph('PAYMENT METHODS', styles['Heading2']))
-        payment_data = [['Payment Method', 'Transactions', 'Amount']]
-        for pm in payment_methods:
-            payment_data.append([
-                pm['payment_method__name'],
-                str(pm['count']),
-                f"KES {pm['total']:,.2f}"
-            ])
-        
-        payment_table = Table(payment_data, colWidths=[3*inch, 1.5*inch, 2*inch])
-        payment_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ]))
-        elements.append(payment_table)
-    
-    # Build PDF
-    doc.build(elements)
-    buffer.seek(0)
-    
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="z-report-{report_date}.pdf"'
-    return response
 
-
-@business_required
-@manager_required
-def close_day(request, slug=None):
-    """Close the day - closes all open shifts for the specified date and reconciles cash floats"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    if request.method != 'POST':
-        messages.error(request, 'Invalid request method.')
-        return redirect('z_report', slug=request.business.slug)
-    
-    try:
-        # Get parameters
-        report_date_str = request.POST.get('report_date')
-        closing_cash = Decimal(request.POST.get('closing_cash', '0'))
-        
-        logger.info(f"[CLOSE_DAY] Starting day closure for business={request.business.slug}, date={report_date_str}, closing_cash={closing_cash}")
-        
-        if not report_date_str:
-            messages.error(request, 'Report date is required.')
-            return redirect('z_report', slug=request.business.slug)
-        
-        # Parse date
-        report_date = datetime.strptime(report_date_str, '%Y-%m-%d').date()
-        
-        # ===== DUPLICATE CLOSURE PREVENTION =====
-        # Check if this day has already been officially closed
-        existing_closure = DayClosureReport.objects.filter(
-            business=request.business,
-            report_date=report_date
-        ).first()
-        
-        logger.info(f"[CLOSE_DAY] Existing closure check: {existing_closure}")
-        
-        if existing_closure:
-            messages.error(
-                request,
-                f'Day {report_date.strftime("%d %B %Y")} has already been closed! '
-                f'Closed by {existing_closure.closed_by.username} on {existing_closure.closed_at.strftime("%d %B %Y at %H:%M")}. '
-                f'Declared cash: KES {existing_closure.declared_cash:.2f}, '
-                f'Variance: {existing_closure.variance_status}. '
-                f'Cannot close the same day twice.'
-            )
-            return redirect('z_report', slug=request.business.slug)
-        # ===== END DUPLICATE PREVENTION =====
-        
-        # Get all shifts for this date that belong to business members
-        business_cashiers = User.objects.filter(business_memberships__business=request.business)
-        shifts = Shift.objects.filter(
-            cashier__in=business_cashiers,
-            start_time__date=report_date,
-            status='open'
-        )
-        
-        logger.info(f"[CLOSE_DAY] Found {shifts.count()} open shifts")
-        
-        # REMOVED: Don't block day closure if no open shifts exist
-        # Many businesses don't use the shift system or close retrospectively
-        # The DayClosureReport is the authoritative record of day closure
-        
-        # Calculate expected cash for the day
-        from django.db.models import Q
-        from pos.models import CashFloat
-        
-        cash_payments = SalePayment.objects.filter(
-            sale__business=request.business,
-            sale__date__date=report_date
-        ).filter(
-            Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        logger.info(f"[CLOSE_DAY] Cash payments: {cash_payments}")
-        
-        # Get cash floats for the day
-        cash_floats = CashFloat.objects.filter(
-            business=request.business,
-            given_at__date=report_date,
-            status='active'
-        )
-        
-        # Calculate total floats
-        total_floats = cash_floats.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        opening_cash = shifts.aggregate(total=Sum('opening_cash'))['total'] or Decimal('0.00')
-        # Use floats if higher than shift opening cash
-        if total_floats > opening_cash:
-            opening_cash = total_floats
-        
-        logger.info(f"[CLOSE_DAY] Opening cash: {opening_cash}, Total floats: {total_floats}")
-        
-        expected_cash = opening_cash + cash_payments
-        cash_difference = closing_cash - expected_cash
-        
-        logger.info(f"[CLOSE_DAY] Expected: {expected_cash}, Declared: {closing_cash}, Variance: {cash_difference}")
-        
-        # Get sales summary for the day
-        sales = Sale.objects.filter(
-            business=request.business,
-            date__date=report_date
-        )
-        total_transactions = sales.count()
-        total_revenue = sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        total_discounts = sales.aggregate(total=Sum('discount_amount'))['total'] or Decimal('0.00')
-        
-        logger.info(f"[CLOSE_DAY] Sales: {total_transactions} transactions, Revenue: {total_revenue}")
-        
-        # Reconcile cash floats
-        floats_reconciled = 0
-        for cash_float in cash_floats:
-            # Calculate expected return for this float
-            # Float amount + cash sales made by this cashier
-            cashier_cash_sales = SalePayment.objects.filter(
-                sale__business=request.business,
-                sale__date__date=report_date,
-                sale__cashier=cash_float.cashier
-            ).filter(
-                Q(payment_method__code='CASH') | Q(payment_method__name__iexact='CASH')
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            
-            expected_return = cash_float.amount + cashier_cash_sales
-            
-            # Mark as returned with the closing cash
-            # Note: In a multi-cashier setup, you'd need to split closing_cash
-            # For now, we'll mark it as reconciled with a note
-            cash_float.status = 'reconciled'
-            cash_float.returned_at = timezone.now()
-            cash_float.notes = (
-                f"Reconciled during day close by {request.user.username}. "
-                f"Expected return: KES {expected_return:.2f}. "
-                f"Day closing variance: KES {cash_difference:.2f}"
-            )
-            cash_float.save()
-            floats_reconciled += 1
-        
-        logger.info(f"[CLOSE_DAY] Reconciled {floats_reconciled} cash floats")
-        
-        # Close all open shifts
-        closed_count = 0
-        for shift in shifts:
-            # Calculate this shift's portion of the closing cash
-            # For simplicity, we'll use the same closing_cash for all shifts
-            # In a more complex system, you might want to track per-shift closing
-            shift.end_time = timezone.now()
-            shift.closing_cash = closing_cash
-            shift.expected_cash = expected_cash
-            shift.cash_difference = cash_difference
-            
-            # Calculate shift summary
-            shift_sales = Sale.objects.filter(
-                business=request.business,
-                date__gte=shift.start_time,
-                date__date=report_date,
-                cashier=shift.cashier
-            )
-            shift.total_sales = shift_sales.count()
-            shift.total_revenue = shift_sales.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
-            shift.status = 'closed'
-            shift.notes = f'Closed by {request.user.username} on {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}'
-            shift.save()
-            
-            closed_count += 1
-        
-        logger.info(f"[CLOSE_DAY] Closed {closed_count} shifts")
-        
-        # ===== CREATE DAY CLOSURE REPORT =====
-        # This creates the official record and prevents duplicate closures
-        logger.info(f"[CLOSE_DAY] Creating DayClosureReport for business={request.business.slug}, date={report_date}")
-        
-        day_closure = DayClosureReport.objects.create(
-            business=request.business,
-            report_date=report_date,
-            closed_by=request.user,
-            opening_cash=opening_cash,
-            cash_sales=cash_payments,
-            expected_cash=expected_cash,
-            declared_cash=closing_cash,
-            variance=cash_difference,
-            total_transactions=total_transactions,
-            total_revenue=total_revenue,
-            total_discounts=total_discounts,
-            shifts_closed=closed_count,
-            floats_reconciled=floats_reconciled,
-            notes=f'Day closed successfully. {closed_count} shift(s) closed, {floats_reconciled} float(s) reconciled.'
-        )
-        
-        logger.info(f"[CLOSE_DAY] DayClosureReport created successfully with ID={day_closure.id}")
-        # ===== END DAY CLOSURE REPORT =====
-        
-        # Log the activity
-        ActivityLog.objects.create(
-            business=request.business,
-            user=request.user,
-            action_type='settings',
-            operation_type='close_day',
-            entity_type='DayClosureReport',
-            entity_id=str(day_closure.id),
-            description=f'Closed day for {report_date.strftime("%d %B %Y")}. '
-                       f'Closed {closed_count} shift(s). '
-                       f'Reconciled {floats_reconciled} cash float(s). '
-                       f'Expected: KES {expected_cash:.2f}, '
-                       f'Actual: KES {closing_cash:.2f}, '
-                       f'Variance: KES {cash_difference:.2f}'
-        )
-        
-        logger.info(f"[CLOSE_DAY] Activity logged successfully")
-        
-        # Success message
-        variance_msg = ''
-        if cash_difference > 0:
-            variance_msg = f' Cash is over by KES {cash_difference:.2f}.'
-        elif cash_difference < 0:
-            variance_msg = f' Cash is short by KES {abs(cash_difference):.2f}.'
-        else:
-            variance_msg = ' Cash is balanced.'
-        
-        float_msg = f' Reconciled {floats_reconciled} cash float(s).' if floats_reconciled > 0 else ''
-        
-        messages.success(
-            request, 
-            f'Day closed successfully for {report_date.strftime("%d %B %Y")}! '
-            f'Closed {closed_count} shift(s).{float_msg}{variance_msg} '
-            f'Printing Z-Report...'
-        )
-        
-        # Redirect to Z-report with auto-print flag
-        from django.urls import reverse
-        z_report_url = reverse('z_report', kwargs={'slug': request.business.slug})
-        redirect_url = f"{z_report_url}?date={report_date_str}&auto_print=1"
-        
-        logger.info(f"[CLOSE_DAY] Redirecting to: {redirect_url}")
-        
-        return redirect(redirect_url)
-        
-    except ValueError as e:
-        logger.error(f"[CLOSE_DAY] ValueError: {str(e)}", exc_info=True)
-        messages.error(request, f'Invalid data provided: {str(e)}')
-    except Exception as e:
-        logger.error(f"[CLOSE_DAY] Exception: {str(e)}", exc_info=True)
-        messages.error(request, f'Error closing day: {str(e)}')
-    
-    return redirect('z_report', slug=request.business.slug)
-
-
-
-@business_required
-@manager_required
-def open_new_day(request, slug=None):
-    """Open a new day after closing previous day - creates new shift with opening cash"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    if request.method != 'POST':
-        messages.error(request, 'Invalid request method.')
-        return redirect('z_report', slug=request.business.slug)
-    
-    try:
-        opening_cash = Decimal(request.POST.get('opening_cash', '0'))
-        bank_deposit = Decimal(request.POST.get('bank_deposit', '0'))
-        
-        logger.info(f"[OPEN_NEW_DAY] Opening new day for business={request.business.slug}, opening_cash={opening_cash}, bank_deposit={bank_deposit}")
-        
-        # Validate amounts
-        if opening_cash < 0:
-            messages.error(request, 'Opening cash cannot be negative.')
-            return redirect('z_report', slug=request.business.slug)
-        
-        if bank_deposit < 0:
-            messages.error(request, 'Bank deposit cannot be negative.')
-            return redirect('z_report', slug=request.business.slug)
-        
-        # Get today's date
-        today = datetime.now().date()
-        
-        # Check if there's already an open shift for today
-        # If there is, close it automatically before opening new day
-        existing_shift = Shift.objects.filter(
-            cashier=request.user,
-            start_time__date=today,
-            status='open'
-        ).first()
-        
-        if existing_shift:
-            # Auto-close the existing shift with the declared cash
-            logger.info(f"[OPEN_NEW_DAY] Auto-closing existing shift: {existing_shift.shift_number}")
-            
-            existing_shift.end_time = timezone.now()
-            existing_shift.closing_cash = opening_cash  # Use the declared amount as closing
-            existing_shift.status = 'closed'
-            existing_shift.notes = (existing_shift.notes or '') + f' Auto-closed by Open New Day feature. '
-            existing_shift.save()
-            
-            logger.info(f"[OPEN_NEW_DAY] Shift {existing_shift.shift_number} closed successfully")
-        
-        # Check if there's a closed shift for today - this is OK, we can open a new one
-        closed_shift_today = Shift.objects.filter(
-            cashier=request.user,
-            start_time__date=today,
-            status='closed'
-        ).first()
-        
-        if closed_shift_today:
-            logger.info(f"[OPEN_NEW_DAY] Found closed shift for today: {closed_shift_today.shift_number}. Allowing new shift creation.")
-        
-        # Create new shift for today
-        shift = Shift.objects.create(
-            cashier=request.user,
-            opening_cash=opening_cash,
-            status='open',
-            notes=f'New day opened by {request.user.username}. '
-                  f'Opening cash: KES {opening_cash:.2f}. '
-                  f'Bank deposit: KES {bank_deposit:.2f}.'
-        )
-        
-        logger.info(f"[OPEN_NEW_DAY] Created shift #{shift.shift_number} with ID={shift.id}")
-        
-        # Log the activity
-        ActivityLog.objects.create(
-            business=request.business,
-            user=request.user,
-            action_type='settings',
-            operation_type='open_new_day',
-            entity_type='Shift',
-            entity_id=str(shift.id),
-            description=f'Opened new day with shift #{shift.shift_number}. '
-                       f'Opening cash: KES {opening_cash:.2f}. '
-                       f'Bank deposit: KES {bank_deposit:.2f}.'
-        )
-        
-        # Success message
-        deposit_msg = f' Bank deposit of KES {bank_deposit:.2f} recorded.' if bank_deposit > 0 else ''
-        
-        messages.success(
-            request,
-            f'New day opened successfully! '
-            f'Shift #{shift.shift_number} started with opening cash of KES {opening_cash:.2f}.{deposit_msg} '
-            f'Ready to start selling!'
-        )
-        
-        logger.info(f"[OPEN_NEW_DAY] Success - redirecting to today's Z-Report")
-        
-        # Redirect to today's Z-Report
-        return redirect('z_report', slug=request.business.slug)
-        
-    except ValueError as e:
-        logger.error(f"[OPEN_NEW_DAY] ValueError: {str(e)}", exc_info=True)
-        messages.error(request, f'Invalid data provided: {str(e)}')
-    except Exception as e:
-        logger.error(f"[OPEN_NEW_DAY] Exception: {str(e)}", exc_info=True)
-        messages.error(request, f'Error opening new day: {str(e)}')
-    
-    return redirect('z_report', slug=request.business.slug)
 
 
 

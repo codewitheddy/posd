@@ -89,6 +89,8 @@
                 </form>
 
                 <script>
+                document.addEventListener('DOMContentLoaded', function() {
+
                 document.getElementById('paymentForm').addEventListener('submit', function(e) {
                     const amount = parseFloat(document.getElementById('amount').value);
                     const maxAmount = parseFloat({{ supplier.outstanding_balance }});
@@ -103,6 +105,45 @@
                         return false;
                     }
                 });
+
+                // Allocation checkboxes logic
+                document.querySelectorAll('.alloc-check').forEach(function(chk) {
+                    chk.addEventListener('change', function() {
+                        const row = this.closest('tr');
+                        const amtInput = row.querySelector('.alloc-amount');
+                        const remaining = parseFloat(this.dataset.remaining);
+                        if (this.checked) {
+                            amtInput.disabled = false;
+                            amtInput.value = remaining.toFixed(2);
+                        } else {
+                            amtInput.disabled = true;
+                            amtInput.value = '';
+                        }
+                        recalcTotal();
+                    });
+                });
+
+                document.querySelectorAll('.alloc-amount').forEach(function(inp) {
+                    inp.addEventListener('input', recalcTotal);
+                });
+
+                const outstandingBalance = parseFloat('{{ supplier.outstanding_balance }}');
+
+                // Pre-fill amount with full outstanding balance on load
+                document.getElementById('amount').value = outstandingBalance.toFixed(2);
+
+                function recalcTotal() {
+                    let total = 0;
+                    document.querySelectorAll('.alloc-amount:not([disabled])').forEach(function(inp) {
+                        const v = parseFloat(inp.value);
+                        if (!isNaN(v)) total += v;
+                    });
+                    const amtField = document.getElementById('amount');
+                    // If nothing selected, revert to full outstanding balance (FIFO mode)
+                    amtField.value = (total > 0 ? total : outstandingBalance).toFixed(2);
+                }
+
+                }); // end DOMContentLoaded
                 </script>
             </div>
         </div>
@@ -126,33 +167,51 @@
             <div class="ui-card">
                 <div class="ui-card-header">
                     <span class="ui-card-title">Unpaid Purchases</span>
+                    <small class="text-muted">Check the ones you want to pay now</small>
                 </div>
                 <div class="ui-card-body p-0">
                     {% if unpaid_purchases %}
                     <div class="table-responsive">
-                        <table class="ui-table">
+                        <table class="ui-table" id="allocations-table">
                             <thead>
                                 <tr>
+                                    <th style="width:48px; padding-left:16px;"></th>
                                     <th>Purchase #</th>
                                     <th>Date</th>
-                                    <th class="text-end">Total</th>
                                     <th class="text-end">Remaining</th>
+                                    <th class="text-end" style="width:140px;">Pay Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for purchase in unpaid_purchases %}
-                                <tr>
-                                    <td>{{ purchase.purchase_number }}</td>
+                                <tr class="alloc-row" data-remaining="{{ purchase.remaining_balance|floatformat:2 }}">
+                                    <td style="padding-left:16px; padding-right:4px; overflow:visible;">
+                                        <div style="overflow:visible; padding:2px;">
+                                        <input type="checkbox" class="form-check-input alloc-check"
+                                               id="chk_{{ purchase.id }}"
+                                               data-purchase-id="{{ purchase.id }}"
+                                               data-remaining="{{ purchase.remaining_balance|floatformat:2 }}"
+                                               style="margin:0; display:block;">
+                                        </div>
+                                    </td>
+                                    <td><label for="chk_{{ purchase.id }}" style="cursor:pointer;">{{ purchase.purchase_number }}</label></td>
                                     <td>{{ purchase.date|date:"Y-m-d" }}</td>
-                                    <td class="text-end">KES {{ purchase.total_amount|floatformat:2 }}</td>
                                     <td class="text-end"><strong>KES {{ purchase.remaining_balance|floatformat:2 }}</strong></td>
+                                    <td class="text-end">
+                                        <input type="number" name="alloc_amount_{{ purchase.id }}"
+                                               class="form-control form-control-sm alloc-amount text-end"
+                                               step="0.01" min="0.01"
+                                               max="{{ purchase.remaining_balance|floatformat:2 }}"
+                                               placeholder="0.00"
+                                               disabled>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                     <div class="ui-card-body" style="padding-top:8px;">
-                        <small class="text-muted"><i class="bi bi-info-circle"></i> Payment will be automatically allocated to oldest purchases first (FIFO)</small>
+                        <small class="text-muted"><i class="bi bi-info-circle"></i> Leave all unchecked to auto-allocate oldest first (FIFO)</small>
                     </div>
                     {% else %}
                     <div class="empty-state" style="padding:24px;">

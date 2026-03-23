@@ -341,7 +341,7 @@
     background-position: center;
     background-size: contain;
     border: 2px solid #858796;
-    border-radius: 50%;
+    border-radius: 50% !important;
     appearance: none;
     cursor: pointer;
     transition: all 0.15s ease-in-out;

@@ -115,10 +115,10 @@
     <div class="fin-card">
       <div class="card-header"><span class="fin-title"><i class="bi bi-pie-chart me-2 text-danger"></i>Expense Distribution</span></div>
       <div class="card-body">
-        {% if pie_values %}
+        {% if expense_by_cat %}
         <canvas id="expensePieChart" height="200"></canvas>
         {% else %}
-        <div class="text-center py-4 text-muted small">No expense data</div>
+        <div class="text-center py-4 text-muted small"><i class="bi bi-pie-chart" style="font-size:2rem;opacity:.2;display:block;margin-bottom:8px"></i>No expense data for this period</div>
         {% endif %}
       </div>
     </div>
@@ -155,7 +155,7 @@ new Chart(document.getElementById('plTrendChart'), {
   }
 });
 
-{% if pie_values %}
+{% if expense_by_cat %}
 new Chart(document.getElementById('expensePieChart'), {
   type: 'doughnut',
   data: {

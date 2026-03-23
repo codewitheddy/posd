@@ -335,6 +335,7 @@
                                     <i class="bi bi-check-circle"></i> <strong id="customer-name"></strong><br>
                                     <span class="badge bg-warning text-dark" id="customer-tier"></span>
                                     <span class="badge bg-success" id="customer-points"></span>
+                                    <span class="badge bg-info" id="customer-credit" style="display:none;"></span>
                                 </small>
                             </div>
                         </div>
@@ -609,6 +610,7 @@
     <input type="hidden" name="discount_type" id="form-discount-type">
     <input type="hidden" name="discount_value" id="form-discount-value">
     <input type="hidden" name="order_notes" id="form-order-notes">
+    <input type="hidden" name="is_credit_sale" id="form-is-credit-sale" value="0">
     <div id="form-items"></div>
     <div id="form-payments"></div>
 </form>
@@ -648,6 +650,36 @@
                 <button type="button" class="btn btn-primary" onclick="addVariablePriceToCart()">
                     <i class="bi bi-cart-plus"></i> Add to Cart
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Unit Picker Modal (Bulk vs Piece) -->
+<div class="modal fade" id="unitPickerModal" tabindex="-1" aria-labelledby="unitPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="unitPickerModalLabel">
+                    <i class="bi bi-box-seam"></i> Select Unit
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6 id="unit-picker-product-name" class="text-center mb-3 fw-bold"></h6>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary btn-lg" id="unit-picker-piece-btn">
+                        <i class="bi bi-1-circle"></i>
+                        <div id="unit-picker-piece-label"></div>
+                    </button>
+                    <button class="btn btn-outline-success btn-lg" id="unit-picker-bulk-btn">
+                        <i class="bi bi-box"></i>
+                        <div id="unit-picker-bulk-label"></div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
             </div>
         </div>
     </div>
@@ -730,6 +762,9 @@
                         <button type="button" class="btn btn-secondary" onclick="autoFillBalance()">
                             <i class="bi bi-lightning-fill"></i> Pay Remaining
                         </button>
+                        <button type="button" class="btn btn-warning" id="pay-on-credit-btn" onclick="payOnCredit()" style="display:none;">
+                            <i class="bi bi-credit-card-2-back"></i> Pay on Credit
+                        </button>
                     </div>
                 </div>
 
@@ -778,6 +813,7 @@
 let cart = [];
 const VAT_RATE = {{ vat_rate|default:16 }};
 const productStock = {};
+const productData = {}; // stores full product objects for unit picker
 let selectedCustomer = null;
 let paymentMethods = [];
 let totalDue = 0;
@@ -1009,8 +1045,9 @@ function renderProducts(products) {
     const listBody = document.getElementById('products-list-body');
     
     products.forEach(product => {
-        // Store stock quantity
+        // Store stock quantity and full product data
         productStock[product.id] = product.stock_quantity;
+        productData[product.id] = product;
         
         // Determine stock status
         const isOutOfStock = product.stock_quantity <= 0;
@@ -1023,7 +1060,11 @@ function renderProducts(products) {
         
         if (!isOutOfStock) {
             row.onclick = function() {
-                addToCart(product.id, product.name, product.unit_price, product.stock_quantity, product.tax_class || 'standard');
+                if (product.has_bulk) {
+                    showUnitPickerModal(product);
+                } else {
+                    addToCart(product.id, product.name, product.unit_price, product.stock_quantity, product.tax_class || 'standard');
+                }
             };
         }
         
@@ -1057,7 +1098,10 @@ function renderProducts(products) {
             <td>
                 ${isOutOfStock ? 
                     '<button class="btn btn-sm btn-secondary" disabled><i class="bi bi-x-circle"></i> Out</button>' :
-                    `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, '${product.tax_class || 'standard'}');"><i class="bi bi-plus-circle"></i> Add</button>`
+                    (product.has_bulk ?
+                        `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); showUnitPickerModalById(${product.id});"><i class="bi bi-plus-circle"></i> Add</button>` :
+                        `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, '${product.tax_class || 'standard'}');"><i class="bi bi-plus-circle"></i> Add</button>`
+                    )
                 }
             </td>
         `;
@@ -1346,7 +1390,10 @@ function searchCustomer() {
                     id: data.customer.id,
                     name: data.customer.name,
                     points: data.customer.loyalty_points,
-                    tier: data.customer.tier
+                    tier: data.customer.tier,
+                    credit_limit: data.customer.credit_limit,
+                    credit_balance: data.customer.credit_balance,
+                    available_credit: data.customer.available_credit,
                 };
                 
                 // Update hidden field
@@ -1357,6 +1404,7 @@ function searchCustomer() {
                 const nameEl = document.getElementById('customer-name');
                 const tierEl = document.getElementById('customer-tier');
                 const pointsEl = document.getElementById('customer-points');
+                const creditEl = document.getElementById('customer-credit');
                 const infoEl = document.getElementById('customer-info');
                 const errorEl = document.getElementById('customer-error');
                 const clearBtn = document.getElementById('clear-customer-btn');
@@ -1364,6 +1412,14 @@ function searchCustomer() {
                 if (nameEl) nameEl.textContent = data.customer.name;
                 if (tierEl) tierEl.textContent = data.customer.tier_display;
                 if (pointsEl) pointsEl.textContent = data.customer.loyalty_points + ' points';
+                if (creditEl) {
+                    if (data.customer.credit_limit > 0) {
+                        creditEl.textContent = 'Credit: KES ' + data.customer.available_credit.toFixed(2) + ' available';
+                        creditEl.style.display = 'inline-block';
+                    } else {
+                        creditEl.style.display = 'none';
+                    }
+                }
                 if (infoEl) infoEl.style.display = 'block';
                 if (errorEl) errorEl.style.display = 'none';
                 if (clearBtn) clearBtn.style.display = 'inline-block';
@@ -1412,6 +1468,59 @@ function clearCustomer() {
     
     calculateTotal();
     saveCartToStorage();
+}
+
+// Pay entire sale on credit
+function payOnCredit() {
+    if (!selectedCustomer || !selectedCustomer.credit_limit) {
+        alert('No customer selected or customer has no credit limit.');
+        return;
+    }
+    if (selectedCustomer.available_credit < totalDue) {
+        alert(`Insufficient credit. Available: KES ${selectedCustomer.available_credit.toFixed(2)}, Required: KES ${totalDue.toFixed(2)}`);
+        return;
+    }
+    if (!confirm(`Charge KES ${totalDue.toFixed(2)} to ${selectedCustomer.name}'s credit account?\nAvailable credit: KES ${selectedCustomer.available_credit.toFixed(2)}`)) {
+        return;
+    }
+    // Mark as credit sale and submit directly
+    document.getElementById('form-is-credit-sale').value = '1';
+    // Populate form and submit
+    const formItems = document.getElementById('form-items');
+    const formPayments = document.getElementById('form-payments');
+    formItems.innerHTML = '';
+    cart.forEach(item => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'items';
+        input.value = `${item.id},${item.quantity},${item.price},${encodeURIComponent(item.note || '')}`;
+        formItems.appendChild(input);
+    });
+    formPayments.innerHTML = '';
+    // No payment entries — it's on credit
+    const amountPaidInput = document.createElement('input');
+    amountPaidInput.type = 'hidden';
+    amountPaidInput.name = 'amount_paid';
+    amountPaidInput.value = '0.00';
+    formPayments.appendChild(amountPaidInput);
+    const changeInput = document.createElement('input');
+    changeInput.type = 'hidden';
+    changeInput.name = 'change_given';
+    changeInput.value = '0.00';
+    formPayments.appendChild(changeInput);
+    const customerIdInput = document.getElementById('form-customer-id');
+    const discountTypeInput = document.getElementById('form-discount-type');
+    const discountValueInput = document.getElementById('form-discount-value');
+    if (customerIdInput) customerIdInput.value = selectedCustomer.id;
+    if (discountTypeInput) discountTypeInput.value = document.getElementById('discount-type').value;
+    if (discountValueInput) discountValueInput.value = document.getElementById('discount-value').value;
+    localStorage.setItem('pos_sale_completing', 'true');
+    const modalElement = document.getElementById('paymentModal');
+    if (modalElement) {
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) modalInstance.hide();
+    }
+    document.getElementById('sale-form').submit();
 }
 
 // Handle discount type change
@@ -1693,6 +1802,83 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// ==================== UNIT PICKER (BULK vs PIECE) ====================
+function showUnitPickerModalById(productId) {
+    const product = productData[productId];
+    if (!product) return;
+    showUnitPickerModal(product);
+}
+
+function showUnitPickerModal(product) {
+    document.getElementById('unit-picker-product-name').textContent = product.name;
+
+    const pieceBtn = document.getElementById('unit-picker-piece-btn');
+    const bulkBtn = document.getElementById('unit-picker-bulk-btn');
+
+    document.getElementById('unit-picker-piece-label').textContent =
+        `1 piece @ KES ${product.unit_price.toFixed(2)}`;
+
+    const bulkName = product.bulk_unit_name || 'Carton';
+    const bulkQty = product.bulk_unit_quantity || 1;
+    const bulkPrice = product.bulk_unit_price || 0;
+    const bulkAvailable = Math.floor(product.stock_quantity / bulkQty);
+
+    document.getElementById('unit-picker-bulk-label').textContent =
+        `1 ${bulkName} (${bulkQty} pcs) @ KES ${bulkPrice.toFixed(2)}`;
+
+    // Disable bulk if not enough stock for even 1 carton
+    bulkBtn.disabled = bulkAvailable < 1;
+    if (bulkAvailable < 1) {
+        bulkBtn.title = 'Not enough stock for a full carton';
+    }
+
+    // Piece handler
+    pieceBtn.onclick = function() {
+        bootstrap.Modal.getInstance(document.getElementById('unitPickerModal')).hide();
+        addToCart(product.id, product.name, product.unit_price, product.stock_quantity, product.tax_class || 'standard');
+    };
+
+    // Bulk handler — add 1 carton: quantity = bulkQty pieces, price = bulkPrice
+    bulkBtn.onclick = function() {
+        bootstrap.Modal.getInstance(document.getElementById('unitPickerModal')).hide();
+        addBulkToCart(product.id, product.name, bulkName, bulkPrice, bulkQty, product.stock_quantity, product.tax_class || 'standard');
+    };
+
+    new bootstrap.Modal(document.getElementById('unitPickerModal')).show();
+}
+
+function addBulkToCart(id, name, bulkName, bulkPrice, bulkQty, availableStock, taxClass) {
+    // Display name shows bulk unit, e.g. "Milk (Carton)"
+    const displayName = `${name} (${bulkName})`;
+    const existing = cart.find(item => item.id === id && item.isBulk);
+    const currentQty = existing ? existing.quantity : 0;
+
+    // Each "unit" in cart = 1 carton = bulkQty pieces; check stock in pieces
+    if ((currentQty + bulkQty) > availableStock) {
+        showNotification(`Not enough stock. Only ${Math.floor(availableStock / bulkQty)} carton(s) available.`, 'error');
+        return;
+    }
+
+    if (existing) {
+        existing.quantity += bulkQty;
+    } else {
+        cart.push({
+            id,
+            name: displayName,
+            price: bulkPrice,
+            quantity: bulkQty,
+            availableStock,
+            taxClass,
+            isBulk: true,
+            bulkQty,  // pieces per carton, used for stock checks
+        });
+    }
+
+    updateCart();
+    saveCartToStorage();
+    showNotification(`Added 1 ${bulkName} of ${name} to cart`, 'success');
+}
+
 function addToCart(id, name, price, availableStock, taxClass = 'standard') {
     console.log('addToCart called:', {id, name, price, availableStock, taxClass});
     
@@ -1725,10 +1911,11 @@ function removeFromCart(id) {
 }
 
 function adjustQty(id, delta) {
-    const item = cart.find(i => i.id === id);
+    const item = cart.find(i => i.id === id && !i.isBulk) || cart.find(i => i.id === id);
     if (!item) return;
-    const newQty = item.quantity + delta;
-    if (newQty < 1) { removeFromCart(id); return; }
+    const step = item.isBulk ? item.bulkQty : 1;
+    const newQty = item.quantity + (delta * step);
+    if (newQty < (item.isBulk ? item.bulkQty : 1)) { removeFromCart(id); return; }
     if (newQty > item.availableStock) {
         showNotification(`Only ${item.availableStock} in stock`, 'error');
         return;
@@ -2068,6 +2255,16 @@ function completeSale() {
         document.getElementById('payment-method-select').value = '';
         document.getElementById('payment-amount-input').value = '';
         document.getElementById('payment-reference-input').value = '';
+        
+        // Show/hide "Pay on Credit" button based on customer credit availability
+        const creditBtn = document.getElementById('pay-on-credit-btn');
+        if (creditBtn) {
+            const hasCreditAvailable = selectedCustomer && selectedCustomer.credit_limit > 0 && selectedCustomer.available_credit >= totalDue;
+            creditBtn.style.display = hasCreditAvailable ? 'inline-block' : 'none';
+            if (hasCreditAvailable) {
+                creditBtn.title = `Available credit: KES ${selectedCustomer.available_credit.toFixed(2)}`;
+            }
+        }
         
         console.log('Opening payment modal...');
         
@@ -2758,6 +2955,10 @@ function confirmPaymentAndComplete() {
     if (customerIdInput) customerIdInput.value = selectedCustomer ? selectedCustomer.id : '';
     if (discountTypeInput) discountTypeInput.value = document.getElementById('discount-type').value;
     if (discountValueInput) discountValueInput.value = document.getElementById('discount-value').value;
+    
+    // Reset credit sale flag for normal payments
+    const creditSaleInput = document.getElementById('form-is-credit-sale');
+    if (creditSaleInput) creditSaleInput.value = '0';
     
     // Order notes
     const orderNotesInput = document.getElementById('form-order-notes');

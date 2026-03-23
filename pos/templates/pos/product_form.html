@@ -53,7 +53,9 @@
                                 <label class="form-label">Product Type</label>
                                 <select class="form-select" name="product_type">
                                     {% for val, label in product_types %}
+                                    {% if val != 'variant' %}
                                     <option value="{{ val }}" {% if product.product_type == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endif %}
                                     {% endfor %}
                                 </select>
                             </div>
@@ -75,7 +77,7 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Unit of Measure</label>
-                                <select class="form-select" name="unit">
+                                <select class="form-select" name="unit" id="unit-field">
                                     <option value="">-- None --</option>
                                     {% for u in units %}
                                     <option value="{{ u.pk }}" {% if product.unit_id == u.pk %}selected{% endif %}>{{ u.name }} ({{ u.abbreviation }})</option>
@@ -172,8 +174,8 @@
                             </div>
                         </div>
 
-                        <div class="tab-section-title mt-4">Bulk / Multi-Unit Pricing</div>
-                        <div class="row g-3">
+                        <div class="tab-section-title mt-4" id="bulk-pricing-title">Bulk / Multi-Unit Pricing</div>
+                        <div class="row g-3" id="bulk-pricing-fields">
                             <div class="col-md-4">
                                 <label class="form-label">Bulk Unit Name</label>
                                 <input type="text" class="form-control" name="bulk_unit_name"
@@ -194,19 +196,20 @@
 
                     <!-- TAB 3: INVENTORY -->
                     <div class="tab-pane fade" id="tab-inventory">
+                        <div id="inv-type-notice"></div>
                         <div class="tab-section-title">Stock Settings</div>
-                        <div class="row g-3">
+                        <div class="row g-3" id="inv-stock-fields">
                             <div class="col-md-3">
                                 <label class="form-label">Current Stock</label>
                                 <input type="text" class="form-control bg-light" value="{{ product.stock_quantity|default:'0' }}" readonly>
                                 <div class="field-hint">Updated via purchases & adjustments</div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" id="inv-low-stock">
                                 <label class="form-label">Low Stock Alert</label>
                                 <input type="number" class="form-control" name="low_stock_threshold"
                                        value="{{ product.low_stock_threshold|default:'10' }}" step="0.001" min="0">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" id="inv-reorder">
                                 <label class="form-label">Reorder Quantity</label>
                                 <input type="number" class="form-control" name="reorder_quantity"
                                        value="{{ product.reorder_quantity|default:'0' }}" step="0.001" min="0">
@@ -227,12 +230,12 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Expiry Date</label>
+                            <div class="col-md-3" id="inv-expiry-date">
+                                <label class="form-label" id="expiry-date-label">Expiry Date</label>
                                 <input type="date" class="form-control" name="expiry_date"
                                        value="{{ product.expiry_date|date:'Y-m-d'|default:'' }}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" id="inv-expiry-alert">
                                 <label class="form-label">Expiry Alert (days)</label>
                                 <input type="number" class="form-control" name="expiry_alert_days"
                                        value="{{ product.expiry_alert_days|default:'7' }}" min="1">
@@ -513,6 +516,120 @@ function quickAddBrand() {
     }).catch(() => alert('Could not add brand. Try refreshing.'));
 }
 
-document.addEventListener('DOMContentLoaded', recalcPricing);
+document.addEventListener('DOMContentLoaded', function() {
+    recalcPricing();
+    const typeSelect = document.querySelector('select[name="product_type"]');
+    if (typeSelect) {
+        applyProductType(typeSelect.value);
+        typeSelect.addEventListener('change', () => applyProductType(typeSelect.value));
+    }
+});
+
+function applyProductType(type) {
+    // ── helpers ──────────────────────────────────────────────────────────────
+    function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
+    function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+    function setNotice(html, cls) {
+        const n = document.getElementById('inv-type-notice');
+        if (!n) return;
+        if (html) { n.innerHTML = `<div class="alert alert-${cls} mb-3">${html}</div>`; }
+        else { n.innerHTML = ''; }
+    }
+    function setInvTabVisible(visible) {
+        const link = document.querySelector('a[href="#tab-inventory"]');
+        if (!link) return;
+        link.parentElement.style.display = visible ? '' : 'none';
+        if (!visible && link.classList.contains('active')) {
+            document.querySelector('a[href="#tab-general"]').click();
+        }
+    }
+    function disableInvFields(disabled) {
+        document.querySelectorAll('#tab-inventory input, #tab-inventory select').forEach(el => {
+            el.disabled = disabled;
+        });
+    }
+    function highlightField(id, highlight) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const input = el.querySelector('input,select');
+        if (input) input.classList.toggle('border-warning', highlight);
+        const label = el.querySelector('label');
+        if (label) { label.style.fontWeight = highlight ? '700' : ''; label.style.color = highlight ? '#ca8a04' : ''; }
+    }
+
+    // ── reset everything to default ──────────────────────────────────────────
+    setInvTabVisible(true);
+    disableInvFields(false);
+    setNotice('', '');
+    show('inv-stock-fields');
+    show('inv-low-stock');
+    show('inv-reorder');
+    show('inv-expiry-date');
+    show('inv-expiry-alert');
+    show('bulk-pricing-title');
+    show('bulk-pricing-fields');
+    highlightField('inv-expiry-date', false);
+    // unit of measure — reset label
+    const unitLabel = document.querySelector('#unit-field')?.previousElementSibling;
+    if (unitLabel) { unitLabel.style.fontWeight = ''; unitLabel.style.color = ''; }
+
+    // ── per-type behaviour ───────────────────────────────────────────────────
+    switch (type) {
+
+        case 'stock':
+            // Default — everything visible, nothing special
+            break;
+
+        case 'service':
+            setInvTabVisible(false);
+            disableInvFields(true);
+            hide('bulk-pricing-title');
+            hide('bulk-pricing-fields');
+            setNotice('<i class="bi bi-tools me-2"></i><strong>Service product</strong> — no physical stock. Inventory tracking is disabled. You can still set a cost price and selling price.', 'info');
+            break;
+
+        case 'bundle':
+            setNotice('<i class="bi bi-box2-heart me-2"></i><strong>Bundle / Combo</strong> — stock is not tracked directly. Set the selling price and cost for the bundle as a whole. Inventory fields are informational only.', 'warning');
+            hide('inv-low-stock');
+            hide('inv-reorder');
+            hide('inv-expiry-date');
+            hide('inv-expiry-alert');
+            hide('bulk-pricing-title');
+            hide('bulk-pricing-fields');
+            break;
+
+        case 'weighted':
+            setNotice('<i class="bi bi-speedometer2 me-2"></i><strong>Weighted product</strong> — sold by weight or volume (e.g. kg, L). Make sure to set a Unit of Measure and use variable pricing in the Pricing tab.', 'info');
+            // Highlight unit of measure field
+            const unitSel = document.getElementById('unit-field');
+            if (unitSel) {
+                const lbl = unitSel.closest('.col-md-4')?.querySelector('label');
+                if (lbl) { lbl.style.fontWeight = '700'; lbl.style.color = '#2563eb'; }
+            }
+            hide('bulk-pricing-title');
+            hide('bulk-pricing-fields');
+            break;
+
+        case 'serialized':
+            setNotice('<i class="bi bi-upc me-2"></i><strong>Serialized product</strong> — each unit has a unique serial number / IMEI. Make sure to set a barcode for scanning. Expiry tracking is not applicable.', 'secondary');
+            hide('inv-expiry-date');
+            hide('inv-expiry-alert');
+            // Highlight barcode field
+            const barcodeInput = document.getElementById('barcodeInput');
+            if (barcodeInput) {
+                barcodeInput.placeholder = 'IMEI / Serial Number';
+                barcodeInput.closest('.col-md-4')?.querySelector('label') && (barcodeInput.closest('.col-md-4').querySelector('label').style.fontWeight = '700');
+            }
+            break;
+
+        case 'batch':
+            setNotice('<i class="bi bi-calendar-check me-2"></i><strong>Batch / Expiry tracked</strong> — expiry date is required for this product type. Set the expiry date and alert threshold below.', 'warning');
+            highlightField('inv-expiry-date', true);
+            // Make expiry date required
+            const expiryInput = document.querySelector('input[name="expiry_date"]');
+            if (expiryInput) expiryInput.required = true;
+            break;
+    }
+}
 </script>
 {% endblock %}

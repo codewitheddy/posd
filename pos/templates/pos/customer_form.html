@@ -38,9 +38,20 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">Email</label>
+                                <label for="email" class="form-label">
+                                    Email
+                                    <span class="text-muted" style="font-size:0.8rem; font-weight:normal;">
+                                        — used for receipts &amp; campaigns
+                                    </span>
+                                </label>
                                 <input type="email" class="form-control" id="email" name="email" 
-                                       value="{% if customer %}{{ customer.email }}{% endif %}">
+                                       value="{% if customer %}{{ customer.email }}{% endif %}"
+                                       placeholder="customer@example.com">
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle"></i>
+                                    A valid email enables email receipts, loyalty updates, and marketing campaigns.
+                                </div>
+                            </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="customer_type" class="form-label">Customer Type</label>

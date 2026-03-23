@@ -5,7 +5,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Count, Q, F, ExpressionWrapper, DecimalField
-from django.db.models.functions import TruncDay, TruncMonth, TruncWeek
+from django.db.models.functions import TruncDay, TruncMonth, TruncWeek, Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -64,13 +64,15 @@ def _sales_stats(business, date_from, date_to):
         date__date__lte=date_to,
     )
     revenue = qs.aggregate(v=Sum('total'))['v'] or Decimal('0')
+    # Use snapshotted cost_price_at_sale when available, fall back to current product cost for old records
     cogs = SaleItem.objects.filter(
         business=business,
         sale__date__date__gte=date_from,
         sale__date__date__lte=date_to,
     ).annotate(
+        effective_cost=Coalesce(F('cost_price_at_sale'), F('product__cost_price')),
         item_cogs=ExpressionWrapper(
-            F('quantity') * F('product__cost_price'),
+            F('quantity') * Coalesce(F('cost_price_at_sale'), F('product__cost_price')),
             output_field=DecimalField(max_digits=14, decimal_places=2)
         )
     ).aggregate(v=Sum('item_cogs'))['v'] or Decimal('0')
@@ -122,6 +124,26 @@ def expense_list(request, slug=None):
     # by category breakdown
     by_cat = qs.values('category__name').annotate(total=Sum('amount')).order_by('-total')
 
+    # by payment method breakdown
+    by_pm = qs.values('payment_method').annotate(total=Sum('amount')).order_by('-total')
+
+    # daily trend (last 30 days within filtered period)
+    trend_qs = Expense.objects.filter(
+        business=request.business,
+        expense_date__gte=date_from,
+        expense_date__lte=date_to,
+    )
+    daily_trend = trend_qs.annotate(day=TruncDay('expense_date')).values('day').annotate(
+        total=Sum('amount')
+    ).order_by('day')
+
+    chart_labels = json.dumps([str(d['day']) for d in daily_trend])
+    chart_values = json.dumps([float(d['total'] or 0) for d in daily_trend])
+    pie_labels = json.dumps([c['category__name'] or 'Uncategorized' for c in by_cat])
+    pie_values = json.dumps([float(c['total'] or 0) for c in by_cat])
+    pm_labels = json.dumps([dict(Expense.PAYMENT_CHOICES).get(p['payment_method'], p['payment_method']) for p in by_pm])
+    pm_values = json.dumps([float(p['total'] or 0) for p in by_pm])
+
     categories = ExpenseCategory.objects.filter(
         Q(business=request.business) | Q(business__isnull=True)
     )
@@ -130,6 +152,7 @@ def expense_list(request, slug=None):
         'expenses': qs.order_by('-expense_date', '-created_at')[:200],
         'categories': categories,
         'by_cat': by_cat,
+        'by_pm': by_pm,
         'total': total,
         'today_total': today_total,
         'week_total': week_total,
@@ -141,6 +164,12 @@ def expense_list(request, slug=None):
         'date_from': date_from,
         'date_to': date_to,
         'payment_choices': Expense.PAYMENT_CHOICES,
+        'chart_labels': chart_labels,
+        'chart_values': chart_values,
+        'pie_labels': pie_labels,
+        'pie_values': pie_values,
+        'pm_labels': pm_labels,
+        'pm_values': pm_values,
     }
     return render(request, 'pos/expense_list.html', context)
 

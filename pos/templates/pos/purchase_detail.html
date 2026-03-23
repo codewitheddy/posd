@@ -53,10 +53,9 @@
         {% endif %}
 
         {% if purchase.status == 'received' %}
-            <form method="post" action="{% url 'purchase_close' slug=request.business.slug pk=purchase.pk %}">
-                {% csrf_token %}
-                <button class="btn btn-secondary"><i class="bi bi-archive"></i> Close PO</button>
-            </form>
+            <a href="{% url 'purchase_close' slug=request.business.slug pk=purchase.pk %}" class="btn btn-secondary">
+                <i class="bi bi-archive"></i> Close PO
+            </a>
         {% endif %}
 
         {# ---- UTILITY ACTIONS ---- #}

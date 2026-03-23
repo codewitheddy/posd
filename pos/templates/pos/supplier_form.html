@@ -1,72 +1,85 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}{% if supplier %}Edit{% else %}Add{% endif %} Supplier - POS System{% endblock %}
+{% block title %}{% if supplier %}Edit{% else %}Add{% endif %} Supplier{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col">
-        <h2>
-            <i class="bi bi-truck"></i> 
-            {% if supplier %}Edit Supplier{% else %}Add New Supplier{% endif %}
-        </h2>
+<div class="container-fluid">
+    <div class="page-header">
+        <div>
+            <h2><i class="bi bi-truck"></i> {% if supplier %}Edit Supplier{% else %}Add New Supplier{% endif %}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug %}">Suppliers</a></li>
+                    <li class="breadcrumb-item active">{% if supplier %}Edit{% else %}Add{% endif %}</li>
+                </ol>
+            </nav>
+        </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-body">
+    <div class="row justify-content-center">
+        <div class="col-md-7">
+            <div class="form-card">
                 <form method="post">
                     {% csrf_token %}
-                    
+
                     <div class="mb-3">
-                        <label for="name" class="form-label">Supplier Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" 
-                               value="{{ supplier.name|default:'' }}" required>
+                        <label class="form-label">Supplier Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name"
+                               value="{{ supplier.name|default:form_data.name|default:'' }}" required autofocus>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="contact_person" class="form-label">Contact Person</label>
-                        <input type="text" class="form-control" id="contact_person" name="contact_person" 
-                               value="{{ supplier.contact_person|default:'' }}">
+                        <label class="form-label">Contact Person</label>
+                        <input type="text" class="form-control" name="contact_person"
+                               value="{{ supplier.contact_person|default:form_data.contact_person|default:'' }}">
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="phone" class="form-label">Phone</label>
-                            <input type="text" class="form-control" id="phone" name="phone" 
-                                   value="{{ supplier.phone|default:'' }}">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" name="phone"
+                                   value="{{ supplier.phone|default:form_data.phone|default:'' }}"
+                                   placeholder="+254 7XX XXX XXX">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="email" name="email" 
-                                   value="{{ supplier.email|default:'' }}">
+                            <label class="form-label">
+                                Email
+                                <span class="text-muted" style="font-size:0.8rem; font-weight:normal;">
+                                    — used for PO emails &amp; GRN notifications
+                                </span>
+                            </label>
+                            <input type="email" class="form-control" name="email"
+                                   value="{{ supplier.email|default:form_data.email|default:'' }}"
+                                   placeholder="supplier@example.com">
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i>
+                                A valid email lets you send purchase orders and return notifications directly to this supplier.
+                            </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="address" class="form-label">Address</label>
-                        <textarea class="form-control" id="address" name="address" rows="3">{{ supplier.address|default:'' }}</textarea>
+                        <label class="form-label">Address</label>
+                        <textarea class="form-control" name="address" rows="2">{{ supplier.address|default:form_data.address|default:'' }}</textarea>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="notes" class="form-label">Notes</label>
-                        <textarea class="form-control" id="notes" name="notes" rows="3">{{ supplier.notes|default:'' }}</textarea>
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" name="notes" rows="2">{{ supplier.notes|default:form_data.notes|default:'' }}</textarea>
                     </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active" 
+
+                    <div class="mb-4 form-check form-switch">
+                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
                                {% if not supplier or supplier.is_active %}checked{% endif %}>
-                        <label class="form-check-label" for="is_active">
-                            Active Supplier
-                        </label>
+                        <label class="form-check-label" for="is_active">Active Supplier</label>
                     </div>
-                    
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-circle"></i> Save Supplier
                         </button>
-                        <a href="{% url 'supplier_list' slug=request.business.slug  %}" class="btn btn-secondary">
+                        <a href="{% url 'supplier_list' slug=request.business.slug %}" class="btn-action">
                             <i class="bi bi-x-circle"></i> Cancel
                         </a>
                     </div>

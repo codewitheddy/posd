@@ -796,6 +796,12 @@ class SaleItem(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     note = models.CharField(max_length=255, blank=True, default='', help_text='Per-item note (e.g. no onions, gift wrap)')
     
+    # COGS snapshot — cost price at the time of sale (immutable historical record)
+    cost_price_at_sale = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Cost price snapshotted at time of sale for accurate COGS reporting"
+    )
+
     # Multi-unit tracking
     unit_type = models.CharField(max_length=10, choices=UNIT_TYPE_CHOICES, default='base',
                                  help_text="Which unit was sold")
@@ -888,28 +894,18 @@ class Supplier(models.Model):
         return self.purchases.count()
     
     def outstanding_balance(self):
-        """Calculate current outstanding balance based on actual received amounts"""
-        # Calculate total based on actual received quantities
-        total_purchases = Decimal('0.00')
-        for purchase in self.purchases.filter(status='received'):
-            # Calculate actual received amount
-            actual_amount = Decimal('0.00')
-            for item in purchase.items.all():
-                # Use quantity_received if available, otherwise use ordered quantity
-                qty = item.quantity_received if item.quantity_received > 0 else item.quantity
-                actual_amount += Decimal(qty) * item.unit_cost
-            
-            # If no items or all zero, fall back to total_amount
-            if actual_amount == Decimal('0.00'):
-                actual_amount = purchase.total_amount
-            
-            total_purchases += actual_amount
-        
-        total_payments = self.payments.aggregate(
-            total=models.Sum('amount')
-        )['total'] or Decimal('0.00')
-        
-        return total_purchases - total_payments
+        """Calculate outstanding balance as sum of remaining balances on unpaid purchases"""
+        from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+        from django.db.models.functions import Coalesce
+        purchases = self.purchases.filter(status__in=('received', 'partially_received')).annotate(
+            allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00')),
+            remaining=ExpressionWrapper(
+                F('total_amount') - Coalesce(Sum('payment_allocations__amount'), Decimal('0.00')),
+                output_field=DecimalField(max_digits=12, decimal_places=2)
+            )
+        ).filter(remaining__gt=Decimal('0.00'))
+        result = purchases.aggregate(total=Sum('remaining'))['total'] or Decimal('0.00')
+        return result
     
     def total_payments(self):
         """Calculate total payments made to this supplier"""

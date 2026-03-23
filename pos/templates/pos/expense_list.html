@@ -20,6 +20,13 @@
 .period-btn.active,.period-btn:hover{border-color:var(--primary-color,#224195);color:var(--primary-color,#224195)}
 .period-btn.active{background:var(--primary-color,#224195);color:#fff}
 .pm-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.exp-tabs .nav-link{font-size:13px;font-weight:600;color:#6b7280;border:none;border-bottom:2px solid transparent;padding:10px 18px;border-radius:0}
+.exp-tabs .nav-link.active{color:var(--primary-color,#224195);border-bottom-color:var(--primary-color,#224195);background:none}
+.exp-tabs .nav-link:hover{color:#374151}
+.dist-row{padding:10px 0;border-bottom:1px solid #f7f8fa}
+.dist-row:last-child{border-bottom:none}
+.dist-bar{height:6px;background:#f0f2f5;border-radius:3px;margin-top:5px}
+.dist-bar-fill{height:6px;border-radius:3px}
 </style>
 {% endblock %}
 
@@ -99,72 +106,262 @@
   </div>
 </div>
 
-<div class="row g-3">
-  <!-- Expense Table -->
-  <div class="col-12 col-lg-8">
-    <div class="fin-card">
-      <div class="card-header"><span class="fin-title"><i class="bi bi-list-ul me-2"></i>Expense Records</span><span class="badge bg-light text-dark">{{ expenses|length }} records</span></div>
-      <div class="card-body p-0">
-        {% if expenses %}
-        <div class="table-responsive">
-          <table class="table fin-table mb-0">
-            <thead><tr><th>Ref #</th><th>Date</th><th>Category</th><th>Description</th><th>Method</th><th class="text-end">Amount</th><th></th></tr></thead>
-            <tbody>
-              {% for e in expenses %}
-              <tr>
-                <td style="font-weight:600;color:#7c3aed">{{ e.expense_number }}</td>
-                <td>{{ e.expense_date|date:"d M Y" }}</td>
-                <td><span class="badge bg-light text-dark">{{ e.category.name }}</span></td>
-                <td>{{ e.description }}{% if e.reference_number %}<div style="font-size:11px;color:#8a94a6">Ref: {{ e.reference_number }}</div>{% endif %}</td>
-                <td>
-                  {% if e.payment_method == 'cash' %}<span class="pm-badge" style="background:#dcfce7;color:#16a34a">Cash</span>
-                  {% elif e.payment_method == 'mpesa' %}<span class="pm-badge" style="background:#dbeafe;color:#2563eb">M-Pesa</span>
-                  {% elif e.payment_method == 'bank' %}<span class="pm-badge" style="background:#ede9fe;color:#7c3aed">Bank</span>
-                  {% else %}<span class="pm-badge" style="background:#f0f2f5;color:#374151">{{ e.get_payment_method_display }}</span>{% endif %}
-                </td>
-                <td class="text-end fw-bold" style="color:#dc2626">KES {{ e.amount|floatformat:0 }}</td>
-                <td>
-                  <div class="d-flex gap-1">
-                    <a href="{% url 'expense_edit' slug=request.business.slug pk=e.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
-                    <a href="{% url 'expense_delete' slug=request.business.slug pk=e.pk %}" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></a>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+<!-- Tabs -->
+<ul class="nav exp-tabs border-bottom mb-3" id="expTabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-records"><i class="bi bi-list-ul me-1"></i>Records</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-distribution"><i class="bi bi-pie-chart me-1"></i>Distribution</a></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- TAB: Records -->
+  <div class="tab-pane fade show active" id="tab-records">
+    <div class="row g-3">
+      <div class="col-12 col-lg-8">
+        <div class="fin-card">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-list-ul me-2"></i>Expense Records</span><span class="badge bg-light text-dark">{{ expenses|length }} records</span></div>
+          <div class="card-body p-0">
+            {% if expenses %}
+            <div class="table-responsive">
+              <table class="table fin-table mb-0">
+                <thead><tr><th>Ref #</th><th>Date</th><th>Category</th><th>Description</th><th>Method</th><th class="text-end">Amount</th><th></th></tr></thead>
+                <tbody>
+                  {% for e in expenses %}
+                  <tr>
+                    <td style="font-weight:600;color:#7c3aed">{{ e.expense_number }}</td>
+                    <td>{{ e.expense_date|date:"d M Y" }}</td>
+                    <td><span class="badge bg-light text-dark">{{ e.category.name }}</span></td>
+                    <td>{{ e.description }}{% if e.reference_number %}<div style="font-size:11px;color:#8a94a6">Ref: {{ e.reference_number }}</div>{% endif %}</td>
+                    <td>
+                      {% if e.payment_method == 'cash' %}<span class="pm-badge" style="background:#dcfce7;color:#16a34a">Cash</span>
+                      {% elif e.payment_method == 'mpesa' %}<span class="pm-badge" style="background:#dbeafe;color:#2563eb">M-Pesa</span>
+                      {% elif e.payment_method == 'bank' %}<span class="pm-badge" style="background:#ede9fe;color:#7c3aed">Bank</span>
+                      {% else %}<span class="pm-badge" style="background:#f0f2f5;color:#374151">{{ e.get_payment_method_display }}</span>{% endif %}
+                    </td>
+                    <td class="text-end fw-bold" style="color:#dc2626">KES {{ e.amount|floatformat:0 }}</td>
+                    <td>
+                      <div class="d-flex gap-1">
+                        <a href="{% url 'expense_edit' slug=request.business.slug pk=e.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                        <a href="{% url 'expense_delete' slug=request.business.slug pk=e.pk %}" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></a>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted"><i class="bi bi-wallet2" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:8px"></i><p class="mb-0">No expenses found for this period</p><a href="{% url 'expense_create' slug=request.business.slug %}" class="btn btn-primary btn-sm mt-3">Add First Expense</a></div>
+            {% endif %}
+          </div>
         </div>
-        {% else %}
-        <div class="text-center py-5 text-muted"><i class="bi bi-wallet2" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:8px"></i><p class="mb-0">No expenses found for this period</p><a href="{% url 'expense_create' slug=request.business.slug %}" class="btn btn-primary btn-sm mt-3">Add First Expense</a></div>
-        {% endif %}
+      </div>
+
+      <!-- By Category sidebar -->
+      <div class="col-12 col-lg-4">
+        <div class="fin-card">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-pie-chart me-2 text-danger"></i>By Category</span></div>
+          <div class="card-body p-0 px-3">
+            {% for cat in by_cat %}
+            <div class="dist-row">
+              <div class="d-flex justify-content-between mb-1">
+                <span style="font-size:13px;font-weight:600">{{ cat.category__name }}</span>
+                <span style="font-size:13px;font-weight:700;color:#dc2626">KES {{ cat.total|floatformat:0 }}</span>
+              </div>
+              {% if total %}
+              <div class="dist-bar"><div class="dist-bar-fill" style="background:#dc2626;width:{% widthratio cat.total total 100 %}%"></div></div>
+              {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-center py-4 text-muted small">No data</div>
+            {% endfor %}
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- By Category -->
-  <div class="col-12 col-lg-4">
-    <div class="fin-card">
-      <div class="card-header"><span class="fin-title"><i class="bi bi-pie-chart me-2 text-danger"></i>By Category</span></div>
-      <div class="card-body p-0 px-3">
-        {% for cat in by_cat %}
-        <div style="padding:10px 0;border-bottom:1px solid #f7f8fa">
-          <div class="d-flex justify-content-between mb-1">
-            <span style="font-size:13px;font-weight:600">{{ cat.category__name }}</span>
-            <span style="font-size:13px;font-weight:700;color:#dc2626">KES {{ cat.total|floatformat:0 }}</span>
+  <!-- TAB: Distribution -->
+  <div class="tab-pane fade" id="tab-distribution">
+    {% if total %}
+    <div class="row g-3 mb-3">
+
+      <!-- Donut: by category -->
+      <div class="col-12 col-md-6">
+        <div class="fin-card h-100">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-pie-chart-fill me-2 text-danger"></i>Spending by Category</span></div>
+          <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px">
+            <canvas id="catDonut" style="max-height:240px"></canvas>
           </div>
-          {% if total %}
-          <div style="height:5px;background:#f0f2f5;border-radius:3px">
-            <div style="height:5px;border-radius:3px;background:#dc2626;width:{% widthratio cat.total total 100 %}%"></div>
-          </div>
-          {% endif %}
         </div>
-        {% empty %}
-        <div class="text-center py-4 text-muted small">No data</div>
-        {% endfor %}
+      </div>
+
+      <!-- Bar: by payment method -->
+      <div class="col-12 col-md-6">
+        <div class="fin-card h-100">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-credit-card me-2 text-primary"></i>By Payment Method</span></div>
+          <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px">
+            <canvas id="pmBar" style="max-height:240px"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Line: daily trend -->
+      <div class="col-12">
+        <div class="fin-card">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-graph-up me-2 text-warning"></i>Daily Spend Trend</span></div>
+          <div class="card-body" style="min-height:220px">
+            <canvas id="trendLine" style="max-height:200px"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Category breakdown table -->
+    <div class="row g-3">
+      <div class="col-12 col-lg-6">
+        <div class="fin-card">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-table me-2"></i>Category Breakdown</span></div>
+          <div class="card-body p-0">
+            <table class="table fin-table mb-0">
+              <thead><tr><th>Category</th><th class="text-end">Amount</th><th class="text-end">Share</th></tr></thead>
+              <tbody>
+                {% for cat in by_cat %}
+                <tr>
+                  <td>{{ cat.category__name }}</td>
+                  <td class="text-end fw-bold" style="color:#dc2626">KES {{ cat.total|floatformat:0 }}</td>
+                  <td class="text-end">
+                    {% if total %}{% widthratio cat.total total 100 %}%{% else %}—{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+                <tr style="background:#fafbfc;font-weight:700">
+                  <td>Total</td>
+                  <td class="text-end" style="color:#dc2626">KES {{ total|floatformat:0 }}</td>
+                  <td class="text-end">100%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment method breakdown table -->
+      <div class="col-12 col-lg-6">
+        <div class="fin-card">
+          <div class="card-header"><span class="fin-title"><i class="bi bi-table me-2"></i>Payment Method Breakdown</span></div>
+          <div class="card-body p-0">
+            <table class="table fin-table mb-0">
+              <thead><tr><th>Method</th><th class="text-end">Amount</th><th class="text-end">Share</th></tr></thead>
+              <tbody>
+                {% for p in by_pm %}
+                <tr>
+                  <td>
+                    {% if p.payment_method == 'cash' %}<span class="pm-badge" style="background:#dcfce7;color:#16a34a">Cash</span>
+                    {% elif p.payment_method == 'mpesa' %}<span class="pm-badge" style="background:#dbeafe;color:#2563eb">M-Pesa</span>
+                    {% elif p.payment_method == 'bank' %}<span class="pm-badge" style="background:#ede9fe;color:#7c3aed">Bank</span>
+                    {% else %}<span class="pm-badge" style="background:#f0f2f5;color:#374151">{{ p.payment_method|capfirst }}</span>{% endif %}
+                  </td>
+                  <td class="text-end fw-bold">KES {{ p.total|floatformat:0 }}</td>
+                  <td class="text-end">{% if total %}{% widthratio p.total total 100 %}%{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
+
+    {% else %}
+    <div class="fin-card">
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-pie-chart" style="font-size:3rem;opacity:.25;display:block;margin-bottom:12px"></i>
+        <p class="mb-2">No expense data for this period</p>
+        <a href="{% url 'expense_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">Add Expense</a>
+      </div>
+    </div>
+    {% endif %}
   </div>
+
+</div><!-- /tab-content -->
 </div>
 
-</div>
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const PIE_COLORS = ['#dc2626','#2563eb','#16a34a','#ca8a04','#7c3aed','#0891b2','#ea580c','#db2777','#65a30d','#6b7280'];
+
+document.addEventListener('DOMContentLoaded', function() {
+  const tabEl = document.querySelector('[href="#tab-distribution"]');
+  if (tabEl) {
+    tabEl.addEventListener('shown.bs.tab', initCharts);
+    // also init if already active (page load with hash)
+    if (location.hash === '#tab-distribution') initCharts();
+  }
+});
+
+let chartsInited = false;
+function initCharts() {
+  if (chartsInited) return;
+  chartsInited = true;
+
+  const pieLabels = {{ pie_labels|safe }};
+  const pieValues = {{ pie_values|safe }};
+  const pmLabels  = {{ pm_labels|safe }};
+  const pmValues  = {{ pm_values|safe }};
+  const trendLabels = {{ chart_labels|safe }};
+  const trendValues = {{ chart_values|safe }};
+
+  // Donut — by category
+  new Chart(document.getElementById('catDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: pieLabels,
+      datasets: [{ data: pieValues, backgroundColor: PIE_COLORS, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      cutout: '62%',
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12 } } }
+    }
+  });
+
+  // Bar — by payment method
+  new Chart(document.getElementById('pmBar'), {
+    type: 'bar',
+    data: {
+      labels: pmLabels,
+      datasets: [{ label: 'Amount (KES)', data: pmValues, backgroundColor: ['#2563eb','#16a34a','#7c3aed','#ca8a04','#6b7280'], borderRadius: 6 }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => 'KES ' + v.toLocaleString() } } }
+    }
+  });
+
+  // Line — daily trend
+  new Chart(document.getElementById('trendLine'), {
+    type: 'line',
+    data: {
+      labels: trendLabels,
+      datasets: [{
+        label: 'Daily Spend (KES)',
+        data: trendValues,
+        borderColor: '#dc2626',
+        backgroundColor: 'rgba(220,38,38,.08)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#dc2626'
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => 'KES ' + v.toLocaleString() } } }
+    }
+  });
+}
+</script>
+{% endblock %}
 {% endblock %}
