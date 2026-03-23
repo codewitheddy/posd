@@ -11,7 +11,7 @@
     // Real connectivity check via fetch ping
     async function checkRealConnectivity() {
         try {
-            const res = await fetch('/favicon.ico?_=' + Date.now(), {
+            const res = await fetch('/ping/?_=' + Date.now(), {
                 method: 'HEAD',
                 cache: 'no-store',
                 signal: AbortSignal.timeout(4000)

@@ -371,7 +371,7 @@ def dashboard(request, slug=None):
     from django.core.cache import cache
     from .cache_utils import get_cache_key
     
-    today = datetime.now().date()
+    today = timezone.localdate()
     yesterday = today - timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
@@ -421,27 +421,27 @@ def dashboard(request, slug=None):
         sales_change = ((today_sales_count - yesterday_count) / yesterday_count) * 100
     
     # Top selling products today - Optimized
-    top_products_today = SaleItem.objects.filter(
+    top_products_today = list(SaleItem.objects.filter(
         sale__business=request.business,
         sale__date__date=today
     ).values('product__name').annotate(
         total_quantity=Sum('quantity'),
         total_revenue=Sum(models.F('quantity') * models.F('unit_price'))
-    ).order_by('-total_quantity')[:5]
+    ).order_by('-total_quantity')[:5])
     
     # Recent sales (last 10) - Optimized with select_related
-    recent_sales = Sale.objects.filter(
+    recent_sales = list(Sale.objects.filter(
         business=request.business
-    ).select_related('cashier', 'customer').order_by('-date')[:10]
+    ).select_related('cashier', 'customer').order_by('-date')[:10])
     
     # Payment method breakdown for today - Optimized
-    payment_breakdown = SalePayment.objects.filter(
+    payment_breakdown = list(SalePayment.objects.filter(
         sale__business=request.business,
         sale__date__date=today
     ).select_related('payment_method').values('payment_method__name').annotate(
         total=Sum('amount'),
         count=Count('id')
-    ).order_by('-total')
+    ).order_by('-total'))
     
     # Stock statistics - Optimized queries
     low_stock_products = Product.objects.filter(
@@ -493,7 +493,6 @@ def dashboard(request, slug=None):
     
     # Superusers (system root) have lifetime access - don't show trial warnings
     if not request.user.is_superuser and request.business.is_trial and request.business.trial_ends_at:
-        from django.utils import timezone
         delta = request.business.trial_ends_at - timezone.now()
         trial_info['days_remaining'] = delta.days
         
@@ -529,16 +528,16 @@ def dashboard(request, slug=None):
             expiring_soon_count += 1
     
     # Fetch actual products for display - Optimized with select_related
-    out_of_stock_list = Product.objects.filter(
+    out_of_stock_list = list(Product.objects.filter(
         business=request.business,
         stock_quantity=0
-    ).select_related('category')[:5]
+    ).select_related('category')[:5])
     
-    expired_list = Product.objects.filter(
+    expired_list = list(Product.objects.filter(
         business=request.business,
         expiry_date__lt=today, 
         stock_quantity__gt=0
-    ).select_related('category')[:5]
+    ).select_related('category')[:5])
     
     expiring_soon_list = []
     for product in products_with_expiry[:10]:  # Check first 10
@@ -608,6 +607,7 @@ def dashboard(request, slug=None):
         
         # Lists and breakdowns
         'top_products_today': top_products_today,
+        'top_product_max_qty': top_products_today[0]['total_quantity'] if top_products_today else 1,
         'recent_sales': recent_sales,
         'payment_breakdown': payment_breakdown,
         'hourly_sales': hourly_sales,
@@ -1579,7 +1579,7 @@ def complete_sale(request, slug=None):
     """Process and complete a sale"""
     if request.method == 'POST':
         try:
-            # Check if there's an open POS session
+            from django.db import transaction as db_transaction
             from .models import POSSession
             open_session = POSSession.objects.filter(
                 business=request.business,
@@ -1670,140 +1670,109 @@ def complete_sale(request, slug=None):
             vat_amount = (total * vat_rate) / (100 + vat_rate)
             subtotal = total - vat_amount
             
-            # Create sale
-            sale = Sale.objects.create(
-                business=request.business,
-                cashier=request.user,
-                customer=customer,
-                session=open_session,  # Link sale to current session
-                subtotal=subtotal,
-                vat_rate=vat_rate,
-                vat_amount=vat_amount,
-                discount_type=discount_type,
-                discount_value=discount_value,
-                discount_amount=discount_amount,
-                total=total,
-                amount_paid=amount_paid,
-                change_given=change_given,
-                is_credit_sale=is_credit_sale,
-            )
-            
-            # Create sale items and deduct stock
-            for item in sale_items:
-                SaleItem.objects.create(
-                    sale=sale,
-                    product=item['product'],
-                    quantity=item['quantity'],
-                    unit_price=item['unit_price'],
-                    note=item.get('note', ''),
-                    cost_price_at_sale=item['product'].cost_price,
+            # Create sale atomically — all or nothing
+            with db_transaction.atomic():
+                sale = Sale.objects.create(
+                    business=request.business,
+                    cashier=request.user,
+                    customer=customer,
+                    session=open_session,
+                    subtotal=subtotal,
+                    vat_rate=vat_rate,
+                    vat_amount=vat_amount,
+                    discount_type=discount_type,
+                    discount_value=discount_value,
+                    discount_amount=discount_amount,
+                    total=total,
+                    amount_paid=amount_paid,
+                    change_given=change_given,
+                    is_credit_sale=is_credit_sale,
                 )
-                
-                # Deduct stock and create adjustment record
-                previous_qty = item['product'].stock_quantity
-                item['product'].deduct_stock(item['quantity'])
-                
-                StockAdjustment.objects.create(
-                    product=item['product'],
-                    adjustment_type='sale',
-                    quantity_change=-item['quantity'],
-                    previous_quantity=previous_qty,
-                    new_quantity=item['product'].stock_quantity,
-                    reason=f'Sale: {sale.invoice_number}'
-                )
-            
-            # Process payment methods
-            from .models import PaymentMethod
-            if payments_data:
-                total_payment_allocated = Decimal('0.00')
-                
-                for payment_str in payments_data:
-                    method_id, amount, reference = payment_str.split(',')
-                    payment_method = PaymentMethod.objects.get(id=method_id, business=request.business)
-                    payment_amount = Decimal(amount)
-                    
-                    # For cash payments, don't record more than the remaining sale amount
-                    # (customer might give 1000 for a 600 sale, but we only record 600)
-                    is_cash = payment_method.code == 'CASH' or payment_method.name.upper() == 'CASH'
-                    remaining_amount = sale.total - total_payment_allocated
-                    
-                    if is_cash and payment_amount > remaining_amount:
-                        # Record only the sale amount, not the cash tendered
-                        # Change is given but not recorded as a payment
-                        payment_amount = remaining_amount
-                    
-                    if payment_amount > 0:
-                        SalePayment.objects.create(
-                            sale=sale,
-                            payment_method=payment_method,
-                            amount=payment_amount,
-                            reference_number=reference
-                        )
-                        total_payment_allocated += payment_amount
-            
-            # Handle credit sale — update customer balance
-            if is_credit_sale and customer:
-                # Re-validate available credit now that we have the final total
-                if customer.get_available_credit() < total:
-                    sale.delete()  # Roll back the sale
-                    messages.error(request, f'Insufficient credit. Available: KES {customer.get_available_credit()}, Required: KES {total}')
-                    return redirect('pos_screen', slug=request.business.slug)
-                customer.credit_balance += total
-                customer.save(update_fields=['credit_balance'])
 
-            # Handle loyalty points
-            if customer:
-                # Redeem points if discount type is 'points'
-                if discount_type == 'points' and discount_value > 0:
-                    points_redeemed = int(discount_value)
-                    
-                    # Enforce minimum redemption of 100 points
-                    if points_redeemed < 100:
-                        messages.error(request, 'Minimum redemption is 100 points')
-                        return redirect('pos_screen', slug=request.business.slug)
-                    
-                    if customer.loyalty_points < 100:
-                        messages.error(request, f'Customer needs at least 100 points to redeem. Current balance: {customer.loyalty_points} points')
-                        return redirect('pos_screen', slug=request.business.slug)
-                    
-                    if points_redeemed <= customer.loyalty_points:
-                        customer.redeem_points(
-                            points_redeemed, 
-                            sale=sale, 
-                            description=f"Redeemed for discount - {sale.invoice_number}"
-                        )
-                    else:
-                        messages.error(request, f'Customer only has {customer.loyalty_points} points available')
-                        return redirect('pos_screen', slug=request.business.slug)
-                
-                # Award loyalty points for the purchase (after discount)
-                points_earned = customer.add_loyalty_points(total, sale=sale, description=f"Purchase - {sale.invoice_number}")
-                customer.total_purchases += total
-                customer.visit_count += 1
-                customer.save()
-                
-                # Build success message
-                message_parts = [f'Sale completed! Invoice: {sale.invoice_number}.']
-                if is_credit_sale:
-                    message_parts.append(f'Charged KES {total} to credit account.')
-                elif change_given > 0:
-                    message_parts.append(f'Change: KES {change_given}.')
-                if discount_type == 'points' and discount_value > 0:
-                    message_parts.append(f'{int(discount_value)} points redeemed.')
-                message_parts.append(f'Earned {points_earned} loyalty points!')
-                
-                messages.success(request, ' '.join(message_parts))
-            else:
-                if change_given > 0:
-                    messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}. Change: KES {change_given}')
+                # Create sale items and deduct stock
+                for item in sale_items:
+                    SaleItem.objects.create(
+                        sale=sale,
+                        product=item['product'],
+                        quantity=item['quantity'],
+                        unit_price=item['unit_price'],
+                        note=item.get('note', ''),
+                        cost_price_at_sale=item['product'].cost_price,
+                    )
+                    previous_qty = item['product'].stock_quantity
+                    item['product'].deduct_stock(item['quantity'])
+                    StockAdjustment.objects.create(
+                        product=item['product'],
+                        adjustment_type='sale',
+                        quantity_change=-item['quantity'],
+                        previous_quantity=previous_qty,
+                        new_quantity=item['product'].stock_quantity,
+                        reason=f'Sale: {sale.invoice_number}'
+                    )
+
+                # Process payment methods
+                from .models import PaymentMethod
+                if payments_data:
+                    total_payment_allocated = Decimal('0.00')
+                    for payment_str in payments_data:
+                        method_id, amount, reference = payment_str.split(',')
+                        payment_method = PaymentMethod.objects.get(id=method_id, business=request.business)
+                        payment_amount = Decimal(amount)
+                        is_cash = payment_method.code == 'CASH' or payment_method.name.upper() == 'CASH'
+                        remaining_amount = sale.total - total_payment_allocated
+                        if is_cash and payment_amount > remaining_amount:
+                            payment_amount = remaining_amount
+                        if payment_amount > 0:
+                            SalePayment.objects.create(
+                                sale=sale,
+                                payment_method=payment_method,
+                                amount=payment_amount,
+                                reference_number=reference
+                            )
+                            total_payment_allocated += payment_amount
+
+                # Handle credit sale — validate and update customer balance
+                if is_credit_sale and customer:
+                    if customer.get_available_credit() < total:
+                        raise ValueError(f'Insufficient credit. Available: KES {customer.get_available_credit()}, Required: KES {total}')
+                    customer.credit_balance += total
+                    customer.save(update_fields=['credit_balance'])
+
+                # Handle loyalty points
+                if customer:
+                    if discount_type == 'points' and discount_value > 0:
+                        points_redeemed = int(discount_value)
+                        if points_redeemed < 100:
+                            raise ValueError('Minimum redemption is 100 points')
+                        if customer.loyalty_points < 100:
+                            raise ValueError(f'Customer needs at least 100 points to redeem. Current balance: {customer.loyalty_points} points')
+                        if points_redeemed <= customer.loyalty_points:
+                            customer.redeem_points(points_redeemed, sale=sale, description=f"Redeemed for discount - {sale.invoice_number}")
+                        else:
+                            raise ValueError(f'Customer only has {customer.loyalty_points} points available')
+                    points_earned = customer.add_loyalty_points(total, sale=sale, description=f"Purchase - {sale.invoice_number}")
+                    customer.total_purchases += total
+                    customer.visit_count += 1
+                    customer.save()
+                    message_parts = [f'Sale completed! Invoice: {sale.invoice_number}.']
+                    if is_credit_sale:
+                        message_parts.append(f'Charged KES {total} to credit account.')
+                    elif change_given > 0:
+                        message_parts.append(f'Change: KES {change_given}.')
+                    if discount_type == 'points' and discount_value > 0:
+                        message_parts.append(f'{int(discount_value)} points redeemed.')
+                    message_parts.append(f'Earned {points_earned} loyalty points!')
+                    messages.success(request, ' '.join(message_parts))
                 else:
-                    messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}')
-            
+                    if change_given > 0:
+                        messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}. Change: KES {change_given}')
+                    else:
+                        messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}')
+
             # Invalidate dashboard cache after sale
             from django.core.cache import cache
             from .cache_utils import get_cache_key
-            from datetime import datetime
-            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+            cache_key = get_cache_key('dashboard', request.business.id, timezone.localdate())
             cache.delete(cache_key)
             
             return redirect('thermal_receipt', slug=request.business.slug, pk=sale.pk)

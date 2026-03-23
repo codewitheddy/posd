@@ -5,7 +5,12 @@ Wraps existing URLs with business slug prefix
 
 from django.urls import path, include
 from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views, registration_admin_views, financial_views, crm_views
+
+
+def ping(request):
+    return HttpResponse('ok', content_type='text/plain')
 
 
 def landing_page(request):
@@ -346,4 +351,6 @@ business_urlpatterns = [
 urlpatterns = public_urlpatterns + [
     # Business-specific routes with slug prefix
     path('b/<slug:slug>/', include(business_urlpatterns)),
+    # Connectivity ping (used by connection status checker)
+    path('ping/', ping, name='ping'),
 ]

@@ -265,8 +265,6 @@
       <div class="card-body">
         {% if payment_breakdown %}
           {% for payment in payment_breakdown %}
-          {% with colors="#7c3aed,#2563eb,#16a34a,#ca8a04,#dc2626,#0284c7" %}
-          {% with cidx=forloop.counter0|divisibleby:1 %}
           <div class="pm-row">
             <div class="pm-dot" style="background:{% cycle '#7c3aed' '#2563eb' '#16a34a' '#ca8a04' '#dc2626' '#0284c7' as pmcolor %}"></div>
             <div class="flex-grow-1">
@@ -275,12 +273,11 @@
                 <span style="font-size:12px;color:#8a94a6">KES {{ payment.total|floatformat:0 }}</span>
               </div>
               <div class="pm-bar-wrap">
-                <div class="pm-bar" style="width:{% widthratio payment.count payment_breakdown|length 100 %}%;background:{{ pmcolor }}"></div>
+                <div class="pm-bar" style="width:{% widthratio payment.total today_revenue 100 %}%;background:{{ pmcolor }}"></div>
               </div>
             </div>
             <span style="font-size:11px;color:#8a94a6;min-width:28px;text-align:right">{{ payment.count }}</span>
           </div>
-          {% endwith %}{% endwith %}
           {% endfor %}
         {% else %}
           <div class="empty-state"><i class="bi bi-credit-card-2-front"></i><p>No payments yet today</p></div>
@@ -307,7 +304,7 @@
               <div style="flex:1;min-width:0">
                 <div style="font-size:13.5px;font-weight:600;color:#1a202c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ product.product__name }}</div>
                 <div style="font-size:12px;color:#8a94a6">{{ product.total_quantity }} units</div>
-                <div class="rank-bar-wrap mt-1"><div class="rank-bar" style="width:{% widthratio product.total_quantity top_products_today.0.total_quantity 100 %}%"></div></div>
+                <div class="rank-bar-wrap mt-1"><div class="rank-bar" style="width:{% widthratio product.total_quantity top_product_max_qty 100 %}%"></div></div>
               </div>
               <div style="font-size:13px;font-weight:700;color:#16a34a;margin-left:12px;white-space:nowrap">KES {{ product.total_revenue|floatformat:0 }}</div>
             </div>
