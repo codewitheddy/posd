@@ -6,59 +6,136 @@
     <title>{% block title %}Marid POS{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8f9fa;
+        :root {
+            --primary: #224195;
+            --primary-hover: #1a3278;
+            --primary-light: #eef1fb;
+            --text-main: #1a202c;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --bg: #f8f9fc;
         }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html { height: 100%; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Navbar ── */
         .navbar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--primary) !important;
+            height: 56px;
+            padding: 0 20px;
+            flex-shrink: 0;
         }
         .navbar-brand {
-            color: white !important;
+            color: #fff !important;
             font-weight: 700;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .navbar .nav-link {
-            color: rgba(255,255,255,0.9) !important;
+        .navbar-brand .brand-icon {
+            width: 30px; height: 30px;
+            background: rgba(255,255,255,.15);
+            border-radius: 7px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px;
         }
-        .navbar .nav-link:hover {
-            color: white !important;
+        .nav-user-btn {
+            background: rgba(255,255,255,.12);
+            border: 1px solid rgba(255,255,255,.2);
+            color: #fff;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex; align-items: center; gap: 6px;
+            cursor: pointer;
+            transition: background .15s;
         }
+        .nav-user-btn:hover { background: rgba(255,255,255,.22); color: #fff; }
+        .navbar .dropdown-menu {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.1);
+            font-size: 13px;
+            min-width: 180px;
+        }
+        .navbar .dropdown-item { padding: 8px 16px; color: var(--text-main); }
+        .navbar .dropdown-item:hover { background: #f3f4f6; color: var(--text-main); }
+        .navbar .dropdown-item.text-danger:hover { background: #fef2f2; }
+        .btn-nav-outline {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,.3);
+            color: #fff;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        .btn-nav-outline:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+        /* ── Main grows to push footer down ── */
+        main { flex: 1; }
+
+        /* ── Footer always at bottom ── */
+        footer {
+            flex-shrink: 0;
+            background: #fff;
+            border-top: 1px solid var(--border);
+            padding: 14px 24px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        footer a { color: var(--text-muted); text-decoration: none; }
+        footer a:hover { color: var(--primary); }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Simple Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% if user.is_superuser %}{% url 'business_list' %}{% elif request.business %}{% url 'dashboard' slug=request.business.slug %}{% else %}{% url 'home' %}{% endif %}">
-                <i class="fas fa-store"></i> Marid POS
+                <div class="brand-icon"><i class="bi bi-shop"></i></div>
+                Marid POS
             </a>
-            <div class="ms-auto">
+            <div class="ms-auto d-flex align-items-center gap-2">
                 {% if user.is_authenticated %}
                     <div class="dropdown">
-                        <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }}
+                        <button class="nav-user-btn" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i>
+                            {{ user.get_full_name|default:user.username }}
+                            <i class="bi bi-chevron-down" style="font-size:10px;opacity:.7"></i>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="{% url 'business_list' %}">
-                                <i class="bi bi-building"></i> My Businesses
+                                <i class="bi bi-building me-2"></i>My Businesses
                             </a></li>
-                            <li><hr class="dropdown-divider"></li>
+                            <li><hr class="dropdown-divider my-1"></li>
                             <li><a class="dropdown-item text-danger" href="{% url 'logout' %}">
-                                <i class="bi bi-box-arrow-right"></i> Logout
+                                <i class="bi bi-box-arrow-right me-2"></i>Sign Out
                             </a></li>
                         </ul>
                     </div>
                 {% else %}
-                    <a href="{% url 'login' %}" class="btn btn-light me-2">
-                        <i class="bi bi-box-arrow-in-right"></i> Login
-                    </a>
-                    <a href="{% url 'register_business' %}" class="btn btn-warning">
-                        <i class="bi bi-rocket"></i> Get Started
-                    </a>
+                    <a href="{% url 'login' %}" class="btn-nav-outline">Sign In</a>
+                    <a href="{% url 'register_business' %}" class="btn-nav-outline" style="background:rgba(255,255,255,.15)">Get Started</a>
                 {% endif %}
             </div>
         </div>
@@ -69,23 +146,18 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-light py-4 mt-5">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6 text-center text-md-start mb-3 mb-md-0">
-                    <p class="mb-0 text-muted">&copy; 2026 Ropenix POS. All rights reserved.</p>
-                </div>
-                <div class="col-md-6 text-center text-md-end">
-                    <a href="{% url 'terms' %}" class="text-muted text-decoration-none me-3">Terms of Service</a>
-                    <a href="{% url 'privacy' %}" class="text-muted text-decoration-none me-3">Privacy Policy</a>
-                    <a href="{% url 'refund' %}" class="text-muted text-decoration-none">Refund Policy</a>
-                </div>
+    <!-- Footer — always at bottom -->
+    <footer>
+        <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <span>© 2026 Marid POS. All rights reserved.</span>
+            <div class="d-flex gap-3">
+                <a href="{% url 'terms' %}">Terms</a>
+                <a href="{% url 'privacy' %}">Privacy</a>
+                <a href="{% url 'refund' %}">Refund Policy</a>
             </div>
         </div>
     </footer>
 
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}
 </body>

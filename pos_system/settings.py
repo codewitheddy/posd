@@ -121,7 +121,13 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_spectacular',
+    'django_ratelimit',
     'pos',
+    'hr',
+    'events',
+    'sync',
+    'backup',
+    'restore',
 ]
 
 MIDDLEWARE = [
@@ -132,8 +138,10 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'pos.middleware.AuditRequestMiddleware',  # Attach request to audit logs
     'django.contrib.messages.middleware.MessageMiddleware',  # Move before TenantMiddleware
     'pos.middleware.TenantMiddleware',  # Multi-tenancy middleware
+    'pos.middleware.BranchMiddleware',  # Multi-branch context
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -183,6 +191,12 @@ if os.environ.get('DATABASE_URL'):
             conn_health_checks=True,
         )
     }
+    # Ensure connection pooling options are set
+    DATABASES['default'].setdefault('CONN_MAX_AGE', 600)
+    DATABASES['default'].setdefault('OPTIONS', {})
+    if 'postgresql' in DATABASES['default'].get('ENGINE', ''):
+        DATABASES['default']['OPTIONS'].setdefault('connect_timeout', 10)
+        DATABASES['default']['OPTIONS'].setdefault('options', '-c statement_timeout=30000')
 elif os.environ.get('DATABASE_ENGINE'):
     # Use environment variables for database configuration
     db_engine = os.environ.get('DATABASE_ENGINE', 'postgresql').lower()
@@ -235,6 +249,16 @@ else:
         }
     }
 
+# Read replica support (optional) — set DATABASE_REPLICA_URL in .env for reporting queries
+_replica_url = os.environ.get('DATABASE_REPLICA_URL', '')
+if _replica_url:
+    DATABASES['replica'] = dj_database_url.config(
+        default=_replica_url,
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+    DATABASE_ROUTERS = ['pos.db_router.ReplicaRouter']
+
 
 # Cache Configuration
 # https://docs.djangoproject.com/en/4.2/ref/settings/#caches
@@ -250,8 +274,24 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
-if REDIS_AVAILABLE:
-    # Use Redis if available
+# Check if Redis is actually running by attempting a connection
+def is_redis_running():
+    """Check if Redis server is running and accessible."""
+    if not REDIS_AVAILABLE:
+        return False
+    try:
+        import redis
+        r = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
+        r.ping()
+        return True
+    except Exception:
+        return False
+
+# Determine if we can use Redis
+REDIS_RUNNING = is_redis_running()
+
+if REDIS_AVAILABLE and REDIS_RUNNING:
+    # Use Redis if available and running
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
@@ -262,7 +302,6 @@ if REDIS_AVAILABLE:
                 'SOCKET_TIMEOUT': 5,
                 'RETRY_ON_TIMEOUT': True,
                 'MAX_CONNECTIONS': 50,
-                'PARSER_CLASS': 'redis.connection.HiredisParser',
                 'CONNECTION_POOL_CLASS_KWARGS': {
                     'max_connections': 50,
                     'retry_on_timeout': True,
@@ -270,24 +309,55 @@ if REDIS_AVAILABLE:
             },
             'KEY_PREFIX': 'pos',
             'TIMEOUT': 300,  # 5 minutes default
+        },
+        'ratelimit': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+            },
+            'KEY_PREFIX': 'ratelimit',
+        },
+        'locmem': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
         }
     }
 else:
-    # Fallback to local memory cache if Redis is not available
+    # Development fallback (no Redis) - disable rate limiting entirely
     CACHES = {
         'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        },
+        'locmem': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'unique-snowflake',
         }
     }
 
+# Rate Limiting Configuration
+# Only enable rate limiting when Redis is available (requires atomic increment support)
+if REDIS_AVAILABLE and REDIS_RUNNING:
+    RATELIMIT_CACHE = 'ratelimit'
+    RATELIMIT_ENABLE = True
+else:
+    RATELIMIT_ENABLE = False
+    # Silence django_ratelimit system checks when Redis is not available
+    SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003', 'django_ratelimit.W001']
+
 # Cache time settings (in seconds)
 CACHE_TTL = {
-    'dashboard': 300,  # 5 minutes
-    'reports': 600,  # 10 minutes
-    'products': 1800,  # 30 minutes
-    'categories': 3600,  # 1 hour
-    'customers': 900,  # 15 minutes
+    'dashboard': 300,       # 5 minutes
+    'reports': 600,         # 10 minutes
+    'products': 1800,       # 30 minutes
+    'categories': 3600,     # 1 hour
+    'customers': 900,       # 15 minutes
+    'business_settings': 3600,
+    'payment_methods': 3600,
+    'loyalty_rewards': 3600,
 }
 
 
@@ -302,7 +372,7 @@ EMAIL_BACKEND = os.environ.get(
 )
 
 # SMTP Configuration
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'in-v3.mailjet.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
@@ -315,19 +385,19 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 EMAIL_TIMEOUT = 10
 EMAIL_USE_LOCALTIME = True
 
-# For Gmail, you need to:
-# 1. Enable 2-factor authentication
-# 2. Generate an app password
-# 3. Use the app password as EMAIL_HOST_PASSWORD
+# For Mailjet, you need to:
+# 1. Verify your sender/domain in Mailjet
+# 2. Use Mailjet API key as EMAIL_HOST_USER
+# 3. Use Mailjet secret key as EMAIL_HOST_PASSWORD
 #
 # Example .env configuration:
 # EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-# EMAIL_HOST=smtp.gmail.com
+# EMAIL_HOST=in-v3.mailjet.com
 # EMAIL_PORT=587
 # EMAIL_USE_TLS=True
-# EMAIL_HOST_USER=your-email@gmail.com
-# EMAIL_HOST_PASSWORD=your-app-password
-# DEFAULT_FROM_EMAIL=your-email@gmail.com
+# EMAIL_HOST_USER=your_mailjet_api_key
+# EMAIL_HOST_PASSWORD=your_mailjet_secret_key
+# DEFAULT_FROM_EMAIL=verified-sender@yourdomain.com
 
 
 # Password validation
@@ -339,12 +409,29 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 10},
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+    {
+        'NAME': 'pos.validators.UppercaseValidator',
+    },
+    {
+        'NAME': 'pos.validators.LowercaseValidator',
+    },
+    {
+        'NAME': 'pos.validators.NumberValidator',
+    },
+    {
+        'NAME': 'pos.validators.SpecialCharValidator',
+    },
+    {
+        'NAME': 'pos.validators.PasswordHistoryValidator',
+        'OPTIONS': {'history_count': 5},
     },
 ]
 
@@ -367,13 +454,41 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# WhiteNoise configuration for serving static files
-# Use simpler storage to avoid manifest issues
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
 # Media files (User uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# ── CDN / Storage backend ────────────────────────────────────────────────────
+# Set AWS_S3_CUSTOM_DOMAIN (or CDN_DOMAIN) in .env to activate S3+CDN storage.
+# Without it, falls back to WhiteNoise (static) + local filesystem (media).
+
+_CDN_DOMAIN = os.environ.get('CDN_DOMAIN', '')          # e.g. d1234.cloudfront.net
+_AWS_BUCKET = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+
+if _AWS_BUCKET:
+    # django-storages S3 backend
+    INSTALLED_APPS += ['storages']
+
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    AWS_STORAGE_BUCKET_NAME = _AWS_BUCKET
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_CUSTOM_DOMAIN = _CDN_DOMAIN or f'{_AWS_BUCKET}.s3.amazonaws.com'
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+    AWS_QUERYSTRING_AUTH = False
+
+    # Static files → S3/CDN
+    STATICFILES_STORAGE = 'storages.backends.s3boto3.S3StaticStorage'
+    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
+
+    # Media files → S3/CDN
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+
+else:
+    # WhiteNoise for static files (no CDN)
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -390,8 +505,44 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+# Session security — expire on browser close, short max age
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 28800          # 8 hours max (safety net)
+SESSION_COOKIE_SECURE = not DEBUG   # HTTPS only in production
+SESSION_COOKIE_HTTPONLY = True      # No JS access to session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'     # CSRF protection
+
 # Password Reset Token Expiry (in seconds)
 PASSWORD_RESET_TIMEOUT = 86400  # 24 hours
+
+# Field-level encryption key for sensitive data at rest
+# Generate with: python -c "from pos.encryption import generate_key; print(generate_key())"
+# Store in .env as FIELD_ENCRYPTION_KEY=<generated_key>
+FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
+
+
+# ==================== CELERY CONFIGURATION ====================
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0'))
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0'))
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 300          # 5 min hard limit
+CELERY_TASK_SOFT_TIME_LIMIT = 240     # 4 min soft limit (raises SoftTimeLimitExceeded)
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1 # Fair task distribution
+CELERY_TASK_ACKS_LATE = True          # Re-queue on worker crash
+CELERY_TASK_ROUTES = {
+    'pos.tasks.send_campaign_emails': {'queue': 'emails'},
+    'pos.tasks.send_purchase_order_email': {'queue': 'emails'},
+    'pos.tasks.send_payment_confirmation_email': {'queue': 'emails'},
+    'pos.tasks.send_grn_notification_email': {'queue': 'emails'},
+    'pos.tasks.send_license_expiry_reminder': {'queue': 'emails'},
+    'pos.tasks.generate_analytics_report': {'queue': 'reports'},
+    'pos.tasks.export_report_csv': {'queue': 'reports'},
+}
 
 
 # ==================== REST FRAMEWORK CONFIGURATION ====================
@@ -399,6 +550,7 @@ PASSWORD_RESET_TIMEOUT = 86400  # 24 hours
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'pos.api_authentication.APIKeyAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -413,7 +565,20 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
     'DATE_FORMAT': '%Y-%m-%d',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'auth': '5/minute',  # Stricter limits for authentication
+        'login': '3/minute',  # Very strict for login attempts
+    },
 }
+
+# Customer module safeguards
+ENFORCE_UNIQUE_CUSTOMER_PHONE = os.environ.get('ENFORCE_UNIQUE_CUSTOMER_PHONE', 'true').lower() == 'true'
 
 # JWT Settings
 from datetime import timedelta
@@ -453,6 +618,8 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
+    'POSTPROCESSING_HOOKS': [],          # disable hooks that can crash on introspection
+    'DISABLE_ERRORS_AND_WARNINGS': True, # suppress schema generation errors
 }
 
 
@@ -564,54 +731,42 @@ JAZZMIN_SETTINGS = {
         "pos.SalePayment": "fas fa-money-bill-wave",
         "pos.Shift": "fas fa-clock",
         "pos.SaleReturn": "fas fa-undo",
-        "pos.Promotion": "fas fa-percentage",
-        "pos.Expense": "fas fa-receipt",
-        "pos.ExpenseCategory": "fas fa-folder",
-    },
-    
-    # Icons that are used when one is not manually specified
-    "default_icon_parents": "fas fa-chevron-circle-right",
-    "default_icon_children": "fas fa-circle",
-    
-    #################
-    # Related Modal #
-    #################
-    
-    # Use modals instead of popups
-    "related_modal_active": False,
-    
-    #############
-    # UI Tweaks #
-    #############
-    
-    # Relative paths to custom CSS/JS scripts (must be present in static files)
-    "custom_css": None,
-    "custom_js": None,
-    
-    # Whether to link font from fonts.googleapis.com (use custom_css to supply font otherwise)
-    "use_google_fonts_cdn": True,
-    
-    # Whether to show the UI customizer on the sidebar
-    "show_ui_builder": False,
-    
-    ###############
-    # Change view #
-    ###############
-    
-    # Render out the change view as a single form, or in tabs, current options are
-    # - single
-    # - horizontal_tabs (default)
-    # - vertical_tabs
-    # - collapsible
-    # - carousel
-    "changeform_format": "horizontal_tabs",
-    
-    # Override change forms on a per modeladmin basis
-    "changeform_format_overrides": {
-        "auth.user": "collapsible",
-        "auth.group": "vertical_tabs",
-    },
+        "pos.BackupAuditLog": "fas fa-lock",
+    }
 }
+
+# =============================================================================
+# BACKUP & SECURITY SETTINGS
+# =============================================================================
+
+# Enable GPG encryption for all backups (requires gpg command available)
+BACKUP_ENABLE_ENCRYPTION = os.environ.get('BACKUP_ENABLE_ENCRYPTION', 'True') == 'True'
+
+# GPG recipient (public key ID) for backup encryption
+# Generate with: gpg --list-keys (copy the long key ID)
+BACKUP_GPG_RECIPIENT = os.environ.get('BACKUP_GPG_RECIPIENT', '')
+
+# GPG passphrase for symmetric encryption (if no recipient)
+BACKUP_GPG_PASSPHRASE = os.environ.get('BACKUP_GPG_PASSPHRASE', '')
+
+# Backup retention policies (in days)
+BACKUP_RETENTION_DAILY = int(os.environ.get('BACKUP_RETENTION_DAILY', 7))  # Keep daily backups for 7 days
+BACKUP_RETENTION_WEEKLY = int(os.environ.get('BACKUP_RETENTION_WEEKLY', 30))  # Keep weekly for 30 days
+BACKUP_RETENTION_MONTHLY = int(os.environ.get('BACKUP_RETENTION_MONTHLY', 365))  # Keep monthly for 1 year
+
+# Cloud backup storage (optional)
+BACKUP_S3_BUCKET = os.environ.get('BACKUP_S3_BUCKET', '')
+BACKUP_GCS_BUCKET = os.environ.get('BACKUP_GCS_BUCKET', '')
+BACKUP_AZURE_CONNECTION_STRING = os.environ.get('BACKUP_AZURE_CONNECTION_STRING', '')
+BACKUP_AZURE_CONTAINER = os.environ.get('BACKUP_AZURE_CONTAINER', '')
+
+# Force HTTPS/TLS for all cloud uploads (security best practice)
+BACKUP_FORCE_TLS = os.environ.get('BACKUP_FORCE_TLS', 'True') == 'True'
+
+# Automated disaster recovery testing (test restore weekly)
+BACKUP_TEST_RESTORE_ENABLED = os.environ.get('BACKUP_TEST_RESTORE_ENABLED', 'True') == 'True'
+BACKUP_TEST_RESTORE_SCHEDULE = os.environ.get('BACKUP_TEST_RESTORE_SCHEDULE', 'weekly')  # daily, weekly, monthly
+
 
 # Jazzmin UI Tweaks
 JAZZMIN_UI_TWEAKS = {
@@ -619,7 +774,7 @@ JAZZMIN_UI_TWEAKS = {
     "footer_small_text": False,
     "body_small_text": False,
     "brand_small_text": False,
-    "brand_colour": "navbar-primary",
+    "brand_colour": "navbar-dark",
     "accent": "accent-primary",
     "navbar": "navbar-dark",
     "no_navbar_border": False,
@@ -649,3 +804,10 @@ JAZZMIN_UI_TWEAKS = {
 
 # Site URL for email links
 SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
+
+# Multi-Branch plan limits
+BRANCH_LIMITS = {
+    'trial': 3,
+    'free': 3,
+    'paid': 3,   # Hard cap at 3 to prevent system overload
+}

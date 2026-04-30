@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\utils\field_mapping.py
+# hypothesis_version: 6.151.10
+
+['JSONField', '_', '_proxy_class', 'allow_blank', 'allow_empty', 'allow_files', 'allow_folders', 'allow_null', 'allow_unicode', 'base_template', 'choices', 'decimal_places', 'field_label', 'help_text', 'label', 'many', 'match', 'max_digits', 'max_length', 'max_value', 'min_length', 'min_value', 'model_field', 'model_name', 'path', 'queryset', 'read_only', 'recursive', 'required', 'style', 'textarea.html', 'to_field', 'unique', 'validators', 'view_name']

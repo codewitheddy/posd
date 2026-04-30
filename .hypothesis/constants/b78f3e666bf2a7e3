@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\views\decorators\http.py
+# hypothesis_version: 6.151.10
+
+['ETag', 'GET', 'HEAD', 'Last-Modified', 'POST']

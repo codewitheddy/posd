@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\request.py
+# hypothesis_version: 6.151.10
+
+['<%s.%s: %s %r>', 'CONTENT_LENGTH', 'CONTENT_TYPE', 'HTTP_CONTENT_LENGTH', 'HTTP_CONTENT_TYPE', '_auth', '_authenticator', '_data', '_files', '_force_auth_token', '_force_auth_user', '_full_data', '_post', '_request', '_stream', '_user', 'accepted_media_type', 'accepted_renderer', 'action', 'action_map', 'encoding', 'multipart/form-data', 'request', 'version', 'versioning_scheme']

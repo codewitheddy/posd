@@ -1,13 +1,13 @@
 from django.contrib import admin
 from .models import (
-    Category, Product, Sale, SaleItem, StockAdjustment, 
-    Supplier, Purchase, PurchaseItem, UserProfile, 
+    Category, Product, Sale, SaleItem, StockAdjustment,
+    Supplier, Purchase, PurchaseItem, UserProfile,
     BusinessSettings, ActivityLog, Customer, PaymentMethod,
     SalePayment, Shift, SaleReturn, SaleReturnItem, Promotion,
     ExpenseCategory, Expense, LoyaltyTransaction, LoyaltyReward,
     LoyaltyRedemption, SupplierPayment, PaymentAllocation,
     Business, BusinessMembership, SubscriptionPayment, DayClosureReport,
-    SupportAccessRequest
+    SupportAccessRequest, HSCode
 )
 
 
@@ -231,10 +231,16 @@ class SaleReturnAdmin(admin.ModelAdmin):
 
 @admin.register(Promotion)
 class PromotionAdmin(admin.ModelAdmin):
-    list_display = ['name', 'code', 'discount_type', 'discount_value', 'start_date', 'end_date', 'is_active', 'uses_count']
-    list_filter = ['discount_type', 'is_active', 'start_date']
-    search_fields = ['name', 'code']
-    filter_horizontal = ['applicable_products', 'applicable_categories']
+    list_display = ['name', 'code', 'promo_type', 'discount_value', 'start_date', 'end_date', 'is_active', 'uses_count']
+    list_filter = ['promo_type', 'is_active', 'start_date']
+
+
+@admin.register(HSCode)
+class HSCodeAdmin(admin.ModelAdmin):
+    list_display = ['code', 'description', 'chapter', 'vat_rate', 'excise_rate', 'import_duty', 'unit', 'is_active']
+    list_filter = ['chapter', 'is_active', 'is_excisable']
+    search_fields = ['code', 'description', 'notes']
+    ordering = ['code']
 
 
 @admin.register(ExpenseCategory)

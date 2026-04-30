@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0043_remove_customer_pos_customer_phone_idx_and_more.py
+# hypothesis_version: 6.151.10
+
+['1.000', 'customer', 'emaillog', 'pos', 'pos_product_cat_idx', 'pos_product_code_idx', 'pos_sale_cashier_idx', 'pos_sale_date_idx', 'pos_sale_invoice_idx', 'pos_shift_status_idx', 'product', 'purchase', 'sale', 'saleitem', 'shift', 'supplier']

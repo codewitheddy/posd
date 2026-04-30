@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\conf\urls\static.py
+# hypothesis_version: 6.151.10
+
+['/', '^%s(?P<path>.*)$']

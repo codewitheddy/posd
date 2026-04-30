@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\celery\utils\collections.py
+# hypothesis_version: 6.151.10
+
+[100, 1000, ', ', 'AttributeDict', 'AttributeDictMixin', 'BufferMap', 'ChainMap', 'ConfigurationView', 'DictAttribute', 'Evictable', 'LimitedSet', 'Messagebuffer', 'OrderedDict', '_', 'changes', 'defaults', 'force_mapping', 'key_t', 'lpmerge', 'move_to_end', 'no last=True on PyPy', 'obj', 'prefix']

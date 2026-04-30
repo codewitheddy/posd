@@ -1,459 +1,557 @@
 {% extends 'pos/base_simple.html' %}
-
-{% block title %}Platform Admin Dashboard{% endblock %}
+{% block title %}Platform Admin — Marid POS{% endblock %}
 
 {% block extra_css %}
 <style>
-    .platform-admin-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 40px 0;
-        margin-bottom: 30px;
-        border-radius: 12px;
-    }
-    .stat-card {
-        border-radius: 12px;
-        padding: 25px;
-        margin-bottom: 20px;
-        border: none;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    }
-    .stat-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 28px;
-        margin-bottom: 15px;
-    }
-    .stat-value {
-        font-size: 36px;
-        font-weight: 700;
-        margin: 10px 0;
-        color: #2c3e50;
-    }
-    .stat-label {
-        font-size: 14px;
-        color: #7f8c8d;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .stat-sublabel {
-        font-size: 12px;
-        color: #95a5a6;
-        margin-top: 5px;
-    }
-    .business-list-card {
-        border-radius: 12px;
-        border: none;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-        margin-top: 20px;
-    }
-    .business-item {
-        padding: 15px;
-        border-bottom: 1px solid #ecf0f1;
-        transition: background-color 0.2s;
-    }
-    .business-item:hover {
-        background-color: #f8f9fa;
-    }
-    .business-item:last-child {
-        border-bottom: none;
-    }
-    .badge-custom {
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-    }
-    .section-title {
-        font-size: 20px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin-bottom: 20px;
-    }
+  :root {
+    --primary: #224195;
+    --primary-hover: #1a3278;
+    --primary-light: #eef1fb;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --warning-bg: #fffbeb;
+    --warning-border: #fde68a;
+    --text-main: #1a202c;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    --bg: #f8f9fc;
+  }
+
+  body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text-main); }
+
+  /* ── Page header ── */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    margin-bottom: 24px;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+  .page-header p  { font-size: 13px; color: var(--text-muted); margin: 2px 0 0; }
+
+  /* ── Stat cards ── */
+  .stat-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex; align-items: center; gap: 16px;
+    transition: box-shadow .2s, transform .2s;
+  }
+  .stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-2px); }
+  .stat-icon {
+    width: 48px; height: 48px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .stat-body { flex: 1; min-width: 0; }
+  .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin-bottom: 3px; }
+  .stat-value { font-size: 26px; font-weight: 700; color: var(--text-main); line-height: 1.1; }
+  .stat-sub   { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+  /* ── Section cards ── */
+  .dash-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .dash-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dash-card-title { font-size: 14px; font-weight: 700; color: var(--text-main); margin: 0; }
+  .dash-card-body  { padding: 20px; }
+
+  /* ── Form controls ── */
+  .form-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 5px; }
+  .form-control, .form-select {
+    border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; font-size: 14px; color: var(--text-main);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(34,65,149,.1);
+    outline: none;
+  }
+
+  /* ── Buttons ── */
+  .btn-primary-solid {
+    background: var(--primary); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary-solid:hover { background: var(--primary-hover); color: #fff; }
+
+  .btn-outline { 
+    background: #fff; color: var(--text-main);
+    border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: border-color .15s, background .15s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-outline:hover { border-color: #9ca3af; background: #f9fafb; color: var(--text-main); }
+
+  .btn-success-solid {
+    background: var(--success); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-success-solid:hover { background: #15803d; color: #fff; }
+
+  /* ── Business table ── */
+  .biz-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .biz-table thead th {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .4px; color: var(--text-muted);
+    padding: 10px 16px; background: #fafbfc;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .biz-table tbody td {
+    padding: 12px 16px; border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle; color: var(--text-main);
+  }
+  .biz-table tbody tr:last-child td { border-bottom: none; }
+  .biz-table tbody tr:hover td { background: #fafbfc; }
+
+  /* ── Status badges ── */
+  .badge-active   { background: var(--success-light); color: var(--success); border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-inactive { background: #f3f4f6; color: var(--text-muted); border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-warning  { background: var(--warning-bg); color: #92400e; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-danger   { background: #fef2f2; color: #991b1b; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+
+  /* ── Quick actions grid ── */
+  .qa-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  /* ── Empty state ── */
+  .empty-state { text-align: center; padding: 48px 16px; color: var(--text-muted); }
+  .empty-state i { font-size: 2.5rem; opacity: .3; display: block; margin-bottom: 10px; }
+
+  /* ── Modal ── */
+  .modal-content { border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.12); }
+  .modal-header  { border-bottom: 1px solid var(--border); padding: 16px 20px; }
+  .modal-footer  { border-top: 1px solid var(--border); padding: 14px 20px; }
+  .modal-title   { font-size: 15px; font-weight: 700; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Platform Admin Header -->
-    <div class="platform-admin-header text-center">
-        <h1 class="display-4 mb-2">
-            <i class="bi bi-speedometer2"></i> Platform Admin Dashboard
-        </h1>
-        <p class="lead mb-0">System-wide statistics and business management</p>
+<div class="container-fluid py-4 px-3 px-md-4">
+
+  <!-- Page header -->
+  <div class="page-header">
+    <div>
+      <h1><i class="bi bi-speedometer2 me-2" style="color:var(--primary)"></i>Platform Admin</h1>
+      <p>System-wide statistics and business management</p>
     </div>
-
-    <!-- Key Metrics -->
-    <div class="row">
-        <!-- Total Businesses -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                    <i class="bi bi-building"></i>
-                </div>
-                <div class="stat-label">Total Businesses</div>
-                <div class="stat-value">{{ total_businesses }}</div>
-                <div class="stat-sublabel">
-                    <span class="text-success">{{ active_businesses }} Active</span> • 
-                    <span class="text-muted">{{ inactive_businesses }} Inactive</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Users -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
-                    <i class="bi bi-people"></i>
-                </div>
-                <div class="stat-label">Total Users</div>
-                <div class="stat-value">{{ total_users }}</div>
-                <div class="stat-sublabel">Across all businesses</div>
-            </div>
-        </div>
-
-        <!-- Total Sales (All Time) -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
-                    <i class="bi bi-receipt"></i>
-                </div>
-                <div class="stat-label">Total Sales</div>
-                <div class="stat-value">{{ total_sales }}</div>
-                <div class="stat-sublabel">All time transactions</div>
-            </div>
-        </div>
-
-        <!-- Total Revenue -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white;">
-                    <i class="bi bi-cash-stack"></i>
-                </div>
-                <div class="stat-label">Total Revenue</div>
-                <div class="stat-value">KES {{ total_revenue|floatformat:0 }}</div>
-                <div class="stat-sublabel">All businesses combined</div>
-            </div>
-        </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'registrations_list' %}" class="btn-outline">
+        <i class="bi bi-person-check"></i> Registrations
+      </a>
+      <a href="/admin/" class="btn-outline">
+        <i class="bi bi-shield-lock"></i> Django Admin
+      </a>
     </div>
+  </div>
 
-    <!-- Additional Metrics -->
-    <div class="row mt-3">
-        <!-- Pending Activations -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); color: #2c3e50;">
-                    <i class="bi bi-hourglass-split"></i>
-                </div>
-                <div class="stat-label">Pending Activations</div>
-                <div class="stat-value">{{ pending_activations }}</div>
-                <div class="stat-sublabel">
-                    {% if pending_activations > 0 %}
-                        <a href="/admin/pos/business/?is_active__exact=0" class="text-warning">Review Now →</a>
-                    {% else %}
-                        All caught up!
-                    {% endif %}
-                </div>
-            </div>
+  <!-- ── Stat cards row 1 ── -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#eef1fb;color:var(--primary)"><i class="bi bi-building"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Businesses</div>
+          <div class="stat-value">{{ total_businesses }}</div>
+          <div class="stat-sub">{{ active_businesses }} active · {{ inactive_businesses }} inactive</div>
         </div>
-        
-        <!-- Total Products -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <div class="stat-label">Total Products</div>
-                <div class="stat-value">{{ total_products }}</div>
-                <div class="stat-sublabel">In inventory</div>
-            </div>
-        </div>
-
-        <!-- Total Customers -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white;">
-                    <i class="bi bi-person-badge"></i>
-                </div>
-                <div class="stat-label">Total Customers</div>
-                <div class="stat-value">{{ total_customers }}</div>
-                <div class="stat-sublabel">Registered customers</div>
-            </div>
-        </div>
-
-        <!-- Today's Sales -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #2c3e50;">
-                    <i class="bi bi-calendar-check"></i>
-                </div>
-                <div class="stat-label">Today's Sales</div>
-                <div class="stat-value">{{ today_sales }}</div>
-                <div class="stat-sublabel">KES {{ today_revenue|floatformat:0 }}</div>
-            </div>
-        </div>
-
-        <!-- This Month -->
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card">
-                <div class="stat-icon" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: white;">
-                    <i class="bi bi-calendar-month"></i>
-                </div>
-                <div class="stat-label">This Month</div>
-                <div class="stat-value">{{ month_sales }}</div>
-                <div class="stat-sublabel">KES {{ month_revenue|floatformat:0 }}</div>
-            </div>
-        </div>
+      </div>
     </div>
-
-    <!-- Business Management Section -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body">
-                    <h5 class="section-title">
-                        <i class="bi bi-plus-circle"></i> Create New Business
-                    </h5>
-                    <form method="post" action="{% url 'admin_create_business' %}" class="row g-3">
-                        {% csrf_token %}
-                        <div class="col-md-4">
-                            <label class="form-label">Business Name</label>
-                            <input type="text" name="name" class="form-control" required placeholder="e.g., My Shop">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Owner Email</label>
-                            <input type="email" name="owner_email" class="form-control" required placeholder="owner@example.com">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Owner Name (Optional)</label>
-                            <input type="text" name="owner_name" class="form-control" placeholder="John Doe">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">&nbsp;</label>
-                            <button type="submit" class="btn btn-success w-100">
-                                <i class="bi bi-plus-lg"></i> Create Business
-                            </button>
-                        </div>
-                    </form>
-                    <small class="text-muted mt-2 d-block">
-                        <i class="bi bi-info-circle"></i> If the owner email doesn't exist, a new user account will be created automatically.
-                    </small>
-                </div>
-            </div>
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#fce7f3;color:#db2777"><i class="bi bi-people"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Users</div>
+          <div class="stat-value">{{ total_users }}</div>
+          <div class="stat-sub">Across all businesses</div>
         </div>
+      </div>
     </div>
-
-    <!-- Recent Businesses -->
-    <div class="row">
-        <div class="col-12">
-            <div class="business-list-card card">
-                <div class="card-header bg-white border-0 pt-4">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="section-title mb-0">
-                            <i class="bi bi-building"></i> All Businesses
-                        </h5>
-                        <a href="/admin/pos/business/" class="btn btn-sm btn-primary">
-                            <i class="bi bi-gear"></i> Manage in Admin
-                        </a>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    {% if businesses %}
-                        {% for business in businesses %}
-                        <div class="business-item">
-                            <div class="row align-items-center">
-                                <div class="col-md-3">
-                                    <h6 class="mb-1">
-                                        <strong>{{ business.name }}</strong>
-                                        {% if not business.is_active %}
-                                        <span class="badge bg-warning badge-custom ms-2">⏳ Pending Activation</span>
-                                        {% endif %}
-                                        {% if business.license_status == 'expired' %}
-                                        <span class="badge bg-danger badge-custom ms-2">License Expired</span>
-                                        {% elif business.license_status == 'suspended' %}
-                                        <span class="badge bg-warning badge-custom ms-2">Suspended</span>
-                                        {% endif %}
-                                    </h6>
-                                    <small class="text-muted">
-                                        <i class="bi bi-link-45deg"></i> /b/{{ business.slug }}
-                                    </small>
-                                </div>
-                                <div class="col-md-2">
-                                    <small class="text-muted d-block">Owner</small>
-                                    <strong>{{ business.owner.get_full_name|default:business.owner.username }}</strong>
-                                </div>
-                                <div class="col-md-2">
-                                    <small class="text-muted d-block">License</small>
-                                    {% if business.license_expires_at %}
-                                        {% if business.is_license_expired %}
-                                            <strong class="text-danger">Expired {{ business.license_expires_at|date:"M d, Y" }}</strong>
-                                        {% elif business.days_until_expiry <= 7 %}
-                                            <strong class="text-warning">{{ business.days_until_expiry }} days left</strong>
-                                        {% else %}
-                                            <strong class="text-success">{{ business.license_expires_at|date:"M d, Y" }}</strong>
-                                        {% endif %}
-                                    {% else %}
-                                        <strong class="text-muted">No expiry set</strong>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-2">
-                                    <small class="text-muted d-block">Plan</small>
-                                    <strong>{{ business.get_subscription_plan_display }}</strong>
-                                </div>
-                                <div class="col-md-3 text-end">
-                                    {% if not business.is_active %}
-                                    <form method="post" action="{% url 'activate_business' business.id %}" style="display: inline;">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-success me-2" onclick="return confirm('Activate {{ business.name }}? The owner will receive an email notification.')">
-                                            <i class="bi bi-check-circle"></i> Activate Business
-                                        </button>
-                                    </form>
-                                    {% else %}
-                                    <a href="{% url 'request_support_access' business_id=business.id %}" 
-                                       class="btn btn-sm btn-success me-2">
-                                        <i class="bi bi-shield-lock"></i> Request Access
-                                    </a>
-                                    {% endif %}
-                                    <button class="btn btn-sm btn-primary" 
-                                            onclick="showExtendLicenseModal({{ business.id }}, '{{ business.name|escapejs }}', '{% if business.license_expires_at %}{{ business.license_expires_at|date:'Y-m-d' }}{% else %}Not set{% endif %}')">
-                                        <i class="bi bi-calendar-plus"></i> Extend License
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="text-center py-5">
-                            <i class="bi bi-building" style="font-size: 48px; color: #bdc3c7;"></i>
-                            <p class="text-muted mt-3">No businesses registered yet</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="bi bi-receipt"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Total Sales</div>
+          <div class="stat-value">{{ total_sales }}</div>
+          <div class="stat-sub">All time</div>
         </div>
+      </div>
     </div>
-
-    <!-- Quick Actions -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body text-center py-4">
-                    <h5 class="section-title">Platform Management</h5>
-                    <div class="mt-3">
-                        <a href="{% url 'my_support_access_requests' %}" class="btn btn-success btn-lg me-2 mb-2">
-                            <i class="bi bi-shield-lock"></i> My Support Access
-                        </a>
-                        <a href="{% url 'registrations_list' %}" class="btn btn-warning btn-lg me-2 mb-2">
-                            <i class="bi bi-person-check"></i> Registration Requests
-                        </a>
-                        <a href="{% url 'invitation_codes_list' %}" class="btn btn-info btn-lg me-2 mb-2">
-                            <i class="bi bi-ticket"></i> Invitation Codes
-                        </a>
-                        <a href="/admin/" class="btn btn-dark btn-lg me-2 mb-2">
-                            <i class="bi bi-shield-lock"></i> Django Admin
-                        </a>
-                        <a href="/admin/pos/business/" class="btn btn-primary btn-lg me-2 mb-2">
-                            <i class="bi bi-building"></i> Manage Businesses
-                        </a>
-                        <a href="/admin/auth/user/" class="btn btn-info btn-lg me-2 mb-2">
-                            <i class="bi bi-people"></i> Manage Users
-                        </a>
-                        <a href="{% url 'business_list' %}" class="btn btn-secondary btn-lg mb-2">
-                            <i class="bi bi-list-ul"></i> My Businesses
-                        </a>
-                    </div>
-                </div>
-            </div>
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--success-light);color:var(--success)"><i class="bi bi-cash-stack"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Total Revenue</div>
+          <div class="stat-value" style="font-size:18px">KES {{ total_revenue|floatformat:0 }}</div>
+          <div class="stat-sub">All businesses</div>
         </div>
+      </div>
     </div>
+  </div>
+
+  <!-- ── Stat cards row 2 ── -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--warning-bg);color:#92400e"><i class="bi bi-hourglass-split"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Pending Activation</div>
+          <div class="stat-value">{{ pending_activations }}</div>
+          <div class="stat-sub">
+            {% if pending_activations > 0 %}<a href="/admin/pos/business/?is_active__exact=0" style="color:var(--primary)">Review now</a>
+            {% else %}All caught up{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#f0fdf4;color:#15803d"><i class="bi bi-box-seam"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Products</div>
+          <div class="stat-value">{{ total_products }}</div>
+          <div class="stat-sub">In inventory</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#fef9c3;color:#ca8a04"><i class="bi bi-person-badge"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Customers</div>
+          <div class="stat-value">{{ total_customers }}</div>
+          <div class="stat-sub">Registered</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-calendar-check"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Today</div>
+          <div class="stat-value">{{ today_sales }}</div>
+          <div class="stat-sub">KES {{ today_revenue|floatformat:0 }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Create business ── -->
+  <div class="dash-card mb-4">
+    <div class="dash-card-header">
+      <span class="dash-card-title"><i class="bi bi-plus-circle me-2" style="color:var(--primary)"></i>Create New Business</span>
+    </div>
+    <div class="dash-card-body">
+      <form method="post" action="{% url 'admin_create_business' %}">
+        {% csrf_token %}
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Business Name</label>
+            <input type="text" name="name" class="form-control" required placeholder="e.g. My Shop">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Owner Email</label>
+            <input type="email" name="owner_email" class="form-control" required placeholder="owner@example.com">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Owner Name <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="text" name="owner_name" class="form-control" placeholder="John Doe">
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn-success-solid w-100" style="justify-content:center;padding:10px">
+              <i class="bi bi-plus-lg"></i> Create
+            </button>
+          </div>
+        </div>
+        <p class="text-muted small mt-2 mb-0">
+          <i class="bi bi-info-circle me-1"></i>If the owner email doesn't exist, a new user account will be created automatically.
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Businesses table ── -->
+  <div class="dash-card mb-4">
+    <div class="dash-card-header">
+      <span class="dash-card-title"><i class="bi bi-building me-2" style="color:var(--primary)"></i>All Businesses</span>
+      <a href="/admin/pos/business/" class="btn-outline" style="font-size:12px;padding:6px 12px">
+        <i class="bi bi-gear"></i> Django Admin
+      </a>
+    </div>
+    {% if businesses %}
+    <div class="table-responsive">
+      <table class="biz-table">
+        <thead>
+          <tr>
+            <th>Business</th>
+            <th>Owner</th>
+            <th>License</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for business in businesses %}
+          <tr>
+            <td>
+              <div style="font-weight:600">{{ business.name }}</div>
+              <div style="font-size:11px;color:var(--text-muted)">/b/{{ business.slug }}</div>
+            </td>
+            <td>
+              <div style="font-weight:500">{{ business.owner.get_full_name|default:business.owner.username }}</div>
+              <div style="font-size:11px;color:var(--text-muted)">{{ business.owner.email }}</div>
+            </td>
+            <td>
+              {% if business.license_expires_at %}
+                {% if business.is_license_expired %}
+                  <span class="badge-danger">Expired {{ business.license_expires_at|date:"d M Y" }}</span>
+                {% elif business.days_until_expiry <= 7 %}
+                  <span class="badge-warning">{{ business.days_until_expiry }}d left</span>
+                {% else %}
+                  <span style="font-size:13px">{{ business.license_expires_at|date:"d M Y" }}</span>
+                {% endif %}
+              {% else %}
+                <span class="badge-inactive">No expiry</span>
+              {% endif %}
+            </td>
+            <td>{{ business.get_subscription_plan_display }}</td>
+            <td>
+              {% if business.is_active %}
+                <span class="badge-active">Active</span>
+              {% else %}
+                <span class="badge-warning">Pending</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <div class="d-flex gap-2 justify-content-end flex-wrap">
+                {% if not business.is_active %}
+                <form method="post" action="{% url 'activate_business' business.id %}" style="display:inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-success-solid"
+                          onclick="return confirm('Activate {{ business.name|escapejs }}? The owner will receive an email.')">
+                    <i class="bi bi-check-circle"></i> Activate
+                  </button>
+                </form>
+                {% else %}
+                <a href="{% url 'request_support_access' business_id=business.id %}" class="btn-outline">
+                  <i class="bi bi-shield-lock"></i> Access
+                </a>
+                {% endif %}
+                <button class="btn-outline"
+                        onclick="showExtendModal({{ business.id }}, '{{ business.name|escapejs }}', '{% if business.license_expires_at %}{{ business.license_expires_at|date:'Y-m-d' }}{% else %}Not set{% endif %}')">
+                  <i class="bi bi-calendar-plus"></i> Extend
+                </button>
+                <button class="btn-outline"
+                        onclick="showResetPasswordModal({{ business.owner.id }}, '{{ business.owner.username|escapejs }}', '{{ business.name|escapejs }}')">
+                  <i class="bi bi-key"></i> Reset PW
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-building"></i>
+      <p>No businesses registered yet</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Quick actions ── -->
+  <div class="dash-card mb-4">
+    <div class="dash-card-header">
+      <span class="dash-card-title"><i class="bi bi-lightning-charge me-2" style="color:#ca8a04"></i>Platform Management</span>
+    </div>
+    <div class="dash-card-body">
+      <div class="qa-grid">
+        <a href="{% url 'my_support_access_requests' %}" class="btn-outline">
+          <i class="bi bi-shield-lock"></i> My Support Access
+        </a>
+        <a href="{% url 'registrations_list' %}" class="btn-outline">
+          <i class="bi bi-person-check"></i> Registration Requests
+        </a>
+        <a href="{% url 'invitation_codes_list' %}" class="btn-outline">
+          <i class="bi bi-ticket"></i> Invitation Codes
+        </a>
+        <a href="/admin/" class="btn-outline">
+          <i class="bi bi-shield-lock"></i> Django Admin
+        </a>
+        <a href="/admin/pos/business/" class="btn-outline">
+          <i class="bi bi-building"></i> Manage Businesses
+        </a>
+        <a href="/admin/auth/user/" class="btn-outline">
+          <i class="bi bi-people"></i> Manage Users
+        </a>
+        <a href="{% url 'business_list' %}" class="btn-outline">
+          <i class="bi bi-list-ul"></i> My Businesses
+        </a>
+      </div>
+    </div>
+  </div>
+
 </div>
 
-<!-- Extend License Modal -->
-<div class="modal fade" id="extendLicenseModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Extend License</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="post" action="{% url 'extend_license' %}" id="extendLicenseForm">
-                {% csrf_token %}
-                <input type="hidden" name="business_id" id="modal_business_id">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label"><strong>Business:</strong></label>
-                        <p id="modal_business_name" class="text-muted"></p>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label"><strong>Current Expiry:</strong></label>
-                        <p id="modal_current_expiry" class="text-muted"></p>
-                    </div>
-                    <div class="mb-3">
-                        <label for="extend_days" class="form-label">Extend By (Days)</label>
-                        <select class="form-select" name="days" id="extend_days" required>
-                            <option value="30">30 Days (1 Month)</option>
-                            <option value="90">90 Days (3 Months)</option>
-                            <option value="180">180 Days (6 Months)</option>
-                            <option value="365" selected>365 Days (1 Year)</option>
-                            <option value="730">730 Days (2 Years)</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="custom_days" class="form-label">Or Enter Custom Days</label>
-                        <input type="number" class="form-control" id="custom_days" min="1" placeholder="Enter custom number of days">
-                    </div>
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> The license will be extended from the current expiry date (or today if no expiry is set).
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-calendar-plus"></i> Extend License
-                    </button>
-                </div>
-            </form>
+<!-- ── Extend License Modal ── -->
+<div class="modal fade" id="extendModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-calendar-plus me-2" style="color:var(--primary)"></i>Extend License</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'extend_license' %}">
+        {% csrf_token %}
+        <input type="hidden" name="business_id" id="modal_biz_id">
+        <div class="modal-body">
+          <div class="mb-3 p-3 rounded" style="background:#f9fafb;border:1px solid var(--border)">
+            <div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:2px">Business</div>
+            <div style="font-weight:600" id="modal_biz_name"></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Current expiry: <span id="modal_biz_expiry"></span></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Extend by</label>
+            <select class="form-select" name="days" id="extend_days" required>
+              <option value="30">30 days (1 month)</option>
+              <option value="90">90 days (3 months)</option>
+              <option value="180">180 days (6 months)</option>
+              <option value="365" selected>365 days (1 year)</option>
+              <option value="730">730 days (2 years)</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Or enter custom days</label>
+            <input type="number" class="form-control" id="custom_days" min="1" placeholder="e.g. 45">
+          </div>
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:13px;color:#1e40af">
+            <i class="bi bi-info-circle me-1"></i>
+            License extends from the current expiry date, or today if none is set.
+          </div>
         </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-primary-solid">
+            <i class="bi bi-calendar-plus"></i> Extend License
+          </button>
+        </div>
+      </form>
     </div>
+  </div>
 </div>
 
 <script>
-function showExtendLicenseModal(businessId, businessName, currentExpiry) {
-    document.getElementById('modal_business_id').value = businessId;
-    document.getElementById('modal_business_name').textContent = businessName;
-    document.getElementById('modal_current_expiry').textContent = currentExpiry || 'Not set';
-    
-    const modal = new bootstrap.Modal(document.getElementById('extendLicenseModal'));
-    modal.show();
+function showExtendModal(id, name, expiry) {
+  document.getElementById('modal_biz_id').value   = id;
+  document.getElementById('modal_biz_name').textContent   = name;
+  document.getElementById('modal_biz_expiry').textContent = expiry;
+  new bootstrap.Modal(document.getElementById('extendModal')).show();
 }
 
-// Handle custom days input
 document.getElementById('custom_days').addEventListener('input', function() {
-    if (this.value) {
-        document.getElementById('extend_days').value = '';
-        // Create a temporary option with custom value
-        const customOption = document.createElement('option');
-        customOption.value = this.value;
-        customOption.text = `${this.value} Days (Custom)`;
-        customOption.selected = true;
-        document.getElementById('extend_days').appendChild(customOption);
-    }
+  const sel = document.getElementById('extend_days');
+  if (this.value) {
+    // remove any previous custom option
+    const prev = sel.querySelector('[data-custom]');
+    if (prev) prev.remove();
+    const opt = document.createElement('option');
+    opt.value = this.value;
+    opt.textContent = this.value + ' days (custom)';
+    opt.selected = true;
+    opt.dataset.custom = '1';
+    sel.appendChild(opt);
+  }
 });
 
 document.getElementById('extend_days').addEventListener('change', function() {
-    if (this.value) {
-        document.getElementById('custom_days').value = '';
-    }
+  if (this.value) document.getElementById('custom_days').value = '';
 });
+
+function showResetPasswordModal(userId, username, businessName) {
+  document.getElementById('reset_user_id').value = userId;
+  document.getElementById('reset_user_info').textContent = username + ' (' + businessName + ')';
+  document.getElementById('reset_new_password').value = '';
+  document.getElementById('reset_pw_feedback').innerHTML = '';
+  new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+}
+
+function validateResetPassword(input) {
+  const pw = input.value;
+  const fb = document.getElementById('reset_pw_feedback');
+  const errors = [];
+  if (pw.length < 10)          errors.push('At least 10 characters');
+  if (!/[A-Z]/.test(pw))       errors.push('At least 1 uppercase letter');
+  if (!/[a-z]/.test(pw))       errors.push('At least 1 lowercase letter');
+  if (!/[0-9]/.test(pw))       errors.push('At least 1 number');
+  if (!/[^A-Za-z0-9]/.test(pw)) errors.push('At least 1 special character (!@#$%...)');
+
+  if (errors.length === 0) {
+    fb.innerHTML = '<span style="color:#16a34a">✓ Password meets all requirements</span>';
+    input.setCustomValidity('');
+  } else {
+    fb.innerHTML = '<span style="color:#dc2626">✗ ' + errors.join(' · ') + '</span>';
+    input.setCustomValidity(errors[0]);
+  }
+}
 </script>
+
+<!-- Reset Password Modal -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content" style="border-radius:14px">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-key me-2"></i>Reset Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'admin_reset_password' %}">
+        {% csrf_token %}
+        <input type="hidden" name="user_id" id="reset_user_id">
+        <div class="modal-body">
+          <div class="mb-3 p-3 rounded" style="background:#f9fafb;border:1px solid var(--border)">
+            <div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:2px">User</div>
+            <div style="font-weight:600" id="reset_user_info"></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="font-size:12px;font-weight:700">New Password</label>
+            <input type="password" class="form-control" name="new_password" id="reset_new_password"
+                   placeholder="Min 10 chars" minlength="10" required style="border-radius:8px"
+                   oninput="validateResetPassword(this)">
+            <div id="reset_pw_feedback" style="font-size:11px;margin-top:6px"></div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px">
+              Must be ≥10 chars with uppercase, lowercase, number and special character.
+            </div>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            This will immediately invalidate all active sessions for this user.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-primary-solid"
+                  onclick="return confirm('Reset password for this user? They will be logged out immediately.')">
+            <i class="bi bi-key"></i> Reset Password
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

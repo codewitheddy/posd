@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\decorators.py
+# hypothesis_version: 6.151.10
+
+['admin', 'business', 'business_list', 'business_membership', 'dashboard', 'owner', 'subscription']

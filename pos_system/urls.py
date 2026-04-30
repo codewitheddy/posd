@@ -26,6 +26,11 @@ admin.site.login = user_passes_test(lambda u: u.is_superuser, login_url='/login/
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('pos.api_urls')),  # REST API endpoints
+    path('api/v1/sync/', include('sync.urls')),
+    path('api/v1/backup/', include('backup.urls')),
+    path('api/v1/restore/', include('restore.urls')),
+    path('settings/backup/', include('backup.web_urls')),
+    path('b/<slug:slug>/hr/', include('hr.urls')),  # HR module web + API
     path('', include('pos.urls_multitenant')),  # Multi-tenant web interface
 ]
 

@@ -1,0 +1,32 @@
+{% extends 'pos/base.html' %}
+{% block title %}Staff Advances{% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="page-header">
+  <div><h1><i class="bi bi-wallet2 me-2 text-primary"></i>Staff Advances</h1></div>
+  <a href="{% url 'hr_advance_create' slug=request.business.slug %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>New Advance</a>
+</div>
+<div class="form-card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-light"><tr><th>Employee</th><th>Amount</th><th>Balance</th><th>Monthly Deduction</th><th>Date</th><th>Reason</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for a in advances %}
+        <tr>
+          <td>{{ a.employee.get_full_name }}</td>
+          <td>KES {{ a.amount|floatformat:2 }}</td>
+          <td class="{% if a.balance_remaining > 0 %}text-warning fw-bold{% else %}text-success{% endif %}">KES {{ a.balance_remaining|floatformat:2 }}</td>
+          <td>KES {{ a.deduction_per_month|floatformat:2 }}/mo</td>
+          <td>{{ a.date_taken|date:"d M Y" }}</td>
+          <td class="small text-muted">{{ a.reason|truncatechars:40 }}</td>
+          <td><span class="badge {% if a.status == 'active' %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ a.get_status_display }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No advances recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endblock %}

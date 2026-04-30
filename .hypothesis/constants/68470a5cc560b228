@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0020_convert_businesssettings_to_per_business.py
+# hypothesis_version: 6.151.10
+
+[200, 254, '58mm', '80mm', 'After Amount', 'Before Amount', 'Business', 'Business Settings', 'BusinessSettings', 'ID', 'KES', 'Large', 'Medium', 'Small', 'address', 'after', 'allow_negative_stock', 'auth.user', 'before', 'business', 'business/logos/', 'business_address', 'business_email', 'business_name', 'business_phone', 'business_website', 'created_at', 'currency_position', 'currency_symbol', 'email', 'enable_expiry_alerts', 'id', 'large', 'logo', 'medium', 'phone', 'pos', 'pos.business', 'receipt_footer', 'receipt_header', 'require_product_code', 'settings', 'show_logo_on_receipt', 'small', 'tax_id', 'thermal_auto_cut', 'thermal_copies', 'thermal_font_size', 'thermal_print_logo', 'updated_at', 'updated_by', 'vat_enabled', 'vat_rate', 'verbose_name', 'verbose_name_plural']

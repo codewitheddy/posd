@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0060_add_support_access_request.py
+# hypothesis_version: 6.151.10
+
+['-requested_at', 'Approved', 'Denied', 'Expired', 'ID', 'Pending', 'Revoked', 'SupportAccessRequest', 'approved', 'approved_at', 'approved_by', 'business', 'denied', 'expired', 'expires_at', 'id', 'indexes', 'notes', 'ordering', 'pending', 'pos', 'pos.business', 'reason', 'requested_at', 'requested_by', 'revoked', 'status', 'support_approvals']

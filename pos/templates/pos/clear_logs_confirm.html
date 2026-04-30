@@ -29,7 +29,11 @@
                         <h5><i class="bi bi-info-circle"></i> You are about to delete:</h5>
                         <ul class="mb-0">
                             <li><strong>{{ count }}</strong> log entries</li>
+                            {% if days > 0 %}
                             <li>Older than <strong>{{ days }} days</strong> (before {{ cutoff_date|date:"Y-m-d" }})</li>
+                            {% else %}
+                            <li><strong>All activity logs</strong> for this business</li>
+                            {% endif %}
                             <li>From your business only</li>
                         </ul>
                     </div>
@@ -69,7 +73,11 @@
                         
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-danger btn-lg">
-                                <i class="bi bi-trash"></i> Yes, Delete {{ count }} Log Entries
+                                {% if days > 0 %}
+                                <i class="bi bi-trash"></i> Yes, Delete {{ count }} Old Log Entries
+                                {% else %}
+                                <i class="bi bi-trash"></i> Yes, Delete All {{ count }} Log Entries
+                                {% endif %}
                             </button>
                             <a href="{% url 'activity_log' slug=request.business.slug %}" class="btn btn-secondary btn-lg">
                                 <i class="bi bi-x-circle"></i> Cancel
@@ -78,7 +86,11 @@
                     </form>
                     {% else %}
                     <div class="alert alert-success">
+                        {% if days > 0 %}
                         <i class="bi bi-check-circle"></i> No logs found older than {{ days }} days. Nothing to delete.
+                        {% else %}
+                        <i class="bi bi-check-circle"></i> No logs found for this business. Nothing to delete.
+                        {% endif %}
                     </div>
                     <a href="{% url 'activity_log' slug=request.business.slug %}" class="btn btn-primary">
                         <i class="bi bi-arrow-left"></i> Back to Activity Logs

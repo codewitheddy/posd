@@ -1,0 +1,517 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if is_edit %}Edit Employee{% else %}Add Employee{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+.emp-type-card {
+  display: block;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: all .2s;
+  background: #fff;
+  user-select: none;
+}
+.emp-type-card:hover {
+  border-color: #93c5fd;
+  background: #f0f9ff;
+}
+.emp-type-card.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+.emp-type-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.emp-type-card .check-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: all .2s;
+}
+.emp-type-card.active .check-dot {
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow: inset 0 0 0 4px #fff;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-person-badge me-2 text-primary"></i>{% if is_edit %}Edit Employee{% else %}Add Employee{% endif %}</h1>
+    {% if is_edit %}<p class="page-subtitle">{{ employee.get_full_name }}</p>{% endif %}
+  </div>
+  <a href="{% url 'hr_employee_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row justify-content-center">
+<div class="col-lg-9">
+<div class="form-card">
+<form method="POST">{% csrf_token %}
+  <div class="row g-4">
+
+    {% if not is_edit %}
+    <!-- ── Employee Type ── -->
+    <div class="col-12">
+      <div class="tab-section-title mt-2">Employee Type</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="emp-type-card active" id="cardPos" onclick="selectType('pos')">
+            <input type="radio" name="emp_type" value="pos" checked class="d-none">
+            <div class="d-flex align-items-center gap-3">
+              <div class="emp-type-icon" style="background:#dbeafe;color:#2563eb;">
+                <i class="bi bi-pc-display-horizontal" style="font-size:1.6rem;"></i>
+              </div>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">POS User</div>
+                <div class="text-muted" style="font-size:12px;">Has system login — cashier, manager, admin</div>
+              </div>
+              <div class="check-dot"></div>
+            </div>
+          </label>
+        </div>
+        <div class="col-md-6">
+          <label class="emp-type-card" id="cardNonPos" onclick="selectType('non_pos')">
+            <input type="radio" name="emp_type" value="non_pos" class="d-none">
+            <div class="d-flex align-items-center gap-3">
+              <div class="emp-type-icon" style="background:#dcfce7;color:#16a34a;">
+                <i class="bi bi-person-fill" style="font-size:1.6rem;"></i>
+              </div>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">Non-POS Staff</div>
+                <div class="text-muted" style="font-size:12px;">No login — cleaner, driver, IT, security…</div>
+              </div>
+              <div class="check-dot"></div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── POS user section ── -->
+    <div id="posUserSection" class="col-12">
+      <div class="tab-section-title">User Account</div>
+      <div class="input-group">
+        <select name="user_account" id="userAccountSelect" class="form-select">
+          <option value="">-- Select existing user --</option>
+          {% for u in users %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }} ({{ u.username }})</option>{% endfor %}
+        </select>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+          <i class="bi bi-person-plus me-1"></i>New User
+        </button>
+      </div>
+      <div class="form-text">Select an existing user or click <strong>New User</strong> to create one.</div>
+    </div>
+
+    <!-- ── Non-POS staff section ── -->
+    <div id="nonPosSection" class="col-12" style="display:none;">
+      <div class="tab-section-title">Staff Name</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">First Name <span class="text-danger">*</span></label>
+          <input type="text" name="first_name" class="form-control" placeholder="e.g. John">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Last Name</label>
+          <input type="text" name="last_name" class="form-control" placeholder="e.g. Kamau">
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Job Details ── -->
+    <div class="col-12">
+      <div class="tab-section-title">Job Details</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Job Title <span class="text-danger">*</span></label>
+          <input type="text" name="job_title" class="form-control" value="{{ employee.job_title|default:'' }}" required placeholder="e.g. Cashier, Cleaner, Driver">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Branch <span class="text-danger">*</span></label>
+          <select name="branch" class="form-select" required>
+            {% for b in branches %}<option value="{{ b.pk }}" {% if employee.branch_id == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Department</label>
+          <div class="input-group">
+            <select name="department" id="departmentSelect" class="form-select">
+              <option value="">-- None --</option>
+              {% for d in departments %}<option value="{{ d.pk }}" {% if employee.department_id == d.pk %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+            </select>
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addDeptModal" title="Add department">
+              <i class="bi bi-plus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Status</label>
+          <select name="status" class="form-select">
+            <option value="active" {% if employee.status == 'active' or not employee %}selected{% endif %}>Active</option>
+            <option value="suspended" {% if employee.status == 'suspended' %}selected{% endif %}>Suspended</option>
+            <option value="terminated" {% if employee.status == 'terminated' %}selected{% endif %}>Terminated</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Hire Date</label>
+          <input type="date" name="hire_date" class="form-control" value="{{ employee.hire_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">National ID Number <span class="text-danger">*</span></label>
+          <input type="text" name="id_number" class="form-control" value="{{ employee.id_number|default:'' }}" required>
+        </div>
+      </div>
+
+      <!-- Identification & Compliance -->
+      <div class="row g-3 mt-2">
+        <div class="col-md-6">
+          <label class="form-label">Staff Code <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" value="{% if employee.staff_code %}{{ employee.staff_code }}{% else %}Auto-generated{% endif %}" readonly>
+          <div class="form-text">Auto-generated unique staff identifier</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">KRA PIN</label>
+          <input type="text" name="kra_pin" class="form-control" value="{{ employee.kra_pin|default:'' }}" placeholder="Used for P9 tax form" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">NSSF Number <span class="text-danger">*</span></label>
+          <input type="text" name="nssf_number" class="form-control" value="{{ employee.nssf_number|default:'' }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">NHIF Number <span class="text-danger">*</span></label>
+          <input type="text" name="nhif_number" class="form-control" value="{{ employee.nhif_number|default:'' }}" required>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Compensation ── -->
+    <div class="col-12">
+      <div class="tab-section-title">Compensation</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Basic Salary (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="basic_salary" class="form-control" value="{{ employee.basic_salary|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Hourly Rate (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="hourly_rate" class="form-control" value="{% if employee.basic_salary %}0{% else %}{{ employee.hourly_rate|default:'0' }}{% endif %}" step="0.01" min="0" {% if employee.basic_salary %}readonly{% endif %}>
+          </div>
+          <div class="form-text">
+            {% if employee.basic_salary %}
+              Auto-calculated from basic salary for overtime purposes.
+              {% if is_edit %}Effective rate: KES {{ employee.effective_hourly_rate|floatformat:2 }}/hour{% endif %}
+            {% else %}
+              Enter hourly rate for hourly employees.
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Allowances -->
+      <div class="row g-3 mt-2">
+        <div class="col-md-6">
+          <label class="form-label">House Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="house_allowance" class="form-control" value="{{ employee.house_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Transport Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="transport_allowance" class="form-control" value="{{ employee.transport_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Medical Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="medical_allowance" class="form-control" value="{{ employee.medical_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Other Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="other_allowance" class="form-control" value="{{ employee.other_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Additional Allowances</label>
+          <div id="additional-allowances-container">
+            {% if employee.other_allowances %}
+              {% for name, amount in employee.other_allowances.items %}
+              <div class="allowance-row mb-2">
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <input type="text" class="form-control allowance-name" placeholder="Allowance name (e.g., Meal Allowance)" value="{{ name }}">
+                  </div>
+                  <div class="col-md-5">
+                    <div class="input-group">
+                      <span class="input-group-text">KES</span>
+                      <input type="number" class="form-control allowance-amount" placeholder="0.00" step="0.01" min="0" value="{{ amount }}">
+                    </div>
+                  </div>
+                  <div class="col-md-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-allowance">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+          <button type="button" id="add-allowance-btn" class="btn btn-outline-primary btn-sm mt-2">
+            <i class="bi bi-plus me-1"></i>Add Allowance
+          </button>
+          <div class="form-text">Add custom allowances specific to this employee. These will be included in payroll calculations.</div>
+          <!-- Hidden field to store JSON data -->
+          <input type="hidden" name="other_allowances" id="other_allowances_json" value="{{ employee.other_allowances|default:'{}' }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Emergency Contact ── -->
+    <div class="col-12">
+      <div class="tab-section-title">Emergency Contact</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Contact Name</label>
+          <input type="text" name="emergency_contact_name" class="form-control" value="{{ employee.emergency_contact_name|default:'' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Contact Phone</label>
+          <input type="text" name="emergency_contact_phone" class="form-control" value="{{ employee.emergency_contact_phone|default:'' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Address</label>
+          <textarea name="address" class="form-control" rows="2">{{ employee.address|default:'' }}</textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Any additional notes about this employee">{{ employee.notes|default:'' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+
+  <div class="d-flex gap-2 mt-4 pt-3 border-top">
+    <button type="submit" class="btn btn-primary px-4">
+      <i class="bi bi-check-circle me-1"></i>{% if is_edit %}Save Changes{% else %}Create Employee{% endif %}
+    </button>
+    <a href="{% url 'hr_employee_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Add Department Modal -->
+<div class="modal fade" id="addDeptModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title"><i class="bi bi-diagram-3 me-1"></i>Add Department</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="text" class="form-control" id="newDeptName" placeholder="e.g. IT, Facilities, Transport">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="quickAddDept()"><i class="bi bi-plus me-1"></i>Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-person-plus me-1"></i>Create New User Account</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="createUserError" class="alert alert-danger d-none"></div>
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label form-label-sm">First Name</label>
+            <input type="text" class="form-control form-control-sm" id="newUserFirst" placeholder="First name">
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">Last Name</label>
+            <input type="text" class="form-control form-control-sm" id="newUserLast" placeholder="Last name">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm">Username <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm" id="newUserUsername" placeholder="e.g. john.doe">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm">Email</label>
+            <input type="email" class="form-control form-control-sm" id="newUserEmail" placeholder="email@example.com">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm">Password <span class="text-danger">*</span></label>
+            <input type="password" class="form-control form-control-sm" id="newUserPassword" placeholder="Min 8 characters">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm">POS Role</label>
+            <select class="form-select form-select-sm" id="newUserRole">
+              <option value="cashier">Cashier</option>
+              <option value="sales">Sales Associate</option>
+              <option value="stock_manager">Stock Manager</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="quickCreateUser()"><i class="bi bi-person-check me-1"></i>Create User</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DEPT_URL = '{% url "hr_department_quick_create" slug=request.business.slug %}';
+const USER_URL = '{% url "hr_user_quick_create" slug=request.business.slug %}';
+const CSRF = '{{ csrf_token }}';
+
+function selectType(val) {
+  const posSection = document.getElementById('posUserSection');
+  const nonPosSection = document.getElementById('nonPosSection');
+  const userSelect = document.getElementById('userAccountSelect');
+  const cardPos = document.getElementById('cardPos');
+  const cardNonPos = document.getElementById('cardNonPos');
+
+  if (val === 'non_pos') {
+    posSection.style.display = 'none';
+    nonPosSection.style.display = '';
+    if (userSelect) userSelect.required = false;
+    cardPos.classList.remove('active');
+    cardNonPos.classList.add('active');
+    cardNonPos.querySelector('input[type=radio]').checked = true;
+  } else {
+    posSection.style.display = '';
+    nonPosSection.style.display = 'none';
+    if (userSelect) userSelect.required = true;
+    cardNonPos.classList.remove('active');
+    cardPos.classList.add('active');
+    cardPos.querySelector('input[type=radio]').checked = true;
+  }
+}
+
+function quickAddDept() {
+  const name = document.getElementById('newDeptName').value.trim();
+  if (!name) return;
+  fetch(DEPT_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+    body: 'name=' + encodeURIComponent(name)
+  }).then(r => r.json()).then(data => {
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('departmentSelect').add(new Option(data.name, data.id, true, true));
+    bootstrap.Modal.getInstance(document.getElementById('addDeptModal')).hide();
+    document.getElementById('newDeptName').value = '';
+  }).catch(() => alert('Could not create department.'));
+}
+
+function quickCreateUser() {
+  const errEl = document.getElementById('createUserError');
+  errEl.classList.add('d-none');
+  const body = new URLSearchParams({
+    username: document.getElementById('newUserUsername').value.trim(),
+    first_name: document.getElementById('newUserFirst').value.trim(),
+    last_name: document.getElementById('newUserLast').value.trim(),
+    email: document.getElementById('newUserEmail').value.trim(),
+    password: document.getElementById('newUserPassword').value,
+    role: document.getElementById('newUserRole').value,
+  });
+  fetch(USER_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+    body: body.toString()
+  }).then(r => r.json()).then(data => {
+    if (data.error) { errEl.textContent = data.error; errEl.classList.remove('d-none'); return; }
+    const sel = document.getElementById('userAccountSelect');
+    if (sel) sel.add(new Option(data.name, data.id, true, true));
+    bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+    ['newUserFirst','newUserLast','newUserUsername','newUserEmail','newUserPassword'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+  }).catch(() => alert('Could not create user.'));
+}
+
+// ── Additional Allowances ────────────────────────────────────────────────────
+function addAllowanceRow(name, amount) {
+  const container = document.getElementById('additional-allowances-container');
+  const row = document.createElement('div');
+  row.className = 'allowance-row mb-2';
+  row.innerHTML = `
+    <div class="row g-2">
+      <div class="col-md-6">
+        <input type="text" class="form-control allowance-name" placeholder="Allowance name (e.g., Meal Allowance)" value="${name || ''}">
+      </div>
+      <div class="col-md-5">
+        <div class="input-group">
+          <span class="input-group-text">KES</span>
+          <input type="number" class="form-control allowance-amount" placeholder="0.00" step="0.01" min="0" value="${amount || ''}">
+        </div>
+      </div>
+      <div class="col-md-1">
+        <button type="button" class="btn btn-outline-danger btn-sm remove-allowance">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+    </div>`;
+  container.appendChild(row);
+}
+
+document.getElementById('add-allowance-btn').addEventListener('click', function() {
+  addAllowanceRow('', '');
+});
+
+document.getElementById('additional-allowances-container').addEventListener('click', function(e) {
+  const btn = e.target.closest('.remove-allowance');
+  if (btn) btn.closest('.allowance-row').remove();
+});
+
+// Serialize allowance rows into the hidden JSON field before submit
+document.querySelector('form').addEventListener('submit', function() {
+  const allowances = {};
+  document.querySelectorAll('#additional-allowances-container .allowance-row').forEach(function(row) {
+    const name = row.querySelector('.allowance-name').value.trim();
+    const amount = parseFloat(row.querySelector('.allowance-amount').value) || 0;
+    if (name) allowances[name] = amount;
+  });
+  document.getElementById('other_allowances_json').value = JSON.stringify(allowances);
+});
+</script>
+{% endblock %}

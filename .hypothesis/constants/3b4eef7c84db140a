@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0077_performance_indexes.py
+# hypothesis_version: 6.151.10
+
+['barcode', 'business', 'cashier', 'category', 'created_at', 'customer', 'date', 'is_active', 'phone', 'pos', 'product', 'product_code', 'purchase', 'sale', 'status', 'stock_quantity', 'stockadjustment', 'tier']

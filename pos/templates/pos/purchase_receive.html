@@ -32,7 +32,7 @@
                 <i class="bi bi-info-circle"></i> <strong>Instructions:</strong>
                 <ul class="mb-0 mt-2">
                     <li>Enter the actual quantity of <strong>good items</strong> received for each product</li>
-                    <li>The system will automatically calculate damaged/missing items</li>
+                    <li>Enter the exact <strong>damaged/missing</strong> quantity manually</li>
                     <li>Only good items will be added to your stock</li>
                     <li>Damage adjustments will be created automatically for damaged items</li>
                 </ul>
@@ -43,7 +43,7 @@
                 
                 <h5 class="mb-3 mt-4"><i class="bi bi-list-check"></i> Items to Receive:</h5>
                 
-                {% for item in purchase.items.all %}
+                {% for item in items %}
                 <div class="card mb-3 border-primary">
                     <div class="card-body">
                         <div class="row align-items-center">
@@ -54,6 +54,8 @@
                                         Ordered: <strong>{{ item.quantity }}</strong> units @ 
                                         KES {{ item.unit_cost|floatformat:2 }} = 
                                         <strong>KES {{ item.total_cost|floatformat:2 }}</strong>
+                                        <br>
+                                        Remaining to receive: <strong>{{ item.remaining_to_receive }}</strong> units
                                     </small>
                                 </p>
                             </div>
@@ -67,28 +69,34 @@
                                         <input type="number" class="form-control form-control-lg" 
                                                name="received_{{ item.id }}" 
                                                id="received_{{ item.id }}"
-                                               value="{{ item.quantity }}" 
-                                               min="0" max="{{ item.quantity }}"
-                                               onchange="updateDamaged({{ item.id }}, {{ item.quantity }})"
-                                               required>
+                                               value="{{ item.remaining_to_receive }}" 
+                                               min="0" max="{{ item.remaining_to_receive }}"
+                                               oninput="validateReceivingRow({{ item.id }}, {{ item.remaining_to_receive }})"
+                                               {% if item.remaining_to_receive > 0 %}required{% else %}disabled{% endif %}>
                                     </div>
                                     
                                     <div class="col-md-4 mb-2">
                                         <label class="form-label fw-bold">
                                             <i class="bi bi-exclamation-triangle text-danger"></i> Damaged/Missing
                                         </label>
-                                        <input type="number" class="form-control form-control-lg bg-light" 
+                                             <input type="number" class="form-control form-control-lg" 
                                                name="damaged_{{ item.id }}" 
                                                id="damaged_{{ item.id }}"
                                                value="0" 
-                                               min="0" max="{{ item.quantity }}"
-                                               readonly>
+                                                   min="0" max="{{ item.remaining_to_receive }}"
+                                                   oninput="validateReceivingRow({{ item.id }}, {{ item.remaining_to_receive }})"
+                                                   {% if item.remaining_to_receive == 0 %}disabled{% endif %}>
+                                             <small class="text-muted">Enter actual damaged/missing units</small>
                                     </div>
                                     
                                     <div class="col-md-4 mb-2">
                                         <label class="form-label fw-bold">Status</label>
-                                        <div class="alert alert-success mb-0 py-2" id="status_{{ item.id }}">
-                                            <small><i class="bi bi-check-circle"></i> All items good</small>
+                                            <div class="alert {% if item.remaining_to_receive == 0 %}alert-info{% else %}alert-success{% endif %} mb-0 py-2" id="status_{{ item.id }}">
+                                                {% if item.remaining_to_receive == 0 %}
+                                                <small><i class="bi bi-check2-all"></i> Item already fully received</small>
+                                                {% else %}
+                                                <small><i class="bi bi-check-circle"></i> All items good</small>
+                                                {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -100,6 +108,7 @@
                                     <input type="text" class="form-control" 
                                            name="notes_{{ item.id }}" 
                                            id="notes_{{ item.id }}"
+                                         {% if item.remaining_to_receive == 0 %}disabled{% endif %}
                                            placeholder="e.g., Broken bottles, dented cans, wrong items...">
                                 </div>
                                 
@@ -112,6 +121,7 @@
                                                name="expiry_{{ item.id }}" 
                                                id="expiry_{{ item.id }}"
                                                onchange="validateExpiry({{ item.id }}, '{{ item.product.name|escapejs }}')"
+                                                 {% if item.remaining_to_receive == 0 %}disabled{% endif %}
                                                {% if item.expiry_date %}value="{{ item.expiry_date|date:'Y-m-d' }}"{% endif %}>
                                         <small class="text-muted">For batch tracking and expiry alerts</small>
                                         <div id="expiry_warning_{{ item.id }}" class="mt-1"></div>
@@ -125,6 +135,7 @@
                                                name="batch_{{ item.id }}" 
                                                id="batch_{{ item.id }}"
                                                value="{{ item.batch_number }}"
+                                                 {% if item.remaining_to_receive == 0 %}disabled{% endif %}
                                                placeholder="e.g., LOT-2024-001">
                                         <small class="text-muted">For traceability and recalls</small>
                                     </div>
@@ -255,19 +266,31 @@ function validateExpiry(itemId, productName) {
     }
 }
 
-function updateDamaged(itemId, orderedQty) {
+function validateReceivingRow(itemId, orderedQty) {
     const receivedInput = document.getElementById(`received_${itemId}`);
     const damagedInput = document.getElementById(`damaged_${itemId}`);
     const statusDiv = document.getElementById(`status_${itemId}`);
     const notesInput = document.getElementById(`notes_${itemId}`);
     
     const received = parseInt(receivedInput.value) || 0;
-    const damaged = orderedQty - received;
-    
-    damagedInput.value = damaged;
-    
-    if (damaged > 0) {
+    const damaged = parseInt(damagedInput.value) || 0;
+    const totalHandled = received + damaged;
+
+    if (received < 0) {
+        receivedInput.value = 0;
+    }
+
+    if (damaged < 0) {
+        damagedInput.value = 0;
+    }
+
+    if (totalHandled > orderedQty) {
         statusDiv.className = 'alert alert-danger mb-0 py-2';
+        statusDiv.innerHTML = `<small><i class="bi bi-exclamation-triangle"></i> Invalid: received + damaged exceeds ordered (${orderedQty})</small>`;
+        notesInput.required = false;
+        notesInput.classList.add('border-danger');
+    } else if (damaged > 0) {
+        statusDiv.className = 'alert alert-warning mb-0 py-2';
         statusDiv.innerHTML = `<small><i class="bi bi-exclamation-triangle"></i> ${damaged} damaged/missing</small>`;
         notesInput.required = true;
         notesInput.classList.add('border-danger');
@@ -285,7 +308,7 @@ function updateSummary() {
     let totalReceived = 0;
     let totalDamaged = 0;
     
-    {% for item in purchase.items.all %}
+    {% for item in items %}
     const received_{{ item.id }} = parseInt(document.getElementById('received_{{ item.id }}').value) || 0;
     const damaged_{{ item.id }} = parseInt(document.getElementById('damaged_{{ item.id }}').value) || 0;
     totalReceived += received_{{ item.id }};
@@ -299,9 +322,13 @@ function updateSummary() {
 // Initialize summary and validate existing expiry dates on page load
 document.addEventListener('DOMContentLoaded', function() {
     updateSummary();
+
+    {% for item in items %}
+    validateReceivingRow({{ item.id }}, {{ item.remaining_to_receive }});
+    {% endfor %}
     
     // Validate any pre-filled expiry dates
-    {% for item in purchase.items.all %}
+    {% for item in items %}
     {% if item.expiry_date %}
     validateExpiry({{ item.id }}, '{{ item.product.name|escapejs }}');
     {% endif %}
@@ -312,9 +339,17 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('receiveForm').addEventListener('submit', function(e) {
     let hasErrors = false;
     
-    {% for item in purchase.items.all %}
+    {% for item in items %}
     const damaged_{{ item.id }} = parseInt(document.getElementById('damaged_{{ item.id }}').value) || 0;
+    const received_{{ item.id }} = parseInt(document.getElementById('received_{{ item.id }}').value) || 0;
     const notes_{{ item.id }} = document.getElementById('notes_{{ item.id }}').value.trim();
+
+    if ((received_{{ item.id }} + damaged_{{ item.id }}) > {{ item.remaining_to_receive }}) {
+        alert('For {{ item.product.name }}, received + damaged cannot exceed remaining quantity ({{ item.remaining_to_receive }}).');
+        hasErrors = true;
+        e.preventDefault();
+        return false;
+    }
     
     if (damaged_{{ item.id }} > 0 && notes_{{ item.id }} === '') {
         alert('Please add notes for {{ item.product.name }} - you have damaged/missing items.');

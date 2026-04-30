@@ -1,0 +1,114 @@
+{% extends 'pos/base.html' %}
+{% block title %}Branches — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.br-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:22px 24px;transition:border-color .15s}
+.br-card:hover{border-color:#224195}
+.badge-active{background:#dcfce7;color:#166534;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.badge-inactive{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.badge-default{background:#eef1fb;color:#224195;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">Branches</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Manage your business locations.</p>
+    </div>
+    <button class="btn-primary-sm" data-bs-toggle="modal" data-bs-target="#addBranchModal">
+      <i class="bi bi-plus-circle"></i> Add Branch
+    </button>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <div class="row g-3">
+    {% for branch in branches %}
+    <div class="col-md-6 col-lg-4">
+      <div class="br-card">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div style="font-weight:700;font-size:15px">{{ branch.name }}</div>
+            <div style="font-size:12px;color:#6b7280;font-family:monospace">{{ branch.code }}</div>
+          </div>
+          <div class="d-flex gap-1 flex-wrap">
+            {% if branch.is_default %}<span class="badge-default">Default</span>{% endif %}
+            {% if branch.is_active %}<span class="badge-active">Active</span>{% else %}<span class="badge-inactive">Inactive</span>{% endif %}
+          </div>
+        </div>
+        <div style="font-size:13px;color:#374151;margin-bottom:14px">
+          <i class="bi bi-geo-alt me-1" style="color:#6b7280"></i>{{ branch.address|truncatechars:60 }}
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="{% url 'branch_detail' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-pencil"></i> Edit</a>
+          <a href="{% url 'branch_stock' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-boxes"></i> Stock</a>
+          <a href="{% url 'branch_membership_list' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-people"></i> Staff</a>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12" style="text-align:center;padding:60px 20px;color:#9ca3af">
+      <i class="bi bi-building" style="font-size:2.5rem;display:block;margin-bottom:12px"></i>
+      <div style="font-weight:600;color:#374151;margin-bottom:6px">No branches yet</div>
+      <p style="font-size:13px">Add your first branch to start managing multiple locations.</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if branches %}
+  <div class="mt-4">
+    <a href="{% url 'business_transfer_list' slug=business.slug %}" class="btn-outline-sm me-2">
+      <i class="bi bi-arrow-left-right"></i> All Transfers
+    </a>
+    <a href="{% url 'consolidated_report' slug=business.slug %}" class="btn-primary-sm">
+      <i class="bi bi-bar-chart"></i> Consolidated Report
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Add Branch Modal -->
+<div class="modal fade" id="addBranchModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius:14px">
+      <div class="modal-header"><h5 class="modal-title">Add Branch</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label style="font-size:12px;font-weight:700">Branch Name *</label>
+            <input type="text" name="name" class="form-control" required style="border-radius:8px">
+          </div>
+          <div class="mb-3">
+            <label style="font-size:12px;font-weight:700">Address *</label>
+            <textarea name="address" class="form-control" rows="2" required style="border-radius:8px"></textarea>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label style="font-size:12px;font-weight:700">Phone</label>
+              <input type="text" name="phone" class="form-control" style="border-radius:8px">
+            </div>
+            <div class="col-6">
+              <label style="font-size:12px;font-weight:700">Email</label>
+              <input type="email" name="email" class="form-control" style="border-radius:8px">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-outline-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-primary-sm">Create Branch</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

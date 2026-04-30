@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\drf_spectacular\types.py
+# hypothesis_version: 6.151.10
+
+['binary', 'boolean', 'byte', 'date', 'date-time', 'double', 'drf_format_suffix', 'duration', 'email', 'float', 'format', 'hostname', 'idn-email', 'idn-hostname', 'int', 'int32', 'int64', 'integer', 'ipv4', 'ipv6', 'iri', 'iri-reference', 'json-pointer', 'number', 'password', 'path', 'regex', 'slug', 'str', 'string', 'time', 'type', 'uri', 'uri-reference', 'uri-template', 'uuid']

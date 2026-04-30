@@ -1,0 +1,123 @@
+{% extends 'pos/base.html' %}
+{% block title %}Edit Member — {{ member.user.get_full_name|default:member.user.username }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="bi bi-person-gear"></i> Edit Member: {{ member.user.get_full_name|default:member.user.username }}</h2>
+  <a href="{% url 'business_members' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Back to Members
+  </a>
+</div>
+
+{% if errors.general %}
+<div class="alert alert-danger">{{ errors.general }}</div>
+{% endif %}
+
+<form method="POST">
+  {% csrf_token %}
+  <div class="row g-4">
+
+    <!-- LEFT: Role & Discount -->
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-person-badge"></i> Role & Limits</h6></div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Role</label>
+            <div class="form-control bg-light">{{ member.get_role_display }}</div>
+            <div class="form-text">Role is set when inviting a member.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Max Discount %</label>
+            <div class="input-group">
+              <input type="number" class="form-control {% if errors.max_discount_pct %}is-invalid{% endif %}"
+                     name="max_discount_pct" value="{{ member.max_discount_pct }}"
+                     step="0.01" min="0" max="100" placeholder="0–100">
+              <span class="input-group-text">%</span>
+            </div>
+            {% if errors.max_discount_pct %}
+            <div class="invalid-feedback d-block">{{ errors.max_discount_pct }}</div>
+            {% endif %}
+            <div class="form-text">Maximum discount this member can apply at POS.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PIN Section -->
+      <div class="card mt-3">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> POS PIN</h6></div>
+        <div class="card-body">
+          <div class="mb-2">
+            <span class="badge {% if profile.has_pin_set %}bg-success{% else %}bg-secondary{% endif %}">
+              {% if profile.has_pin_set %}PIN set{% else %}No PIN{% endif %}
+            </span>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Set New PIN</label>
+            <input type="password" class="form-control {% if errors.pin %}is-invalid{% endif %}"
+                   name="new_pin" placeholder="4–6 digits" maxlength="6" inputmode="numeric"
+                   autocomplete="new-password">
+            {% if errors.pin %}
+            <div class="invalid-feedback d-block">{{ errors.pin }}</div>
+            {% endif %}
+            <div class="form-text">Leave blank to keep existing PIN.</div>
+          </div>
+          {% if profile.has_pin_set %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="clear_pin" value="1" id="clearPin">
+            <label class="form-check-label text-danger" for="clearPin">Clear PIN (disable PIN login)</label>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Permissions -->
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-shield-check"></i> Permissions</h6>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" onclick="selectAll(true)">Select All</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="selectAll(false)">Clear All</button>
+          </div>
+        </div>
+        {% if errors.permissions %}
+        <div class="alert alert-danger m-3 mb-0">{{ errors.permissions }}</div>
+        {% endif %}
+        <div class="card-body">
+          <div class="row g-3">
+            {% for code, label in permission_list %}
+            <div class="col-md-6">
+              <div class="form-check p-3 border rounded {% if code in member.permissions %}bg-light{% endif %}">
+                <input class="form-check-input" type="checkbox" name="permissions"
+                       value="{{ code }}" id="perm_{{ code }}"
+                       {% if code in member.permissions %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="perm_{{ code }}">{{ label }}</label>
+                <div class="form-text small text-muted">{{ code }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+
+  <div class="mt-4 d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-circle"></i> Save Changes
+    </button>
+    <a href="{% url 'business_members' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function selectAll(checked) {
+  document.querySelectorAll('input[name="permissions"]').forEach(cb => cb.checked = checked);
+}
+</script>
+{% endblock %}

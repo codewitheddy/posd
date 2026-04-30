@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0082_remove_customer_pos_customer_bus_phone_idx_and_more.py
+# hypothesis_version: 6.151.10
+
+[100, 300, '0081_branch_models', 'Email subject line', 'ID', 'apikey', 'branchstock', 'business', 'campaign', 'category', 'criteria_value', 'customer', 'customerpayment', 'customersegment', 'events', 'expense', 'expense_number', 'expenses', 'id', 'message', 'pos', 'pos.business', 'pos.expensecategory', 'product', 'purchase', 'sale', 'stockadjustment', 'stocktransfer', 'subject', 'webhook', 'webhookdelivery']

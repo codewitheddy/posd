@@ -6,8 +6,8 @@
 
 Your production Mailjet account is configured:
 - **Email**: info@marid.co.ke
-- **API Key**: 46f06713bd67184eb3b783098226f0d9
-- **Secret Key**: 0317e680de9ee8329fe1452ef11f35a6
+- **API Key**: configured in environment
+- **Secret Key**: configured in environment
 - **SMTP Host**: in-v3.mailjet.com
 
 **CRITICAL**: Before deployment, verify sender email in Mailjet:

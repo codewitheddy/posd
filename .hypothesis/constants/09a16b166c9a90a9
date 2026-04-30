@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos_system\urls.py
+# hypothesis_version: 6.151.10
+
+['/login/', 'admin/', 'api/v1/', 'b/<slug:slug>/hr/', 'hr.urls', 'pos.api_urls', 'pos.urls_multitenant']

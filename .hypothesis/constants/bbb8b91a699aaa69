@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\settings.py
+# hypothesis_version: 6.151.10
+
+[1000, 'ALLOWED_VERSIONS', 'COMPACT_JSON', 'DATETIME_FORMAT', 'DATE_FORMAT', 'DATE_INPUT_FORMATS', 'DEFAULT_SCHEMA_CLASS', 'DEFAULT_VERSION', 'EXCEPTION_HANDLER', 'FORMAT_SUFFIX_KWARG', 'HTML_SELECT_CUTOFF', 'MAX_PAGINATE_BY', 'NON_FIELD_ERRORS_KEY', 'NUM_PROXIES', 'ORDERING_PARAM', 'PAGE_SIZE', 'PAGINATE_BY', 'PAGINATE_BY_PARAM', 'REST_FRAMEWORK', 'SEARCH_PARAM', 'STRICT_JSON', 'TIME_FORMAT', 'TIME_INPUT_FORMATS', 'UNAUTHENTICATED_USER', 'UNICODE_JSON', 'URL_FIELD_NAME', 'URL_FORMAT_OVERRIDE', 'VERSION_PARAM', 'VIEW_NAME_FUNCTION', '_user_settings', 'anon', 'delete', 'destroy', 'format', 'multipart', 'non_field_errors', 'ordering', 'read', 'retrieve', 'search', 'setting', 'url', 'user', 'version']

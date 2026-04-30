@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\services\registration_service.py
+# hypothesis_version: 6.151.10
+
+[',', '@', 'Business', 'Invalid email format', 'KRA PIN is required', '^[A-Z]\\d{9}[A-Z]$', '^\\+?[0-9]{10,15}$', '_general', 'approved', 'business_name', 'business_slug', 'business_type', 'completed', 'create', 'email', 'email_verified', 'first_name', 'free', 'invitation_code', 'kra_pin', 'last_name', 'owner', 'password', 'pending', 'pending_approval', 'phone', 'rejected', 'trial_days', 'username']

@@ -25,7 +25,7 @@ class AnalyticsService:
         # Get sales data
         sales = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date
+            date__date__gte=start_date
         ).annotate(
             day=TruncDate('date')
         ).values('day').annotate(
@@ -40,7 +40,7 @@ class AnalyticsService:
         profit_by_day = {}
         sale_items = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date
+            sale__date__date__gte=start_date
         ).annotate(
             day=TruncDate('sale__date')
         ).values('day').annotate(
@@ -72,7 +72,7 @@ class AnalyticsService:
         
         hourly_sales = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date
+            date__date__gte=start_date
         ).annotate(
             hour=ExtractHour('date')
         ).values('hour').annotate(
@@ -128,8 +128,8 @@ class AnalyticsService:
         
         profit_analysis = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date,
-            sale__date__lte=end_date
+            sale__date__date__gte=start_date,
+            sale__date__date__lte=end_date
         ).aggregate(
             total_revenue=Sum(
                 ExpressionWrapper(
@@ -168,7 +168,7 @@ class AnalyticsService:
         
         best_sellers = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date
+            sale__date__date__gte=start_date
         ).values(
             'product__id',
             'product__name',
@@ -213,12 +213,12 @@ class AnalyticsService:
             units_sold=Sum(
                 'saleitem__quantity',
                 filter=Q(
-                    saleitem__sale__date__gte=start_date
+                    saleitem__sale__date__date__gte=start_date
                 )
             )
         ).annotate(
             units_sold_clean=Count('saleitem', filter=Q(
-                saleitem__sale__date__gte=start_date
+                saleitem__sale__date__date__gte=start_date
             ))
         ).filter(
             units_sold_clean__lte=5  # Sold 5 or fewer times
@@ -228,7 +228,7 @@ class AnalyticsService:
             total_sold=Sum(
                 'saleitem__quantity',
                 filter=Q(
-                    saleitem__sale__date__gte=start_date
+                    saleitem__sale__date__date__gte=start_date
                 )
             )
         ).order_by('total_sold')[:limit]
@@ -251,7 +251,7 @@ class AnalyticsService:
         # Total cost of goods sold
         cogs = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date
+            sale__date__date__gte=start_date
         ).aggregate(
             total_cogs=Sum(F('quantity') * F('product__cost_price'))
         )['total_cogs'] or Decimal('0')
@@ -354,15 +354,15 @@ class AnalyticsService:
         ).annotate(
             purchase_count=Count(
                 'purchases',
-                filter=Q(purchases__date__gte=start_date)
+                filter=Q(purchases__date__date__gte=start_date)
             ),
             amount_spent=Sum(
                 'purchases__total',
-                filter=Q(purchases__date__gte=start_date)
+                filter=Q(purchases__date__date__gte=start_date)
             ),
             avg_purchase_value=Avg(
                 'purchases__total',
-                filter=Q(purchases__date__gte=start_date)
+                filter=Q(purchases__date__date__gte=start_date)
             )
         ).filter(
             purchase_count__gt=0
@@ -383,7 +383,7 @@ class AnalyticsService:
             Sale.objects.filter(
                 business=self.business,
                 date__gte=previous_start,
-                date__lt=start_date,
+                date__date__lt=start_date,
                 customer__isnull=False
             ).values_list('customer_id', flat=True)
         )
@@ -392,8 +392,8 @@ class AnalyticsService:
         current_customers = set(
             Sale.objects.filter(
                 business=self.business,
-                date__gte=start_date,
-                date__lte=end_date,
+                date__date__gte=start_date,
+                date__date__lte=end_date,
                 customer__isnull=False
             ).values_list('customer_id', flat=True)
         )
@@ -422,7 +422,7 @@ class AnalyticsService:
         
         breakdown = SalePayment.objects.filter(
             business=self.business,
-            sale__date__gte=start_date
+            sale__date__date__gte=start_date
         ).values(
             'payment_method__name'
         ).annotate(
@@ -444,7 +444,7 @@ class AnalyticsService:
         # Get revenue data from Sales
         daily_revenue = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date
+            date__date__gte=start_date
         ).annotate(
             day=TruncDate('date')
         ).values('day').annotate(
@@ -456,7 +456,7 @@ class AnalyticsService:
         # Get cost and profit from SaleItems
         daily_profit = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date
+            sale__date__date__gte=start_date
         ).annotate(
             day=TruncDate('sale__date')
         ).values('day').annotate(
@@ -500,7 +500,7 @@ class AnalyticsService:
         # Sales summary
         sales_summary = Sale.objects.filter(
             business=self.business,
-            date__gte=start_date
+            date__date__gte=start_date
         ).aggregate(
             total_revenue=Sum('total'),
             total_transactions=Count('id'),
@@ -510,7 +510,7 @@ class AnalyticsService:
         # Profit calculation from SaleItems
         profit_data = SaleItem.objects.filter(
             sale__business=self.business,
-            sale__date__gte=start_date
+            sale__date__date__gte=start_date
         ).aggregate(
             total_profit=Sum(
                 ExpressionWrapper(
@@ -525,7 +525,7 @@ class AnalyticsService:
             'total_customers': Customer.objects.filter(business=self.business).count(),
             'active_customers': Sale.objects.filter(
                 business=self.business,
-                date__gte=start_date,
+                date__date__gte=start_date,
                 customer__isnull=False
             ).values('customer').distinct().count()
         }

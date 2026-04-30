@@ -1,0 +1,289 @@
+{% extends 'pos/base.html' %}
+{% block title %}Integrations — {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .int-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+              padding:24px; transition:border-color .15s, box-shadow .15s; }
+  .int-card:hover { border-color:#224195; box-shadow:0 4px 16px rgba(34,65,149,.1); }
+  .int-icon { width:52px; height:52px; border-radius:12px; background:#eef1fb;
+              display:flex; align-items:center; justify-content:center;
+              font-size:24px; color:#224195; margin-bottom:14px; }
+  .int-title { font-size:15px; font-weight:700; margin-bottom:4px; }
+  .int-desc  { font-size:13px; color:#6b7280; margin-bottom:16px; }
+  .btn-primary-sm { background:#224195; color:#fff; border:none; border-radius:8px;
+                    padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary-sm:hover { background:#1a3278; color:#fff; }
+  .btn-outline-sm { background:#fff; color:#374151; border:1.5px solid #e5e7eb;
+                    border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-outline-sm:hover { border-color:#9ca3af; color:#111; }
+  .section-title { font-size:17px; font-weight:700; margin-bottom:16px; }
+  .export-row { display:flex; align-items:center; justify-content:space-between;
+                padding:14px 18px; border:1.5px solid #e5e7eb; border-radius:10px;
+                background:#fff; margin-bottom:10px; }
+  .export-label { font-size:14px; font-weight:600; }
+  .export-desc  { font-size:12px; color:#6b7280; margin-top:2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:1000px">
+
+  <div class="mb-4">
+    <h1 style="font-size:22px;font-weight:700;margin:0">Integrations</h1>
+    <p style="font-size:13px;color:#6b7280;margin:3px 0 0">
+      Connect Marid POS to your accounting software, e-commerce platforms, and custom systems.
+    </p>
+  </div>
+
+  <!-- Webhooks -->
+  <div class="section-title"><i class="bi bi-broadcast me-2" style="color:#224195"></i>Webhooks</div>
+  <div class="row g-3 mb-5">
+    <div class="col-md-6">
+      <div class="int-card">
+        <div class="int-icon"><i class="bi bi-broadcast"></i></div>
+        <div class="int-title">Custom Webhooks</div>
+        <div class="int-desc">
+          Send real-time event notifications to any URL when sales, stock changes,
+          or customer events occur. Sign payloads with HMAC-SHA256.
+          <span class="ms-2 badge" style="background:#eef1fb;color:#224195;font-size:11px;border-radius:20px;padding:3px 10px;">
+            {{ active_webhook_count }} active
+          </span>
+        </div>
+        <a href="{% url 'webhook_list' slug=business.slug %}" class="btn-primary-sm">
+          <i class="bi bi-gear"></i> Manage Webhooks
+        </a>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="int-card">
+        <div class="int-icon"><i class="bi bi-code-slash"></i></div>
+        <div class="int-title">REST API</div>
+        <div class="int-desc">
+          Full REST API with JWT authentication. Access products, sales, customers,
+          inventory and more programmatically.
+        </div>
+        <a href="{% url 'swagger-ui' %}" target="_blank" class="btn-primary-sm">
+          <i class="bi bi-box-arrow-up-right"></i> API Docs
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Keys -->
+  <div class="section-title"><i class="bi bi-key me-2" style="color:#224195"></i>API Keys</div>
+  <div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:22px;margin-bottom:32px">
+    <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
+      API keys allow external systems to access your data without a user login.
+      Each key is shown only once — store it securely.
+    </p>
+
+    {% if api_keys %}
+    <table class="table table-sm mb-3" style="font-size:13px">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Created</th>
+          <th>Last Used</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key in api_keys %}
+        <tr>
+          <td><i class="bi bi-key me-1" style="color:#224195"></i>{{ key.name }}</td>
+          <td>{{ key.created_at|date:"d M Y" }}</td>
+          <td>{{ key.last_used_at|date:"d M Y H:i"|default:"Never" }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-danger"
+                    onclick="revokeKey({{ key.id }}, '{{ key.name|escapejs }}')"
+                    style="font-size:12px;padding:3px 10px;border-radius:6px">
+              Revoke
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="font-size:13px;color:#9ca3af;margin-bottom:16px">No active API keys.</p>
+    {% endif %}
+
+    <button class="btn-primary-sm" onclick="document.getElementById('createKeyForm').classList.toggle('d-none')">
+      <i class="bi bi-plus-circle"></i> Create API Key
+    </button>
+
+    <div id="createKeyForm" class="d-none mt-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-6">
+          <label style="font-size:12px;font-weight:600">Key Name / Label</label>
+          <input type="text" id="newKeyName" class="form-control form-control-sm"
+                 placeholder="e.g. QuickBooks Integration" style="border-radius:7px">
+        </div>
+        <div class="col-sm-auto">
+          <button class="btn-primary-sm" onclick="createApiKey()">
+            <i class="bi bi-check-circle"></i> Generate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- One-time token modal -->
+  <div id="tokenModal" class="d-none align-items-center justify-content-center" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999">
+    <div style="background:#fff;border-radius:16px;padding:32px;max-width:540px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <h5 style="font-weight:700;margin-bottom:8px"><i class="bi bi-key-fill me-2" style="color:#224195"></i>API Key Created</h5>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
+        Copy this key now. It will <strong>not</strong> be shown again.
+      </p>
+      <div style="background:#f8f9fc;border:1.5px solid #e5e7eb;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;word-break:break-all;margin-bottom:16px" id="tokenDisplay"></div>
+      <div class="d-flex gap-2">
+        <button class="btn-primary-sm" onclick="copyToken()">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+        <button class="btn-outline-sm" onclick="closeTokenModal()">
+          <i class="bi bi-x-circle"></i> Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Exports -->
+  <div class="section-title"><i class="bi bi-download me-2" style="color:#224195"></i>Data Exports</div>
+
+  <!-- Sales exports with date filter -->
+  <div style="background:#f8f9fc;border:1.5px solid #e5e7eb;border-radius:12px;padding:20px 22px;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">Filter by Date Range (optional)</div>
+    <form id="exportForm" class="row g-2 align-items-end">
+      <div class="col-sm-4">
+        <label style="font-size:12px;font-weight:600">Start Date</label>
+        <input type="date" id="startDate" class="form-control form-control-sm" style="border-radius:7px">
+      </div>
+      <div class="col-sm-4">
+        <label style="font-size:12px;font-weight:600">End Date</label>
+        <input type="date" id="endDate" class="form-control form-control-sm" style="border-radius:7px">
+      </div>
+    </form>
+  </div>
+
+  <div class="export-row">
+    <div>
+      <div class="export-label"><i class="bi bi-file-earmark-spreadsheet me-2" style="color:#16a34a"></i>Sales — CSV</div>
+      <div class="export-desc">Compatible with QuickBooks, Xero, and Excel. Includes all line items and payments.</div>
+    </div>
+    <button class="btn-primary-sm" onclick="doExport('{% url 'export_sales_csv' slug=business.slug %}')">
+      <i class="bi bi-download"></i> Download
+    </button>
+  </div>
+
+  <div class="export-row">
+    <div>
+      <div class="export-label"><i class="bi bi-filetype-json me-2" style="color:#f59e0b"></i>Sales — JSON</div>
+      <div class="export-desc">Structured JSON for custom integrations and e-commerce platforms.</div>
+    </div>
+    <button class="btn-primary-sm" onclick="doExport('{% url 'export_sales_json' slug=business.slug %}')">
+      <i class="bi bi-download"></i> Download
+    </button>
+  </div>
+
+  <div class="export-row">
+    <div>
+      <div class="export-label"><i class="bi bi-box-seam me-2" style="color:#7c3aed"></i>Products — CSV</div>
+      <div class="export-desc">Full product catalogue with prices, stock levels, and categories.</div>
+    </div>
+    <a href="{% url 'export_products_csv' slug=business.slug %}" class="btn-primary-sm">
+      <i class="bi bi-download"></i> Download
+    </a>
+  </div>
+
+  <div class="export-row">
+    <div>
+      <div class="export-label"><i class="bi bi-people me-2" style="color:#0284c7"></i>Customers — CSV</div>
+      <div class="export-desc">Customer list with loyalty tiers, points, and purchase history.</div>
+    </div>
+    <a href="{% url 'export_customers_csv' slug=business.slug %}" class="btn-primary-sm">
+      <i class="bi bi-download"></i> Download
+    </a>
+  </div>
+
+  <!-- Accounting integrations info -->
+  <div class="mt-5 section-title"><i class="bi bi-calculator me-2" style="color:#224195"></i>Accounting Software</div>
+  <div class="row g-3">
+    {% for name, icon, desc in accounting_apps %}
+    <div class="col-md-4">
+      <div class="int-card" style="opacity:.7">
+        <div class="int-icon"><i class="bi {{ icon }}"></i></div>
+        <div class="int-title">{{ name }}</div>
+        <div class="int-desc">{{ desc }}</div>
+        <span style="font-size:11px;background:#f3f4f6;color:#6b7280;border-radius:20px;padding:3px 10px;font-weight:600">
+          Use CSV Export
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+<script>
+function doExport(baseUrl) {
+  const start = document.getElementById('startDate').value;
+  const end   = document.getElementById('endDate').value;
+  let url = baseUrl;
+  const params = [];
+  if (start) params.push('start_date=' + start);
+  if (end)   params.push('end_date=' + end);
+  if (params.length) url += '?' + params.join('&');
+  window.location.href = url;
+}
+
+const API_KEYS_URL = '/api/v1/{{ business.slug }}/api-keys/';
+
+function getCsrfToken() {
+  return document.cookie.split(';').map(c => c.trim())
+    .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+}
+
+async function createApiKey() {
+  const name = document.getElementById('newKeyName').value.trim();
+  if (!name) { alert('Please enter a name for the key.'); return; }
+  const resp = await fetch(API_KEYS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+    body: JSON.stringify({ name }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) { alert(data.error || 'Failed to create key.'); return; }
+  document.getElementById('tokenDisplay').textContent = data.key;
+  document.getElementById('tokenModal').classList.remove('d-none');
+  document.getElementById('tokenModal').classList.add('d-flex');
+}
+
+function copyToken() {
+  const text = document.getElementById('tokenDisplay').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target.closest('button');
+    btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy'; }, 2000);
+  });
+}
+
+function closeTokenModal() {
+  document.getElementById('tokenModal').classList.remove('d-flex');
+  document.getElementById('tokenModal').classList.add('d-none');
+  location.reload();
+}
+
+async function revokeKey(id, name) {
+  if (!confirm(`Revoke API key "${name}"? This cannot be undone.`)) return;
+  const resp = await fetch(`${API_KEYS_URL}${id}/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': getCsrfToken() },
+  });
+  if (resp.ok) { location.reload(); }
+  else { alert('Failed to revoke key.'); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\image_utils.py
+# hypothesis_version: 6.151.10
+
+[150, 255, 300, 600, 1024, 1200, '.', 'ImageField', 'JPEG', 'LA', 'P', 'RGB', 'RGBA', 'image/jpeg', 'large', 'medium', 'products', 'small', 'thumbnail']

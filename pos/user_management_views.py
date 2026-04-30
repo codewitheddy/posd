@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Business, BusinessMembership, UserProfile, ActivityLog
+from .models import Branch, Business, BusinessMembership, UserProfile, ActivityLog, PERMISSION_CODES, DEFAULT_PERMISSIONS
 from .decorators import business_required
 
 
@@ -47,6 +47,51 @@ ROLE_CHOICES = [
 ]
 
 
+AUTO_REGISTER_EMPLOYEE_ROLES = {'admin', 'manager', 'stock_manager', 'cashier', 'sales'}
+
+
+def _get_auto_employee_branch(business, branch_id=None):
+    branches = business.branches.filter(is_active=True).order_by('-is_default', 'name', 'pk')
+    if branch_id:
+        return branches.filter(pk=branch_id).first()
+    return branches.filter(is_default=True).first() or branches.first()
+
+
+def _sync_employee_profile(user, business, role, branch_id=None, profile=None):
+    if role not in AUTO_REGISTER_EMPLOYEE_ROLES:
+        return None, False, None
+
+    from hr.models import Employee
+
+    employee = Employee.objects.filter(user_account=user, business=business).select_related('branch').first()
+    if employee:
+        if profile and not profile.employee_id and employee.staff_code:
+            profile.employee_id = employee.staff_code
+            profile.save(update_fields=['employee_id'])
+        return employee, False, None
+
+    branch = _get_auto_employee_branch(business, branch_id)
+    if branch is None:
+        return None, False, 'No active branch is available for HR auto-registration.'
+
+    employee = Employee.objects.create(
+        user_account=user,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        business=business,
+        branch=branch,
+        job_title=dict(ROLE_CHOICES).get(role, role.replace('_', ' ').title()),
+        hire_date=timezone.localdate(),
+        status='active',
+    )
+
+    if profile and not profile.employee_id and employee.staff_code:
+        profile.employee_id = employee.staff_code
+        profile.save(update_fields=['employee_id'])
+
+    return employee, True, None
+
+
 @business_required
 @manager_required
 def user_list_view(request, slug=None):
@@ -78,6 +123,7 @@ def user_list_view(request, slug=None):
 @manager_required
 def user_create_view(request, slug=None):
     """Create a new user and add to business"""
+    branches = request.business.branches.filter(is_active=True).order_by('-is_default', 'name', 'pk')
     if request.method == 'POST':
         username = request.POST.get('username')
         email = request.POST.get('email', '')
@@ -88,6 +134,7 @@ def user_create_view(request, slug=None):
         role = request.POST.get('role')
         phone = request.POST.get('phone', '')
         employee_id = request.POST.get('employee_id', '')
+        branch_id = request.POST.get('branch_id', '').strip()
         
         # Validation
         if not username or not password:
@@ -132,6 +179,14 @@ def user_create_view(request, slug=None):
                     is_active=True,
                     joined_at=timezone.now()
                 )
+
+                employee, employee_created, employee_warning = _sync_employee_profile(
+                    user=user,
+                    business=request.business,
+                    role=role,
+                    branch_id=branch_id or None,
+                    profile=profile,
+                )
                 
                 # Log activity
                 ActivityLog.log_activity(
@@ -142,14 +197,29 @@ def user_create_view(request, slug=None):
                     description=f'Created user: {username} with role: {role}',
                     request=request
                 )
+
+                if employee_created:
+                    ActivityLog.log_activity(
+                        user=request.user,
+                        action_type='create',
+                        model_name='Employee',
+                        object_id=employee.id,
+                        description=f'Auto-registered employee profile for user: {username}',
+                        request=request
+                    )
                 
                 messages.success(request, f'User "{username}" created successfully with role: {dict(ROLE_CHOICES)[role]}')
+                if employee_created:
+                    messages.info(request, f'Employee profile {employee.staff_code} was created in HR and assigned to {employee.branch.name}.')
+                elif employee_warning:
+                    messages.warning(request, f'User created, but HR auto-registration was skipped: {employee_warning}')
                 return redirect('user_management_list', slug=request.business.slug)
                 
         except Exception as e:
             messages.error(request, f'Error creating user: {str(e)}')
     
     context = {
+        'branches': branches,
         'roles': ROLE_CHOICES,
     }
     return render(request, 'pos/user_management_form.html', context)
@@ -165,6 +235,7 @@ def user_edit_view(request, slug=None, pk=None):
         business=request.business
     )
     user = membership.user
+    branches = request.business.branches.filter(is_active=True).order_by('-is_default', 'name', 'pk')
     
     # Prevent editing owner if not owner
     is_requester_owner = (request.user.is_superuser or 
@@ -182,6 +253,7 @@ def user_edit_view(request, slug=None, pk=None):
         role = request.POST.get('role')
         phone = request.POST.get('phone', '')
         employee_id = request.POST.get('employee_id', '')
+        branch_id = request.POST.get('branch_id', '').strip()
         is_active = request.POST.get('is_active') == 'on'
         
         try:
@@ -214,17 +286,86 @@ def user_edit_view(request, slug=None, pk=None):
                         request=request
                     )
                 
+                # Update granular permissions
+                submitted_perms = request.POST.getlist('permissions')
+                valid_perms = [p for p in submitted_perms if p in PERMISSION_CODES]
+                if valid_perms or 'permissions' in request.POST:
+                    old_perms = list(membership.permissions)
+                    BusinessMembership.objects.filter(pk=membership.pk).update(permissions=valid_perms)
+                    if old_perms != valid_perms:
+                        ActivityLog.log_activity(
+                            user=request.user,
+                            action_type='update',
+                            model_name='BusinessMembership',
+                            object_id=membership.pk,
+                            description=f'Permissions updated for {user.username}: {old_perms} → {valid_perms}',
+                            request=request
+                        )
+
+                effective_role = membership.role
+                employee, employee_created, employee_warning = _sync_employee_profile(
+                    user=user,
+                    business=request.business,
+                    role=effective_role,
+                    branch_id=branch_id or None,
+                    profile=profile,
+                )
+
+                if employee_created:
+                    ActivityLog.log_activity(
+                        user=request.user,
+                        action_type='create',
+                        model_name='Employee',
+                        object_id=employee.id,
+                        description=f'Auto-registered employee profile for user: {user.username}',
+                        request=request
+                    )
+
+                # Update max discount
+                max_disc_str = request.POST.get('max_discount_pct', '').strip()
+                if max_disc_str:
+                    from decimal import Decimal
+                    try:
+                        max_disc = Decimal(max_disc_str)
+                        if 0 <= max_disc <= 100:
+                            BusinessMembership.objects.filter(pk=membership.pk).update(max_discount_pct=max_disc)
+                    except Exception:
+                        pass
+
                 messages.success(request, f'User "{user.username}" updated successfully!')
+                if employee_created:
+                    messages.info(request, f'Employee profile {employee.staff_code} was created in HR and assigned to {employee.branch.name}.')
+                elif employee_warning:
+                    messages.warning(request, f'HR auto-registration was skipped: {employee_warning}')
                 return redirect('user_management_list', slug=request.business.slug)
                 
         except Exception as e:
             messages.error(request, f'Error updating user: {str(e)}')
     
+    PERMISSION_LABELS = {
+        'can_refund_sale': 'Process Refunds',
+        'can_void_sale': 'Void Sales',
+        'can_edit_price': 'Override Item Price',
+        'can_view_cost_price': 'View Cost Price',
+        'can_apply_discount': 'Apply Discounts',
+        'can_exceed_max_discount': 'Exceed Discount Limit',
+        'can_manage_users': 'Manage Team Members',
+        'can_view_reports': 'View Reports',
+        'can_manage_stock': 'Manage Stock & Purchases',
+    }
+    permission_list = [(code, PERMISSION_LABELS.get(code, code)) for code in PERMISSION_CODES]
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    linked_employee = getattr(user, 'employee_profile', None)
+
     context = {
+        'branches': branches,
+        'linked_employee': linked_employee,
         'user': user,
         'membership': membership,
         'roles': ROLE_CHOICES,
         'is_edit': True,
+        'permission_list': permission_list,
+        'profile': profile,
     }
     return render(request, 'pos/user_management_form.html', context)
 

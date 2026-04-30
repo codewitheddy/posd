@@ -229,6 +229,7 @@ class RegistrationService:
                         'password': temp_password,
                         'email': data['email'],
                         'business_name': business.name,
+                        'business_slug': business.slug,
                         'trial_days': 30
                     }, None
                 

@@ -1,0 +1,67 @@
+{% extends 'pos/base.html' %}
+{% block title %}Stock — {{ branch.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:0;overflow:hidden}
+.stock-table{width:100%;border-collapse:collapse;font-size:13px}
+.stock-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:10px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.stock-table tbody tr{border-bottom:1px solid #f3f4f6;transition:background .1s}
+.stock-table tbody tr:hover{background:#f8f9fc}
+.stock-table tbody td{padding:11px 16px;vertical-align:middle}
+.badge-low{background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.badge-out{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'branch_detail' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h1 style="font-size:20px;font-weight:700;margin:0">Stock — {{ branch.name }}</h1>
+      <p style="font-size:13px;color:#6b7280;margin:2px 0 0">{{ stock_records.count }} product{{ stock_records.count|pluralize }}</p>
+    </div>
+    <div class="ms-auto">
+      <a href="{% url 'transfer_create' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm">
+        <i class="bi bi-arrow-left-right"></i> Transfer Stock
+      </a>
+    </div>
+  </div>
+
+  <div class="int-card">
+    <div class="table-responsive">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th class="text-end">Qty on Hand</th>
+            <th class="text-end">Low Stock Threshold</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in stock_records %}
+          <tr>
+            <td style="font-weight:600">{{ s.product.name }}</td>
+            <td style="color:#6b7280">{{ s.product.category.name|default:"—" }}</td>
+            <td class="text-end" style="font-weight:700">{{ s.quantity|floatformat:3 }}</td>
+            <td class="text-end" style="color:#6b7280">{{ s.product.low_stock_threshold|floatformat:0 }}</td>
+            <td>
+              {% if s.quantity <= 0 %}
+                <span class="badge-out">Out of Stock</span>
+              {% elif s.quantity <= s.product.low_stock_threshold %}
+                <span class="badge-low">Low Stock</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" style="text-align:center;padding:48px;color:#9ca3af">No stock records yet. Stock is added when purchases are received at this branch.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

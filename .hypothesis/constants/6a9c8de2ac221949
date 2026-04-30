@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0004_purchase_supplier_purchaseitem_purchase_supplier.py
+# hypothesis_version: 6.151.10
+
+[100, 200, 254, '-date', 'Cancelled', 'ID', 'Ordered', 'Pending', 'Purchase', 'PurchaseItem', 'Received', 'Supplier', 'address', 'cancelled', 'contact_person', 'created_at', 'date', 'email', 'expected_delivery', 'id', 'is_active', 'items', 'name', 'notes', 'ordered', 'ordering', 'pending', 'phone', 'pos', 'pos.product', 'pos.purchase', 'pos.supplier', 'product', 'purchase', 'purchase_number', 'purchases', 'quantity', 'received', 'received_date', 'status', 'subtotal', 'supplier', 'tax_amount', 'total_amount', 'total_cost', 'unit_cost', 'updated_at']

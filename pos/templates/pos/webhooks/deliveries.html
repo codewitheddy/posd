@@ -1,0 +1,70 @@
+{% extends 'pos/base.html' %}
+{% block title %}Delivery Log — {{ hook.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .delivery-row { background:#fff; border:1.5px solid #e5e7eb; border-radius:10px;
+                  padding:14px 18px; margin-bottom:10px; }
+  .badge-ok   { background:#dcfce7; color:#16a34a; border-radius:20px; padding:3px 10px;
+                font-size:11px; font-weight:700; }
+  .badge-fail { background:#fee2e2; color:#dc2626; border-radius:20px; padding:3px 10px;
+                font-size:11px; font-weight:700; }
+  .payload-pre { background:#f8f9fc; border:1px solid #e5e7eb; border-radius:8px;
+                 padding:12px; font-size:11px; overflow-x:auto; max-height:200px; }
+  .btn-outline-solid { background:#fff; color:#374151; border:1.5px solid #e5e7eb;
+                       border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600;
+                       cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-outline-solid:hover { border-color:#9ca3af; color:#111; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:900px">
+
+  <div class="mb-4">
+    <a href="{% url 'webhook_list' slug=business.slug %}" class="btn-outline-solid mb-3" style="font-size:13px;padding:7px 14px">
+      <i class="bi bi-arrow-left"></i> Back to Webhooks
+    </a>
+    <h1 style="font-size:22px;font-weight:700;margin:0">Delivery Log</h1>
+    <p style="font-size:13px;color:#6b7280;margin:3px 0 0">
+      <i class="bi bi-link-45deg"></i> {{ hook.url }}
+    </p>
+  </div>
+
+  {% if not deliveries %}
+    <div style="text-align:center;padding:50px;background:#fff;border:1.5px dashed #e5e7eb;border-radius:14px">
+      <i class="bi bi-inbox" style="font-size:2.5rem;color:#d1d5db"></i>
+      <p style="font-size:14px;color:#6b7280;margin-top:10px">No deliveries yet.</p>
+    </div>
+  {% else %}
+    {% for d in deliveries %}
+    <div class="delivery-row">
+      <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-2">
+        <div class="d-flex align-items-center gap-2">
+          {% if d.success %}
+            <span class="badge-ok"><i class="bi bi-check-lg"></i> {{ d.response_status }}</span>
+          {% else %}
+            <span class="badge-fail"><i class="bi bi-x-lg"></i> {% if d.response_status %}{{ d.response_status }}{% else %}Error{% endif %}</span>
+          {% endif %}
+          <span style="font-size:13px;font-weight:600">{{ d.event }}</span>
+          <span style="font-size:11px;color:#9ca3af">Attempt {{ d.attempt }}</span>
+        </div>
+        <span style="font-size:12px;color:#9ca3af">{{ d.delivered_at|date:"M d, Y H:i:s" }}</span>
+      </div>
+      <details>
+        <summary style="font-size:12px;color:#6b7280;cursor:pointer">View payload &amp; response</summary>
+        <div class="mt-2">
+          <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:4px">Payload</div>
+          <pre class="payload-pre">{{ d.payload|pprint }}</pre>
+          {% if d.response_body %}
+          <div style="font-size:11px;font-weight:600;color:#374151;margin:8px 0 4px">Response</div>
+          <pre class="payload-pre">{{ d.response_body }}</pre>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+</div>
+{% endblock %}

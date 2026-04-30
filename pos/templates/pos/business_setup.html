@@ -1,126 +1,156 @@
 {% extends 'pos/base_simple.html' %}
 {% load static %}
 
-{% block title %}Business Setup - {{ business.name }}{% endblock %}
+{% block title %}Business Setup — {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .setup-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .setup-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .setup-card-body { padding: 24px; }
+
+  .form-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 5px; }
+  .form-control, .form-select {
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 13px;
+    font-size: 14px;
+    color: var(--text-main);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(34,65,149,.1);
+    outline: none;
+  }
+
+  .btn-primary-solid {
+    background: var(--primary); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 10px 24px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn-primary-solid:hover { background: var(--primary-hover); color: #fff; }
+
+  .btn-outline-solid {
+    background: #fff; color: var(--text-main);
+    border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 10px 20px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: border-color .15s, background .15s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn-outline-solid:hover { border-color: #9ca3af; background: #f9fafb; color: var(--text-main); }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <!-- Login Credentials Display (if just registered) -->
-            {% if request.session.new_user_credentials %}
-            <div class="ui-card mb-4" style="border-left:3px solid #16a34a;">
-                <div class="ui-card-header" style="background:#dcfce7;">
-                    <span class="ui-card-title" style="color:#16a34a;"><i class="fas fa-check-circle"></i> Registration Successful!</span>
-                </div>
-                <div class="ui-card-body">
-                    <div class="alert alert-success mb-3">
-                        <i class="fas fa-info-circle"></i> 
-                        <strong>Important:</strong> Please save your login credentials below. You'll need them to access your account.
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <div class="card bg-light">
-                                <div class="card-body">
-                                    <h6 class="text-muted mb-2"><i class="fas fa-user"></i> Username</h6>
-                                    <h5 class="mb-0 font-monospace">{{ request.session.new_user_credentials.username }}</h5>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="card bg-light">
-                                <div class="card-body">
-                                    <h6 class="text-muted mb-2"><i class="fas fa-envelope"></i> Email</h6>
-                                    <h5 class="mb-0 font-monospace">{{ request.session.new_user_credentials.email }}</h5>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="alert alert-warning mb-0">
-                        <i class="fas fa-exclamation-triangle"></i> 
-                        <strong>Login Options:</strong> You can use either your <strong>username</strong> or <strong>email</strong> to login.
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-            
-            <div class="form-card">
-                <h4 class="mb-3"><i class="fas fa-cog"></i> Complete Your Business Setup</h4>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> 
-                        Welcome! Let's set up your business profile to get started.
-                    </div>
-                    
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                    
-                    <form method="post">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="address" class="form-label">
-                                <i class="fas fa-map-marker-alt"></i> Business Address
-                            </label>
-                            <textarea class="form-control" id="address" name="address" rows="3" 
-                                      placeholder="Enter your business address">{{ business.address }}</textarea>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="phone" class="form-label">
-                                <i class="fas fa-phone"></i> Phone Number
-                            </label>
-                            <input type="text" class="form-control" id="phone" name="phone" 
-                                   placeholder="+1234567890" value="{{ business.phone }}">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="email" class="form-label">
-                                <i class="fas fa-envelope"></i> Business Email
-                            </label>
-                            <input type="email" class="form-control" id="email" name="email" 
-                                   placeholder="contact@business.com" value="{{ business.email }}">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="tax_id" class="form-label">
-                                <i class="fas fa-file-invoice"></i> Tax ID / VAT Number (Optional)
-                            </label>
-                            <input type="text" class="form-control" id="tax_id" name="tax_id" 
-                                   placeholder="Tax ID" value="{{ business.tax_id }}">
-                        </div>
-                        
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-check"></i> Complete Setup
-                            </button>
-                            <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary">
-                                Skip for Now
-                            </a>
-                        </div>
-                    </form>
-            </div>
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:860px">
 
-            <div class="ui-card mt-4">
-                <div class="ui-card-body">
-                    <h5><i class="fas fa-lightbulb text-warning"></i> Next Steps</h5>
-                    <ul class="mb-0">
-                        <li>Add your products and categories</li>
-                        <li>Invite team members</li>
-                        <li>Configure business settings</li>
-                        <li>Start making sales!</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+  <!-- Page header -->
+  <div class="mb-4">
+    <a href="{% url 'dashboard' slug=business.slug %}" class="btn-outline-solid mb-3" style="font-size:13px;padding:7px 14px">
+      <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+    <h1 style="font-size:22px;font-weight:700;margin:0">Business Setup</h1>
+    <p style="font-size:13px;color:var(--text-muted);margin:3px 0 0">Configure your business details for {{ business.name }}</p>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3"
+           style="border-radius:8px;font-size:14px" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- ── Basic info form ── -->
+  <div class="setup-card">
+    <div class="setup-card-header">
+      <div style="font-size:15px;font-weight:700"><i class="bi bi-building me-2" style="color:var(--primary)"></i>Business Details</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-top:2px">Basic information about your business</div>
     </div>
+    <div class="setup-card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label" for="phone">Phone Number</label>
+            <input type="tel" class="form-control" id="phone" name="phone"
+                   value="{{ business.phone|default:'' }}" placeholder="+254712345678">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label" for="email">Business Email</label>
+            <input type="email" class="form-control" id="email" name="email"
+                   value="{{ business.email|default:'' }}" placeholder="info@mybusiness.com">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="address">Address</label>
+            <input type="text" class="form-control" id="address" name="address"
+                   value="{{ business.address|default:'' }}" placeholder="123 Main St, Nairobi">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label" for="tax_id">KRA PIN / Tax ID</label>
+            <input type="text" class="form-control" id="tax_id" name="tax_id"
+                   value="{{ business.tax_id|default:'' }}" placeholder="A123456789Z"
+                   style="text-transform:uppercase">
+          </div>
+        </div>
+
+        <hr class="my-4">
+        <!-- ── Time & Attendance ── -->
+        <div class="mb-1" style="font-size:15px;font-weight:700">
+          <i class="bi bi-clock-history me-2" style="color:var(--primary)"></i>Time &amp; Attendance
+        </div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+          Set working hours to enable late check-in detection and overtime tracking.
+        </div>
+        <div class="row g-3">
+          <div class="col-sm-3">
+            <label class="form-label" for="workday_start_time">Workday Start</label>
+            <input type="time" class="form-control" id="workday_start_time" name="workday_start_time"
+                   value="{{ settings.workday_start_time|time:'H:i' }}">
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label" for="workday_end_time">Workday End</label>
+            <input type="time" class="form-control" id="workday_end_time" name="workday_end_time"
+                   value="{{ settings.workday_end_time|time:'H:i' }}">
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label" for="late_grace_minutes">Late Grace (min)</label>
+            <input type="number" class="form-control" id="late_grace_minutes" name="late_grace_minutes"
+                   min="0" max="180" value="{{ settings.late_grace_minutes }}">
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label" for="overtime_rate_multiplier">Overtime Rate</label>
+            <input type="number" class="form-control" id="overtime_rate_multiplier" name="overtime_rate_multiplier"
+                   min="1" max="5" step="0.01" value="{{ settings.overtime_rate_multiplier }}">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">e.g. 1.50 = 1.5× pay</div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn-primary-solid">
+            <i class="bi bi-check-lg"></i> Save &amp; Continue
+          </button>
+          <a href="{% url 'skip_setup' slug=business.slug %}" class="btn-outline-solid">
+            Skip for now
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </div>
+
 {% endblock %}

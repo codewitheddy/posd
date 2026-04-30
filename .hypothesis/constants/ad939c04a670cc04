@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0028_add_expiry_to_purchaseitem.py
+# hypothesis_version: 6.151.10
+
+[100, 'batch_number', 'expiry_date', 'pos', 'purchaseitem']

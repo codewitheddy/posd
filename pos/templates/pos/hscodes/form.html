@@ -1,0 +1,106 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if hscode %}Edit{% else %}Add{% endif %} HS Code{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4" style="max-width:700px">
+
+  <div class="mb-3">
+    <a href="{% url 'hscode_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to HS Codes
+    </a>
+  </div>
+
+  <h1 class="mb-1" style="font-size:20px;font-weight:700">
+    {% if hscode %}Edit HS Code — {{ hscode.code }}{% else %}Add HS Code{% endif %}
+  </h1>
+  <p class="text-muted small mb-4">HS codes are shared globally across all businesses on the platform.</p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">HS Code <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="code"
+                   value="{{ hscode.code|default:'' }}" placeholder="e.g. 090121 or 0901.21" required>
+            <div class="form-text">6-digit code (dots optional)</div>
+          </div>
+
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="description"
+                   value="{{ hscode.description|default:'' }}"
+                   placeholder="Official WCO/KRA description" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">VAT Rate %</label>
+            <input type="number" class="form-control" name="vat_rate"
+                   value="{{ hscode.vat_rate|default:'16' }}" step="0.01" min="0" max="100">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Excise Rate %</label>
+            <input type="number" class="form-control" name="excise_rate"
+                   value="{{ hscode.excise_rate|default:'0' }}" step="0.01" min="0">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Import Duty %</label>
+            <input type="number" class="form-control" name="import_duty"
+                   value="{{ hscode.import_duty|default:'0' }}" step="0.01" min="0">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Standard Unit</label>
+            <select class="form-select" name="unit">
+              {% for val, label in hscode_units %}
+              <option value="{{ val }}" {% if hscode and hscode.unit == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4 d-flex align-items-end pb-1">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="is_excisable" name="is_excisable"
+                     {% if hscode and hscode.is_excisable %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="is_excisable">Excisable</label>
+            </div>
+          </div>
+
+          <div class="col-md-4 d-flex align-items-end pb-1">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
+                     {% if not hscode or hscode.is_active %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="is_active">Active</label>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notes</label>
+            <textarea class="form-control" name="notes" rows="2"
+                      placeholder="KRA-specific guidance, exemptions, etc.">{{ hscode.notes|default:'' }}</textarea>
+          </div>
+
+          <div class="col-12 d-flex gap-2 pt-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>{% if hscode %}Save Changes{% else %}Add HS Code{% endif %}
+            </button>
+            <a href="{% url 'hscode_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

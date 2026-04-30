@@ -47,22 +47,38 @@ class Command(BaseCommand):
 
         self.stdout.write(f'📦 Backing up business: {business.name}')
 
+        from pos.models import SaleItem, SalePayment, PurchaseItem
+
+        sales_qs = business.sales.all().order_by('-date')[:1000]
+        purchases_qs = business.purchases.all().order_by('-date')[:500]
+        sale_ids = list(sales_qs.values_list('id', flat=True))
+        purchase_ids = list(purchases_qs.values_list('id', flat=True))
+
         # Collect all related data
         backup_data = {
             'metadata': {
                 'business_name': business.name,
                 'business_slug': business.slug,
                 'backup_date': timestamp,
-                'version': '1.0'
+                'version': '2.0'
             },
             'business': self.serialize_single(business),
-            'products': self.serialize_queryset(business.products.all()),
             'categories': self.serialize_queryset(business.categories.all()),
-            'customers': self.serialize_queryset(business.customers.all()),
-            'suppliers': self.serialize_queryset(business.suppliers.all()),
-            'sales': self.serialize_queryset(business.sales.all()[:1000]),  # Last 1000 sales
-            'purchases': self.serialize_queryset(business.purchases.all()[:500]),  # Last 500 purchases
             'payment_methods': self.serialize_queryset(business.payment_methods.all()),
+            'suppliers': self.serialize_queryset(business.suppliers.all()),
+            'customers': self.serialize_queryset(business.customers.all()),
+            'products': self.serialize_queryset(business.products.all()),
+            'purchases': self.serialize_queryset(purchases_qs),
+            'purchase_items': self.serialize_queryset(
+                PurchaseItem.objects.filter(purchase_id__in=purchase_ids)
+            ),
+            'sales': self.serialize_queryset(sales_qs),
+            'sale_items': self.serialize_queryset(
+                SaleItem.objects.filter(sale_id__in=sale_ids)
+            ),
+            'sale_payments': self.serialize_queryset(
+                SalePayment.objects.filter(sale_id__in=sale_ids)
+            ),
         }
 
         # Write to file

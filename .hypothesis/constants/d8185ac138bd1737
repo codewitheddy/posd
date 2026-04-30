@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0051_rename_pos_cashflo_busines_idx_pos_cashflo_busines_23d611_idx_and_more.py
+# hypothesis_version: 6.151.10
+
+['Create', 'Data Backup', 'Delete', 'Login', 'Logout', 'Purchase', 'Sale', 'Settings Change', 'Stock Adjustment', 'Update', 'action_type', 'activitylog', 'backup', 'cashfloat', 'create', 'delete', 'login', 'logout', 'pos', 'purchase', 'sale', 'settings', 'stock_adjust', 'update']

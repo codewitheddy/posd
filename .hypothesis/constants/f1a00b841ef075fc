@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0086_alter_stockadjustment_adjustment_type.py
+# hypothesis_version: 6.151.10
+
+['Bulk Break', 'Customer Return', 'Damage/Loss', 'Expired Items', 'Restock', 'Sale', 'Stock Correction', 'adjustment_type', 'bulk_break', 'correction', 'damage', 'expired', 'pos', 'restock', 'return', 'sale', 'stockadjustment']

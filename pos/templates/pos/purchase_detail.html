@@ -31,7 +31,7 @@
             </form>
         {% endif %}
 
-        {% if purchase.status in 'sent,approved,ordered,pending,partially_received' %}
+        {% if purchase.status == 'sent' or purchase.status == 'approved' or purchase.status == 'ordered' or purchase.status == 'pending' or purchase.status == 'partially_received' %}
             <a href="{% url 'purchase_receive' slug=request.business.slug pk=purchase.pk %}" class="btn btn-success">
                 <i class="bi bi-box-seam"></i> Create GRN
             </a>
@@ -45,6 +45,11 @@
             {% else %}
             <a href="{% url 'goods_received_list' slug=request.business.slug %}" class="btn btn-outline-info">
                 <i class="bi bi-box-seam"></i> View GRNs
+            </a>
+            {% endif %}
+            {% if can_create_return_note %}
+            <a href="{% url 'grn_create' slug=request.business.slug %}?purchase_id={{ purchase.id }}" class="btn btn-outline-warning">
+                <i class="bi bi-arrow-return-left"></i> Create Return Note
             </a>
             {% endif %}
             <a href="{% url 'create_payment' slug=request.business.slug supplier_id=purchase.supplier.id %}" class="btn btn-success">
@@ -64,7 +69,7 @@
             <button class="btn btn-outline-secondary"><i class="bi bi-copy"></i> Duplicate</button>
         </form>
 
-        {% if purchase.status not in 'received,cancelled,closed' %}
+        {% if purchase.status != 'received' and purchase.status != 'cancelled' and purchase.status != 'closed' %}
             <a href="{% url 'purchase_cancel' slug=request.business.slug pk=purchase.pk %}" class="btn btn-danger">
                 <i class="bi bi-x-circle"></i> Cancel
             </a>
@@ -81,7 +86,7 @@
     <div class="card-body py-2">
         <div class="d-flex align-items-center gap-2 flex-wrap">
             {% for s, label in purchase.STATUS_CHOICES %}
-                {% if s not in 'pending,ordered' %}
+                {% if s != 'pending' and s != 'ordered' %}
                 <span class="badge rounded-pill
                     {% if purchase.status == s %}bg-primary fs-6
                     {% else %}bg-light text-muted{% endif %}">
@@ -160,11 +165,11 @@
                         </thead>
                         <tbody>
                             {% for item in items %}
-                            <tr {% if item.has_discrepancy and purchase.status in 'received,partially_received' %}class="table-warning"{% endif %}>
+                            <tr {% if item.has_discrepancy and purchase.status == 'received' or item.has_discrepancy and purchase.status == 'partially_received' %}class="table-warning"{% endif %}>
                                 <td>
                                     {{ item.product.name }}
                                     {% if item.description %}<br><small class="text-muted">{{ item.description }}</small>{% endif %}
-                                    {% if item.receiving_notes and purchase.status in 'received,partially_received' %}
+                                    {% if item.receiving_notes and purchase.status == 'received' or item.receiving_notes and purchase.status == 'partially_received' %}
                                     <br><small class="text-muted"><i class="bi bi-info-circle"></i> {{ item.receiving_notes }}</small>
                                     {% endif %}
                                 </td>
@@ -222,7 +227,7 @@
             </div>
         </div>
 
-        {% if purchase.status in 'received,partially_received,closed' %}
+        {% if purchase.status == 'received' or purchase.status == 'partially_received' or purchase.status == 'closed' %}
         <div class="card">
             <div class="card-header"><h5 class="mb-0">Payment Status</h5></div>
             <div class="card-body">

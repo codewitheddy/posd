@@ -1,0 +1,154 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if hook %}Edit{% else %}New{% endif %} Webhook — {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .form-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; overflow:hidden; }
+  .form-card-header { padding:18px 24px; border-bottom:1px solid #e5e7eb; }
+  .form-card-body  { padding:24px; }
+  .form-label { font-size:13px; font-weight:600; color:#1a202c; margin-bottom:5px; }
+  .form-control, .form-select {
+    border:1.5px solid #e5e7eb; border-radius:8px; padding:10px 13px;
+    font-size:14px; color:#1a202c; transition:border-color .15s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color:#224195; box-shadow:0 0 0 3px rgba(34,65,149,.1); outline:none;
+  }
+  .event-check { display:flex; align-items:center; gap:10px; padding:10px 14px;
+                 border:1.5px solid #e5e7eb; border-radius:8px; cursor:pointer;
+                 transition:border-color .15s, background .15s; margin-bottom:8px; }
+  .event-check:hover { border-color:#224195; background:#f5f7ff; }
+  .event-check input[type=checkbox] { width:18px; height:18px; accent-color:#224195; cursor:pointer; }
+  .event-check.checked { border-color:#224195; background:#eef1fb; }
+  .btn-primary-solid { background:#224195; color:#fff; border:none; border-radius:8px;
+                       padding:10px 24px; font-size:14px; font-weight:600; cursor:pointer;
+                       display:inline-flex; align-items:center; gap:7px; }
+  .btn-primary-solid:hover { background:#1a3278; }
+  .btn-outline-solid { background:#fff; color:#374151; border:1.5px solid #e5e7eb;
+                       border-radius:8px; padding:10px 20px; font-size:14px; font-weight:600;
+                       cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+  .btn-outline-solid:hover { border-color:#9ca3af; color:#111; }
+  .secret-box { font-family:monospace; font-size:13px; background:#f8f9fc; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:760px">
+
+  <div class="mb-4">
+    <a href="{% url 'webhook_list' slug=business.slug %}" class="btn-outline-solid mb-3" style="font-size:13px;padding:7px 14px">
+      <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <h1 style="font-size:22px;font-weight:700;margin:0">
+      {% if hook %}Edit Webhook{% else %}New Webhook{% endif %}
+    </h1>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:8px;font-size:14px">
+        {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="form-card mb-3">
+      <div class="form-card-header">
+        <div style="font-size:15px;font-weight:700"><i class="bi bi-broadcast me-2" style="color:#224195"></i>Endpoint</div>
+      </div>
+      <div class="form-card-body">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" name="name" class="form-control" required
+                 value="{{ hook.name|default:'' }}" placeholder="e.g. Accounting System">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">URL</label>
+          <input type="url" name="url" class="form-control" required
+                 value="{{ hook.url|default:'' }}" placeholder="https://your-app.com/webhook">
+        </div>
+        {% if hook %}
+        <div class="mb-3">
+          <label class="form-label">Active</label>
+          <select name="is_active" class="form-select">
+            <option value="1" {% if hook.is_active %}selected{% endif %}>Yes</option>
+            <option value="0" {% if not hook.is_active %}selected{% endif %}>No</option>
+          </select>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-card mb-3">
+      <div class="form-card-header">
+        <div style="font-size:15px;font-weight:700"><i class="bi bi-list-check me-2" style="color:#224195"></i>Events to Subscribe</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:2px">Select which events trigger this webhook</div>
+      </div>
+      <div class="form-card-body">
+        <div class="row g-2">
+          {% for code, label in event_choices %}
+          <div class="col-md-6">
+            <label class="event-check {% if hook and code in hook.events %}checked{% endif %}" id="lbl_{{ forloop.counter }}">
+              <input type="checkbox" name="events" value="{{ code }}"
+                     {% if hook and code in hook.events %}checked{% endif %}
+                     onchange="toggleChecked(this)">
+              <div>
+                <div style="font-size:13px;font-weight:600">{{ label }}</div>
+                <div style="font-size:11px;color:#6b7280">{{ code }}</div>
+              </div>
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card mb-4">
+      <div class="form-card-header">
+        <div style="font-size:15px;font-weight:700"><i class="bi bi-shield-lock me-2" style="color:#224195"></i>Signing Secret</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:2px">
+          We'll include an <code>X-Webhook-Signature</code> header so you can verify payloads.
+        </div>
+      </div>
+      <div class="form-card-body">
+        {% if not hook %}
+        <div class="mb-3">
+          <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+            <input type="checkbox" name="auto_secret" value="1" id="autoSecret" checked
+                   style="width:16px;height:16px;accent-color:#224195">
+            <span style="font-size:13px;font-weight:600">Auto-generate a secure secret</span>
+          </label>
+        </div>
+        {% endif %}
+        <div class="mb-0">
+          <label class="form-label">Secret{% if not hook %} (leave blank to use auto-generated){% endif %}</label>
+          <input type="text" name="secret" class="form-control secret-box"
+                 value="{{ hook.secret|default:'' }}"
+                 placeholder="{% if not hook %}{{ generated_secret }}{% else %}Enter new secret to rotate{% endif %}">
+          {% if not hook %}
+          <div style="font-size:11px;color:#6b7280;margin-top:5px">
+            Auto-generated: <code>{{ generated_secret }}</code>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn-primary-solid">
+        <i class="bi bi-check-lg"></i> {% if hook %}Save Changes{% else %}Create Webhook{% endif %}
+      </button>
+      <a href="{% url 'webhook_list' slug=business.slug %}" class="btn-outline-solid">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+function toggleChecked(input) {
+  input.closest('.event-check').classList.toggle('checked', input.checked);
+}
+</script>
+{% endblock %}

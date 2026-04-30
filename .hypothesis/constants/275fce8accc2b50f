@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\corsheaders\defaults.py
+# hypothesis_version: 6.151.10
+
+['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'accept', 'authorization', 'content-type', 'user-agent', 'x-csrftoken', 'x-requested-with']

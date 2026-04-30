@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0068_enhance_product_module.py
+# hypothesis_version: 6.151.10
+
+[100, 'Brand', 'Bundle / Combo', 'ID', 'Product description', 'Stock Product', 'Variant Product', 'Weighted (kg/L)', 'batch', 'brand', 'brands', 'bundle', 'business', 'created_at', 'description', 'id', 'is_active', 'lead_time_days', 'minimum_price', 'name', 'ordering', 'pos', 'pos.brand', 'pos.business', 'pos.supplier', 'preferred_products', 'preferred_supplier', 'product', 'product_type', 'products', 'reorder_quantity', 'serialized', 'service', 'stock', 'unique_together', 'variant', 'weighted', 'wholesale_price']

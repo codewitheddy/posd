@@ -1,0 +1,66 @@
+{% extends 'pos/base.html' %}
+{% block title %}New Transfer — {{ branch.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.form-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:28px 32px}
+.field-label{font-size:12px;font-weight:700;color:#374151;margin-bottom:5px;display:block}
+.form-control,.form-select{border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;padding:9px 12px}
+.form-control:focus,.form-select:focus{border-color:#224195;box-shadow:0 0 0 3px rgba(34,65,149,.08);outline:none}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:700px;margin:0 auto">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'transfer_list' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <h1 style="font-size:20px;font-weight:700;margin:0">Transfer Stock from {{ branch.name }}</h1>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <div class="form-card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="field-label">Destination Branch *</label>
+          <select name="destination_branch" class="form-select" required>
+            <option value="">— Select branch —</option>
+            {% for b in other_branches %}
+            <option value="{{ b.pk }}">{{ b.name }} ({{ b.code }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="field-label">Product *</label>
+          <select name="product" class="form-select" required>
+            <option value="">— Select product —</option>
+            {% for p in products %}
+            <option value="{{ p.pk }}">{{ p.name }} ({{ p.product_code }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="field-label">Quantity *</label>
+          <input type="number" name="quantity" class="form-control" step="0.001" min="0.001" required>
+        </div>
+        <div class="col-12">
+          <label class="field-label">Note</label>
+          <textarea name="note" class="form-control" rows="2" placeholder="Optional reason for transfer"></textarea>
+        </div>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-4 pt-3" style="border-top:1px solid #f3f4f6">
+        <a href="{% url 'transfer_list' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm">Cancel</a>
+        <button type="submit" class="btn-primary-sm"><i class="bi bi-arrow-left-right"></i> Transfer</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

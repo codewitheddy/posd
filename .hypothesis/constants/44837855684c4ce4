@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\api_urls.py
+# hypothesis_version: 6.151.10
+
+['<slug:slug>/sales/', 'auth/token/', 'auth/token/refresh/', 'business-settings', 'businesssettings', 'categories', 'category', 'customer', 'customers', 'docs/', 'integration_apikeys', 'integration_sales', 'loyalty-rewards', 'loyalty-transactions', 'loyaltyreward', 'loyaltytransaction', 'payment-methods', 'paymentmethod', 'product', 'products', 'purchase', 'purchases', 'sale', 'sales', 'schema', 'schema/', 'stock-adjustments', 'stockadjustment', 'supplier', 'suppliers', 'swagger-ui', 'sync/pull/', 'sync/push/', 'sync/status/', 'sync_pull', 'sync_push', 'sync_status', 'token_obtain_pair', 'token_refresh', 'user', 'users', 'verify-signature/', 'verify_signature']

@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\context_processors.py
+# hypothesis_version: 6.151.10
+
+['No Access', 'Superuser', 'admin', 'alert_count', 'business', 'business_membership', 'business_slug', 'can_make_sales', 'can_manage_products', 'can_manage_purchases', 'can_manage_settings', 'can_manage_stock', 'can_manage_suppliers', 'can_manage_users', 'can_view_reports', 'cashier', 'has_business', 'is_admin', 'is_cashier', 'is_manager', 'is_owner', 'is_stock_manager', 'is_viewer', 'low_stock_threshold', 'manager', 'none', 'owner', 'product', 'role', 'stock_manager', 'superuser', 'user_permissions', 'user_role', 'viewer']

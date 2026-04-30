@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\serializers.py
+# hypothesis_version: 6.151.10
+
+['*', ', ', '.', 'JSONField', 'Meta', 'No data provided', '__all__', '_data', '_declared_fields', '_errors', '_validated_data', 'allow_blank', 'allow_empty', 'allow_null', 'auto_now', 'auto_now_add', 'child', 'choices', 'code', 'commit', 'context', 'create', 'data', 'decoder', 'default', 'depth', 'empty', 'encoder', 'error_messages', 'exclude', 'extra_kwargs', 'fields', 'help_text', 'initial', 'initial_data', 'instance', 'invalid', 'label', 'many', 'max_length', 'max_value', 'min_length', 'min_value', 'model', 'model_field', 'not_a_list', 'null', 'partial', 'queryset', 'read_only', 'read_only_fields', 'readonly_fields', 'required', 'slug_field', 'source', 'style', 'to_field', 'update', 'validate_', 'validators', 'view_name', 'write_only']

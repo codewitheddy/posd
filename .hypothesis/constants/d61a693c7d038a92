@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0009_businesssettings_logo_product_image.py
+# hypothesis_version: 6.151.10
+
+['business/logos/', 'businesssettings', 'image', 'logo', 'pos', 'product']

@@ -1,0 +1,34 @@
+{% comment %}
+Usage: {% include 'pos/partials/action_badge.html' with action=log.action_type label=log.get_action_type_display %}
+{% endcomment %}
+{% if action == 'create' %}
+  <span class="badge bg-success-subtle text-success border border-success-subtle">{{ label }}</span>
+{% elif action == 'update' %}
+  <span class="badge bg-info-subtle text-info border border-info-subtle">{{ label }}</span>
+{% elif action == 'delete' %}
+  <span class="badge bg-danger-subtle text-danger border border-danger-subtle">{{ label }}</span>
+{% elif action == 'login' %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ label }}</span>
+{% elif action == 'logout' %}
+  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ label }}</span>
+{% elif action == 'sale' %}
+  <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ label }}</span>
+{% elif action == 'refund' %}
+  <span class="badge bg-orange-subtle text-orange border" style="background-color:#fff3e0;color:#e65100;border-color:#ffcc80!important">{{ label }}</span>
+{% elif action == 'stock_adjust' %}
+  <span class="badge bg-dark-subtle text-dark border border-dark-subtle">{{ label }}</span>
+{% elif action == 'purchase' %}
+  <span class="badge bg-info-subtle text-info border border-info-subtle">{{ label }}</span>
+{% elif action == 'settings' %}
+  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ label }}</span>
+{% elif action == 'backup' %}
+  <span class="badge bg-success-subtle text-success border border-success-subtle">{{ label }}</span>
+{% elif action == 'restore' %}
+  <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ label }}</span>
+{% elif action == 'export' %}
+  <span class="badge bg-info-subtle text-info border border-info-subtle">{{ label }}</span>
+{% elif action == 'password_change' %}
+  <span class="badge bg-danger-subtle text-danger border border-danger-subtle">{{ label }}</span>
+{% else %}
+  <span class="badge bg-light text-dark border">{{ label }}</span>
+{% endif %}

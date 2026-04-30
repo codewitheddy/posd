@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\kombu\exceptions.py
+# hypothesis_version: 6.151.10
+
+['BaseExceptionType', 'ChannelError', 'ChannelLimitExceeded', 'ConnectionError', 'DecodeError', 'EncodeError', 'HttpError', 'InconsistencyError', 'KombuError', 'LimitExceeded', 'MessageStateError', 'NotBoundError', 'OperationalError', 'ResourceError', 'SerializationError', 'TimeoutError', 'VersionMismatch', 'reraise']

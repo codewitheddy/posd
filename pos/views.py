@@ -1,13 +1,13 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Sum, Count, Q, F
-from django.db import models
+from django.db import models, IntegrityError, transaction
 from django.db.models.functions import Coalesce, TruncHour, ExtractHour
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
@@ -24,7 +24,10 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.models import User
+from django.views.decorators.http import require_POST
 import io
+from collections import defaultdict
+from django_ratelimit.decorators import ratelimit
 
 
 # ==================== PLATFORM ADMIN DASHBOARD ====================
@@ -161,6 +164,8 @@ def admin_create_business(request):
             )
             
             messages.success(request, f'Business "{name}" created successfully! Owner: {owner.email}')
+            from django.urls import reverse
+            return redirect(reverse('dashboard', kwargs={'slug': business.slug}) + '?setup=1')
             
         except Exception as e:
             messages.error(request, f'Error creating business: {str(e)}')
@@ -285,6 +290,63 @@ Marid POS Team
     return redirect('platform_admin_dashboard')
 
 
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def admin_reset_password(request):
+    """Superuser resets password for any business owner"""
+    if request.method == 'POST':
+        user_id = request.POST.get('user_id')
+        new_password = request.POST.get('new_password', '').strip()
+
+        if not user_id or not new_password:
+            messages.error(request, 'User and new password are required.')
+            return redirect('platform_admin_dashboard')
+
+        if len(new_password) < 10:
+            messages.error(request, 'Password must be at least 10 characters.')
+            return redirect('platform_admin_dashboard')
+
+        try:
+            target_user = User.objects.get(id=user_id)
+            # Prevent resetting another superuser's password
+            if target_user.is_superuser and target_user != request.user:
+                messages.error(request, 'Cannot reset another superuser\'s password.')
+                return redirect('platform_admin_dashboard')
+
+            # Validate against all configured password validators
+            from django.contrib.auth.password_validation import validate_password
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_password(new_password, user=target_user)
+            except DjangoValidationError as ve:
+                messages.error(request, 'Password not accepted: ' + ' '.join(ve.messages))
+                return redirect('platform_admin_dashboard')
+
+            target_user.set_password(new_password)
+            target_user.save()
+            from django.contrib.sessions.models import Session
+            import json
+            for session in Session.objects.all():
+                try:
+                    data = session.get_decoded()
+                    if str(data.get('_auth_user_id')) == str(target_user.id):
+                        session.delete()
+                except Exception:
+                    pass
+
+            messages.success(
+                request,
+                f'Password for {target_user.username} ({target_user.email}) reset successfully. '
+                'All their active sessions have been invalidated.'
+            )
+        except User.DoesNotExist:
+            messages.error(request, 'User not found.')
+        except Exception as e:
+            messages.error(request, f'Error resetting password: {str(e)}')
+
+    return redirect('platform_admin_dashboard')
+
+
 # ==================== LEGACY DECORATORS ====================
 
 def manager_required(view_func):
@@ -364,13 +426,111 @@ def can_manage_purchases(view_func):
     return wrapper
 
 
+def check_discount_ceiling(membership, discount_type, discount_value, total_inclusive):
+    """
+    Enforce the max_discount_pct ceiling on a sale discount.
+
+    Returns (allowed: bool, effective_pct: Decimal, error_msg: str).
+    Converts flat discounts to percentage before comparing.
+    Logs override and blocked events to ActivityLog.
+    """
+    from .models import ActivityLog, PERMISSION_CODES
+
+    # If no membership (e.g. superuser), allow all
+    if membership is None:
+        return (True, Decimal('0'), '')
+
+    # Compute effective percentage
+    if discount_type in ('fixed', 'flat') and total_inclusive > 0:
+        effective_pct = (Decimal(str(discount_value)) / Decimal(str(total_inclusive))) * 100
+    else:
+        effective_pct = Decimal(str(discount_value))
+
+    # No discount — always allowed
+    if effective_pct <= 0:
+        return (True, effective_pct, '')
+
+    # Within ceiling — allowed
+    if effective_pct <= membership.max_discount_pct:
+        return (True, effective_pct, '')
+
+    # Over ceiling but has override permission
+    if membership.has_permission('can_exceed_max_discount'):
+        ActivityLog.log_activity(
+            user=membership.user,
+            action_type='sale',
+            description=(
+                f'Discount override: {effective_pct:.2f}% applied '
+                f'(ceiling {membership.max_discount_pct}%) by {membership.user.username}'
+            ),
+            business=membership.business,
+            operation_type='discount_override',
+            entity_type='BusinessMembership',
+            entity_id=str(membership.pk),
+        )
+        return (True, effective_pct, '')
+
+    # Blocked
+    ActivityLog.log_activity(
+        user=membership.user,
+        action_type='sale',
+        description=(
+            f'Discount blocked: {effective_pct:.2f}% requested '
+            f'(ceiling {membership.max_discount_pct}%) by {membership.user.username}'
+        ),
+        business=membership.business,
+        operation_type='discount_blocked',
+        entity_type='BusinessMembership',
+        entity_id=str(membership.pk),
+        status='failure',
+    )
+    error_msg = f"Discount of {effective_pct:.1f}% exceeds your limit of {membership.max_discount_pct}%."
+    return (False, effective_pct, error_msg)
+
+
 @login_required
 @business_required
 def dashboard(request, slug=None):
     """Main dashboard with quick stats - Optimized with caching"""
     from django.core.cache import cache
     from .cache_utils import get_cache_key
-    
+
+    def _get_attendance_widget_context():
+        """Build user-specific attendance data; never cache this across users."""
+        membership = getattr(request, 'business_membership', None)
+        base = {
+            'show_attendance_widget': bool(membership),
+            'attendance_is_clocked_in': False,
+            'attendance_clock_in_time': None,
+            'attendance_clock_out_time': None,
+            'attendance_total_hours': None,
+        }
+        if not membership:
+            return base
+
+        try:
+            from hr.models import Attendance
+            today_local = timezone.localdate()
+            record = Attendance.objects.filter(
+                employee__business=request.business,
+                employee__user_account=request.user,
+                date=today_local,
+            ).order_by('-id').first()
+            if not record:
+                return base
+
+            base.update({
+                'attendance_is_clocked_in': record.clock_out is None,
+                'attendance_clock_in_time': record.clock_in,
+                'attendance_clock_out_time': record.clock_out,
+                'attendance_total_hours': record.total_hours,
+            })
+        except Exception:
+            # Keep dashboard resilient even if HR module is unavailable.
+            pass
+
+        return base
+
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
@@ -381,8 +541,9 @@ def dashboard(request, slug=None):
     cached_data = cache.get(cache_key)
     
     if cached_data:
-        # Return cached data
-        return render(request, 'pos/dashboard.html', cached_data)
+        render_context = dict(cached_data)
+        render_context.update(_get_attendance_widget_context())
+        return render(request, 'pos/dashboard.html', render_context)
     
     # Calculate dashboard data (cache miss)
     # Today's sales - Optimized with select_related
@@ -454,6 +615,21 @@ def dashboard(request, slug=None):
         business=request.business, 
         stock_quantity=0
     ).count()
+
+    # Bulk-level low stock count
+    from django.db.models import ExpressionWrapper, FloatField
+    bulk_low_stock_count = Product.objects.filter(
+        business=request.business,
+        bulk_low_stock_threshold__isnull=False,
+        bulk_unit_quantity__isnull=False,
+        bulk_unit_quantity__gt=0,
+        stock_quantity__gt=0,
+    ).annotate(
+        bulk_stock=ExpressionWrapper(
+            models.F('stock_quantity') / models.F('bulk_unit_quantity'),
+            output_field=FloatField()
+        )
+    ).filter(bulk_stock__lte=models.F('bulk_low_stock_threshold')).count()
     
     total_stock_value = Product.objects.filter(
         business=request.business
@@ -492,7 +668,10 @@ def dashboard(request, slug=None):
     }
     
     # Superusers (system root) have lifetime access - don't show trial warnings
-    if not request.user.is_superuser and request.business.is_trial and request.business.trial_ends_at:
+    # Also only show to owner/admin roles — cashiers and other staff don't need to see this
+    _member_role = getattr(request.business_membership, 'role', None) if hasattr(request, 'business_membership') else None
+    _is_owner_or_admin = _member_role in ('owner', 'admin') or request.user.is_superuser
+    if not request.user.is_superuser and _is_owner_or_admin and request.business.is_trial and request.business.trial_ends_at:
         delta = request.business.trial_ends_at - timezone.now()
         trial_info['days_remaining'] = delta.days
         
@@ -557,7 +736,6 @@ def dashboard(request, slug=None):
     hourly_sales = [{'hour': r['hour'], 'count': r['count'], 'revenue': float(r['revenue'] or 0)} for r in hourly_sales_qs]
     
     context = {
-        # Product stats
         'total_products': Product.objects.filter(business=request.business).count(),
         'total_categories': Category.objects.filter(business=request.business).count(),
         'total_stock_value': total_stock_value,
@@ -585,6 +763,7 @@ def dashboard(request, slug=None):
         'low_stock_count': low_stock_products,
         'out_of_stock_count': out_of_stock_products,
         'out_of_stock_list': out_of_stock_list,
+        'bulk_low_stock_count': bulk_low_stock_count,
         
         # Supplier stats
         'total_suppliers': total_suppliers,
@@ -616,8 +795,10 @@ def dashboard(request, slug=None):
     # Cache the dashboard data for 5 minutes
     cache_timeout = getattr(settings, 'CACHE_TTL', {}).get('dashboard', 300)
     cache.set(cache_key, context, cache_timeout)
-    
-    return render(request, 'pos/dashboard.html', context)
+
+    render_context = dict(context)
+    render_context.update(_get_attendance_widget_context())
+    return render(request, 'pos/dashboard.html', render_context)
 
 
 @login_required
@@ -625,21 +806,19 @@ def dashboard(request, slug=None):
 def product_list(request, slug=None):
     """List all products with filtering"""
     from .models import Brand
-    products = Product.objects.filter(business=request.business).select_related('category', 'brand').all()
+    products = Product.objects.filter(business=request.business).select_related('category', 'brand')
 
     # Filters
     category_filter = request.GET.get('category', '')
     brand_filter = request.GET.get('brand', '')
-    type_filter = request.GET.get('type', '')
     status_filter = request.GET.get('status', '')
+    sort_by = request.GET.get('sort', 'newest')
     search = request.GET.get('q', '').strip()
 
     if category_filter:
         products = products.filter(category_id=category_filter)
     if brand_filter:
         products = products.filter(brand_id=brand_filter)
-    if type_filter:
-        products = products.filter(product_type=type_filter)
     if status_filter == 'active':
         products = products.filter(is_active=True)
     elif status_filter == 'inactive':
@@ -655,15 +834,21 @@ def product_list(request, slug=None):
             models.Q(barcode__icontains=search)
         )
 
+    sort_map = {
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'name_asc': 'name',
+    }
+    products = products.order_by(sort_map.get(sort_by, '-created_at'))
+
     context = {
         'products': products,
         'categories': Category.objects.filter(business=request.business).order_by('name'),
         'brands': Brand.objects.filter(business=request.business).order_by('name'),
-        'product_types': Product.PRODUCT_TYPE_CHOICES,
         'category_filter': category_filter,
         'brand_filter': brand_filter,
-        'type_filter': type_filter,
         'status_filter': status_filter,
+        'sort_by': sort_by,
         'search': search,
     }
     return render(request, 'pos/product_list.html', context)
@@ -857,7 +1042,6 @@ def _product_form_context(request):
         'brands': Brand.objects.filter(business=request.business).order_by('name'),
         'units': UnitOfMeasurement.objects.filter(business=request.business, is_active=True),
         'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
-        'product_types': Product.PRODUCT_TYPE_CHOICES,
     }
 
 
@@ -867,9 +1051,9 @@ def product_create(request, slug=None):
     from .models import UnitOfMeasurement
     
     if request.method == 'POST':
-        name = request.POST.get('name')
-        product_code = request.POST.get('product_code')
-        barcode = request.POST.get('barcode')
+        name = request.POST.get('name', '').strip()
+        product_code = request.POST.get('product_code', '').strip()
+        barcode = request.POST.get('barcode', '').strip()
         category_id = request.POST.get('category')
         unit_id = request.POST.get('unit')
         cost_price = request.POST.get('cost_price', '').strip()
@@ -882,8 +1066,17 @@ def product_create(request, slug=None):
         bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
         bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
         bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
+
+        # New advanced bulk fields
+        unit_barcode = request.POST.get('unit_barcode', '').strip()
+        bulk_low_stock_threshold = request.POST.get('bulk_low_stock_threshold', '').strip()
+        bulk_discount_price = request.POST.get('bulk_discount_price', '').strip()
         
         try:
+            if not name:
+                messages.error(request, 'Product name is required.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
             # Validate cost_price is provided and greater than 0
             if not cost_price:
                 messages.error(request, 'Cost Price is required. This is needed for profit tracking and financial reporting.')
@@ -903,6 +1096,75 @@ def product_create(request, slug=None):
             if selling_price <= 0:
                 messages.error(request, 'Selling Price must be greater than 0.')
                 return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            # Validate bulk field consistency
+            has_bulk_name = bool(bulk_unit_name)
+            has_bulk_qty = bool(bulk_unit_quantity)
+            has_bulk_price = bool(bulk_unit_price)
+            has_bulk_advanced = bool(unit_barcode or bulk_low_stock_threshold or bulk_discount_price)
+            has_any_bulk = has_bulk_name or has_bulk_qty or has_bulk_price or has_bulk_advanced
+
+            if has_any_bulk and not (has_bulk_name and has_bulk_qty and has_bulk_price):
+                messages.error(request, 'Bulk Unit Name, Units per Bulk, and Bulk Unit Price are all required when using bulk configuration.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            if has_bulk_qty and Decimal(bulk_unit_quantity) <= 0:
+                messages.error(request, 'Units per Bulk must be greater than 0.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            if has_bulk_price and Decimal(bulk_unit_price) <= 0:
+                messages.error(request, 'Bulk Unit Price must be greater than 0.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            if bulk_low_stock_threshold and Decimal(bulk_low_stock_threshold) < 0:
+                messages.error(request, 'Bulk Low Stock Alert cannot be negative.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            if product_code and Product.objects.filter(business=request.business, product_code__iexact=product_code).exists():
+                messages.error(request, 'This product code is already used by another product in your business.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            if barcode and Product.objects.filter(
+                business=request.business
+            ).filter(Q(barcode__iexact=barcode) | Q(unit_barcode__iexact=barcode)).exists():
+                messages.error(request, 'This barcode is already used by another product barcode or unit barcode in your business.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            # Validate unit_barcode uniqueness per business
+            if unit_barcode and Product.objects.filter(
+                business=request.business
+            ).filter(Q(unit_barcode__iexact=unit_barcode) | Q(barcode__iexact=unit_barcode)).exists():
+                messages.error(request, 'This unit barcode is already used by another product in your business.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+
+            # Validate bulk_discount_price
+            if bulk_discount_price:
+                bdp = Decimal(bulk_discount_price)
+                if bdp >= selling_price:
+                    messages.warning(request, 'Bulk discount price should be lower than the selling price.')
+
+            # Validate excise consistency
+            is_excisable = request.POST.get('is_excisable', '0') == '1'
+            excise_rate = Decimal(request.POST.get('excise_rate') or '0')
+            if excise_rate < 0:
+                messages.error(request, 'Excise Rate cannot be negative.')
+                return render(request, 'pos/product_form.html', _product_form_context(request))
+            if not is_excisable:
+                excise_rate = Decimal('0')
+
+            # HS Code library reference
+            from .models import HSCode as _HSCode
+            hs_code_ref_id = request.POST.get('hs_code_ref', '').strip()
+            hs_code_ref = None
+            if hs_code_ref_id:
+                try:
+                    hs_code_ref = _HSCode.objects.get(pk=int(hs_code_ref_id))
+                    # Auto-fill excise from library if not overridden
+                    if hs_code_ref.is_excisable and not is_excisable:
+                        is_excisable = True
+                        excise_rate = hs_code_ref.excise_rate
+                except (_HSCode.DoesNotExist, ValueError):
+                    pass
             
             category = Category.objects.get(id=category_id, business=request.business) if category_id else None
             unit = UnitOfMeasurement.objects.get(id=unit_id, business=request.business) if unit_id else None
@@ -921,17 +1183,15 @@ def product_create(request, slug=None):
                 business=request.business,
                 name=name,
                 description=request.POST.get('description', ''),
-                product_code=product_code if product_code else None,
-                barcode=barcode if barcode else '',
-                product_type=request.POST.get('product_type', 'stock'),
+                product_code=product_code or None,
+                barcode=barcode,
                 category=category,
                 brand=brand,
                 unit=unit,
                 is_active=request.POST.get('is_active', '1') == '1',
                 cost_price=cost,
                 unit_price=selling_price,
-                wholesale_price=Decimal(request.POST.get('wholesale_price')) if request.POST.get('wholesale_price') else None,
-                minimum_price=Decimal(request.POST.get('minimum_price')) if request.POST.get('minimum_price') else None,
+                minimum_price=None,
                 tax_class=tax_class,
                 stock_quantity=0,
                 low_stock_threshold=low_stock,
@@ -942,10 +1202,14 @@ def product_create(request, slug=None):
                 bulk_unit_name=bulk_unit_name if bulk_unit_name else '',
                 bulk_unit_quantity=Decimal(bulk_unit_quantity) if bulk_unit_quantity else None,
                 bulk_unit_price=Decimal(bulk_unit_price) if bulk_unit_price else None,
+                unit_barcode=unit_barcode,
+                bulk_low_stock_threshold=Decimal(bulk_low_stock_threshold) if bulk_low_stock_threshold else None,
+                bulk_discount_price=Decimal(bulk_discount_price) if bulk_discount_price else None,
                 hs_code=request.POST.get('hs_code', ''),
                 hs_code_description=request.POST.get('hs_code_description', ''),
-                is_excisable=request.POST.get('is_excisable', '0') == '1',
-                excise_rate=Decimal(request.POST.get('excise_rate') or '0'),
+                is_excisable=is_excisable,
+                excise_rate=excise_rate,
+                hs_code_ref=hs_code_ref,
             )
             
             # Create initial stock adjustment record
@@ -954,14 +1218,16 @@ def product_create(request, slug=None):
             # Invalidate dashboard cache
             from django.core.cache import cache
             from .cache_utils import get_cache_key
-            from datetime import datetime
-            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+
+            cache_key = get_cache_key('dashboard', request.business.id, timezone.now().date())
             cache.delete(cache_key)
             
             messages.success(request, 'Product created successfully! Add stock through purchase orders.')
             return redirect('product_list', slug=request.business.slug)
         except ValueError as e:
             messages.error(request, f'Invalid price value: {str(e)}')
+        except InvalidOperation:
+            messages.error(request, 'Please enter valid numeric values for price and quantity fields.')
         except Exception as e:
             messages.error(request, f'Error creating product: {str(e)}')
 
@@ -1006,12 +1272,54 @@ def product_edit(request, slug=None, pk=None):
                 ctx = _product_form_context(request)
                 ctx['product'] = product
                 return render(request, 'pos/product_form.html', ctx)
+
+            # Validate minimum price
+            minimum_price_str = request.POST.get('minimum_price', '').strip()
+            minimum_price = None
+            if minimum_price_str:
+                minimum_price = Decimal(minimum_price_str)
+                if minimum_price <= 0:
+                    messages.error(request, 'Minimum Price must be greater than 0.')
+                    ctx = _product_form_context(request)
+                    ctx['product'] = product
+                    return render(request, 'pos/product_form.html', ctx)
+                if minimum_price > selling_price:
+                    messages.error(request, 'Minimum Price cannot be greater than Selling Price.')
+                    ctx = _product_form_context(request)
+                    ctx['product'] = product
+                    return render(request, 'pos/product_form.html', ctx)
+
+            product_name = request.POST.get('name', '').strip()
+            if not product_name:
+                messages.error(request, 'Product name is required.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            product_code = request.POST.get('product_code', '').strip()
+            barcode = request.POST.get('barcode', '').strip()
             
-            product.name = request.POST.get('name')
+            if product_code and Product.objects.filter(
+                business=request.business,
+                product_code__iexact=product_code,
+            ).exclude(pk=product.pk).exists():
+                messages.error(request, 'This product code is already used by another product in your business.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            if barcode and Product.objects.filter(
+                business=request.business
+            ).exclude(pk=product.pk).filter(Q(barcode__iexact=barcode) | Q(unit_barcode__iexact=barcode)).exists():
+                messages.error(request, 'This barcode is already used by another product barcode or unit barcode in your business.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            product.name = product_name
             product.description = request.POST.get('description', '')
-            product.product_code = request.POST.get('product_code') if request.POST.get('product_code') else None
-            product.barcode = request.POST.get('barcode', '')
-            product.product_type = request.POST.get('product_type', 'stock')
+            product.product_code = product_code or None
+            product.barcode = barcode
             product.is_active = request.POST.get('is_active', '1') == '1'
             category_id = request.POST.get('category')
             product.category = Category.objects.get(business=request.business, id=category_id) if category_id else None
@@ -1030,8 +1338,7 @@ def product_edit(request, slug=None, pk=None):
             # Update cost price and selling price
             product.cost_price = cost
             product.unit_price = selling_price
-            product.wholesale_price = Decimal(request.POST.get('wholesale_price')) if request.POST.get('wholesale_price') else None
-            product.minimum_price = Decimal(request.POST.get('minimum_price')) if request.POST.get('minimum_price') else None
+            product.minimum_price = minimum_price
 
             # Update tax class
             product.tax_class = request.POST.get('tax_class', 'standard')
@@ -1046,16 +1353,93 @@ def product_edit(request, slug=None, pk=None):
             bulk_unit_name = request.POST.get('bulk_unit_name', '').strip()
             bulk_unit_quantity = request.POST.get('bulk_unit_quantity', '').strip()
             bulk_unit_price = request.POST.get('bulk_unit_price', '').strip()
+
+            # New advanced bulk fields
+            unit_barcode = request.POST.get('unit_barcode', '').strip()
+            bulk_low_stock_threshold = request.POST.get('bulk_low_stock_threshold', '').strip()
+            bulk_discount_price = request.POST.get('bulk_discount_price', '').strip()
+
+            # Validate bulk field consistency
+            has_bulk_name = bool(bulk_unit_name)
+            has_bulk_qty = bool(bulk_unit_quantity)
+            has_bulk_price = bool(bulk_unit_price)
+            has_bulk_advanced = bool(unit_barcode or bulk_low_stock_threshold or bulk_discount_price)
+            has_any_bulk = has_bulk_name or has_bulk_qty or has_bulk_price or has_bulk_advanced
+
+            if has_any_bulk and not (has_bulk_name and has_bulk_qty and has_bulk_price):
+                messages.error(request, 'Bulk Unit Name, Units per Bulk, and Bulk Unit Price are all required when using bulk configuration.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            if has_bulk_qty and Decimal(bulk_unit_quantity) <= 0:
+                messages.error(request, 'Units per Bulk must be greater than 0.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            if has_bulk_price and Decimal(bulk_unit_price) <= 0:
+                messages.error(request, 'Bulk Unit Price must be greater than 0.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            if bulk_low_stock_threshold and Decimal(bulk_low_stock_threshold) < 0:
+                messages.error(request, 'Bulk Low Stock Alert cannot be negative.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            # Validate unit_barcode uniqueness per business (exclude current product)
+            if unit_barcode and Product.objects.filter(
+                business=request.business
+            ).exclude(pk=product.pk).filter(Q(unit_barcode__iexact=unit_barcode) | Q(barcode__iexact=unit_barcode)).exists():
+                messages.error(request, 'This unit barcode is already used by another product in your business.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+
+            # Validate bulk_discount_price
+            if bulk_discount_price:
+                bdp = Decimal(bulk_discount_price)
+                if minimum_price is not None:
+                    if bdp < minimum_price:
+                        messages.error(request, 'Bulk discount price cannot be below the minimum price.')
+                        ctx = _product_form_context(request)
+                        ctx['product'] = product
+                        return render(request, 'pos/product_form.html', ctx)
+                if bdp >= selling_price:
+                    messages.warning(request, 'Bulk discount price should be lower than the selling price.')
             
             product.bulk_unit_name = bulk_unit_name if bulk_unit_name else ''
             product.bulk_unit_quantity = Decimal(bulk_unit_quantity) if bulk_unit_quantity else None
             product.bulk_unit_price = Decimal(bulk_unit_price) if bulk_unit_price else None
+            product.unit_barcode = unit_barcode
+            product.bulk_low_stock_threshold = Decimal(bulk_low_stock_threshold) if bulk_low_stock_threshold else None
+            product.bulk_discount_price = Decimal(bulk_discount_price) if bulk_discount_price else None
 
             # HS Code / excise
             product.hs_code = request.POST.get('hs_code', '')
             product.hs_code_description = request.POST.get('hs_code_description', '')
             product.is_excisable = request.POST.get('is_excisable', '0') == '1'
             product.excise_rate = Decimal(request.POST.get('excise_rate') or '0')
+            if product.excise_rate < 0:
+                messages.error(request, 'Excise Rate cannot be negative.')
+                ctx = _product_form_context(request)
+                ctx['product'] = product
+                return render(request, 'pos/product_form.html', ctx)
+            if not product.is_excisable:
+                product.excise_rate = Decimal('0')
+
+            # HS Code library reference
+            from .models import HSCode as _HSCode
+            hs_code_ref_id = request.POST.get('hs_code_ref', '').strip()
+            product.hs_code_ref = None
+            if hs_code_ref_id:
+                try:
+                    product.hs_code_ref = _HSCode.objects.get(pk=int(hs_code_ref_id))
+                except (_HSCode.DoesNotExist, ValueError):
+                    pass
 
             # Handle image upload
             image = request.FILES.get('image')
@@ -1072,14 +1456,16 @@ def product_edit(request, slug=None, pk=None):
             # Invalidate dashboard cache
             from django.core.cache import cache
             from .cache_utils import get_cache_key
-            from datetime import datetime
-            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+
+            cache_key = get_cache_key('dashboard', request.business.id, timezone.now().date())
             cache.delete(cache_key)
             
             messages.success(request, 'Product updated successfully!')
             return redirect('product_list', slug=request.business.slug)
         except ValueError as e:
             messages.error(request, f'Invalid price value: {str(e)}')
+        except InvalidOperation:
+            messages.error(request, 'Please enter valid numeric values for price and quantity fields.')
         except Exception as e:
             messages.error(request, f'Error updating product: {str(e)}')
 
@@ -1087,6 +1473,47 @@ def product_edit(request, slug=None, pk=None):
     ctx['product'] = product
     ctx['stock_history'] = product.stock_adjustments.order_by('-created_at')[:50]
     return render(request, 'pos/product_form.html', ctx)
+
+
+@business_required
+@require_POST
+def break_bulk(request, slug=None, pk=None):
+    """Record a break-bulk event: split bulk units into base units (audit trail only, stock unchanged)."""
+    product = get_object_or_404(Product, business=request.business, pk=pk)
+    
+    if not product.bulk_unit_name or not product.bulk_unit_quantity:
+        return JsonResponse({'error': 'This product does not have bulk unit configuration.'}, status=400)
+    
+    try:
+        bulk_units_to_break = Decimal(request.POST.get('bulk_units_to_break', '0'))
+    except Exception:
+        return JsonResponse({'error': 'Invalid bulk units value.'}, status=400)
+    
+    if bulk_units_to_break <= 0:
+        return JsonResponse({'error': 'Bulk units to break must be a positive number.'}, status=400)
+    
+    base_units = bulk_units_to_break * product.bulk_unit_quantity
+    if base_units > product.stock_quantity:
+        return JsonResponse({
+            'error': f'Cannot break {bulk_units_to_break} bulk units: only {product.stock_quantity} base units in stock.'
+        }, status=400)
+    
+    # Create audit record — stock quantity is unchanged (reclassification, not movement)
+    StockAdjustment.objects.create(
+        business=request.business,
+        product=product,
+        adjustment_type='bulk_break',
+        quantity_change=0,
+        previous_quantity=product.stock_quantity,
+        new_quantity=product.stock_quantity,
+        reason=f'Break bulk: {bulk_units_to_break} {product.bulk_unit_name}(s) broken into {base_units} base units. Performed by {request.user.username}.',
+    )
+    
+    messages.success(
+        request,
+        f'Recorded break of {bulk_units_to_break} {product.bulk_unit_name}(s) into {base_units} base units.'
+    )
+    return redirect('product_edit', slug=request.business.slug, pk=product.pk)
 
 
 @business_required
@@ -1467,7 +1894,8 @@ def pos_screen(request, slug=None):
             ).select_related('category', 'unit').only(
                 'id', 'name', 'unit_price', 'stock_quantity', 'barcode',
                 'product_code', 'category__name', 'unit__name', 'unit__abbreviation',
-                'tax_class', 'bulk_unit_name', 'bulk_unit_price', 'bulk_unit_quantity'
+                'tax_class', 'bulk_unit_name', 'bulk_unit_price', 'bulk_unit_quantity',
+                'unit_barcode', 'bulk_discount_price'
             )
             
             logger.info(f"   Base query count: {products_query.count()}")
@@ -1513,6 +1941,8 @@ def pos_screen(request, slug=None):
                     'bulk_unit_name': product.bulk_unit_name or '',
                     'bulk_unit_price': float(product.bulk_unit_price) if product.bulk_unit_price else 0,
                     'bulk_unit_quantity': product.bulk_unit_quantity or 1,
+                    'unit_barcode': product.unit_barcode or '',
+                    'bulk_discount_price': float(product.bulk_discount_price) if product.bulk_discount_price else None,
                 })
             
             response_data = {
@@ -1561,6 +1991,10 @@ def pos_screen(request, slug=None):
     total_products = Product.objects.filter(
         business=request.business
     ).count()
+
+    # M-Pesa config for POS display
+    from .models import BusinessSettings as _BizSettings
+    biz_settings = _BizSettings.get_settings(request.business)
     
     context = {
         'categories': categories,
@@ -1569,7 +2003,13 @@ def pos_screen(request, slug=None):
         'vat_rate': vat_rate,
         'total_products': total_products,
         'lazy_load': True,
-        'current_session': open_session,  # Add session info to context
+        'current_session': open_session,
+        'mpesa_enabled': biz_settings.mpesa_enabled,
+        'mpesa_type': biz_settings.mpesa_type,
+        'mpesa_shortcode': biz_settings.mpesa_shortcode,
+        'mpesa_phone': biz_settings.mpesa_phone,
+        'mpesa_account_name': biz_settings.mpesa_account_name,
+        'mpesa_account_reference': biz_settings.mpesa_account_reference,
     }
     return render(request, 'pos/pos_screen.html', context)
 
@@ -1602,6 +2042,8 @@ def complete_sale(request, slug=None):
             amount_paid = Decimal(request.POST.get('amount_paid', 0))
             change_given = Decimal(request.POST.get('change_given', 0))
             is_credit_sale = request.POST.get('is_credit_sale', '0') == '1'
+            promo_code = request.POST.get('promo_code', '').strip()
+            promo_id = request.POST.get('promo_id', '').strip()
             vat_rate = Decimal(getattr(settings, 'VAT_RATE', 16))
             
             if not items_data:
@@ -1631,17 +2073,23 @@ def complete_sale(request, slug=None):
             sale_items = []
             
             for item_str in items_data:
-                parts = item_str.split(',')
+                parts = item_str.split(',', 3)
                 product_id, quantity, price = parts[0], parts[1], parts[2]
                 item_note = ''
                 if len(parts) > 3:
                     from urllib.parse import unquote
                     item_note = unquote(parts[3])
                 product = Product.objects.get(id=product_id, business=request.business)
-                quantity = int(quantity)
+                quantity = Decimal(quantity)
                 unit_price = Decimal(price)  # This is tax-inclusive price
                 total_price = unit_price * quantity
-                
+                # Validate price and quantity before processing
+                if unit_price < 0 or quantity <= 0:
+                    messages.error(request, f'Invalid price or quantity for {product.name}.')
+                    return redirect('pos_screen', slug=request.business.slug)
+
+                total_price = unit_price * quantity
+
                 # Check stock availability
                 if not product.has_sufficient_stock(quantity):
                     messages.error(request, f'Insufficient stock for {product.name}. Available: {product.stock_quantity}')
@@ -1656,6 +2104,50 @@ def complete_sale(request, slug=None):
                     'note': item_note,
                 })
             
+            # ── Promotion evaluation ──────────────────────────────────────
+            applied_promotion = None
+            promo_discount_amount = Decimal('0')
+
+            if promo_code or promo_id:
+                from .promotion_service import PromotionService
+                cart_items_for_promo = [
+                    {
+                        'product_id': item['product'].id,
+                        'product_name': item['product'].name,
+                        'quantity': item['quantity'],
+                        'unit_price': item['unit_price'],
+                        'total_price': item['total_price'],
+                        'category_id': item['product'].category_id,
+                    }
+                    for item in sale_items
+                ]
+                promo_result = PromotionService.apply(
+                    request.business, cart_items_for_promo, total_inclusive,
+                    promo_code=promo_code,
+                )
+                if promo_result.promotion and not promo_result.error:
+                    applied_promotion = promo_result.promotion
+                    promo_discount_amount = promo_result.discount_amount
+                    # Override the cashier-entered discount with the promo discount
+                    discount_type = 'fixed'
+                    discount_value = promo_discount_amount
+
+            # Enforce discount ceiling for the current user's membership
+            # Promotions bypass the ceiling — they are manager-configured and
+            # should never be blocked by a cashier's max_discount_pct.
+            _membership = None
+            if not request.user.is_superuser and hasattr(request, 'business_membership'):
+                _membership = request.business_membership
+
+            if not applied_promotion:
+                # Only enforce ceiling for manually entered discounts
+                _allowed, _eff_pct, _err = check_discount_ceiling(
+                    _membership, discount_type, discount_value, total_inclusive
+                )
+                if not _allowed:
+                    from django.http import JsonResponse as _JsonResponse
+                    return _JsonResponse({'error': _err}, status=400)
+
             # Calculate discount on tax-inclusive amount
             if discount_type == 'percentage':
                 discount_amount = (total_inclusive * discount_value) / 100
@@ -1687,6 +2179,7 @@ def complete_sale(request, slug=None):
                     amount_paid=amount_paid,
                     change_given=change_given,
                     is_credit_sale=is_credit_sale,
+                    promotion=applied_promotion,
                 )
 
                 # Create sale items and deduct stock
@@ -1710,6 +2203,12 @@ def complete_sale(request, slug=None):
                         reason=f'Sale: {sale.invoice_number}'
                     )
 
+                # Increment promotion uses_count
+                if applied_promotion:
+                    from django.db.models import F
+                    from .models import Promotion as _Promo
+                    _Promo.objects.filter(pk=applied_promotion.pk).update(uses_count=F('uses_count') + 1)
+
                 # Process payment methods
                 from .models import PaymentMethod
                 if payments_data:
@@ -1730,6 +2229,13 @@ def complete_sale(request, slug=None):
                                 reference_number=reference
                             )
                             total_payment_allocated += payment_amount
+
+                # Recalculate change_given server-side — frontend value may differ
+                # due to cash-payment truncation
+                actual_change = max(Decimal('0'), amount_paid - sale.total)
+                if sale.change_given != actual_change:
+                    sale.change_given = actual_change
+                    sale.save(update_fields=['change_given'])
 
                 # Handle credit sale — validate and update customer balance
                 if is_credit_sale and customer:
@@ -1769,9 +2275,24 @@ def complete_sale(request, slug=None):
                     else:
                         messages.success(request, f'Sale completed! Invoice: {sale.invoice_number}')
 
+            # Log sale activity
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='sale',
+                description=f'Sale completed: Invoice {sale.invoice_number}, Total KES {sale.total}',
+                model_name='Sale',
+                object_id=sale.pk,
+                request=request,
+                business=request.business,
+                entity_type='Sale',
+                entity_id=str(sale.pk),
+                operation_type='complete_sale',
+            )
+
             # Invalidate dashboard cache after sale
             from django.core.cache import cache
             from .cache_utils import get_cache_key
+
             cache_key = get_cache_key('dashboard', request.business.id, timezone.localdate())
             cache.delete(cache_key)
             
@@ -1836,6 +2357,7 @@ def thermal_receipt(request, slug, pk):
         'business_settings': business_settings,
     })
 
+# ── Held Orders ───────────────────────────────────────────────────────────────
 
 
 @login_required
@@ -1949,9 +2471,9 @@ def sales_report(request, slug=None):
         try:
             filter_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
-            filter_date = datetime.now().date()
+            filter_date = timezone.now().date()
     else:
-        filter_date = datetime.now().date()
+        filter_date = timezone.now().date()
     
     # Get sales for the date - filter by business
     sales = Sale.objects.filter(business=request.business, date__date=filter_date).prefetch_related('items')
@@ -1988,21 +2510,21 @@ def sales_list(request, slug=None):
     
     # Quick date range filters
     if date_range == 'today':
-        today = datetime.now().date()
+        today = timezone.now().date()
         sales = sales.filter(date__date=today)
     elif date_range == 'yesterday':
-        yesterday = datetime.now().date() - timedelta(days=1)
+        yesterday = timezone.now().date() - timedelta(days=1)
         sales = sales.filter(date__date=yesterday)
     elif date_range == 'this_week':
-        today = datetime.now().date()
+        today = timezone.now().date()
         start_of_week = today - timedelta(days=today.weekday())
         sales = sales.filter(date__date__gte=start_of_week)
     elif date_range == 'this_month':
-        today = datetime.now().date()
+        today = timezone.now().date()
         start_of_month = today.replace(day=1)
         sales = sales.filter(date__date__gte=start_of_month)
     elif date_range == 'last_month':
-        today = datetime.now().date()
+        today = timezone.now().date()
         first_of_this_month = today.replace(day=1)
         last_month_end = first_of_this_month - timedelta(days=1)
         last_month_start = last_month_end.replace(day=1)
@@ -2160,6 +2682,27 @@ def api_create_brand(request, slug=None):
     return JsonResponse({'id': brand.pk, 'name': brand.name})
 
 
+@login_required
+@business_required
+def api_create_unit(request, slug=None):
+    """AJAX: Quick-create a unit of measurement from the product form"""
+    from django.http import JsonResponse
+    from .models import UnitOfMeasurement
+    import json
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    data = json.loads(request.body)
+    name = data.get('name', '').strip()
+    abbreviation = data.get('abbreviation', '').strip()
+    if not name or not abbreviation:
+        return JsonResponse({'error': 'Name and abbreviation required'}, status=400)
+    unit, created = UnitOfMeasurement.objects.get_or_create(
+        business=request.business, name=name,
+        defaults={'abbreviation': abbreviation}
+    )
+    return JsonResponse({'id': unit.pk, 'name': unit.name, 'abbreviation': unit.abbreviation})
+
+
 @business_required
 def search_product_by_code(request, slug=None):
     """API endpoint to search product by barcode/product code"""
@@ -2169,7 +2712,41 @@ def search_product_by_code(request, slug=None):
         return JsonResponse({'error': 'No code provided'}, status=400)
     
     try:
-        product = Product.objects.get(business=request.business, product_code=code)
+        products = Product.objects.filter(
+            Q(barcode=code) | Q(unit_barcode=code) | Q(product_code=code),
+            business=request.business
+        ).select_related('category')
+
+        count = products.count()
+
+        if count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'Product with code "{code}" not found'
+            }, status=404)
+
+        if count > 1:
+            return JsonResponse({
+                'ambiguous': True,
+                'products': [
+                    {'id': p.id, 'name': p.name, 'product_code': p.product_code}
+                    for p in products
+                ]
+            }, status=200)
+
+        product = products.first()
+
+        # Determine scan type
+        if product.barcode == code and product.unit_barcode != code:
+            scan_type = 'bulk'
+            quantity_to_add = float(product.bulk_unit_quantity) if product.bulk_unit_quantity else 1
+        elif product.unit_barcode == code:
+            scan_type = 'unit'
+            quantity_to_add = 1
+        else:
+            scan_type = 'unit'
+            quantity_to_add = 1
+
         return JsonResponse({
             'success': True,
             'product': {
@@ -2178,16 +2755,18 @@ def search_product_by_code(request, slug=None):
                 'product_code': product.product_code,
                 'price': float(product.unit_price),
                 'category': product.category.name if product.category else None,
-                'stock_quantity': product.stock_quantity,
+                'stock_quantity': float(product.stock_quantity),
                 'in_stock': not product.is_out_of_stock(),
-                'tax_class': product.tax_class
+                'tax_class': product.tax_class,
+                'scan_type': scan_type,
+                'quantity_to_add': quantity_to_add,
+                'bulk_unit_quantity': float(product.bulk_unit_quantity) if product.bulk_unit_quantity else 1,
+                'bulk_discount_price': float(product.bulk_discount_price) if product.bulk_discount_price else None,
+                'has_bulk': bool(product.bulk_unit_name and product.bulk_unit_price),
+                'bulk_unit_name': product.bulk_unit_name or '',
+                'bulk_unit_price': float(product.bulk_unit_price) if product.bulk_unit_price else 0,
             }
         })
-    except Product.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'error': f'Product with code "{code}" not found'
-        }, status=404)
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -2286,12 +2865,16 @@ def stock_adjust(request, slug=None, pk=None):
             # For positive adjustments (return, correction with +)
             if adjustment_type in ['return', 'correction'] and quantity_change > 0:
                 product.add_stock(quantity_change)
-            # For negative adjustments (damage, correction with -)
+            # For negative adjustments (damage, expired, correction with -)
             else:
                 if not product.has_sufficient_stock(abs(quantity_change)):
                     messages.error(request, 'Cannot deduct more than available stock!')
                     return redirect('stock_adjust', slug=request.business.slug, pk=pk)
                 product.deduct_stock(abs(quantity_change))
+                # For expired items, clear the expiry date after write-off
+                if adjustment_type == 'expired':
+                    product.expiry_date = None
+                    product.save(update_fields=['expiry_date'])
             
             # Create adjustment record
             StockAdjustment.objects.create(
@@ -2306,8 +2889,8 @@ def stock_adjust(request, slug=None, pk=None):
             # Invalidate dashboard cache
             from django.core.cache import cache
             from .cache_utils import get_cache_key
-            from datetime import datetime
-            cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+
+            cache_key = get_cache_key('dashboard', request.business.id, timezone.now().date())
             cache.delete(cache_key)
             
             messages.success(request, f'Stock adjusted successfully! New quantity: {product.stock_quantity}')
@@ -2335,6 +2918,9 @@ def stock_history(request, slug=None, pk=None):
 @business_required
 def low_stock_alert(request, slug=None):
     """View products with low or out of stock"""
+    import logging
+    logger = logging.getLogger(__name__)
+
     low_stock = Product.objects.filter(
         business=request.business,
         stock_quantity__lte=models.F('low_stock_threshold'),
@@ -2345,10 +2931,39 @@ def low_stock_alert(request, slug=None):
         business=request.business,
         stock_quantity=0
     ).select_related('category')
-    
+
+    # Bulk-level low stock: products where stock_quantity / bulk_unit_quantity <= bulk_low_stock_threshold
+    # Expressed as: stock_quantity <= bulk_low_stock_threshold * bulk_unit_quantity
+    from django.db.models import ExpressionWrapper, FloatField
+    bulk_low_stock_qs = Product.objects.filter(
+        business=request.business,
+        bulk_low_stock_threshold__isnull=False,
+        bulk_unit_quantity__isnull=False,
+        bulk_unit_quantity__gt=0,
+        stock_quantity__gt=0,
+    ).annotate(
+        bulk_stock=ExpressionWrapper(
+            models.F('stock_quantity') / models.F('bulk_unit_quantity'),
+            output_field=FloatField()
+        )
+    ).filter(bulk_stock__lte=models.F('bulk_low_stock_threshold')).select_related('category')
+
+    # Log warning for misconfigured products (threshold set but no bulk_unit_quantity)
+    misconfigured = Product.objects.filter(
+        business=request.business,
+        bulk_low_stock_threshold__isnull=False,
+    ).filter(
+        models.Q(bulk_unit_quantity__isnull=True) | models.Q(bulk_unit_quantity=0)
+    )
+    for p in misconfigured:
+        logger.warning(
+            f"Product {p.pk} ({p.name}) has bulk_low_stock_threshold set but bulk_unit_quantity is zero or null."
+        )
+
     context = {
         'low_stock_products': low_stock,
         'out_of_stock_products': out_of_stock,
+        'bulk_low_stock_products': bulk_low_stock_qs,
     }
     return render(request, 'pos/low_stock_alert.html', context)
 
@@ -2375,7 +2990,7 @@ def supplier_list(request, slug=None):
 def supplier_create(request, slug=None):
     """Create a new supplier"""
     if request.method == 'POST':
-        name = request.POST.get('name')
+        name = request.POST.get('name', '').strip()
         contact_person = request.POST.get('contact_person', '')
         email = request.POST.get('email', '').strip()
         phone = request.POST.get('phone', '')
@@ -2385,7 +3000,7 @@ def supplier_create(request, slug=None):
         
         if not name:
             messages.error(request, 'Supplier name is required!')
-            return render(request, 'pos/supplier_form.html')
+            return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
         
         if email:
             from django.core.validators import validate_email
@@ -2395,22 +3010,30 @@ def supplier_create(request, slug=None):
             except DjangoValidationError:
                 messages.error(request, f'"{email}" is not a valid email address.')
                 return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
+
+        if Supplier.objects.filter(business=request.business, name__iexact=name).exists():
+            messages.error(request, f'Supplier "{name}" already exists for this business.')
+            return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
         
-        Supplier.objects.create(
-            business=request.business,
-            name=name,
-            contact_person=contact_person,
-            email=email,
-            phone=phone,
-            address=address,
-            notes=notes,
-            is_active=is_active
-        )
+        try:
+            Supplier.objects.create(
+                business=request.business,
+                name=name,
+                contact_person=contact_person,
+                email=email,
+                phone=phone,
+                address=address,
+                notes=notes,
+                is_active=is_active
+            )
+        except IntegrityError:
+            messages.error(request, f'Supplier "{name}" already exists for this business.')
+            return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
         
         messages.success(request, f'Supplier "{name}" created successfully!')
         return redirect('supplier_list', slug=request.business.slug)
     
-    return render(request, 'pos/supplier_form.html')
+    return render(request, 'pos/supplier_form.html', {'form_data': {}})
 
 
 @business_required
@@ -2419,7 +3042,7 @@ def supplier_edit(request, slug=None, pk=None):
     supplier = get_object_or_404(Supplier, business=request.business, pk=pk)
     
     if request.method == 'POST':
-        supplier.name = request.POST.get('name')
+        supplier.name = request.POST.get('name', '').strip()
         supplier.contact_person = request.POST.get('contact_person', '')
         supplier.email = request.POST.get('email', '').strip()
         supplier.phone = request.POST.get('phone', '')
@@ -2438,9 +3061,21 @@ def supplier_edit(request, slug=None, pk=None):
                 validate_email(supplier.email)
             except DjangoValidationError:
                 messages.error(request, f'"{supplier.email}" is not a valid email address.')
-                return render(request, 'pos/supplier_form.html', {'supplier': supplier})
-        
-        supplier.save()
+                return render(request, 'pos/supplier_form.html', {'supplier': supplier, 'form_data': request.POST})
+
+        if Supplier.objects.filter(
+            business=request.business,
+            name__iexact=supplier.name
+        ).exclude(pk=supplier.pk).exists():
+            messages.error(request, f'Supplier "{supplier.name}" already exists for this business.')
+            return render(request, 'pos/supplier_form.html', {'supplier': supplier, 'form_data': request.POST})
+
+        try:
+            supplier.save()
+        except IntegrityError:
+            messages.error(request, f'Supplier "{supplier.name}" already exists for this business.')
+            return render(request, 'pos/supplier_form.html', {'supplier': supplier, 'form_data': request.POST})
+
         messages.success(request, f'Supplier "{supplier.name}" updated successfully!')
         return redirect('supplier_list', slug=request.business.slug)
     
@@ -2499,22 +3134,64 @@ def supplier_delete(request, slug=None, pk=None):
 @business_required
 def purchase_list(request, slug=None):
     """List all purchases"""
-    purchases = Purchase.objects.filter(business=request.business).select_related('supplier').all()
-    
-    # Filter by status if provided
-    status_filter = request.GET.get('status')
+    purchases = Purchase.objects.filter(business=request.business).select_related('supplier')
+
+    # Filters
+    status_filter = request.GET.get('status', '').strip()
+    supplier_filter = request.GET.get('supplier', '').strip()
+    from_date = request.GET.get('from_date', '').strip()
+    to_date = request.GET.get('to_date', '').strip()
+    search = request.GET.get('q', '').strip()
+    sort_by = request.GET.get('sort', 'newest').strip()
+
     if status_filter:
         purchases = purchases.filter(status=status_filter)
-    
+
+    if supplier_filter:
+        purchases = purchases.filter(supplier_id=supplier_filter)
+
+    if from_date:
+        try:
+            purchases = purchases.filter(date__date__gte=datetime.strptime(from_date, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    if to_date:
+        try:
+            purchases = purchases.filter(date__date__lte=datetime.strptime(to_date, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    if search:
+        purchases = purchases.filter(
+            models.Q(purchase_number__icontains=search) |
+            models.Q(supplier__name__icontains=search)
+        )
+
+    sort_map = {
+        'newest': '-date',
+        'oldest': 'date',
+        'amount_desc': '-total_amount',
+        'amount_asc': 'total_amount',
+    }
+    purchases = purchases.order_by(sort_map.get(sort_by, '-date'))
+
     context = {
         'purchases': purchases,
         'status_filter': status_filter,
+        'supplier_filter': supplier_filter,
+        'from_date': from_date,
+        'to_date': to_date,
+        'search': search,
+        'sort_by': sort_by,
+        'suppliers': Supplier.objects.filter(business=request.business, is_active=True).order_by('name'),
     }
     return render(request, 'pos/purchase_list.html', context)
 
 
+@login_required
 @business_required
-@business_required
+@can_manage_purchases
 def purchase_create(request, slug=None):
     """Create a new purchase order"""
     if request.method == 'POST':
@@ -2538,73 +3215,92 @@ def purchase_create(request, slug=None):
             messages.error(request, 'Please add at least one product!')
             return redirect('purchase_create', slug=request.business.slug)
 
-        # Create purchase as draft first
+        if not (len(product_ids) == len(quantities) == len(unit_costs)):
+            messages.error(request, 'Invalid item data submitted. Please review line items and try again.')
+            return redirect('purchase_create', slug=request.business.slug)
+
         supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
-        purchase = Purchase.objects.create(
-            business=request.business,
-            supplier=supplier,
-            expected_delivery=expected_delivery if expected_delivery else None,
-            notes=notes,
-            status='draft',
-            created_by=request.user,
-        )
+        if not supplier.is_active:
+            messages.error(request, 'Cannot create a purchase order for an inactive supplier.')
+            return redirect('purchase_create', slug=request.business.slug)
 
-        # Add purchase items and calculate totals
-        subtotal = Decimal('0.00')
-        total_discount = Decimal('0.00')
-        items_added = 0
-        for i, product_id in enumerate(product_ids):
-            if product_id and quantities[i] and unit_costs[i]:
-                product = get_object_or_404(Product, pk=product_id, business=request.business)
-                quantity = int(quantities[i])
-                unit_cost = Decimal(unit_costs[i])
-                discount = Decimal(discounts[i]) if i < len(discounts) and discounts[i] else Decimal('0')
-                description = descriptions[i] if i < len(descriptions) else ''
-
-                if quantity <= 0 or unit_cost < 0:
-                    purchase.delete()
-                    messages.error(request, 'All quantities must be greater than zero and costs cannot be negative!')
-                    return redirect('purchase_create', slug=request.business.slug)
-
-                line_gross = quantity * unit_cost
-                line_discount = line_gross * (discount / Decimal('100'))
-
-                PurchaseItem.objects.create(
-                    purchase=purchase,
-                    product=product,
-                    description=description,
-                    quantity=quantity,
-                    unit_cost=unit_cost,
-                    discount=discount,
+        try:
+            with transaction.atomic():
+                purchase = Purchase.objects.create(
+                    business=request.business,
+                    supplier=supplier,
+                    expected_delivery=expected_delivery if expected_delivery else None,
+                    notes=notes,
+                    status='draft',
+                    created_by=request.user,
                 )
 
-                subtotal += line_gross
-                total_discount += line_discount
-                items_added += 1
+                subtotal = Decimal('0.00')
+                total_discount = Decimal('0.00')
+                items_added = 0
 
-        if items_added == 0:
-            purchase.delete()
-            messages.error(request, 'Please add at least one valid item to the purchase!')
+                for i, product_id in enumerate(product_ids):
+                    qty_raw = quantities[i].strip() if i < len(quantities) and quantities[i] else ''
+                    cost_raw = unit_costs[i].strip() if i < len(unit_costs) and unit_costs[i] else ''
+                    discount_raw = discounts[i].strip() if i < len(discounts) and discounts[i] else '0'
+                    description = descriptions[i] if i < len(descriptions) else ''
+
+                    if not product_id:
+                        continue
+
+                    if not qty_raw or not cost_raw:
+                        raise ValueError('Each selected product must have quantity and unit cost.')
+
+                    product = get_object_or_404(Product, pk=product_id, business=request.business)
+
+                    try:
+                        quantity = int(qty_raw)
+                        unit_cost = Decimal(cost_raw)
+                        discount = Decimal(discount_raw)
+                    except (ValueError, InvalidOperation):
+                        raise ValueError(f'Invalid quantity/cost/discount value for {product.name}.')
+
+                    if quantity <= 0 or unit_cost <= 0:
+                        raise ValueError('All quantities and unit costs must be greater than zero.')
+                    if discount < 0 or discount > 100:
+                        raise ValueError('Discount must be between 0 and 100 percent.')
+
+                    line_gross = quantity * unit_cost
+                    line_discount = line_gross * (discount / Decimal('100'))
+
+                    PurchaseItem.objects.create(
+                        purchase=purchase,
+                        product=product,
+                        description=description,
+                        quantity=quantity,
+                        unit_cost=unit_cost,
+                        discount=discount,
+                    )
+
+                    subtotal += line_gross
+                    total_discount += line_discount
+                    items_added += 1
+
+                if items_added == 0:
+                    raise ValueError('Please add at least one valid item to the purchase.')
+
+                if subtotal <= 0:
+                    raise ValueError('Purchase total must be greater than zero.')
+
+                purchase.subtotal = subtotal
+                purchase.discount_amount = total_discount
+                purchase.tax_amount = Decimal('0.00')
+                purchase.total_amount = subtotal - total_discount + purchase.tax_amount
+
+                if action == 'submit':
+                    purchase.status = 'pending_approval'
+                    purchase.submitted_by = request.user
+                    purchase.submitted_at = timezone.now()
+
+                purchase.save()
+        except ValueError as e:
+            messages.error(request, str(e))
             return redirect('purchase_create', slug=request.business.slug)
-
-        if subtotal <= 0:
-            purchase.delete()
-            messages.error(request, 'Purchase total must be greater than zero!')
-            return redirect('purchase_create', slug=request.business.slug)
-
-        # Update purchase totals
-        purchase.subtotal = subtotal
-        purchase.discount_amount = total_discount
-        purchase.tax_amount = Decimal('0.00')
-        purchase.total_amount = subtotal - total_discount + purchase.tax_amount
-
-        # Handle action: submit for approval immediately?
-        if action == 'submit':
-            purchase.status = 'pending_approval'
-            purchase.submitted_by = request.user
-            purchase.submitted_at = timezone.now()
-
-        purchase.save()
 
         if action == 'submit':
             messages.success(request, f'Purchase order {purchase.purchase_number} submitted for approval.')
@@ -2638,18 +3334,35 @@ def purchase_detail(request, slug=None, pk=None):
     """View purchase order details"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     items = purchase.items.select_related('product').all()
+
+    remaining_damaged_qty = 0
+    for item in items:
+        already_returned = GoodsReturnedNoteItem.objects.filter(
+            grn__business=request.business,
+            grn__related_purchase_id=purchase.id,
+            product_id=item.product_id,
+        ).exclude(grn__status='cancelled').aggregate(total=Sum('quantity'))['total'] or 0
+        remaining_damaged_qty += max(item.quantity_damaged - already_returned, 0)
     
     context = {
         'purchase': purchase,
         'items': items,
+        'can_create_return_note': remaining_damaged_qty > 0,
+        'remaining_damaged_qty': remaining_damaged_qty,
     }
     return render(request, 'pos/purchase_detail.html', context)
 
 
+@login_required
 @business_required
+@can_manage_purchases
 def purchase_receive(request, slug=None, pk=None):
     """Enhanced purchase receiving with item-level details"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
+
+    items = list(purchase.items.select_related('product').all())
+    for item in items:
+        item.remaining_to_receive = max(item.quantity - item.quantity_received - item.quantity_damaged, 0)
 
     if purchase.status == 'received':
         messages.warning(request, 'This purchase has already been received!')
@@ -2671,12 +3384,23 @@ def purchase_receive(request, slug=None, pk=None):
         today = timezone.now().date()
         one_week_later = today + timedelta(days=7)
         
-        for item in purchase.items.all():
-            qty_received = int(request.POST.get(f'received_{item.id}', item.quantity))
-            qty_damaged = int(request.POST.get(f'damaged_{item.id}', 0))
+        has_any_item_update = False
+
+        for item in items:
+            remaining_qty = max(item.quantity - item.quantity_received - item.quantity_damaged, 0)
+            qty_received_raw = request.POST.get(f'received_{item.id}', remaining_qty)
+            qty_damaged_raw = request.POST.get(f'damaged_{item.id}', 0)
             notes = request.POST.get(f'notes_{item.id}', '').strip()
             expiry_date_str = request.POST.get(f'expiry_{item.id}', '').strip()
             batch_number = request.POST.get(f'batch_{item.id}', '').strip()
+
+            try:
+                qty_received = int(qty_received_raw)
+                qty_damaged = int(qty_damaged_raw)
+            except (TypeError, ValueError):
+                messages.error(request, f'{item.product.name}: quantities must be valid whole numbers!')
+                has_errors = True
+                break
             
             # Validate quantities
             if qty_received < 0 or qty_damaged < 0:
@@ -2684,10 +3408,16 @@ def purchase_receive(request, slug=None, pk=None):
                 has_errors = True
                 break
             
-            if qty_received + qty_damaged > item.quantity:
-                messages.error(request, f'{item.product.name}: Received + Damaged ({qty_received + qty_damaged}) cannot exceed ordered quantity ({item.quantity})!')
+            if qty_received + qty_damaged > remaining_qty:
+                messages.error(
+                    request,
+                    f'{item.product.name}: Received + Damaged ({qty_received + qty_damaged}) cannot exceed remaining quantity ({remaining_qty})!'
+                )
                 has_errors = True
                 break
+
+            if qty_received > 0 or qty_damaged > 0:
+                has_any_item_update = True
             
             # Validate expiry date
             expiry_date_obj = None
@@ -2722,6 +3452,10 @@ def purchase_receive(request, slug=None, pk=None):
             })
         
         if not has_errors:
+            if not has_any_item_update:
+                messages.error(request, 'No quantities were entered for receiving. Please receive at least one item.')
+                return redirect('purchase_receive', slug=request.business.slug, pk=pk)
+
             # Show expiry warnings if any
             if expiry_warnings:
                 for warning in expiry_warnings:
@@ -2734,23 +3468,42 @@ def purchase_receive(request, slug=None, pk=None):
                 # Invalidate dashboard cache
                 from django.core.cache import cache
                 from .cache_utils import get_cache_key
-                from datetime import datetime
-                cache_key = get_cache_key('dashboard', request.business.id, datetime.now().date())
+
+                cache_key = get_cache_key('dashboard', request.business.id, timezone.now().date())
                 cache.delete(cache_key)
 
-                # Auto-create Goods Received Note document
+                # Auto-create or refresh Goods Received Note document
                 try:
-                    grn_doc = GoodsReceivedNote.objects.create(
+                    grn_doc, _created = GoodsReceivedNote.objects.get_or_create(
                         business=request.business,
                         purchase=purchase,
-                        supplier=purchase.supplier,
-                        received_date=timezone.now().date(),
-                        received_by=request.user,
-                        delivery_note_number=request.POST.get('delivery_note_number', ''),
-                        vehicle_number=request.POST.get('vehicle_number', ''),
-                        driver_name=request.POST.get('driver_name', ''),
-                        notes=request.POST.get('receiving_notes', ''),
+                        defaults={
+                            'supplier': purchase.supplier,
+                            'received_date': timezone.now().date(),
+                            'received_by': request.user,
+                            'delivery_note_number': request.POST.get('delivery_note_number', ''),
+                            'vehicle_number': request.POST.get('vehicle_number', ''),
+                            'driver_name': request.POST.get('driver_name', ''),
+                            'notes': request.POST.get('receiving_notes', ''),
+                        }
                     )
+
+                    # Refresh GRN header fields from latest receive event.
+                    grn_doc.supplier = purchase.supplier
+                    grn_doc.received_date = timezone.now().date()
+                    grn_doc.received_by = request.user
+                    if request.POST.get('delivery_note_number'):
+                        grn_doc.delivery_note_number = request.POST.get('delivery_note_number', '')
+                    if request.POST.get('vehicle_number'):
+                        grn_doc.vehicle_number = request.POST.get('vehicle_number', '')
+                    if request.POST.get('driver_name'):
+                        grn_doc.driver_name = request.POST.get('driver_name', '')
+                    if request.POST.get('receiving_notes'):
+                        grn_doc.notes = request.POST.get('receiving_notes', '')
+
+                    # Rebuild GRN items from current cumulative purchase item state.
+                    grn_doc.items.all().delete()
+
                     total_ordered = total_received = total_damaged = 0
                     total_value = Decimal('0.00')
                     for item in purchase.items.all():
@@ -2782,7 +3535,12 @@ def purchase_receive(request, slug=None, pk=None):
 
                 # Count discrepancies
                 total_damaged = sum(d['quantity_damaged'] for d in receiving_data['items'])
-                if total_damaged > 0:
+                if purchase.status == 'partially_received':
+                    messages.warning(
+                        request,
+                        f'Purchase {purchase.purchase_number} partially received. Remaining quantities are still outstanding.'
+                    )
+                elif total_damaged > 0:
                     messages.warning(request, f'Purchase {purchase.purchase_number} received with {total_damaged} damaged/missing items. Damage adjustments created.')
                 else:
                     messages.success(request, f'Purchase {purchase.purchase_number} received successfully! Stock updated.')
@@ -2792,12 +3550,14 @@ def purchase_receive(request, slug=None, pk=None):
     
     context = {
         'purchase': purchase,
+        'items': items,
     }
     return render(request, 'pos/purchase_receive.html', context)
-    return render(request, 'pos/purchase_receive_confirm.html', context)
 
 
+@login_required
 @business_required
+@can_manage_purchases
 def purchase_cancel(request, slug=None, pk=None):
     """Cancel a purchase order with proper validation and audit trail"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
@@ -2873,6 +3633,7 @@ def purchase_cancel(request, slug=None, pk=None):
 @login_required
 @business_required
 @can_manage_purchases
+@require_POST
 def purchase_submit(request, slug=None, pk=None):
     """Submit a draft PO for approval"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
@@ -2890,6 +3651,7 @@ def purchase_submit(request, slug=None, pk=None):
 @login_required
 @business_required
 @can_manage_purchases
+@require_POST
 def purchase_approve(request, slug=None, pk=None):
     """Approve a PO that is pending approval"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
@@ -2907,6 +3669,7 @@ def purchase_approve(request, slug=None, pk=None):
 @login_required
 @business_required
 @can_manage_purchases
+@require_POST
 def purchase_send_to_supplier(request, slug=None, pk=None):
     """Mark PO as sent to supplier and optionally email it"""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
@@ -2929,6 +3692,7 @@ def purchase_send_to_supplier(request, slug=None, pk=None):
 @login_required
 @business_required
 @can_manage_purchases
+@require_POST
 def purchase_duplicate(request, slug=None, pk=None):
     """Duplicate a PO as a new draft"""
     original = get_object_or_404(Purchase, business=request.business, pk=pk)
@@ -3092,6 +3856,7 @@ def update_expiry(request, slug=None, pk=None):
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 
+@ratelimit(key='ip', rate='3/m', method='POST', block=True)
 def login_view(request):
     """User login"""
     # TEST MODE: Auto-login for testing (REMOVE IN PRODUCTION!)
@@ -3198,6 +3963,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.urls import reverse
 
+@ratelimit(key='ip', rate='2/m', method='POST', block=True)
 def password_reset_request(request):
     """Request password reset via email"""
     if request.method == 'POST':
@@ -3252,6 +4018,7 @@ Marid POS Team'''
     return render(request, 'pos/password_reset_request.html')
 
 
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def password_reset_confirm(request, uidb64, token):
     """Confirm password reset with token"""
     try:
@@ -3268,6 +4035,8 @@ def password_reset_confirm(request, uidb64, token):
             if password1 and password2:
                 if password1 == password2:
                     if len(password1) >= 8:
+                        from .models import PasswordHistory
+                        PasswordHistory.record(user, password1)
                         user.set_password(password1)
                         user.save()
                         
@@ -3397,6 +4166,14 @@ def user_list(request, slug):
 
 
 @login_required
+@business_required
+@business_required
+@manager_required
+def hr_hub(request, slug=None):
+    """HR Module hub page"""
+    return render(request, 'pos/hr_hub.html', {})
+
+
 @business_required
 @manager_required
 def roles_permissions(request, slug):
@@ -3627,6 +4404,8 @@ def user_edit(request, slug, pk):
         if new_password:
             password_confirm = request.POST.get('password_confirm')
             if new_password == password_confirm:
+                from .models import PasswordHistory
+                PasswordHistory.record(user, new_password)
                 user.set_password(new_password)
             else:
                 messages.error(request, 'Passwords do not match!')
@@ -3763,6 +4542,8 @@ def user_profile(request, slug=None):
                     return redirect('user_profile', slug=slug)
                 return redirect('business_list')
             
+            from .models import PasswordHistory
+            PasswordHistory.record(user, new_password)
             user.set_password(new_password)
             messages.success(request, 'Password changed successfully! Please login again.')
         
@@ -3808,7 +4589,6 @@ def user_profile(request, slug=None):
 
 from .models import BusinessSettings
 
-@login_required
 @login_required
 @manager_required
 def business_settings(request, slug=None):
@@ -3872,6 +4652,14 @@ def business_settings(request, slug=None):
         settings.theme_dark = request.POST.get('theme_dark', '#1a1514')
         settings.theme_light = request.POST.get('theme_light', '#d5d3d4')
         settings.theme_accent = request.POST.get('theme_accent', '#cd8a4c')
+
+        # M-Pesa Configuration
+        settings.mpesa_enabled = request.POST.get('mpesa_enabled') == 'on'
+        settings.mpesa_type = request.POST.get('mpesa_type', 'paybill')
+        settings.mpesa_shortcode = request.POST.get('mpesa_shortcode', '').strip()
+        settings.mpesa_phone = request.POST.get('mpesa_phone', '').strip()
+        settings.mpesa_account_name = request.POST.get('mpesa_account_name', '').strip()
+        settings.mpesa_account_reference = request.POST.get('mpesa_account_reference', '').strip()
         
         settings.updated_by = request.user
         
@@ -3909,61 +4697,161 @@ def business_settings(request, slug=None):
 @manager_required
 def activity_log(request, slug=None):
     """View activity logs for this business"""
-    # Get users in this business
-    memberships = request.business.memberships.filter(is_active=True).select_related('user')
-    business_user_ids = memberships.values_list('user_id', flat=True)
-    
-    # Filter logs by users in this business
-    logs = ActivityLog.objects.filter(user_id__in=business_user_ids).select_related('user')
-    
-    # Filter by user
-    user_filter = request.GET.get('user')
+    from datetime import timedelta
+    from django.core.paginator import Paginator
+    from django.db.models import Count, Q
+
+    logs = ActivityLog.objects.filter(business=request.business).select_related('user', 'branch')
+
+    # --- Filters ---
+    user_filter = request.GET.get('user', '').strip()
+    action_filter = request.GET.get('action', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    branch_filter = request.GET.get('branch', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+    search_query = request.GET.get('q', '').strip()
+
     if user_filter:
         logs = logs.filter(user_id=user_filter)
-    
-    # Filter by action type
-    action_filter = request.GET.get('action')
     if action_filter:
         logs = logs.filter(action_type=action_filter)
-    
-    # Filter by date
-    date_filter = request.GET.get('date')
-    if date_filter:
+    if status_filter:
+        logs = logs.filter(status=status_filter)
+    if branch_filter:
+        logs = logs.filter(branch_id=branch_filter)
+    if date_from:
         try:
-            filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
-            logs = logs.filter(timestamp__date=filter_date)
+            logs = logs.filter(timestamp__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
         except ValueError:
             pass
-    
-    # Get log statistics
-    from datetime import timedelta
+    if date_to:
+        try:
+            logs = logs.filter(timestamp__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+    if search_query:
+        logs = logs.filter(
+            Q(description__icontains=search_query) |
+            Q(user__username__icontains=search_query) |
+            Q(user__first_name__icontains=search_query) |
+            Q(user__last_name__icontains=search_query) |
+            Q(entity_type__icontains=search_query) |
+            Q(ip_address__icontains=search_query)
+        )
+
+    # --- CSV Export ---
+    if request.GET.get('export') == 'csv':
+        import csv
+        from django.http import HttpResponse as _HttpResponse
+        response = _HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="activity_log_{request.business.slug}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Timestamp', 'User', 'Action', 'Status', 'Description', 'Entity', 'IP Address', 'Branch'])
+        for log in logs[:5000]:  # cap at 5000 rows
+            writer.writerow([
+                log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                log.user.username if log.user else 'Unknown',
+                log.get_action_type_display(),
+                log.status,
+                log.description,
+                f'{log.entity_type} #{log.entity_id}' if log.entity_type else '',
+                log.ip_address or '',
+                log.branch.name if log.branch else '',
+            ])
+        ActivityLog.log_activity(
+            user=request.user,
+            action_type='export',
+            description='Exported activity log to CSV',
+            request=request,
+            business=request.business,
+            operation_type='export_activity_log',
+        )
+        return response
+
+    # --- Statistics ---
     total_logs = logs.count()
+    logs_today = logs.filter(timestamp__date=timezone.localdate()).count()
+    logs_7_days = logs.filter(timestamp__gte=timezone.now() - timedelta(days=7)).count()
     logs_30_days = logs.filter(timestamp__gte=timezone.now() - timedelta(days=30)).count()
-    logs_90_days = logs.filter(timestamp__gte=timezone.now() - timedelta(days=90)).count()
-    logs_older_90 = logs.filter(timestamp__lt=timezone.now() - timedelta(days=90)).count()
-    
-    # Pagination
-    from django.core.paginator import Paginator
-    paginator = Paginator(logs, 50)  # Show 50 logs per page
+
+    # Action breakdown for chart
+    action_breakdown = (
+        ActivityLog.objects.filter(business=request.business)
+        .values('action_type')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:8]
+    )
+
+    # --- Pagination ---
+    paginator = Paginator(logs, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Get users in this business for filter
-    users = User.objects.filter(id__in=business_user_ids)
-    
+
+    # Users and branches for filter dropdowns
+    users = User.objects.filter(activity_logs__business=request.business).distinct().order_by('username')
+    from .models import Branch
+    branches = Branch.objects.filter(business=request.business, is_active=True).order_by('name')
+
     context = {
         'page_obj': page_obj,
         'users': users,
+        'branches': branches,
         'user_filter': user_filter,
         'action_filter': action_filter,
-        'date_filter': date_filter,
+        'status_filter': status_filter,
+        'branch_filter': branch_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+        'search_query': search_query,
         'action_types': ActivityLog.ACTION_TYPES,
+        'status_choices': ActivityLog.STATUS_CHOICES,
         'total_logs': total_logs,
+        'logs_today': logs_today,
+        'logs_7_days': logs_7_days,
         'logs_30_days': logs_30_days,
-        'logs_90_days': logs_90_days,
-        'logs_older_90': logs_older_90,
+        'action_breakdown': action_breakdown,
     }
     return render(request, 'pos/activity_log.html', context)
+
+
+@login_required
+@business_required
+@manager_required
+def user_activity(request, slug=None, user_id=None):
+    """View activity log for a specific user"""
+    from datetime import timedelta
+    from django.core.paginator import Paginator
+
+    target_user = get_object_or_404(User, pk=user_id)
+    logs = ActivityLog.objects.filter(
+        business=request.business,
+        user=target_user,
+    ).select_related('branch').order_by('-timestamp')
+
+    # Quick stats
+    total = logs.count()
+    last_login = logs.filter(action_type='login').first()
+    last_logout = logs.filter(action_type='logout').first()
+    sales_count = logs.filter(action_type='sale').count()
+    failed_logins = logs.filter(action_type='login', status='failure').count()
+
+    paginator = Paginator(logs, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'target_user': target_user,
+        'page_obj': page_obj,
+        'total': total,
+        'last_login': last_login,
+        'last_logout': last_logout,
+        'sales_count': sales_count,
+        'failed_logins': failed_logins,
+        'action_types': ActivityLog.ACTION_TYPES,
+    }
+    return render(request, 'pos/user_activity.html', context)
+
+
 
 
 @login_required
@@ -3973,47 +4861,30 @@ def clear_old_logs(request, slug=None):
     """Clear old activity logs"""
     if request.method == 'POST':
         days = int(request.POST.get('days', 90))
-        
-        from datetime import timedelta
-        cutoff_date = timezone.now() - timedelta(days=days)
-        
-        # Get users in this business
-        memberships = request.business.memberships.filter(is_active=True)
-        business_user_ids = memberships.values_list('user_id', flat=True)
-        
-        # Delete logs for users in this business older than cutoff date
-        deleted_count, _ = ActivityLog.objects.filter(
-            user_id__in=business_user_ids,
-            timestamp__lt=cutoff_date
-        ).delete()
-        
-        # Log this action
-        ActivityLog.log_activity(
-            user=request.user,
-            action_type='delete',
-            description=f'Cleared {deleted_count} activity logs older than {days} days',
-            model_name='ActivityLog',
-            business=request.business
-        )
-        
-        messages.success(request, f'Successfully deleted {deleted_count} log entries older than {days} days')
+
+        logs_qs = ActivityLog.objects.filter(business=request.business)
+        if days > 0:
+            from datetime import timedelta
+            cutoff_date = timezone.now() - timedelta(days=days)
+            logs_qs = logs_qs.filter(timestamp__lt=cutoff_date)
+
+        deleted_count, _ = logs_qs.delete()
+
+        if days > 0:
+            messages.success(request, f'Successfully deleted {deleted_count} log entries older than {days} days')
+        else:
+            messages.success(request, f'Successfully deleted all {deleted_count} log entries for this business')
         return redirect('activity_log', slug=request.business.slug)
     
     # GET request - show confirmation page
     days = int(request.GET.get('days', 90))
     
-    from datetime import timedelta
-    cutoff_date = timezone.now() - timedelta(days=days)
-    
-    # Get users in this business
-    memberships = request.business.memberships.filter(is_active=True)
-    business_user_ids = memberships.values_list('user_id', flat=True)
-    
-    # Count logs that would be deleted
-    logs_to_delete = ActivityLog.objects.filter(
-        user_id__in=business_user_ids,
-        timestamp__lt=cutoff_date
-    )
+    cutoff_date = None
+    logs_to_delete = ActivityLog.objects.filter(business=request.business)
+    if days > 0:
+        from datetime import timedelta
+        cutoff_date = timezone.now() - timedelta(days=days)
+        logs_to_delete = logs_to_delete.filter(timestamp__lt=cutoff_date)
     count = logs_to_delete.count()
     
     # Get breakdown by action type
@@ -4059,11 +4930,32 @@ def customer_list(request, slug=None):
     customer_type = request.GET.get('customer_type', '')
     if customer_type:
         customers = customers.filter(customer_type=customer_type)
+
+    # Filter by active status
+    status_filter = request.GET.get('status', '')
+    if status_filter == 'active':
+        customers = customers.filter(is_active=True)
+    elif status_filter == 'inactive':
+        customers = customers.filter(is_active=False)
+
+    # Sorting
+    sort_by = request.GET.get('sort', 'newest')
+    sort_options = {
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'name_asc': 'name',
+        'name_desc': '-name',
+        'spending_desc': '-total_purchases',
+        'points_desc': '-loyalty_points',
+    }
+    customers = customers.order_by(sort_options.get(sort_by, '-created_at'))
     
     context = {
         'customers': customers,
         'search': search,
         'customer_type': customer_type,
+        'status_filter': status_filter,
+        'sort_by': sort_by,
         'total_count': all_customers.count(),
         'regular_count': regular_count,
         'vip_count': vip_count,
@@ -4076,21 +4968,38 @@ def customer_list(request, slug=None):
 def customer_create(request, slug=None):
     """Create new customer"""
     if request.method == 'POST':
-        name = request.POST.get('name')
-        phone = request.POST.get('phone')
-        email = request.POST.get('email', '')
+        name = (request.POST.get('name') or '').strip()
+        phone = Customer.normalize_phone(request.POST.get('phone'))
+        email = (request.POST.get('email') or '').strip()
         address = request.POST.get('address', '')
         date_of_birth = request.POST.get('date_of_birth', '')
         customer_type = request.POST.get('customer_type', 'regular')
         is_active = request.POST.get('is_active') == 'on'
         notes = request.POST.get('notes', '')
+
+        if not name or not phone:
+            messages.error(request, 'Name and phone are required.')
+            return render(request, 'pos/customer_form.html')
+
+        if getattr(settings, 'ENFORCE_UNIQUE_CUSTOMER_PHONE', True):
+            duplicate_customer = Customer.find_duplicate_by_phone(request.business, phone)
+            if duplicate_customer:
+                messages.error(
+                    request,
+                    f'Another customer already uses this phone number ({duplicate_customer.customer_code} - {duplicate_customer.name}).',
+                )
+                return render(request, 'pos/customer_form.html')
+
+        allowed_types = {choice[0] for choice in Customer.CUSTOMER_TYPES}
+        if customer_type not in allowed_types:
+            messages.error(request, 'Invalid customer type selected.')
+            return render(request, 'pos/customer_form.html')
         
         # Validate age if date of birth is provided
         if date_of_birth:
             try:
-                from datetime import datetime, date
                 dob = datetime.strptime(date_of_birth, '%Y-%m-%d').date()
-                today = date.today()
+                today = timezone.now().date()
                 age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
                 
                 if age < 18:
@@ -4100,8 +5009,22 @@ def customer_create(request, slug=None):
                 messages.error(request, 'Invalid date of birth format.')
                 return render(request, 'pos/customer_form.html')
         
-        credit_limit = request.POST.get('credit_limit', '0') or '0'
+        credit_limit_raw = (request.POST.get('credit_limit', '0') or '0').strip()
         tags = request.POST.get('tags', '')
+
+        try:
+            credit_limit = Decimal(credit_limit_raw)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Credit limit must be a valid number.')
+            today = timezone.now().date()
+            max_date = date(today.year - 18, today.month, today.day)
+            return render(request, 'pos/customer_form.html', {'max_date': max_date.strftime('%Y-%m-%d')})
+
+        if credit_limit < 0:
+            messages.error(request, 'Credit limit cannot be negative.')
+            today = timezone.now().date()
+            max_date = date(today.year - 18, today.month, today.day)
+            return render(request, 'pos/customer_form.html', {'max_date': max_date.strftime('%Y-%m-%d')})
 
         if email:
             from django.core.validators import validate_email
@@ -4110,8 +5033,7 @@ def customer_create(request, slug=None):
                 validate_email(email)
             except DjangoValidationError:
                 messages.error(request, f'"{email}" is not a valid email address.')
-                from datetime import date
-                today = date.today()
+                today = timezone.now().date()
                 max_date = date(today.year - 18, today.month, today.day)
                 return render(request, 'pos/customer_form.html', {'max_date': max_date.strftime('%Y-%m-%d')})
 
@@ -4147,8 +5069,7 @@ def customer_create(request, slug=None):
             messages.error(request, f'Error creating customer: {str(e)}')
     
     # Calculate max date (18 years ago from today)
-    from datetime import date
-    today = date.today()
+        today = timezone.now().date()
     max_date = date(today.year - 18, today.month, today.day)
     
     context = {
@@ -4163,9 +5084,9 @@ def customer_edit(request, slug=None, pk=None):
     customer = get_object_or_404(Customer, business=request.business, pk=pk)
     
     if request.method == 'POST':
-        customer.name = request.POST.get('name')
-        customer.phone = request.POST.get('phone')
-        customer.email = request.POST.get('email', '')
+        customer.name = (request.POST.get('name') or '').strip()
+        customer.phone = Customer.normalize_phone(request.POST.get('phone'))
+        customer.email = (request.POST.get('email') or '').strip()
         customer.address = request.POST.get('address', '')
         date_of_birth = request.POST.get('date_of_birth', '')
         customer.customer_type = request.POST.get('customer_type', 'regular')
@@ -4173,13 +5094,54 @@ def customer_edit(request, slug=None, pk=None):
         customer.notes = request.POST.get('notes', '')
         customer.credit_limit = request.POST.get('credit_limit', '0') or '0'
         customer.tags = request.POST.get('tags', '')
+
+        if not customer.name or not customer.phone:
+            messages.error(request, 'Name and phone are required.')
+            today = timezone.now().date()
+            max_date = date(today.year - 18, today.month, today.day)
+            return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
+
+        if getattr(settings, 'ENFORCE_UNIQUE_CUSTOMER_PHONE', True):
+            duplicate_customer = Customer.find_duplicate_by_phone(
+                request.business,
+                customer.phone,
+                exclude_pk=customer.pk,
+            )
+            if duplicate_customer:
+                messages.error(
+                    request,
+                    f'Another customer already uses this phone number ({duplicate_customer.customer_code} - {duplicate_customer.name}).',
+                )
+                today = timezone.now().date()
+                max_date = date(today.year - 18, today.month, today.day)
+                return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
+
+        allowed_types = {choice[0] for choice in Customer.CUSTOMER_TYPES}
+        if customer.customer_type not in allowed_types:
+            messages.error(request, 'Invalid customer type selected.')
+            today = timezone.now().date()
+            max_date = date(today.year - 18, today.month, today.day)
+            return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
+
+        try:
+            customer.credit_limit = Decimal(str(customer.credit_limit).strip())
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Credit limit must be a valid number.')
+            today = timezone.now().date()
+            max_date = date(today.year - 18, today.month, today.day)
+            return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
+
+        if customer.credit_limit < 0:
+            messages.error(request, 'Credit limit cannot be negative.')
+            today = timezone.now().date()
+            max_date = date(today.year - 18, today.month, today.day)
+            return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
         
         # Validate age if date of birth is provided
         if date_of_birth:
             try:
-                from datetime import datetime, date
                 dob = datetime.strptime(date_of_birth, '%Y-%m-%d').date()
-                today = date.today()
+                today = timezone.now().date()
                 age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
                 
                 if age < 18:
@@ -4194,8 +5156,7 @@ def customer_edit(request, slug=None, pk=None):
             except ValueError:
                 messages.error(request, 'Invalid date of birth format.')
                 # Calculate max date for template
-                from datetime import date
-                today = date.today()
+                today = timezone.now().date()
                 max_date = date(today.year - 18, today.month, today.day)
                 context = {
                     'customer': customer,
@@ -4212,8 +5173,7 @@ def customer_edit(request, slug=None, pk=None):
                 validate_email(customer.email)
             except DjangoValidationError:
                 messages.error(request, f'"{customer.email}" is not a valid email address.')
-                from datetime import date
-                today = date.today()
+                today = timezone.now().date()
                 max_date = date(today.year - 18, today.month, today.day)
                 return render(request, 'pos/customer_form.html', {'customer': customer, 'max_date': max_date.strftime('%Y-%m-%d')})
 
@@ -4237,8 +5197,7 @@ def customer_edit(request, slug=None, pk=None):
             messages.error(request, f'Error updating customer: {str(e)}')
     
     # Calculate max date (18 years ago from today)
-    from datetime import date
-    today = date.today()
+        today = timezone.now().date()
     max_date = date(today.year - 18, today.month, today.day)
     
     context = {
@@ -4651,7 +5610,7 @@ def writeoff_report(request, slug=None):
 @can_manage_purchases
 def supplier_payments(request, slug, supplier_id):
     """List all payments for a supplier"""
-    supplier = get_object_or_404(Supplier, pk=supplier_id)
+    supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
     
     # Get date filters
     start_date = request.GET.get('start_date')
@@ -4684,10 +5643,10 @@ def create_payment(request, slug, supplier_id):
     from .models import PaymentMethod
     from datetime import datetime
     
-    supplier = get_object_or_404(Supplier, pk=supplier_id)
+    supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
     
-    # Check if supplier has any received purchases
-    has_received_purchases = supplier.purchases.filter(status='received').exists()
+    # Check if supplier has any purchases that can carry a payable balance
+    has_received_purchases = supplier.purchases.filter(status__in=('received', 'partially_received', 'closed')).exists()
     
     if not has_received_purchases:
         messages.error(
@@ -4735,7 +5694,7 @@ def create_payment(request, slug, supplier_id):
                 # Re-render form with error
                 unpaid_purchases = Purchase.objects.filter(
                     supplier=supplier,
-                    status__in=('received', 'partially_received')
+                    status__in=('received', 'partially_received', 'closed')
                 ).annotate(
                     allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
                 ).filter(
@@ -4753,11 +5712,33 @@ def create_payment(request, slug, supplier_id):
             
             # Parse date string to date object
             if payment_date_str:
-                payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
+                try:
+                    payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    messages.error(request, 'Invalid payment date format. Use YYYY-MM-DD.')
+                    unpaid_purchases = Purchase.objects.filter(
+                        supplier=supplier,
+                        status__in=('received', 'partially_received', 'closed')
+                    ).annotate(
+                        allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
+                    ).filter(
+                        allocated__lt=F('total_amount')
+                    ).order_by('date')
+                    payment_methods = PaymentMethod.objects.filter(business=request.business, is_active=True)
+                    return render(request, 'pos/payment_form.html', {
+                        'supplier': supplier,
+                        'unpaid_purchases': unpaid_purchases,
+                        'payment_methods': payment_methods,
+                    })
             else:
                 payment_date = timezone.now().date()
             
-            payment_method = PaymentMethod.objects.get(id=payment_method_id)
+            payment_method = get_object_or_404(
+                PaymentMethod,
+                id=payment_method_id,
+                business=request.business,
+                is_active=True
+            )
             
             # Build manual allocations if provided
             allocations = None
@@ -4767,13 +5748,16 @@ def create_payment(request, slug, supplier_id):
                 for key in allocation_keys:
                     purchase_id = key.replace('alloc_amount_', '')
                     alloc_amount_str = request.POST.get(key, '').strip()
-                    if not alloc_amount_str:
-                        continue
-                    alloc_amount = Decimal(alloc_amount_str)
-                    if alloc_amount <= Decimal('0.00'):
-                        continue
+                    try:
+                        alloc_amount = Decimal(alloc_amount_str) if alloc_amount_str else Decimal('0.00')
+                    except Exception:
+                        alloc_amount = Decimal('0.00')
                     purchase = Purchase.objects.get(id=purchase_id, supplier=supplier)
-                    allocations.append({'purchase': purchase, 'amount': alloc_amount})
+                    # If amount is 0 or blank, default to the full remaining balance
+                    if alloc_amount <= Decimal('0.00'):
+                        alloc_amount = purchase.remaining_balance()
+                    if alloc_amount > Decimal('0.00'):
+                        allocations.append({'purchase': purchase, 'amount': alloc_amount})
                 if not allocations:
                     allocations = None  # fall back to FIFO if nothing selected
             
@@ -4795,10 +5779,10 @@ def create_payment(request, slug, supplier_id):
         except Exception as e:
             messages.error(request, f'Error creating payment: {str(e)}')
     
-    # Get unpaid purchases for this supplier (received or partially received, with remaining balance)
+    # Get unpaid purchases for this supplier (received/partially received/closed, with remaining balance)
     unpaid_purchases = Purchase.objects.filter(
         supplier=supplier,
-        status__in=('received', 'partially_received')
+        status__in=('received', 'partially_received', 'closed')
     ).annotate(
         allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
     ).filter(
@@ -4815,7 +5799,6 @@ def create_payment(request, slug, supplier_id):
     return render(request, 'pos/payment_form.html', context)
 
 
-@login_required
 @login_required
 @can_manage_purchases
 def payment_detail(request, slug, payment_id):
@@ -4852,7 +5835,7 @@ def delete_payment(request, slug, payment_id):
     """Delete a supplier payment"""
     from .models import SupplierPayment
     
-    payment = get_object_or_404(SupplierPayment, pk=payment_id)
+    payment = get_object_or_404(SupplierPayment, pk=payment_id, supplier__business=request.business)
     supplier_id = payment.supplier.id
     
     if request.method == 'POST':
@@ -4886,9 +5869,21 @@ def supplier_statement(request, slug, supplier_id):
     end_date = request.GET.get('end_date')
     
     if start_date:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Invalid start date format. Use YYYY-MM-DD.')
+            return redirect('supplier_statement', slug=request.business.slug, supplier_id=supplier_id)
     if end_date:
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        try:
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Invalid end date format. Use YYYY-MM-DD.')
+            return redirect('supplier_statement', slug=request.business.slug, supplier_id=supplier_id)
+
+    if start_date and end_date and start_date > end_date:
+        messages.error(request, 'Start date cannot be after end date.')
+        return redirect('supplier_statement', slug=request.business.slug, supplier_id=supplier_id)
     
     # Generate fresh statement (no caching)
     statement = SupplierStatementService.generate_statement(
@@ -4910,9 +5905,9 @@ def supplier_statement(request, slug, supplier_id):
 
 @login_required
 @can_manage_purchases
-def supplier_balances(request):
+def supplier_balances(request, slug=None):
     """List all suppliers with their outstanding balances"""
-    suppliers = Supplier.objects.filter(is_active=True)
+    suppliers = Supplier.objects.filter(business=request.business, is_active=True)
     
     # Add outstanding balance to each supplier
     supplier_data = []
@@ -4966,7 +5961,7 @@ def aging_analysis(request):
     context = {
         'aging_data': aging_data,
         'totals': totals,
-        'as_of_date': as_of_date or datetime.now().date(),
+        'as_of_date': as_of_date or timezone.now().date(),
     }
     return render(request, 'pos/aging_analysis.html', context)
 
@@ -4998,7 +5993,7 @@ def analytics_api(request, slug=None):
     
     try:
         period = request.GET.get('period', 'month')
-        today = datetime.now().date()
+        today = timezone.now().date()
         
         # Calculate date range based on period
         if period == 'today':
@@ -5161,7 +6156,7 @@ def analytics_export_pdf(request, slug=None):
     
     try:
         period = request.GET.get('period', 'month')
-        today = datetime.now().date()
+        today = timezone.now().date()
         
         # Calculate date range based on period
         if period == 'today':
@@ -5347,7 +6342,7 @@ def analytics_export_pdf(request, slug=None):
             textColor=colors.HexColor('#999999'),
             alignment=TA_CENTER
         )
-        elements.append(Paragraph(f'Generated on {datetime.now().strftime("%B %d, %Y at %I:%M %p")}', footer_style))
+        elements.append(Paragraph(f'Generated on {timezone.now().strftime("%B %d, %Y at %I:%M %p")}', footer_style))
         
         # Build PDF
         doc.build(elements)
@@ -5377,7 +6372,7 @@ def payment_transactions_report(request, slug=None):
         search = request.GET.get('search', '').strip()
         
         # Default date range (current month)
-        today = datetime.now().date()
+        today = timezone.now().date()
         if not start_date:
             start_date = today.replace(day=1)
         else:
@@ -5466,7 +6461,7 @@ def payment_transactions_export(request, slug=None):
     search = request.GET.get('search', '').strip()
     
     # Default date range
-    today = datetime.now().date()
+    today = timezone.now().date()
     if not start_date:
         start_date = today.replace(day=1)
     else:
@@ -5573,7 +6568,7 @@ def payment_transactions_export(request, slug=None):
         alignment=TA_CENTER
     )
     elements.append(Paragraph(
-        f'Generated on {datetime.now().strftime("%B %d, %Y at %I:%M %p")}',
+        f'Generated on {timezone.now().strftime("%B %d, %Y at %I:%M %p")}',
         footer_style
     ))
     
@@ -5598,7 +6593,7 @@ def payment_transactions_csv(request, slug=None):
     search = request.GET.get('search', '').strip()
     
     # Default date range
-    today = datetime.now().date()
+    today = timezone.now().date()
     if not start_date:
         start_date = today.replace(day=1)
     else:
@@ -5867,7 +6862,23 @@ def goods_received_detail(request, slug=None, pk=None):
     """View a Goods Received Note"""
     note = get_object_or_404(GoodsReceivedNote, business=request.business, pk=pk)
     items = note.items.select_related('product').all()
-    context = {'note': note, 'items': items}
+    remaining_damaged_qty = 0
+    if note.purchase_id:
+        purchase_items = PurchaseItem.objects.filter(purchase_id=note.purchase_id)
+        for purchase_item in purchase_items:
+            already_returned = GoodsReturnedNoteItem.objects.filter(
+                grn__business=request.business,
+                grn__related_purchase_id=note.purchase_id,
+                product_id=purchase_item.product_id,
+            ).exclude(grn__status='cancelled').aggregate(total=Sum('quantity'))['total'] or 0
+            remaining_damaged_qty += max(purchase_item.quantity_damaged - already_returned, 0)
+
+    context = {
+        'note': note,
+        'items': items,
+        'can_create_return_note': remaining_damaged_qty > 0,
+        'remaining_damaged_qty': remaining_damaged_qty,
+    }
     return render(request, 'pos/goods_received_detail.html', context)
 
 
@@ -5932,87 +6943,221 @@ def grn_create(request, slug=None):
         return_date = request.POST.get('return_date')
         
         try:
-            supplier = Supplier.objects.get(id=supplier_id, business=request.business)
-            purchase = None
-            if purchase_id:
-                purchase = Purchase.objects.get(id=purchase_id, business=request.business)
-            
-            # Create GRN
-            grn = GoodsReturnedNote.objects.create(
-                business=request.business,
-                supplier=supplier,
-                related_purchase=purchase,
-                return_reason=return_reason,
-                reason_details=reason_details,
-                return_date=return_date if return_date else timezone.now().date(),
-                created_by=request.user
-            )
-            
-            # Add items
-            item_count = 0
-            for key in request.POST:
-                if key.startswith('item_product_'):
-                    index = key.split('_')[-1]
-                    product_id = request.POST.get(f'item_product_{index}')
-                    quantity = request.POST.get(f'item_quantity_{index}')
-                    unit_cost = request.POST.get(f'item_cost_{index}')
-                    batch = request.POST.get(f'item_batch_{index}', '')
-                    expiry = request.POST.get(f'item_expiry_{index}', '')
-                    notes = request.POST.get(f'item_notes_{index}', '')
-                    
-                    if product_id and quantity and unit_cost:
-                        product = Product.objects.get(id=product_id, business=request.business)
-                        
-                        GoodsReturnedNoteItem.objects.create(
-                            grn=grn,
-                            product=product,
-                            quantity=int(quantity),
-                            unit_cost=Decimal(unit_cost),
-                            batch_number=batch,
-                            expiry_date=expiry if expiry else None,
-                            item_notes=notes
+            with transaction.atomic():
+                purchase = None
+                if purchase_id:
+                    purchase = Purchase.objects.select_related('supplier').get(id=purchase_id, business=request.business)
+                    if purchase.status not in ('received', 'partially_received', 'closed'):
+                        raise ValueError('Selected purchase is not eligible for returns.')
+
+                # If linked to a purchase, force supplier from purchase to avoid mismatch errors.
+                if purchase:
+                    supplier = Supplier.objects.get(id=purchase.supplier_id, business=request.business, is_active=True)
+                    if supplier_id and str(supplier.id) != str(supplier_id):
+                        raise ValueError('Supplier is fixed by the selected purchase order.')
+                else:
+                    supplier = Supplier.objects.get(id=supplier_id, business=request.business, is_active=True)
+
+                if not return_reason:
+                    return_reason = 'damaged' if purchase else None
+                if not return_reason:
+                    raise ValueError('Return reason is required.')
+
+                parsed_items = []
+                requested_by_product = defaultdict(int)
+
+                for key in request.POST:
+                    if key.startswith('item_product_'):
+                        index = key.split('_')[-1]
+                        product_id = request.POST.get(f'item_product_{index}')
+                        quantity_raw = request.POST.get(f'item_quantity_{index}')
+                        unit_cost_raw = request.POST.get(f'item_cost_{index}')
+                        batch = request.POST.get(f'item_batch_{index}', '')
+                        expiry = request.POST.get(f'item_expiry_{index}', '')
+                        notes = request.POST.get(f'item_notes_{index}', '')
+
+                        if not (product_id and quantity_raw and unit_cost_raw):
+                            continue
+
+                        try:
+                            quantity = int(quantity_raw)
+                        except (TypeError, ValueError):
+                            raise ValueError('Invalid quantity in GRN items.')
+                        if quantity <= 0:
+                            raise ValueError('Return quantity must be greater than zero.')
+
+                        try:
+                            unit_cost = Decimal(unit_cost_raw)
+                        except (InvalidOperation, TypeError, ValueError):
+                            raise ValueError('Invalid unit cost in GRN items.')
+                        if unit_cost <= 0:
+                            raise ValueError('Unit cost must be greater than zero.')
+
+                        parsed_items.append({
+                            'product_id': int(product_id),
+                            'quantity': quantity,
+                            'unit_cost': unit_cost,
+                            'batch_number': batch,
+                            'expiry_date': expiry if expiry else None,
+                            'item_notes': notes,
+                        })
+                        requested_by_product[int(product_id)] += quantity
+
+                if not parsed_items:
+                    if purchase and return_reason == 'damaged':
+                        purchase_items = list(
+                            PurchaseItem.objects.filter(purchase=purchase).select_related('product')
                         )
-                        
-                        # Create stock adjustment (deduct returned items)
-                        previous_qty = product.stock_quantity
-                        product.stock_quantity -= Decimal(quantity)
-                        product.save()
-                        
-                        StockAdjustment.objects.create(
-                            business=request.business,
-                            product=product,
-                            adjustment_type='return',
-                            quantity_change=-int(quantity),
-                            previous_quantity=int(previous_qty),
-                            new_quantity=int(product.stock_quantity),
-                            reason=f'Returned to supplier - {grn.grn_number}'
+                        for item in purchase_items:
+                            already_returned = GoodsReturnedNoteItem.objects.filter(
+                                grn__business=request.business,
+                                grn__related_purchase=purchase,
+                                product_id=item.product_id,
+                            ).exclude(grn__status='cancelled').aggregate(total=Sum('quantity'))['total'] or 0
+
+                            remaining_damaged = max(item.quantity_damaged - already_returned, 0)
+                            if remaining_damaged <= 0:
+                                continue
+
+                            parsed_items.append({
+                                'product_id': item.product_id,
+                                'quantity': remaining_damaged,
+                                'unit_cost': item.unit_cost,
+                                'batch_number': item.batch_number or '',
+                                'expiry_date': item.expiry_date,
+                                'item_notes': item.receiving_notes or 'Auto-filled from PO damaged quantity',
+                            })
+                            requested_by_product[item.product_id] += remaining_damaged
+
+                    if not parsed_items:
+                        if purchase and return_reason == 'damaged':
+                            raise ValueError('All damaged quantities for this purchase have already been returned.')
+                        raise ValueError('Please add at least one item to the GRN.')
+
+                product_ids = list(requested_by_product.keys())
+                locked_products = Product.objects.select_for_update().filter(
+                    business=request.business,
+                    id__in=product_ids,
+                )
+                product_map = {p.id: p for p in locked_products}
+
+                if len(product_map) != len(product_ids):
+                    raise ValueError('One or more selected products are invalid.')
+
+                for product_id, requested_qty in requested_by_product.items():
+                    product = product_map[product_id]
+                    if Decimal(requested_qty) > product.stock_quantity:
+                        raise ValueError(
+                            f'Insufficient stock for {product.name}. Available: {product.stock_quantity}, requested return: {requested_qty}.'
                         )
-                        
-                        item_count += 1
-            
-            if item_count == 0:
-                grn.delete()
-                messages.error(request, 'Please add at least one item to the GRN.')
-                return redirect('grn_create', slug=slug)
-            
-            # Check if should submit immediately
-            action = request.POST.get('action', 'draft')
-            if action == 'submit':
-                grn.submit_to_supplier()
-                from .email_service import EmailService
-                EmailService.send_grn_notification(grn)
-                messages.success(request, f'GRN {grn.grn_number} created and submitted to supplier!')
-            else:
-                messages.success(request, f'GRN {grn.grn_number} created as draft.')
-            
-            return redirect('grn_detail', slug=slug, pk=grn.pk)
-            
+
+                    if purchase:
+                        total_received = PurchaseItem.objects.filter(
+                            purchase=purchase,
+                            product_id=product_id,
+                        ).aggregate(total=Sum('quantity_received'))['total'] or 0
+
+                        total_damaged = PurchaseItem.objects.filter(
+                            purchase=purchase,
+                            product_id=product_id,
+                        ).aggregate(total=Sum('quantity_damaged'))['total'] or 0
+
+                        already_returned = GoodsReturnedNoteItem.objects.filter(
+                            grn__business=request.business,
+                            grn__related_purchase=purchase,
+                            product_id=product_id,
+                        ).exclude(grn__status='cancelled').aggregate(total=Sum('quantity'))['total'] or 0
+
+                        if return_reason == 'damaged':
+                            max_returnable = max(total_damaged - already_returned, 0)
+                            limit_label = 'damaged quantity'
+                        else:
+                            max_returnable = max(total_received - already_returned, 0)
+                            limit_label = 'purchase-received quantity'
+
+                        if requested_qty > max_returnable:
+                            raise ValueError(
+                                f'Return quantity for {product.name} exceeds available {limit_label}. '
+                                f'Available to return: {max_returnable}.'
+                            )
+
+                grn = GoodsReturnedNote.objects.create(
+                    business=request.business,
+                    supplier=supplier,
+                    related_purchase=purchase,
+                    return_reason=return_reason,
+                    reason_details=reason_details,
+                    return_date=return_date if return_date else timezone.now().date(),
+                    created_by=request.user,
+                )
+
+                for item_data in parsed_items:
+                    product = product_map[item_data['product_id']]
+
+                    GoodsReturnedNoteItem.objects.create(
+                        grn=grn,
+                        product=product,
+                        quantity=item_data['quantity'],
+                        unit_cost=item_data['unit_cost'],
+                        batch_number=item_data['batch_number'],
+                        expiry_date=item_data['expiry_date'],
+                        item_notes=item_data['item_notes'],
+                    )
+
+                    previous_qty = product.stock_quantity
+                    product.stock_quantity -= Decimal(item_data['quantity'])
+                    product.save(update_fields=['stock_quantity', 'updated_at'])
+
+                    StockAdjustment.objects.create(
+                        business=request.business,
+                        product=product,
+                        adjustment_type='return',
+                        quantity_change=-item_data['quantity'],
+                        previous_quantity=int(previous_qty),
+                        new_quantity=int(product.stock_quantity),
+                        reason=f'Returned to supplier - {grn.grn_number}',
+                    )
+
+                action = request.POST.get('action', 'draft')
+                if action == 'submit':
+                    grn.submit_to_supplier()
+                    from .email_service import EmailService
+                    EmailService.send_grn_notification(grn)
+                    messages.success(request, f'GRN {grn.grn_number} created and submitted to supplier!')
+                else:
+                    messages.success(request, f'GRN {grn.grn_number} created as draft.')
+
+                return redirect('grn_detail', slug=slug, pk=grn.pk)
+
+        except ValueError as e:
+            messages.error(request, str(e))
         except Exception as e:
             messages.error(request, f'Error creating GRN: {str(e)}')
     
     # GET request
+    initial_related_purchase_id = None
+    initial_supplier_id = None
+    initial_return_reason = None
+
+    prefill_purchase_id = request.GET.get('purchase_id')
+    if prefill_purchase_id:
+        try:
+            prefill_purchase = Purchase.objects.select_related('supplier').get(
+                business=request.business,
+                id=prefill_purchase_id,
+                status__in=('received', 'partially_received', 'closed')
+            )
+            initial_related_purchase_id = prefill_purchase.id
+            initial_supplier_id = prefill_purchase.supplier_id
+            initial_return_reason = 'damaged'
+        except Purchase.DoesNotExist:
+            pass
+
     suppliers = Supplier.objects.filter(business=request.business, is_active=True)
-    purchases = Purchase.objects.filter(business=request.business, status='received').order_by('-date')[:50]
+    purchases = Purchase.objects.filter(
+        business=request.business,
+        status__in=('received', 'partially_received', 'closed')
+    ).order_by('-date')[:50]
     products = Product.objects.filter(business=request.business).order_by('name')
     
     context = {
@@ -6020,6 +7165,9 @@ def grn_create(request, slug=None):
         'purchases': purchases,
         'products': products,
         'today': timezone.now().date(),
+        'initial_related_purchase_id': initial_related_purchase_id,
+        'initial_supplier_id': initial_supplier_id,
+        'initial_return_reason': initial_return_reason,
     }
     return render(request, 'pos/grn_form.html', context)
 
@@ -6075,12 +7223,15 @@ def grn_mark_collected(request, slug=None, pk=None):
     if request.method == 'POST':
         collection_date = request.POST.get('collection_date')
         collection_notes = request.POST.get('collection_notes', '')
-        
-        grn.mark_collected(
+
+        collected = grn.mark_collected(
             collection_date=collection_date if collection_date else None,
             notes=collection_notes
         )
-        messages.success(request, f'GRN {grn.grn_number} marked as collected.')
+        if collected:
+            messages.success(request, f'GRN {grn.grn_number} marked as collected.')
+        else:
+            messages.error(request, 'Only submitted or acknowledged GRNs can be marked as collected.')
         return redirect('grn_detail', slug=slug, pk=pk)
     
     return render(request, 'pos/grn_mark_collected.html', {
@@ -6111,16 +7262,22 @@ def grn_apply_credit(request, slug=None, pk=None):
             if amount <= 0:
                 messages.error(request, 'Credit note amount must be greater than zero.')
                 return redirect('grn_apply_credit', slug=slug, pk=pk)
-        except (ValueError, TypeError):
+            if amount > grn.total_value:
+                messages.error(request, 'Credit note amount cannot exceed GRN total value.')
+                return redirect('grn_apply_credit', slug=slug, pk=pk)
+        except (InvalidOperation, ValueError, TypeError):
             messages.error(request, 'Invalid credit note amount.')
             return redirect('grn_apply_credit', slug=slug, pk=pk)
-        
-        grn.apply_credit_note(
+
+        applied = grn.apply_credit_note(
             credit_note_number=credit_note_number,
             amount=amount,
             date=credit_note_date if credit_note_date else None
         )
-        messages.success(request, f'Credit note applied to GRN {grn.grn_number}.')
+        if applied:
+            messages.success(request, f'Credit note applied to GRN {grn.grn_number}.')
+        else:
+            messages.error(request, 'Credit note can only be applied after submission and before cancellation.')
         return redirect('grn_detail', slug=slug, pk=pk)
     
     return render(request, 'pos/grn_apply_credit.html', {
@@ -6138,27 +7295,27 @@ def grn_cancel(request, slug=None, pk=None):
     grn = get_object_or_404(GoodsReturnedNote, business=request.business, pk=pk)
     
     if request.method == 'POST':
-        if grn.cancel():
-            # Reverse stock adjustments
-            for item in grn.items.all():
-                product = item.product
-                previous_qty = product.stock_quantity
-                product.stock_quantity += Decimal(item.quantity)
-                product.save()
-                
-                StockAdjustment.objects.create(
-                    business=request.business,
-                    product=product,
-                    adjustment_type='correction',
-                    quantity_change=item.quantity,
-                    previous_quantity=int(previous_qty),
-                    new_quantity=int(product.stock_quantity),
-                    reason=f'GRN {grn.grn_number} cancelled - stock restored'
-                )
-            
-            messages.success(request, f'GRN {grn.grn_number} cancelled and stock restored.')
-        else:
-            messages.error(request, 'GRN cannot be cancelled (already collected or credited).')
+        with transaction.atomic():
+            grn = GoodsReturnedNote.objects.select_for_update().get(pk=grn.pk, business=request.business)
+            if grn.cancel():
+                for item in grn.items.select_related('product').all():
+                    product = Product.objects.select_for_update().get(pk=item.product_id, business=request.business)
+                    previous_qty = product.stock_quantity
+                    product.stock_quantity += Decimal(item.quantity)
+                    product.save(update_fields=['stock_quantity', 'updated_at'])
+
+                    StockAdjustment.objects.create(
+                        business=request.business,
+                        product=product,
+                        adjustment_type='correction',
+                        quantity_change=item.quantity,
+                        previous_quantity=int(previous_qty),
+                        new_quantity=int(product.stock_quantity),
+                        reason=f'GRN {grn.grn_number} cancelled - stock restored'
+                    )
+                messages.success(request, f'GRN {grn.grn_number} cancelled and stock restored.')
+            else:
+                messages.error(request, 'GRN cannot be cancelled (already collected or credited).')
         return redirect('grn_detail', slug=slug, pk=pk)
     
     return render(request, 'pos/grn_cancel_confirm.html', {'grn': grn})
@@ -6206,7 +7363,7 @@ def api_grn_supplier_purchases(request, slug=None):
     purchases = Purchase.objects.filter(
         business=request.business,
         supplier_id=supplier_id,
-        status='received'
+        status__in=('received', 'partially_received', 'closed')
     ).order_by('-date').values('id', 'purchase_number', 'date', 'total_amount')[:50]
 
     data = [
@@ -6217,6 +7374,57 @@ def api_grn_supplier_purchases(request, slug=None):
         for p in purchases
     ]
     return JsonResponse({'purchases': data})
+
+
+@login_required
+@business_required
+@can_manage_purchases
+def api_grn_purchase_defaults(request, slug=None):
+    """AJAX: Return supplier + damaged-return defaults for a purchase."""
+    purchase_id = request.GET.get('purchase_id')
+    if not purchase_id:
+        return JsonResponse({'supplier_id': None, 'return_reason': 'damaged', 'items': []})
+
+    try:
+        purchase = Purchase.objects.select_related('supplier').get(
+            business=request.business,
+            id=purchase_id,
+            status__in=('received', 'partially_received', 'closed')
+        )
+    except Purchase.DoesNotExist:
+        return JsonResponse({'error': 'Purchase not found.'}, status=404)
+
+    defaults = []
+    purchase_items = PurchaseItem.objects.filter(purchase=purchase).select_related('product')
+    for item in purchase_items:
+        already_returned = GoodsReturnedNoteItem.objects.filter(
+            grn__business=request.business,
+            grn__related_purchase=purchase,
+            product_id=item.product_id,
+        ).exclude(grn__status='cancelled').aggregate(total=Sum('quantity'))['total'] or 0
+
+        remaining_damaged = max(item.quantity_damaged - already_returned, 0)
+        if remaining_damaged <= 0:
+            continue
+
+        defaults.append({
+            'product_id': item.product_id,
+            'product_name': item.product.name,
+            'quantity': remaining_damaged,
+            'unit_cost': float(item.unit_cost),
+            'batch_number': item.batch_number or '',
+            'expiry_date': item.expiry_date.isoformat() if item.expiry_date else '',
+            'item_notes': item.receiving_notes or '',
+            'total': float(Decimal(remaining_damaged) * item.unit_cost),
+        })
+
+    return JsonResponse({
+        'purchase_id': purchase.id,
+        'purchase_number': purchase.purchase_number,
+        'supplier_id': purchase.supplier_id,
+        'return_reason': 'damaged',
+        'items': defaults,
+    })
 
 
 @login_required
@@ -6485,3 +7693,75 @@ def analytics_api(request, slug=None):
     data = decimal_to_float(data)
     
     return JsonResponse(data, safe=False)
+
+
+# ==================== HELD ORDERS ====================
+
+@login_required
+@business_required
+@require_POST
+def held_order_save(request, slug=None):
+    """Save or update a held order on the server."""
+    import json as _json
+    from .models import HeldOrder
+    try:
+        body = _json.loads(request.body)
+    except (ValueError, KeyError):
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    name = (body.get('name') or '').strip()[:200]
+    if not name:
+        return JsonResponse({'success': False, 'error': 'Name required'}, status=400)
+
+    cart_json = body.get('cart')
+    if not isinstance(cart_json, list):
+        return JsonResponse({'success': False, 'error': 'Invalid cart'}, status=400)
+
+    held = HeldOrder.objects.create(
+        business=request.business,
+        cashier=request.user,
+        name=name,
+        cart_json=cart_json,
+        customer_json=body.get('customer'),
+        discount_type=body.get('discount_type', 'percentage'),
+        discount_value=Decimal(str(body.get('discount_value', 0))),
+    )
+    return JsonResponse({'success': True, 'id': held.pk, 'name': held.name})
+
+
+@login_required
+@business_required
+def held_orders_list(request, slug=None):
+    """Return all active held orders for this business as JSON."""
+    from .models import HeldOrder
+    orders = (
+        HeldOrder.objects
+        .filter(business=request.business, is_active=True)
+        .order_by('-created_at')
+        .values('id', 'name', 'cart_json', 'customer_json',
+                'discount_type', 'discount_value', 'created_at')
+    )
+    result = []
+    for o in orders:
+        result.append({
+            'id': o['id'],
+            'name': o['name'],
+            'cart': o['cart_json'],
+            'customer': o['customer_json'],
+            'discount_type': o['discount_type'],
+            'discount_value': float(o['discount_value']),
+            'timestamp': o['created_at'].isoformat(),
+        })
+    return JsonResponse({'success': True, 'orders': result})
+
+
+@login_required
+@business_required
+@require_POST
+def held_order_delete(request, slug=None, pk=None):
+    """Soft-delete a held order."""
+    from .models import HeldOrder
+    held = get_object_or_404(HeldOrder, pk=pk, business=request.business)
+    held.is_active = False
+    held.save(update_fields=['is_active'])
+    return JsonResponse({'success': True})

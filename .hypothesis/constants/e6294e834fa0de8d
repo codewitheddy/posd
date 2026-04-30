@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\_batcher.py
+# hypothesis_version: 6.151.10
+
+[5.0, 100, 1000, 'Any', 'Callable[..., None]', 'Envelope', 'Optional[Envelope]', 'Optional[int]', 'T', 'flag', 'item_count', 'items', 'list[T]', 'sent_at', 'threading.Event', 'threading.local']

@@ -45,6 +45,7 @@
           <label for="adjustment_type" class="form-label">Adjustment Type <span class="text-danger">*</span></label>
           <select class="form-select" id="adjustment_type" name="adjustment_type" required>
             <option value="damage">Damage/Loss (Remove Stock)</option>
+            <option value="expired">Expired Items (Remove Stock)</option>
             <option value="return">Customer Return (Add Stock)</option>
             <option value="correction">Stock Correction</option>
           </select>
@@ -53,7 +54,7 @@
         <div class="mb-3">
           <label for="quantity_change" class="form-label">Quantity Change <span class="text-danger">*</span></label>
           <input type="number" class="form-control" id="quantity_change" name="quantity_change" required min="1" placeholder="Enter quantity">
-          <small class="text-muted">For damage/loss: enter amount to deduct. For return: enter amount to add. For correction: positive or negative.</small>
+          <small class="text-muted" id="qty_hint">For damage/loss: enter amount to deduct. For return: enter amount to add. For correction: positive or negative.</small>
         </div>
 
         <div class="mb-3">
@@ -82,11 +83,34 @@
 </div>
 
 <script>
+const currentStock = {{ product.stock_quantity }};
+const qtyInput = document.getElementById('quantity_change');
+const qtyHint = document.getElementById('qty_hint');
+
+const hints = {
+  damage:     'Enter the quantity to remove (damaged or lost items).',
+  expired:    'Expired items — quantity pre-filled with current stock. Adjust if only some items expired.',
+  return:     'Enter the quantity being returned by the customer (adds to stock).',
+  correction: 'Enter a positive number to add stock, or a negative number to remove.',
+};
+
 document.getElementById('adjustment_type').addEventListener('change', function() {
-  const q = document.getElementById('quantity_change');
-  if (this.value === 'damage') q.placeholder = 'Enter quantity to remove';
-  else if (this.value === 'return') q.placeholder = 'Enter quantity to add';
-  else q.placeholder = 'Enter quantity';
+  const type = this.value;
+  qtyHint.textContent = hints[type] || '';
+
+  if (type === 'expired') {
+    qtyInput.value = currentStock;
+    qtyInput.placeholder = 'Expired quantity';
+  } else if (type === 'damage') {
+    qtyInput.value = '';
+    qtyInput.placeholder = 'Enter quantity to remove';
+  } else if (type === 'return') {
+    qtyInput.value = '';
+    qtyInput.placeholder = 'Enter quantity to add';
+  } else {
+    qtyInput.value = '';
+    qtyInput.placeholder = 'Enter quantity';
+  }
 });
 </script>
 {% endblock %}

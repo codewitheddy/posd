@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\support_access_views.py
+# hypothesis_version: 6.151.10
+
+['Access denied.', 'POST', 'access_history', 'access_request', 'active', 'active_access', 'approved', 'business', 'business_list', 'dashboard', 'denied', 'duration_hours', 'expired', 'history', 'notes', 'owner', 'pending', 'pending_requests', 'reason', 'revoked']

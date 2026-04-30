@@ -1,0 +1,171 @@
+{% extends 'pos/base.html' %}
+{% block title %}Staff — {{ branch.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden}
+.m-table{width:100%;border-collapse:collapse;font-size:13px}
+.m-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:10px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.m-table tbody tr{border-bottom:1px solid #f3f4f6}
+.m-table tbody tr:hover{background:#f8f9fc}
+.m-table tbody td{padding:11px 16px;vertical-align:middle}
+.badge-active{background:#dcfce7;color:#166534;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.badge-inactive{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+.btn-danger-sm{background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-danger-sm:hover{background:#fecaca}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'branch_detail' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h1 style="font-size:20px;font-weight:700;margin:0">Staff — {{ branch.name }}</h1>
+    </div>
+    <div class="ms-auto">
+      <button class="btn-primary-sm" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+        <i class="bi bi-person-plus"></i> Add Staff
+      </button>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <div class="int-card">
+    <div class="table-responsive">
+      <table class="m-table">
+        <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Since</th><th></th></tr></thead>
+        <tbody>
+          {% for m in memberships %}
+          <tr>
+            <td>
+              <div style="font-weight:600">{{ m.user.get_full_name|default:m.user.username }}</div>
+              <div style="font-size:11px;color:#6b7280">{{ m.user.username }}</div>
+            </td>
+            <td>{{ m.get_role_display }}</td>
+            <td>{% if m.is_active %}<span class="badge-active">Active</span>{% else %}<span class="badge-inactive">Revoked</span>{% endif %}</td>
+            <td style="color:#6b7280;font-size:12px">{{ m.created_at|date:"d M Y" }}</td>
+            <td>
+              {% if m.is_active %}
+              <form method="post" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="deactivate">
+                <input type="hidden" name="membership_id" value="{{ m.pk }}">
+                <button type="submit" class="btn-danger-sm" onclick="return confirm('Revoke access for {{ m.user.username }}?')">Revoke</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" style="text-align:center;padding:48px;color:#9ca3af">No staff assigned yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Staff Modal -->
+<div class="modal fade" id="addStaffModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius:14px">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Staff to {{ branch.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <!-- Tabs -->
+      <ul class="nav nav-tabs px-3 pt-2" style="border-bottom:1px solid #e5e7eb">
+        <li class="nav-item">
+          <a class="nav-link active" data-bs-toggle="tab" href="#tab-existing" style="font-size:13px">Existing User</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" data-bs-toggle="tab" href="#tab-new" style="font-size:13px">Create New User</a>
+        </li>
+      </ul>
+      <div class="tab-content">
+        <!-- Existing user tab -->
+        <div class="tab-pane fade show active" id="tab-existing">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label style="font-size:12px;font-weight:700">Username</label>
+                <input type="text" name="username" class="form-control" required style="border-radius:8px"
+                       placeholder="Enter existing username">
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:700">Role</label>
+                <select name="role" class="form-select" style="border-radius:8px">
+                  {% for val, label in role_choices %}
+                  <option value="{{ val }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn-outline-sm" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn-primary-sm">Add</button>
+            </div>
+          </form>
+        </div>
+        <!-- Create new user tab -->
+        <div class="tab-pane fade" id="tab-new">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_and_add">
+            <div class="modal-body">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label style="font-size:12px;font-weight:700">First Name</label>
+                  <input type="text" name="new_first_name" class="form-control" style="border-radius:8px">
+                </div>
+                <div class="col-6">
+                  <label style="font-size:12px;font-weight:700">Last Name</label>
+                  <input type="text" name="new_last_name" class="form-control" style="border-radius:8px">
+                </div>
+                <div class="col-12">
+                  <label style="font-size:12px;font-weight:700">Username <span style="color:#dc2626">*</span></label>
+                  <input type="text" name="new_username" class="form-control" required style="border-radius:8px"
+                         placeholder="e.g. john_nairobi">
+                </div>
+                <div class="col-12">
+                  <label style="font-size:12px;font-weight:700">Email</label>
+                  <input type="email" name="new_email" class="form-control" style="border-radius:8px">
+                </div>
+                <div class="col-12">
+                  <label style="font-size:12px;font-weight:700">Password <span style="color:#dc2626">*</span></label>
+                  <input type="password" name="new_password" class="form-control" required minlength="10"
+                         style="border-radius:8px" placeholder="Min 10 chars, upper+lower+number+special">
+                </div>
+                <div class="col-12">
+                  <label style="font-size:12px;font-weight:700">Role</label>
+                  <select name="new_role" class="form-select" style="border-radius:8px">
+                    {% for val, label in role_choices %}
+                    <option value="{{ val }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:10px;font-size:11px;color:#6b7280">
+                This creates a new system user and assigns them to this branch. They can log in with the username and password you set.
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn-outline-sm" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn-primary-sm"><i class="bi bi-person-plus"></i> Create & Assign</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

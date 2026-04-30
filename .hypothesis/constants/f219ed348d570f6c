@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\redis\utils.py
+# hypothesis_version: 6.151.10
+
+[', ', 'Any', 'Sequence[Any]', 'Span', 'count', 'first_ten', 'key', 'redis.command', 'redis.commands', 'redis.is_cluster', 'redis.key', 'redis.transaction']

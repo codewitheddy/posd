@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework_simplejwt\authentication.py
+# hypothesis_version: 6.151.10
+
+['AuthUser', 'User is inactive', 'User not found', 'api', 'application/json', 'detail', 'message', 'messages', 'password_changed', 'token_class', 'token_type', 'user_inactive', 'user_not_found', '{} realm="{}"']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\pagination.py
+# hypothesis_version: 6.151.10
+
+[123, 1000, '-', '-created', '0', '1', 'Cursor', 'Invalid cursor', 'Invalid page.', 'Limit', 'Offset', 'Page', 'Page size', 'PageLink', '__', '__gt', '__lt', 'ascii', 'count', 'cursor', 'description', 'example', 'filter_backends', 'format', 'get_ordering', 'in', 'integer', 'is_active', 'is_break', 'last', 'limit', 'name', 'next', 'next_url', 'nullable', 'number', 'o', 'object', 'offset', 'p', 'page', 'page_links', 'position', 'previous', 'previous_url', 'properties', 'query', 'r', 'required', 'results', 'reverse', 'schema', 'string', 'type', 'uri', 'url']

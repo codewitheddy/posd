@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\routers.py
+# hypothesis_version: 6.151.10
+
+['$', ', ', '/', ':', 'DynamicRoute', 'Instance', 'List', 'Route', '[^/.]+', '^', '^/', '_urls', 'api-root', 'basename', 'create', 'delete', 'destroy', 'detail', 'format', 'get', 'initkwargs', 'list', 'lookup_field', 'lookup_url_kwarg', 'lookup_value_regex', 'mapping', 'name', 'partial_update', 'patch', 'pk', 'post', 'put', 'queryset', 'retrieve', 'root_renderers', 'str', 'suffix', 'update', 'url', '{', '{basename}-detail', '{basename}-list', '{url_name}', '{url_path}', '{{', '}', '}}']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\authentication.py
+# hypothesis_version: 6.151.10
+
+[b'basic', ':', 'Basic realm="%s"', 'CSRF Failed: %s', 'HTTP_AUTHORIZATION', 'Invalid token.', 'REMOTE_USER', 'Token', 'api', 'latin-1', 'password', 'user', 'utf-8']

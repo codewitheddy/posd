@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\sync_views.py
+# hypothesis_version: 6.151.10
+
+[400, 500, 'GET', 'Invalid JSON data', 'POST', 'amount', 'cash', 'customer_id', 'discount', 'duplicate', 'invoice_number', 'items', 'message', 'method', 'online', 'payments', 'price', 'product_id', 'quantity', 'recent_sales_24h', 'reference', 'sale_data', 'sale_id', 'server_time', 'status', 'subtotal', 'success', 'tax', 'temp_id', 'total']

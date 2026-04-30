@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\chardet\__init__.py
+# hypothesis_version: 6.151.10
+
+['DEFAULT_MAX_BYTES', 'DetectionDict', 'DetectionResult', 'EncodingEra', 'LanguageFilter', 'MINIMUM_THRESHOLD', 'UniversalDetector', '__version__', 'confidence', 'cp1252', 'detect', 'detect_all', 'empty_input_encoding', 'exclude_encodings', 'include_encodings', 'no_match_encoding', 'utf-8']

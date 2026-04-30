@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0090_remove_product_product_type.py
+# hypothesis_version: 6.151.10
+
+['pos', 'product', 'product_type']

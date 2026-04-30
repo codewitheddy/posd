@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0021_fix_supplierpayment_payment_number_unique.py
+# hypothesis_version: 6.151.10
+
+['payment_number', 'pos', 'supplierpayment']

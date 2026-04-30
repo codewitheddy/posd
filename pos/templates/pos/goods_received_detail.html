@@ -136,12 +136,17 @@
                 </div>
             </div>
 
-            {% if note.has_discrepancy %}
+            {% if note.total_damaged_qty > 0 and can_create_return_note %}
             <div class="alert alert-warning">
                 <i class="bi bi-exclamation-triangle"></i>
                 <strong>Discrepancy noted.</strong> Consider creating a
-                <a href="{% url 'grn_create' slug=business_slug %}">Goods Returned Note</a>
+                <a href="{% url 'grn_create' slug=business_slug %}?purchase_id={{ note.purchase.id }}">Goods Returned Note</a>
                 for damaged items or contacting the supplier for a credit note.
+            </div>
+            {% elif note.total_damaged_qty > 0 %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i>
+                <strong>Return already completed.</strong> All damaged quantities linked to this receipt have already been returned.
             </div>
             {% endif %}
         </div>
@@ -170,10 +175,19 @@
                     <a href="{% url 'goods_received_print' slug=business_slug pk=note.pk %}" class="btn btn-outline-primary w-100 mb-2" target="_blank">
                         <i class="bi bi-printer"></i> Print GRN
                     </a>
-                    {% if note.has_discrepancy %}
-                    <a href="{% url 'grn_create' slug=business_slug %}" class="btn btn-outline-warning w-100">
+                    {% if note.total_damaged_qty > 0 and can_create_return_note %}
+                    <a href="{% url 'grn_create' slug=business_slug %}?purchase_id={{ note.purchase.id }}" class="btn btn-outline-warning w-100">
                         <i class="bi bi-arrow-return-left"></i> Create Return Note
                     </a>
+                    {% elif note.total_damaged_qty > 0 %}
+                    <button type="button" class="btn btn-outline-success w-100" disabled>
+                        <i class="bi bi-check-circle"></i> Return Already Done
+                    </button>
+                    {% endif %}
+                    {% if note.total_damaged_qty > 0 %}
+                    <div class="small text-muted mt-2">
+                        Return notes are available only for damaged quantities on this receipt that have not yet been returned.
+                    </div>
                     {% endif %}
                 </div>
             </div>

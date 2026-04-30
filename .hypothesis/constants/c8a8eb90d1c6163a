@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0085_user_management_enhancements.py
+# hypothesis_version: 6.151.10
+
+[128, '0', '0.00', '100', '100.00', '20.00', '50.00', 'BusinessMembership', 'admin', 'businessmembership', 'can_apply_discount', 'can_edit_price', 'can_manage_stock', 'can_manage_users', 'can_refund_sale', 'can_view_cost_price', 'can_view_reports', 'can_void_sale', 'cashier', 'manager', 'max_discount_pct', 'owner', 'permissions', 'pin_hash', 'pos', 'sales', 'stock_manager', 'userprofile', 'viewer']

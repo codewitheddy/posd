@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0025_make_business_fields_required.py
+# hypothesis_version: 6.151.10
+
+['business', 'payment_methods', 'paymentmethod', 'pos', 'pos.business', 'purchase', 'purchase_items', 'purchaseitem', 'purchases', 'sale', 'sale_items', 'sale_payments', 'saleitem', 'salepayment', 'sales', 'stock_adjustments', 'stockadjustment', 'supplier', 'supplier_payments', 'supplierpayment', 'suppliers']

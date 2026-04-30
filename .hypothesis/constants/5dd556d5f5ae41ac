@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\branch_services.py
+# hypothesis_version: 6.151.10
+
+['-units_sold', '0', 'HQ', 'Uncategorized', 'admin', 'branch', 'branch__name', 'branch_id', 'branch_name', 'cancelled', 'cancelled_at', 'category', 'completed', 'completed_at', 'cost_value', 'gross_profit', 'id', 'in_transit', 'name', 'owner', 'pending', 'product', 'product__cost_price', 'product__id', 'product__name', 'product__unit_price', 'product_id', 'profit', 'quantity', 'revenue', 'rows', 'sale__branch_id', 'sell_value', 'status', 'total', 'total_profit', 'total_revenue', 'total_transactions', 'tx_count', 'unit_price', 'units_sold', 'updated_at']

@@ -1,0 +1,64 @@
+/* Marid POS — Jazzmin admin overrides
+   This file is ONLY loaded in Django admin via JAZZMIN_SETTINGS custom_css.
+   It undoes any bleed from custom-theme.css and sets the correct admin colors.
+*/
+
+/* ── Reset any bleed from custom-theme.css ── */
+.main-header.navbar,
+.main-header.navbar.navbar-dark,
+.main-header.navbar.navbar-white,
+.main-header.navbar.navbar-light {
+    background-color: #224195 !important;
+    border-bottom: none !important;
+}
+
+/* ── All text/links in the topbar must be white ── */
+.main-header.navbar *,
+.main-header.navbar a,
+.main-header.navbar .nav-link,
+.main-header.navbar .navbar-brand,
+.main-header.navbar .brand-text,
+.main-header.navbar .navbar-text,
+.main-header.navbar span,
+.main-header.navbar li,
+.main-header.navbar button {
+    color: #ffffff !important;
+}
+
+.main-header.navbar a:hover,
+.main-header.navbar .nav-link:hover {
+    color: rgba(255,255,255,.75) !important;
+    background-color: rgba(255,255,255,.08) !important;
+}
+
+/* ── Search bar in topbar ── */
+.main-header.navbar .form-control {
+    background-color: rgba(255,255,255,.15) !important;
+    border-color: rgba(255,255,255,.2) !important;
+    color: #ffffff !important;
+}
+.main-header.navbar .form-control::placeholder {
+    color: rgba(255,255,255,.6) !important;
+}
+.main-header.navbar .input-group-text {
+    background-color: rgba(255,255,255,.15) !important;
+    border-color: rgba(255,255,255,.2) !important;
+    color: #ffffff !important;
+}
+
+/* ── Sidebar brand ── */
+.main-sidebar .brand-link {
+    background-color: #1a3278 !important;
+    border-bottom: 1px solid rgba(255,255,255,.1) !important;
+}
+.main-sidebar .brand-link .brand-text,
+.main-sidebar .brand-link * {
+    color: #ffffff !important;
+}
+
+/* ── Active sidebar item ── */
+.sidebar-dark-primary .nav-sidebar > .nav-item > .nav-link.active,
+.sidebar-dark-primary .nav-sidebar > .nav-item > .nav-link.active:hover {
+    background-color: #224195 !important;
+    color: #ffffff !important;
+}

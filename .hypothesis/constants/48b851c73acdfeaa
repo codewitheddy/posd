@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\amqp\__init__.py
+# hypothesis_version: 6.151.10
+
+['5.3.1', 'AMQPError', 'AccessRefused', 'Barry Pederson', 'Channel', 'ChannelError', 'ChannelNotOpen', 'Connection', 'ConnectionError', 'ConnectionForced', 'ConsumerCancelled', 'ContentTooLarge', 'FrameError', 'FrameSyntaxError', 'InternalError', 'InvalidCommand', 'InvalidPath', 'Message', 'NoConsumers', 'NotAllowed', 'NotFound', 'PreconditionFailed', 'ResourceError', 'ResourceLocked', 'UnexpectedFrame', 'auvipy@gmail.com', 'error_for_code', 'major', 'micro', 'minor', 'promise', 'releaselevel', 'restructuredtext', 'serial', 'version_info_t']

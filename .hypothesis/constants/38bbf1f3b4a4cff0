@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0089_normalize_product_types_to_stock.py
+# hypothesis_version: 6.151.10
+
+['0088_backupauditlog', 'Product', 'pos', 'stock']

@@ -1,0 +1,47 @@
+{% extends 'pos/base.html' %}
+{% block title %}New Staff Advance{% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="page-header">
+  <div><h1><i class="bi bi-wallet2 me-2 text-primary"></i>New Staff Advance</h1></div>
+  <a href="{% url 'hr_advance_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+<div class="row justify-content-center">
+<div class="col-md-6">
+<div class="form-card">
+<form method="POST">{% csrf_token %}
+  <div class="mb-3">
+    <label class="form-label">Employee <span class="text-danger">*</span></label>
+    <select name="employee" class="form-select" required>
+      <option value="">-- Select employee --</option>
+      {% for e in employees %}<option value="{{ e.pk }}">{{ e.get_full_name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-6">
+      <label class="form-label">Amount (KES) <span class="text-danger">*</span></label>
+      <input type="number" name="amount" class="form-control" step="0.01" min="1" required>
+    </div>
+    <div class="col-6">
+      <label class="form-label">Monthly Deduction (KES) <span class="text-danger">*</span></label>
+      <input type="number" name="deduction_per_month" class="form-control" step="0.01" min="1" required>
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Date Taken <span class="text-danger">*</span></label>
+    <input type="date" name="date_taken" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Reason <span class="text-danger">*</span></label>
+    <textarea name="reason" class="form-control" rows="2" required></textarea>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-1"></i>Record Advance</button>
+    <a href="{% url 'hr_advance_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+</div>
+</div>
+</div>
+</div>
+{% endblock %}

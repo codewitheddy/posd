@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0048_add_loyalty_settings.py
+# hypothesis_version: 6.151.10
+
+[1.0, 1.5, 2.0, 3.0, 100, 10000, 50000, 100000, 'Enable points expiry', 'businesssettings', 'loyalty_enabled', 'loyalty_points_value', 'pos']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\drf_spectacular\utils.py
+# hypothesis_version: 6.151.10
+
+['ExtendedMetaSchema', 'F', '__iter__', 'cls', 'component_name', 'context', 'cookie', 'deprecate_fields', 'description', 'examples', 'exclude_fields', 'extensions', 'field', 'field_component_name', 'filter_backends', 'header', 'kwargs', 'many', 'path', 'query', 'request', 'response', 'schema', 'serializers']

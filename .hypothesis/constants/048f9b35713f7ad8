@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\filters.py
+# hypothesis_version: 6.151.10
+
+['"', '$', '%s - %s', "'", '*', ',', '-', '.', '=', '@', 'A search term.', 'Ordering', 'Search', '^', '__', '__all__', 'ascending', 'current', 'descending', 'description', 'get_path_info', 'get_serializer_class', 'icontains', 'iexact', 'in', 'iregex', 'istartswith', 'name', 'options', 'ordering', 'ordering_fields', 'param', 'path_infos', 'pk', 'query', 'request', 'required', 'schema', 'search', 'search_fields', 'serializer_class', 'string', 'term', 'type', 'write_only']

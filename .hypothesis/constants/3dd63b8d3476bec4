@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\core\handlers\exception.py
+# hypothesis_version: 6.151.10
+
+[400, 403, 404, 500, '%s: %s', 'django.security.%s', 'is_rendered', 'render', 'request', 'status_code']

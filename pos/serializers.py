@@ -4,6 +4,8 @@ Handles serialization/deserialization for REST API
 """
 
 from rest_framework import serializers
+from django.conf import settings
+from django.db.models import Q
 from django.contrib.auth.models import User
 from .models import (
     Product, Category, Sale, SaleItem, Customer, Supplier,
@@ -66,6 +68,54 @@ class ProductSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def validate_name(self, value):
+        normalized = (value or '').strip()
+        if not normalized:
+            raise serializers.ValidationError('Product name is required.')
+        return normalized
+
+    def validate(self, attrs):
+        business = self.context.get('business')
+        if business is None and self.instance is not None:
+            business = self.instance.business
+
+        if business is None:
+            raise serializers.ValidationError({'business': 'Business context is required.'})
+
+        instance_pk = self.instance.pk if self.instance else None
+
+        category = attrs.get('category')
+        if category is not None and category.business_id != business.id:
+            raise serializers.ValidationError({'category': 'Selected category does not belong to this business.'})
+
+        unit = attrs.get('unit')
+        if unit is not None and unit.business_id != business.id:
+            raise serializers.ValidationError({'unit': 'Selected unit does not belong to this business.'})
+
+        product_code = attrs.get('product_code', getattr(self.instance, 'product_code', None))
+        barcode = attrs.get('barcode', getattr(self.instance, 'barcode', ''))
+        name = attrs.get('name', getattr(self.instance, 'name', ''))
+
+        normalized_code = (product_code or '').strip() or None
+        normalized_barcode = (barcode or '').strip()
+
+        attrs['name'] = (name or '').strip()
+        attrs['product_code'] = normalized_code
+        attrs['barcode'] = normalized_barcode
+
+        product_qs = Product.objects.filter(business=business)
+        if instance_pk is not None:
+            product_qs = product_qs.exclude(pk=instance_pk)
+
+        if normalized_code and product_qs.filter(product_code__iexact=normalized_code).exists():
+            raise serializers.ValidationError({'product_code': 'This product code already exists in your business.'})
+
+        if normalized_barcode:
+            if product_qs.filter(Q(barcode__iexact=normalized_barcode) | Q(unit_barcode__iexact=normalized_barcode)).exists():
+                raise serializers.ValidationError({'barcode': 'This barcode is already used by another product barcode or unit barcode in your business.'})
+
+        return attrs
+
 
 class CustomerSerializer(serializers.ModelSerializer):
     """Customer serializer with loyalty info"""
@@ -81,8 +131,8 @@ class CustomerSerializer(serializers.ModelSerializer):
     def validate_date_of_birth(self, value):
         """Validate that customer is at least 18 years old"""
         if value:
-            from datetime import date
-            today = date.today()
+            from django.utils import timezone
+            today = timezone.now().date()
             age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
             
             if age < 18:
@@ -90,6 +140,28 @@ class CustomerSerializer(serializers.ModelSerializer):
                     f'Customer must be at least 18 years old. Current age: {age} years.'
                 )
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        business = self.context.get('business')
+        if business is None:
+            request = self.context.get('request')
+            business = getattr(request, 'business', None) if request else None
+
+        phone = Customer.normalize_phone(attrs.get('phone', getattr(self.instance, 'phone', '')))
+        attrs['phone'] = phone
+
+        if getattr(settings, 'ENFORCE_UNIQUE_CUSTOMER_PHONE', True) and business and phone:
+            duplicate_customer = Customer.find_duplicate_by_phone(
+                business,
+                phone,
+                exclude_pk=self.instance.pk if self.instance is not None else None,
+            )
+            if duplicate_customer is not None:
+                raise serializers.ValidationError({'phone': 'This phone number is already used by another customer in this business.'})
+
+        return attrs
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -107,7 +179,7 @@ class SaleItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = SaleItem
-        fields = ['id', 'product', 'product_name', 'quantity', 'unit_price', 'discount', 'subtotal']
+        fields = ['id', 'product', 'product_name', 'quantity', 'unit_price', 'total_price', 'note']
         read_only_fields = ['id', 'subtotal']
 
 
@@ -117,7 +189,7 @@ class SalePaymentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = SalePayment
-        fields = ['id', 'payment_method', 'payment_method_name', 'amount', 'reference']
+        fields = ['id', 'payment_method', 'payment_method_name', 'amount', 'reference_number']
         read_only_fields = ['id']
 
 
@@ -127,13 +199,14 @@ class SaleSerializer(serializers.ModelSerializer):
     payments = SalePaymentSerializer(many=True, read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True, allow_null=True)
     cashier_name = serializers.CharField(source='cashier.username', read_only=True, allow_null=True)
+    sale_number = serializers.CharField(source='invoice_number', read_only=True)
     
     class Meta:
         model = Sale
         fields = [
             'id', 'sale_number', 'customer', 'customer_name', 'cashier', 'cashier_name',
-            'subtotal', 'tax', 'discount', 'total', 'amount_paid', 'change_amount',
-            'payment_status', 'notes', 'created_at', 'updated_at', 'items', 'payments'
+            'subtotal', 'vat_amount', 'discount_amount', 'total', 'amount_paid', 'change_given',
+            'created_at', 'updated_at', 'items', 'payments'
         ]
         read_only_fields = ['id', 'sale_number', 'created_at', 'updated_at']
 

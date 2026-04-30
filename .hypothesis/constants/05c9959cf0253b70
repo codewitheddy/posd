@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0064_add_registration_control.py
+# hypothesis_version: 6.151.10
+
+[100, 200, 254, '-created_at', 'Approved', 'BusinessRegistration', 'Completed', 'Email Verified', 'ID', 'InvitationCode', 'Pending Verification', 'RegistrationSettings', 'Rejected', 'approved', 'business', 'business_name', 'business_type', 'businessregistration', 'code', 'completed', 'completed_at', 'created_at', 'created_by', 'email', 'email_verified', 'email_verified_at', 'first_name', 'id', 'invitation_code', 'invitationcode', 'ip_address', 'is_active', 'kra_pin', 'last_name', 'max_uses', 'notes', 'ordering', 'pending', 'pending_approval', 'phone', 'pos', 'pos.business', 'pos.invitationcode', 'pos_busreg_email_idx', 'registration', 'registration_enabled', 'rejected', 'rejection_reason', 'require_kra_pin', 'reviewed_at', 'reviewed_by', 'status', 'updated_at', 'user', 'user_agent', 'uses_count', 'valid_from', 'valid_until', 'verbose_name', 'verbose_name_plural']

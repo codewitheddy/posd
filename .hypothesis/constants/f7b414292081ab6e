@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0076_add_password_history.py
+# hypothesis_version: 6.151.10
+
+[255, '-created_at', 'ID', 'PasswordHistory', 'created_at', 'id', 'ordering', 'password_hash', 'password_history', 'pos', 'user']

@@ -1,0 +1,287 @@
+{% extends 'pos/base.html' %}
+{% block title %}{% if promo %}Edit{% else %}New{% endif %} Promotion{% endblock %}
+
+{% block extra_css %}
+<style>
+.promo-type-card { display:block; cursor:pointer; }
+.promo-type-card input[type="radio"] { position:absolute; opacity:0; width:0; height:0; }
+.promo-type-inner {
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  border:2px solid #e5e7eb; border-radius:10px; background:#fff;
+  transition:border-color .15s, background .15s, box-shadow .15s;
+  font-size:13px;
+}
+.promo-type-card:hover .promo-type-inner { border-color:#93c5fd; background:#eff6ff; }
+.promo-type-card input:checked + .promo-type-inner {
+  border-color:#3b82f6; background:#eff6ff;
+  box-shadow:0 0 0 3px rgba(59,130,246,.15);
+}
+.promo-type-dot {
+  width:16px; height:16px; border-radius:50%; border:2px solid #d1d5db;
+  flex-shrink:0; position:relative; transition:border-color .15s;
+}
+.promo-type-dot::after {
+  content:''; position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%) scale(0);
+  width:7px; height:7px; border-radius:50%; background:#3b82f6;
+  transition:transform .15s;
+}
+.promo-type-card input:checked + .promo-type-inner .promo-type-dot { border-color:#3b82f6; }
+.promo-type-card input:checked + .promo-type-inner .promo-type-dot::after { transform:translate(-50%,-50%) scale(1); }
+.section-card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:20px; margin-bottom:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4" style="max-width:860px">
+
+  <div class="mb-3">
+    <a href="{% url 'promotion_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Promotions
+    </a>
+  </div>
+
+  <h1 class="mb-1" style="font-size:20px;font-weight:700">
+    {% if promo %}Edit Promotion{% else %}New Promotion{% endif %}
+  </h1>
+  <p class="text-muted small mb-4">Configure the promotion details, scope, and validity period.</p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+
+    <!-- ── Type selector ── -->
+    <div class="section-card">
+      <div class="fw-semibold mb-3">Promotion Type</div>
+      <div class="row g-2">
+        {% for code, label in promo_types %}
+        <div class="col-6 col-md-4">
+          <label class="promo-type-card w-100" for="type_{{ code }}">
+            <input type="radio" name="promo_type" id="type_{{ code }}" value="{{ code }}"
+                   {% if promo and promo.promo_type == code %}checked
+                   {% elif not promo and code == 'percentage' %}checked{% endif %}>
+            <span class="promo-type-inner">
+              <span class="promo-type-dot"></span>
+              <span>
+                {% if code == 'percentage' %}<i class="bi bi-percent text-primary me-1"></i>
+                {% elif code == 'fixed' %}<i class="bi bi-cash text-info me-1"></i>
+                {% elif code == 'buy_x_get_y' %}<i class="bi bi-gift text-warning me-1"></i>
+                {% elif code == 'price_cut' %}<i class="bi bi-scissors text-danger me-1"></i>
+                {% elif code == 'bundle' %}<i class="bi bi-box-seam text-success me-1"></i>
+                {% elif code == 'happy_hour' %}<i class="bi bi-clock text-orange me-1" style="color:#e65100"></i>
+                {% endif %}
+                {{ label }}
+              </span>
+            </span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ── Basic info ── -->
+    <div class="section-card">
+      <div class="fw-semibold mb-3">Basic Information</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Promotion Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" name="name" value="{{ promo.name|default:'' }}" required placeholder="e.g. Weekend Sale, BOGO Fridays">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Promo Code <span class="text-muted fw-normal">(optional)</span></label>
+          <input type="text" class="form-control text-uppercase" name="code" value="{{ promo.code|default:'' }}"
+                 placeholder="e.g. SAVE20 — leave blank for auto-apply" style="text-transform:uppercase">
+          <div class="form-text">Leave blank to auto-apply without a code.</div>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">Description</label>
+          <textarea class="form-control" name="description" rows="2" placeholder="Optional internal notes">{{ promo.description|default:'' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Discount value ── -->
+    <div class="section-card" id="discount-section">
+      <div class="fw-semibold mb-3">Discount Details</div>
+      <div class="row g-3">
+
+        <!-- Percentage / Fixed / Happy Hour / Price Cut -->
+        <div class="col-md-4" id="discount-value-row">
+          <label class="form-label fw-semibold" id="discount-value-label">Discount Value</label>
+          <div class="input-group">
+            <span class="input-group-text" id="discount-prefix">%</span>
+            <input type="number" class="form-control" name="discount_value" id="discount_value"
+                   value="{{ promo.discount_value|default:'0' }}" step="0.01" min="0">
+          </div>
+          <div class="form-text" id="discount-value-hint">Percentage to deduct from qualifying total</div>
+        </div>
+
+        <!-- Buy X Get Y -->
+        <div class="col-md-4" id="buy-qty-row" style="display:none">
+          <label class="form-label fw-semibold">Buy Quantity</label>
+          <input type="number" class="form-control" name="buy_quantity" value="{{ promo.buy_quantity|default:1 }}" min="1">
+          <div class="form-text">Customer must buy this many</div>
+        </div>
+        <div class="col-md-4" id="get-qty-row" style="display:none">
+          <label class="form-label fw-semibold">Get Free Quantity</label>
+          <input type="number" class="form-control" name="get_quantity" value="{{ promo.get_quantity|default:1 }}" min="1">
+          <div class="form-text">Customer gets this many free</div>
+        </div>
+
+        <!-- Happy Hour times -->
+        <div class="col-md-4" id="happy-start-row" style="display:none">
+          <label class="form-label fw-semibold">Happy Hour Start</label>
+          <input type="time" class="form-control" name="happy_hour_start"
+                 value="{{ promo.happy_hour_start|time:'H:i'|default:'' }}">
+        </div>
+        <div class="col-md-4" id="happy-end-row" style="display:none">
+          <label class="form-label fw-semibold">Happy Hour End</label>
+          <input type="time" class="form-control" name="happy_hour_end"
+                 value="{{ promo.happy_hour_end|time:'H:i'|default:'' }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Scope ── -->
+    <div class="section-card">
+      <div class="fw-semibold mb-3">Applies To</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Scope</label>
+          <select class="form-select" name="applies_to" id="applies_to" onchange="updateScope()">
+            {% for code, label in applies_to_choices %}
+            <option value="{{ code }}" {% if promo and promo.applies_to == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-8" id="products-scope" style="display:none">
+          <label class="form-label fw-semibold">Specific Products</label>
+          <select class="form-select" name="applicable_products" multiple size="5">
+            {% for product in products %}
+            <option value="{{ product.id }}"
+              {% if product.id in selected_products %}selected{% endif %}>
+              {{ product.name }} — KES {{ product.unit_price }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Hold Ctrl/Cmd to select multiple</div>
+        </div>
+
+        <div class="col-md-8" id="category-scope" style="display:none">
+          <label class="form-label fw-semibold">Specific Categories</label>
+          <select class="form-select" name="applicable_categories" multiple size="5">
+            {% for cat in categories %}
+            <option value="{{ cat.id }}"
+              {% if cat.id in selected_categories %}selected{% endif %}>
+              {{ cat.name }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Hold Ctrl/Cmd to select multiple</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Validity ── -->
+    <div class="section-card">
+      <div class="fw-semibold mb-3">Validity Period</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Start Date & Time <span class="text-danger">*</span></label>
+          <input type="datetime-local" class="form-control" name="start_date" required
+                 value="{{ promo.start_date|date:'Y-m-d\TH:i'|default:'' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">End Date & Time <span class="text-danger">*</span></label>
+          <input type="datetime-local" class="form-control" name="end_date" required
+                 value="{{ promo.end_date|date:'Y-m-d\TH:i'|default:'' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Min Purchase (KES)</label>
+          <input type="number" class="form-control" name="min_purchase_amount"
+                 value="{{ promo.min_purchase_amount|default:'0' }}" step="0.01" min="0">
+          <div class="form-text">0 = no minimum</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Max Uses</label>
+          <input type="number" class="form-control" name="max_uses"
+                 value="{{ promo.max_uses|default:'0' }}" min="0">
+          <div class="form-text">0 = unlimited</div>
+        </div>
+        <div class="col-md-4 d-flex align-items-end pb-1">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
+                   {% if not promo or promo.is_active %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="is_active">Active</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg me-1"></i>{% if promo %}Save Changes{% else %}Create Promotion{% endif %}
+      </button>
+      <a href="{% url 'promotion_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const promoType = () => document.querySelector('input[name="promo_type"]:checked')?.value || 'percentage';
+
+function updateDiscountUI() {
+  const t = promoType();
+  const prefix = document.getElementById('discount-prefix');
+  const label = document.getElementById('discount-value-label');
+  const hint = document.getElementById('discount-value-hint');
+  const dvRow = document.getElementById('discount-value-row');
+  const buyRow = document.getElementById('buy-qty-row');
+  const getRow = document.getElementById('get-qty-row');
+  const happyStart = document.getElementById('happy-start-row');
+  const happyEnd = document.getElementById('happy-end-row');
+
+  // Reset
+  [buyRow, getRow, happyStart, happyEnd].forEach(el => el.style.display = 'none');
+  dvRow.style.display = '';
+
+  if (t === 'percentage') {
+    prefix.textContent = '%'; label.textContent = 'Discount %';
+    hint.textContent = 'Percentage to deduct from qualifying total';
+  } else if (t === 'fixed') {
+    prefix.textContent = 'KES'; label.textContent = 'Amount Off';
+    hint.textContent = 'Fixed KES amount to deduct from cart total';
+  } else if (t === 'buy_x_get_y') {
+    dvRow.style.display = 'none';
+    buyRow.style.display = ''; getRow.style.display = '';
+  } else if (t === 'price_cut') {
+    prefix.textContent = 'KES'; label.textContent = 'New Price';
+    hint.textContent = 'Fixed price per unit for qualifying products';
+  } else if (t === 'bundle') {
+    prefix.textContent = 'KES'; label.textContent = 'Bundle Price';
+    hint.textContent = 'Total price for the bundle of selected products';
+  } else if (t === 'happy_hour') {
+    prefix.textContent = '%'; label.textContent = 'Discount %';
+    hint.textContent = 'Percentage off during happy hour window';
+    happyStart.style.display = ''; happyEnd.style.display = '';
+  }
+}
+
+function updateScope() {
+  const scope = document.getElementById('applies_to').value;
+  document.getElementById('products-scope').style.display = scope === 'products' ? '' : 'none';
+  document.getElementById('category-scope').style.display = scope === 'category' ? '' : 'none';
+}
+
+document.querySelectorAll('input[name="promo_type"]').forEach(r => r.addEventListener('change', updateDiscountUI));
+document.addEventListener('DOMContentLoaded', () => { updateDiscountUI(); updateScope(); });
+</script>
+{% endblock %}

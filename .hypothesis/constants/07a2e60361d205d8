@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0075_change_saleitem_quantity_to_decimal.py
+# hypothesis_version: 6.151.10
+
+['0.001', 'pos', 'quantity', 'saleitem']

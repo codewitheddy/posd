@@ -46,49 +46,47 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
-    // Skip non-GET requests
     if (event.request.method !== 'GET') {
         return;
     }
 
-    // Skip chrome extensions and other non-http requests
     if (!event.request.url.startsWith('http')) {
         return;
     }
 
+    const requestUrl = new URL(event.request.url);
+    const isSameOrigin = requestUrl.origin === self.location.origin;
+    const isStaticAsset = requestUrl.pathname.startsWith('/static/') || requestUrl.pathname.startsWith('/media/') || requestUrl.pathname.endsWith('.js') || requestUrl.pathname.endsWith('.css') || requestUrl.pathname.endsWith('.png') || requestUrl.pathname.endsWith('.jpg') || requestUrl.pathname.endsWith('.jpeg') || requestUrl.pathname.endsWith('.svg') || requestUrl.pathname.endsWith('.woff2') || requestUrl.pathname.endsWith('.woff') || requestUrl.pathname.endsWith('.ttf');
+    const isDynamicAPI = requestUrl.pathname.includes('/api/') || requestUrl.searchParams.has('load_products') || requestUrl.searchParams.has('get_prices') || requestUrl.pathname.includes('/ping/') || requestUrl.pathname.endsWith('/sw.js');
+
+    // Serve dynamic requests directly from network
+    if (!isStaticAsset || isDynamicAPI) {
+        if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+            event.respondWith(
+                fetch(event.request).catch(() => caches.match(OFFLINE_URL))
+            );
+        } else {
+            event.respondWith(fetch(event.request));
+        }
+        return;
+    }
+
+    // Static asset request - serve from cache, cache new responses
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             if (cachedResponse) {
-                // Return cached version
                 return cachedResponse;
             }
-
-            // Try to fetch from network
-            return fetch(event.request)
-                .then((response) => {
-                    // Don't cache non-successful responses
-                    if (!response || response.status !== 200 || response.type === 'error') {
-                        return response;
-                    }
-
-                    // Clone the response
-                    const responseToCache = response.clone();
-
-                    // Cache successful responses (except API calls)
-                    if (!event.request.url.includes('/api/')) {
-                        caches.open(CACHE_NAME).then((cache) => {
-                            cache.put(event.request, responseToCache);
-                        });
-                    }
-
+            return fetch(event.request).then((response) => {
+                if (!response || response.status !== 200 || response.type === 'error') {
                     return response;
-                })
-                .catch(() => {
-                    // Network failed, return offline page for navigation requests
-                    if (event.request.mode === 'navigate') {
-                        return caches.match(OFFLINE_URL);
-                    }
+                }
+                const responseToCache = response.clone();
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, responseToCache);
                 });
+                return response;
+            });
         })
     );
 });

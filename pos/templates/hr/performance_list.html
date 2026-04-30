@@ -1,0 +1,65 @@
+{% extends 'pos/base.html' %}
+{% block title %}Performance{% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="page-header">
+  <div><h1><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Staff Performance</h1></div>
+</div>
+
+<div class="form-card mb-3">
+  <h6 class="mb-3"><i class="bi bi-play-circle me-1"></i>Generate Performance Records</h6>
+  <form method="POST" class="row g-2 align-items-end">{% csrf_token %}
+    <div class="col-md-3">
+      <label class="form-label form-label-sm">Period Start</label>
+      <input type="date" name="period_start" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label form-label-sm">Period End</label>
+      <input type="date" name="period_end" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-play-fill me-1"></i>Generate</button>
+    </div>
+  </form>
+</div>
+
+<div class="form-card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-light">
+        <tr><th>Rank</th><th>Employee</th><th>Period</th><th>Sales</th><th>Transactions</th><th>Discounts</th><th>Voids</th><th>Score</th></tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td>
+            {% if forloop.counter == 1 %}<i class="bi bi-trophy-fill text-warning"></i>
+            {% elif forloop.counter == 2 %}<i class="bi bi-trophy-fill text-secondary"></i>
+            {% elif forloop.counter == 3 %}<i class="bi bi-trophy-fill" style="color:#cd7f32"></i>
+            {% else %}{{ forloop.counter }}{% endif %}
+          </td>
+          <td>{{ r.employee.get_full_name }}</td>
+          <td class="small text-muted">{{ r.period_start|date:"d M" }} – {{ r.period_end|date:"d M Y" }}</td>
+          <td>{{ r.total_sales }}</td>
+          <td>{{ r.total_transactions }}</td>
+          <td>KES {{ r.total_discounts_given|floatformat:0 }}</td>
+          <td>{{ r.total_voids }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height:8px;min-width:60px">
+                <div class="progress-bar {% if r.performance_score >= 75 %}bg-success{% elif r.performance_score >= 40 %}bg-warning{% else %}bg-danger{% endif %}"
+                     style="width:{{ r.performance_score }}%"></div>
+              </div>
+              <span class="fw-bold">{{ r.performance_score|floatformat:0 }}</span>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No performance records. Generate above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endblock %}

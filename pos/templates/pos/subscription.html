@@ -1,453 +1,243 @@
 {% extends 'pos/base.html' %}
 {% load static %}
 
-{% block title %}Subscription & Billing - {{ business.name }}{% endblock %}
+{% block title %}Subscription & Billing — {{ business.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .subscription-container {
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-    
-    .subscription-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 40px;
-        border-radius: 12px;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    
-    .current-plan {
-        background: white;
-        padding: 30px;
-        border-radius: 12px;
-        margin-bottom: 30px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .plan-badge {
-        display: inline-block;
-        padding: 8px 20px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .plan-trial { background: #fff3cd; color: #856404; }
-    .plan-paid { background: #9b59b6; color: white; }
-    
-    .status-badge {
-        display: inline-block;
-        padding: 6px 16px;
-        border-radius: 16px;
-        font-size: 13px;
-        font-weight: 600;
-    }
-    
-    .status-active { background: #d4edda; color: #155724; }
-    .status-expired { background: #f8d7da; color: #721c24; }
-    .status-completed { background: #d4edda; color: #155724; }
-    .status-pending { background: #fff3cd; color: #856404; }
-    .status-failed { background: #f8d7da; color: #721c24; }
-    .status-cancelled { background: #f8d7da; color: #721c24; }
-    
-    .expiry-warning {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 15px;
-        margin: 20px 0;
-        border-radius: 4px;
-    }
-    
-    .expiry-danger {
-        background: #f8d7da;
-        border-left: 4px solid #dc3545;
-        padding: 15px;
-        margin: 20px 0;
-        border-radius: 4px;
-    }
-    
-    .payment-history {
-        background: white;
-        padding: 30px;
-        border-radius: 12px;
-        margin-bottom: 30px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .payment-item {
-        padding: 15px;
-        border-bottom: 1px solid #ecf0f1;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .payment-item:last-child {
-        border-bottom: none;
-    }
-    
-    .payment-amount {
-        font-size: 18px;
-        font-weight: 600;
-        color: #27ae60;
-    }
-    
-    .pricing-plans {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 30px;
-        margin-top: 30px;
-    }
-    
-    .pricing-card {
-        background: white;
-        padding: 40px 30px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        text-align: center;
-        transition: transform 0.2s;
-        position: relative;
-    }
-    
-    .pricing-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    
-    .pricing-card.featured {
-        border: 3px solid #667eea;
-        transform: scale(1.05);
-    }
-    
-    .featured-badge {
-        position: absolute;
-        top: -15px;
-        right: 20px;
-        background: #667eea;
-        color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    
-    .price {
-        font-size: 48px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 20px 0;
-    }
-    
-    .price-currency {
-        font-size: 24px;
-        vertical-align: super;
-    }
-    
-    .price-period {
-        font-size: 16px;
-        color: #7f8c8d;
-        margin-top: 5px;
-    }
-    
-    .features-list {
-        list-style: none;
-        padding: 0;
-        margin: 30px 0;
-        text-align: left;
-    }
-    
-    .features-list li {
-        padding: 10px 0;
-        color: #555;
-        font-size: 15px;
-    }
-    
-    .features-list li:before {
-        content: "✓";
-        color: #27ae60;
-        font-weight: bold;
-        margin-right: 10px;
-        font-size: 18px;
-    }
-    
-    .payment-instructions {
-        background: white;
-        padding: 30px;
-        border-radius: 12px;
-        margin-top: 30px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .payment-method {
-        background: #f8f9fa;
-        padding: 20px;
-        border-radius: 8px;
-        margin: 15px 0;
-    }
-    
-    .btn-upgrade {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 15px 40px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 16px;
-        cursor: pointer;
-        transition: all 0.2s;
-        width: 100%;
-        margin-top: 20px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        min-height: 48px;
-    }
-    
-    .btn-upgrade:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        color: white;
-    }
-    
-    .contact-support {
-        background: #f8f9fa;
-        padding: 20px;
-        border-radius: 8px;
-        text-align: center;
-        margin-top: 30px;
-    }
+  .int-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; padding:28px; }
+  .btn-primary-sm { background:#224195; color:#fff; border:none; border-radius:8px;
+                    padding:10px 22px; font-size:14px; font-weight:600; cursor:pointer;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary-sm:hover { background:#1a3278; color:#fff; }
+  .btn-outline-sm { background:#fff; color:#374151; border:1.5px solid #e5e7eb;
+                    border-radius:8px; padding:9px 18px; font-size:14px; font-weight:600;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-outline-sm:hover { border-color:#9ca3af; color:#111; }
+  .plan-badge { display:inline-block; padding:5px 16px; border-radius:20px;
+                font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  .plan-trial { background:#fef3c7; color:#92400e; }
+  .plan-paid  { background:#eef1fb; color:#224195; }
+  .status-badge { display:inline-block; padding:4px 12px; border-radius:20px;
+                  font-size:12px; font-weight:700; }
+  .status-active    { background:#dcfce7; color:#166534; }
+  .status-expired   { background:#fee2e2; color:#991b1b; }
+  .status-completed { background:#dcfce7; color:#166534; }
+  .status-pending   { background:#fef3c7; color:#92400e; }
+  .status-failed    { background:#fee2e2; color:#991b1b; }
+  .status-cancelled { background:#fee2e2; color:#991b1b; }
+  .alert-warning-custom { background:#fffbeb; border-left:4px solid #f59e0b;
+                           padding:14px 18px; border-radius:8px; font-size:13px; }
+  .alert-danger-custom  { background:#fef2f2; border-left:4px solid #dc2626;
+                           padding:14px 18px; border-radius:8px; font-size:13px; }
+  .payment-row { display:flex; justify-content:space-between; align-items:center;
+                 padding:14px 0; border-bottom:1px solid #f3f4f6; }
+  .payment-row:last-child { border-bottom:none; }
+  .pricing-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; }
+  .pricing-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+                  padding:32px 28px; text-align:center; position:relative;
+                  transition:border-color .15s, box-shadow .15s; }
+  .pricing-card.featured { border-color:#224195; box-shadow:0 4px 20px rgba(34,65,149,.12); }
+  .featured-badge { position:absolute; top:-13px; left:50%; transform:translateX(-50%);
+                    background:#224195; color:#fff; padding:4px 16px; border-radius:20px;
+                    font-size:11px; font-weight:700; letter-spacing:.05em; white-space:nowrap; }
+  .price-big { font-size:44px; font-weight:800; color:#111; line-height:1; }
+  .price-currency { font-size:22px; vertical-align:super; font-weight:700; }
+  .features-list { list-style:none; padding:0; margin:24px 0; text-align:left; }
+  .features-list li { padding:8px 0; font-size:14px; color:#374151;
+                      border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:10px; }
+  .features-list li:last-child { border-bottom:none; }
+  .features-list li::before { content:"✓"; color:#16a34a; font-weight:800; font-size:15px; flex-shrink:0; }
+  .payment-method-box { background:#f8f9fc; border:1.5px solid #e5e7eb; border-radius:10px; padding:20px 22px; }
+  .section-title { font-size:17px; font-weight:700; margin-bottom:16px; color:#111; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="subscription-container">
-    <!-- Header -->
-    <div class="subscription-header">
-        <h1 style="margin: 0 0 10px 0;">Subscription & Billing</h1>
-        <p style="margin: 0; opacity: 0.9;">Simple pricing - All features included</p>
-    </div>
-    
-    <!-- Current Plan -->
-    <div class="current-plan">
-        <h2 style="margin-bottom: 20px;">Current Plan</h2>
-        
-        <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 20px;">
-            <div>
-                <span class="plan-badge plan-{{ business.subscription_plan }}">
-                    {{ business.get_subscription_plan_display }}
-                </span>
-                
-                <span class="status-badge status-{{ business.license_status }}" style="margin-left: 10px;">
-                    {{ business.get_license_status_display }}
-                </span>
-            </div>
-            
-            <div style="text-align: right;">
-                {% if business.license_expires_at %}
-                <div style="font-size: 14px; color: #7f8c8d;">License Expires</div>
-                <div style="font-size: 20px; font-weight: 600; color: #2c3e50;">
-                    {{ business.license_expires_at|date:"M d, Y" }}
-                </div>
-                {% if business.days_until_expiry != None %}
-                <div style="font-size: 13px; color: #7f8c8d; margin-top: 5px;">
-                    {{ business.days_until_expiry }} days remaining
-                </div>
-                {% endif %}
-                {% else %}
-                <div style="font-size: 14px; color: #7f8c8d;">No expiry date set</div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- Expiry Warnings -->
-        {% if business.is_license_expired %}
-        <div class="expiry-danger">
-            <strong>⚠️ License Expired!</strong><br>
-            Your license has expired. Please renew to continue using the system.
-        </div>
-        {% elif business.days_until_expiry != None and business.days_until_expiry <= 7 %}
-        <div class="expiry-warning">
-            <strong>⚠️ License Expiring Soon!</strong><br>
-            Your license will expire in {{ business.days_until_expiry }} days. Please renew to avoid service interruption.
-        </div>
+<div class="container-fluid py-4 px-3 px-md-5">
+
+  <!-- Header -->
+  <div class="mb-4">
+    <h1 style="font-size:22px;font-weight:700;margin:0">Subscription & Billing</h1>
+    <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Simple pricing — all features included.</p>
+  </div>
+
+  <!-- Current Plan -->
+  <div class="int-card mb-4" style="border:none;padding-left:0;padding-right:0">
+    <div class="section-title" style="margin-bottom:20px">Current Plan</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:20px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="plan-badge plan-{{ business.subscription_plan }}">
+          {{ business.get_subscription_plan_display }}
+        </span>
+        <span class="status-badge status-{{ business.license_status }}">
+          {{ business.get_license_status_display }}
+        </span>
+      </div>
+
+      <div style="text-align:right">
+        {% if business.license_expires_at %}
+        <div style="font-size:12px;color:#6b7280">License Expires</div>
+        <div style="font-size:18px;font-weight:700;color:#111">{{ business.license_expires_at|date:"M d, Y" }}</div>
+        {% if business.days_until_expiry != None %}
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">{{ business.days_until_expiry }} days remaining</div>
         {% endif %}
-    </div>
-    
-    <!-- Payment History -->
-    <div class="payment-history">
-        <h2 style="margin-bottom: 20px;">Payment History</h2>
-        
-        {% if payments %}
-        <div>
-            {% for payment in payments %}
-            <div class="payment-item">
-                <div>
-                    <div style="font-weight: 600; color: #2c3e50;">
-                        {{ payment.get_plan_display }}
-                    </div>
-                    <div style="font-size: 13px; color: #7f8c8d;">
-                        {{ payment.payment_date|date:"M d, Y" }} • 
-                        {{ payment.get_payment_method_display }}
-                        {% if payment.payment_reference %}
-                        • Ref: {{ payment.payment_reference }}
-                        {% endif %}
-                    </div>
-                    <div style="font-size: 12px; color: #95a5a6; margin-top: 4px;">
-                        Period: {{ payment.period_start|date:"M d, Y" }} - {{ payment.period_end|date:"M d, Y" }}
-                    </div>
-                </div>
-                <div>
-                    <div class="payment-amount">
-                        {{ payment.currency }} {{ payment.amount|floatformat:0 }}
-                    </div>
-                    <div style="font-size: 12px; text-align: right;">
-                        <span class="status-badge status-{{ payment.status }}">
-                            {{ payment.get_status_display }}
-                        </span>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
         {% else %}
-        <p style="text-align: center; color: #7f8c8d; padding: 40px 0;">
-            No payment history yet
-        </p>
+        <div style="font-size:13px;color:#9ca3af">No expiry date set</div>
         {% endif %}
+      </div>
     </div>
-    
-    <!-- Pricing Plans -->
-    <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h2 style="margin-bottom: 10px; text-align: center;">Simple Pricing</h2>
-        <p style="color: #7f8c8d; margin-bottom: 30px; text-align: center;">All features included. No hidden fees.</p>
-        
-        <div class="pricing-plans">
-            <!-- Free Trial -->
-            <div class="pricing-card">
-                <h3 style="color: #2c3e50; margin-bottom: 10px;">Free Trial</h3>
-                <div class="price">
-                    <span class="price-currency">KES</span> 0
-                </div>
-                <div class="price-period">30 Days</div>
-                
-                <ul class="features-list">
-                    <li>Full POS System</li>
-                    <li>Inventory Management</li>
-                    <li>Supplier Management</li>
-                    <li>Purchase Orders & GRN</li>
-                    <li>Customer Management</li>
-                    <li>Loyalty Program</li>
-                    <li>Complete Reports</li>
-                    <li>Multi-User Support</li>
-                    <li>Email Support</li>
-                </ul>
-                
-                {% if business.subscription_plan == 'trial' %}
-                <button class="btn btn-secondary btn-block" disabled>Current Plan</button>
-                {% endif %}
-            </div>
-            
-            <!-- Annual Subscription -->
-            <div class="pricing-card featured">
-                <div class="featured-badge">BEST VALUE</div>
-                <h3 style="color: #667eea; margin-bottom: 10px;">Annual Subscription</h3>
-                <div class="price">
-                    <span class="price-currency">KES</span> 15,000
-                </div>
-                <div class="price-period">Per Year</div>
-                
-                <ul class="features-list">
-                    <li>Everything in Free Trial</li>
-                     <li>Unlimited Usage</li>
-                    <li>No Feature Restrictions</li>
-                    <li>Priority Support</li>
-                    <li>Regular Updates</li>
-                    <li>Data Backup</li>
-                    <li>WhatsApp Support</li>
-                    <li>Phone Support</li>
-                    <li>Training & Onboarding</li>
-                </ul>
-                
-                {% if business.subscription_plan == 'paid' %}
-                <button class="btn btn-secondary btn-block" disabled>Current Plan</button>
-                {% else %}
-                <a href="#payment-instructions" class="btn btn-upgrade">Subscribe Now</a>
-                {% endif %}
-            </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-            <p style="margin: 0; color: #555; font-size: 15px;">
-                <strong>💡 Simple & Transparent:</strong> Just KES 15,000 per year for unlimited access to all features. No complicated tiers, no hidden costs.
-            </p>
-        </div>
+
+    {% if business.is_license_expired %}
+    <div class="alert-danger-custom mt-4">
+      <strong>⚠️ License Expired</strong> — Please renew to continue using the system.
     </div>
-    
-    <!-- Payment Instructions -->
-    <div class="payment-instructions" id="payment-instructions">
-        <h2 style="margin-bottom: 20px;">How to Pay</h2>
-        <p style="color: #7f8c8d; margin-bottom: 30px;">
-            Choose your preferred payment method below. After payment, contact us with your transaction reference to activate your subscription.
-        </p>
-        
-        <!-- M-Pesa -->
-        <div class="payment-method">
-            <h4 style="margin-bottom: 15px;">📱 M-Pesa (Recommended)</h4>
-            <ol style="margin: 0; padding-left: 20px;">
-                <li>Go to M-Pesa menu on your phone</li>
-                <li>Select "Lipa na M-Pesa"</li>
-                <li>Select "SEND MONEY"</li>
-                <li>Enter Phone Number: <strong>0717147007</strong></li>
-                <li>Enter Account Number: <strong>{{ business.slug }}</strong></li>
-                <li>Enter Amount: <strong>KES 15,000</strong></li>
-                <li>Enter your M-Pesa PIN and confirm</li>
-                <li>You will receive an M-Pesa confirmation SMS</li>
-                <li>Send the M-Pesa code to us via WhatsApp or Email</li>
-            </ol>
-        </div>
-        
-        <!-- Contact Info -->
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px;">
-            <h4 style="margin-bottom: 15px;">📞 Send Payment Confirmation To:</h4>
-            <div style="display: grid; gap: 10px;">
-                <div>
-                    <strong>WhatsApp:</strong> +254 717 147 007
-                </div>
-                <div>
-                    <strong>Email:</strong> ropenixkenya@gmail.com
-                </div>
-                <div>
-                    <strong>Phone:</strong> +254 717 147 007
-                </div>
-            </div>
-            <p style="margin-top: 15px; font-size: 13px; color: #7f8c8d;">
-                Include your business name (<strong>{{ business.name }}</strong>) and transaction reference in your message.
-                Your subscription will be activated within 1 hour during business hours.
-            </p>
-        </div>
+    {% elif business.days_until_expiry != None and business.days_until_expiry <= 7 %}
+    <div class="alert-warning-custom mt-4">
+      <strong>⚠️ Expiring Soon</strong> — Your license expires in {{ business.days_until_expiry }} days. Renew to avoid interruption.
     </div>
-    
-    <!-- Contact Support -->
-    <div class="contact-support">
-        <h3 style="margin-bottom: 10px;">Need Help?</h3>
-        <p style="color: #7f8c8d; margin-bottom: 15px;">
-            Our support team is here to help you with any questions about subscriptions and billing.
-        </p>
-        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <a href="https://wa.me/254717147007" class="btn btn-success" target="_blank">
-                <i class="bi bi-whatsapp"></i> WhatsApp Us
-            </a>
-            <a href="mailto:ropenixkenya@gmail.com" class="btn btn-primary">
-                <i class="bi bi-envelope"></i> Email Us
-            </a>
+    {% endif %}
+  </div>
+
+  <!-- Payment History -->
+  <div class="int-card mb-4">
+    <div class="section-title">Payment History</div>
+
+    {% if payments %}
+    {% for payment in payments %}
+    <div class="payment-row">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:#111">{{ payment.get_plan_display }}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:3px">
+          {{ payment.payment_date|date:"M d, Y" }} · {{ payment.get_payment_method_display }}
+          {% if payment.payment_reference %} · Ref: {{ payment.payment_reference }}{% endif %}
         </div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px">
+          {{ payment.period_start|date:"M d, Y" }} – {{ payment.period_end|date:"M d, Y" }}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:#16a34a">
+          {{ payment.currency }} {{ payment.amount|floatformat:0 }}
+        </div>
+        <div style="margin-top:4px">
+          <span class="status-badge status-{{ payment.status }}">{{ payment.get_status_display }}</span>
+        </div>
+      </div>
     </div>
+    {% endfor %}
+    {% else %}
+    <p style="text-align:center;color:#9ca3af;padding:40px 0;font-size:13px">No payment history yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Pricing Plans -->
+  <div class="int-card mb-4">
+    <div class="section-title" style="text-align:center">Simple Pricing</div>
+    <p style="text-align:center;font-size:13px;color:#6b7280;margin-bottom:28px">All features included. No hidden fees.</p>
+
+    <div class="pricing-grid">
+      <!-- Free Trial -->
+      <div class="pricing-card">
+        <h3 style="font-size:16px;font-weight:700;color:#374151;margin-bottom:8px">Free Trial</h3>
+        <div class="price-big"><span class="price-currency">KES</span> 0</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:6px">30 Days</div>
+
+        <ul class="features-list">
+          <li>Full POS System</li>
+          <li>Inventory Management</li>
+          <li>Supplier Management</li>
+          <li>Purchase Orders & GRN</li>
+          <li>Customer Management</li>
+          <li>Loyalty Program</li>
+          <li>Complete Reports</li>
+          <li>Multi-User Support</li>
+          <li>Email Support</li>
+        </ul>
+
+        {% if business.subscription_plan == 'trial' %}
+        <button class="btn-outline-sm w-100 justify-content-center" disabled style="opacity:.6;cursor:default">Current Plan</button>
+        {% endif %}
+      </div>
+
+      <!-- Annual -->
+      <div class="pricing-card featured">
+        <div class="featured-badge">BEST VALUE</div>
+        <h3 style="font-size:16px;font-weight:700;color:#224195;margin-bottom:8px">Annual Subscription</h3>
+        <div class="price-big"><span class="price-currency">KES</span> 15,000</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:6px">Per Year</div>
+
+        <ul class="features-list">
+          <li>Everything in Free Trial</li>
+          <li>Unlimited Usage</li>
+          <li>No Feature Restrictions</li>
+          <li>Priority Support</li>
+          <li>Regular Updates</li>
+          <li>Data Backup</li>
+          <li>WhatsApp Support</li>
+          <li>Phone Support</li>
+          <li>Training & Onboarding</li>
+        </ul>
+
+        {% if business.subscription_plan == 'paid' %}
+        <button class="btn-outline-sm w-100 justify-content-center" disabled style="opacity:.6;cursor:default">Current Plan</button>
+        {% else %}
+        <a href="#payment-instructions" class="btn-primary-sm w-100 justify-content-center">Subscribe Now</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding:16px 20px;background:#f8f9fc;border-radius:10px;font-size:13px;color:#374151;text-align:center">
+      <strong>💡 Simple & Transparent:</strong> KES 15,000/year for unlimited access to all features. No tiers, no hidden costs.
+    </div>
+  </div>
+
+  <!-- Payment Instructions -->
+  <div class="int-card mb-4" id="payment-instructions">
+    <div class="section-title">How to Pay</div>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:20px">
+      After payment, send us your transaction reference to activate your subscription.
+    </p>
+
+    <div class="payment-method-box mb-3">
+      <div style="font-weight:700;font-size:14px;margin-bottom:12px">📱 M-Pesa (Recommended)</div>
+      <ol style="margin:0;padding-left:20px;font-size:13px;color:#374151;line-height:2">
+        <li>Go to M-Pesa → Lipa na M-Pesa → Send Money</li>
+        <li>Phone Number: <strong>0717147007</strong></li>
+        <li>Account Number: <strong>{{ business.slug }}</strong></li>
+        <li>Amount: <strong>KES 15,000</strong></li>
+        <li>Confirm with your PIN</li>
+        <li>Send the M-Pesa code to us via WhatsApp or Email</li>
+      </ol>
+    </div>
+
+    <div class="payment-method-box">
+      <div style="font-weight:700;font-size:14px;margin-bottom:12px">📞 Send Confirmation To</div>
+      <div style="font-size:13px;color:#374151;display:grid;gap:8px">
+        <div><strong>WhatsApp / Phone:</strong> +254 717 147 007</div>
+        <div><strong>Email:</strong> ropenixkenya@gmail.com</div>
+      </div>
+      <p style="margin-top:12px;font-size:12px;color:#6b7280">
+        Include your business name (<strong>{{ business.name }}</strong>) and transaction reference.
+        Activation within 1 hour during business hours.
+      </p>
+    </div>
+  </div>
+
+  <!-- Support -->
+  <div style="text-align:center;padding:24px;background:#f8f9fc;border-radius:14px;border:1.5px solid #e5e7eb">
+    <div style="font-weight:700;font-size:15px;margin-bottom:6px">Need Help?</div>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Our support team is happy to help with any billing questions.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a href="https://wa.me/254717147007" class="btn-primary-sm" target="_blank">
+        <i class="bi bi-whatsapp"></i> WhatsApp Us
+      </a>
+      <a href="mailto:ropenixkenya@gmail.com" class="btn-outline-sm">
+        <i class="bi bi-envelope"></i> Email Us
+      </a>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

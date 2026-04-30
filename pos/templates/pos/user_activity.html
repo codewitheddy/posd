@@ -1,0 +1,165 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Activity: {{ target_user.get_full_name|default:target_user.username }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+  <!-- Breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug %}">Dashboard</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'activity_log' slug=request.business.slug %}">Activity Log</a></li>
+      <li class="breadcrumb-item active">{{ target_user.get_full_name|default:target_user.username }}</li>
+    </ol>
+  </nav>
+
+  <!-- User Header -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3">
+        <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center"
+             style="width:56px;height:56px;font-size:1.5rem;font-weight:700;color:var(--bs-primary)">
+          {{ target_user.get_full_name|default:target_user.username|first|upper }}
+        </div>
+        <div>
+          <h4 class="mb-0">{{ target_user.get_full_name|default:target_user.username }}</h4>
+          <div class="text-muted small">
+            @{{ target_user.username }}
+            {% if target_user.email %}&nbsp;·&nbsp;{{ target_user.email }}{% endif %}
+          </div>
+        </div>
+        <div class="ms-auto">
+          <a href="{% url 'activity_log' slug=request.business.slug %}?user={{ target_user.id }}"
+             class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-funnel me-1"></i>Filter in main log
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-primary">{{ total }}</div>
+        <div class="text-muted small">Total Actions</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-warning">{{ sales_count }}</div>
+        <div class="text-muted small">Sales Processed</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-success">
+          {% if last_login %}{{ last_login.timestamp|date:"d M H:i" }}{% else %}—{% endif %}
+        </div>
+        <div class="text-muted small">Last Login</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold {% if failed_logins > 0 %}text-danger{% else %}text-muted{% endif %}">
+          {{ failed_logins }}
+        </div>
+        <div class="text-muted small">Failed Logins</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-transparent border-bottom d-flex align-items-center justify-content-between py-2">
+      <span class="fw-semibold">Activity History</span>
+      <span class="badge bg-secondary">{{ total }} records</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3" style="width:160px">Timestamp</th>
+              <th style="width:120px">Action</th>
+              <th style="width:80px">Status</th>
+              <th>Description</th>
+              <th style="width:110px">Entity</th>
+              <th style="width:120px">IP Address</th>
+              {% if branches %}<th>Branch</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in page_obj %}
+            <tr>
+              <td class="ps-3">
+                <span class="small text-nowrap">{{ log.timestamp|date:"Y-m-d" }}</span><br>
+                <span class="small text-muted">{{ log.timestamp|date:"H:i:s" }}</span>
+              </td>
+              <td>
+                {% include 'pos/partials/action_badge.html' with action=log.action_type label=log.get_action_type_display %}
+              </td>
+              <td>
+                {% if log.status == 'success' %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle">Success</span>
+                {% elif log.status == 'failure' %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Failed</span>
+                {% else %}
+                  <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ log.status|capfirst }}</span>
+                {% endif %}
+              </td>
+              <td class="text-truncate" style="max-width:300px" title="{{ log.description }}">
+                {{ log.description }}
+              </td>
+              <td>
+                {% if log.entity_type %}
+                  <span class="badge bg-light text-dark border small">{{ log.entity_type }}</span>
+                  {% if log.entity_id %}<span class="text-muted small">#{{ log.entity_id }}</span>{% endif %}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted">{{ log.ip_address|default:"—" }}</td>
+              {% if branches %}
+              <td class="small">{{ log.branch.name|default:"—" }}</td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                No activity found for this user.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+        <small class="text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a>
+              </li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+            {% if page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

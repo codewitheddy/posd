@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\wsgi.py
+# hypothesis_version: 6.151.10
+
+['%s://%s/%s', ',', '/', 'Any', 'Callable[..., Any]', 'Dict[str, Any]', 'Dict[str, str]', 'Event', 'EventProcessor', 'ExcInfo', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'Iterator[bytes]', 'Optional[Any]', 'PATH_INFO', 'QUERY_STRING', 'REMOTE_ADDR', 'REQUEST_METHOD', 'SCRIPT_NAME', 'SERVER_NAME', 'SERVER_PORT', 'StartResponse', 'Tuple[str, ...]', 'WsgiExcInfo', 'WsgiResponseHeaders', 'WsgiResponseIter', '_response', '_scope', 'app', 'env', 'fileno', 'generic WSGI request', 'handled', 'headers', 'ip_address', 'latin1', 'manual', 'method', 'query_string', 'replace', 'request', 'span_origin', 'type', 'url', 'use_x_forwarded_for', 'user', 'utf-8', 'wsgi', 'wsgi.file_wrapper', 'wsgi.url_scheme', 'wsgi_environ']

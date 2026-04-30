@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\utils\model_meta.py
+# hypothesis_version: 6.151.10
+
+['FieldInfo', 'RelationInfo', '_meta', 'abstract', 'fields', 'fields_and_pk', 'forward_relations', 'has_through_model', 'model_field', 'pk', 'related_model', 'relations', 'reverse', 'reverse_relations', 'through', 'to_field', 'to_fields', 'to_many']

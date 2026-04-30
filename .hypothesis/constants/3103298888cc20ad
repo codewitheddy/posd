@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0047_simplify_subscription_plans.py
+# hypothesis_version: 6.151.10
+
+['Annual Subscription', 'Business', 'Free Trial', 'Free Trial (30 Days)', 'SubscriptionPayment', 'basic', 'business', 'enterprise', 'free', 'paid', 'plan', 'pos', 'professional', 'subscription_plan', 'subscriptionpayment', 'trial']

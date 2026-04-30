@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ branch.name }} — Sign In</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      margin: 0; min-height: 100vh;
+      background: #f8f9fc;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 16px;
+    }
+    .card {
+      width: 100%; max-width: 420px;
+      background: #fff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 40px 40px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.07);
+    }
+    .branch-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #eef1fb; color: #224195;
+      border-radius: 20px; padding: 5px 14px;
+      font-size: 12px; font-weight: 700;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+    p  { font-size: 13px; color: #6b7280; margin: 0 0 24px; }
+    label { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 5px; display: block; }
+    .form-control {
+      border: 1.5px solid #e5e7eb; border-radius: 8px;
+      font-size: 13px; padding: 10px 12px;
+    }
+    .form-control:focus { border-color: #224195; box-shadow: 0 0 0 3px rgba(34,65,149,.08); outline: none; }
+    .btn-signin {
+      width: 100%; background: #224195; color: #fff; border: none;
+      border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 700;
+      cursor: pointer; margin-top: 8px;
+    }
+    .btn-signin:hover { background: #1a3278; }
+    .error-box {
+      background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; color: #991b1b; margin-bottom: 16px;
+    }
+    .back-link { font-size: 12px; color: #6b7280; text-align: center; margin-top: 20px; }
+    .back-link a { color: #224195; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="branch-badge">
+      <i class="bi bi-building"></i> {{ branch.code }}
+    </div>
+    <h1>{{ branch.name }}</h1>
+    <p>Sign in to operate this branch</p>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label>Username or Email</label>
+        <input type="text" name="username" class="form-control" autofocus required
+               placeholder="Enter your username">
+      </div>
+      <div class="mb-3">
+        <label>Password</label>
+        <input type="password" name="password" class="form-control" required
+               placeholder="Enter your password">
+      </div>
+      <button type="submit" class="btn-signin">Sign In to Branch</button>
+    </form>
+
+    <div class="back-link">
+      <a href="{% url 'login' %}">← Back to main login</a>
+    </div>
+  </div>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+</body>
+</html>

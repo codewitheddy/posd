@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0079_webhooks.py
+# hypothesis_version: 6.151.10
+
+[100, 500, '-created_at', '-delivered_at', 'Webhook', 'WebhookDelivery', 'attempt', 'business', 'created_at', 'delivered_at', 'deliveries', 'event', 'events', 'id', 'is_active', 'name', 'ordering', 'payload', 'pos', 'pos.business', 'pos.webhook', 'response_body', 'response_status', 'secret', 'success', 'updated_at', 'url', 'webhook', 'webhooks']

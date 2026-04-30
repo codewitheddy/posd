@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0088_backupauditlog.py
+# hypothesis_version: 6.151.10
+
+[255, '-started_at', '0087_heldorder', 'Backup Deletion', 'Backup Verification', 'BackupAuditLog', 'Business Backup', 'Business Restore', 'Database Backup', 'Database Restore', 'Failed', 'ID', 'In Progress', 'Media Backup', 'Media Restore', 'SHA-256 checksum', 'Size of backup in MB', 'Success', 'Warning', 'auth', 'auth.user', 'backup_audit_logs', 'backup_business', 'backup_checksum', 'backup_database', 'backup_file', 'backup_media', 'backup_operations', 'backup_size_mb', 'backupauditlog', 'business', 'completed_at', 'delete_backup', 'details', 'duration_seconds', 'error_message', 'failed', 'id', 'in_progress', 'is_encrypted', 'operation', 'ordering', 'pos', 'pos.business', 'restore_business', 'restore_database', 'restore_media', 'started_at', 'status', 'success', 'user', 'verify_backup', 'warning']

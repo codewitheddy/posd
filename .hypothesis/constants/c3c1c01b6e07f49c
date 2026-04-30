@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\_wsgi_common.py
+# hypothesis_version: 6.151.10
+
+['+json', '-', ';', 'Any', 'CONNECT', 'CONTENT_LENGTH', 'CONTENT_TYPE', 'DELETE', 'Dict[str, Any]', 'Event', 'GET', 'HTTP_', 'HTTP_AUTHORIZATION', 'HTTP_COOKIE', 'HTTP_SET_COOKIE', 'HTTP_X_API_KEY', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'Iterator[None]', 'Mapping[str, str]', 'Optional[Any]', 'Optional[str]', 'PATCH', 'POST', 'PUT', 'REMOTE_ADDR', 'TRACE', '_', 'application/', 'application/json', 'cookies', 'data', 'medium', 'never', 'request', 'small', 'utf-8']

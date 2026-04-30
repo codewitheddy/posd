@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\contrib\postgres\fields\ranges.py
+# hypothesis_version: 6.151.10
+
+['%s%s', '%s::%s', '%s::integer', '%s::numeric', '%s::{}', '&&', '&<', '&>', "'%s%s'", '(', '()', '(]', ')', '-|-', '::{}', '<<', '<>', '<@', '=', '>>', '@>', 'BigIntegerRangeField', 'DateRangeField', 'DateTimeRangeField', 'DecimalRangeField', 'IntegerRangeField', 'LOWER_INC', 'LOWER_INF', 'RangeBoundary', 'RangeField', 'RangeOperators', 'UPPER_INC', 'UPPER_INF', '[', '[)', '[]', ']', 'adjacent_to', 'base_field', 'bigint', 'bounds', 'contained_by', 'contains', 'date', 'daterange', 'default_bounds', 'double precision', 'empty', 'endswith', 'form_class', 'fully_gt', 'fully_lt', 'int4range', 'int8range', 'integer', 'isempty', 'lower', 'lower_inc', 'lower_inf', 'model', 'not_gt', 'not_lt', 'numeric', 'numrange', 'smallint', 'startswith', 'tstzrange', 'upper', 'upper_inc', 'upper_inf']

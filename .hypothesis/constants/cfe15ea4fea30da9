@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\tests_integration_pbt.py
+# hypothesis_version: 6.151.10
+
+[100, 120, 128, 200, 300, 500, 501, 1000, 1024, 4096, 100000, '*', '._', 'Acme Ltd', 'Authorization', 'Bearer deadbeef', 'Cs', 'Ll', 'Lu', 'Nd', 'OK', 'Test', 'Test Business', 'Token sometoken', '__main__', 'acme', 'business', 'customer.created', 'data', 'event', 'id', 'name', 'payment.received', 'product.low_stock', 'product.out_of_stock', 'purchase.created', 'purchase.received', 'sale.created', 'sale.refunded', 'sha256=', 'slug', 'stock.adjusted', 'success', 'test', 'test-business', 'timestamp']

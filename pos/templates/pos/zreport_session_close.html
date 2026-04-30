@@ -1,0 +1,72 @@
+{% extends 'pos/base.html' %}
+{% block title %}Close Session — {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .z-close-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:16px; padding:28px; }
+  .z-close-label { font-size:12px; font-weight:700; color:#374151; display:block; margin-bottom:6px; }
+  .z-close-input { border:1.5px solid #e5e7eb; border-radius:10px; font-size:22px; font-weight:700; text-align:center; }
+  .z-close-input:focus { border-color:#224195; box-shadow:0 0 0 3px rgba(34,65,149,.08); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:600px;margin:0 auto">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'zreport_session_status' slug=business.slug %}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h1 style="font-size:20px;font-weight:700;margin:0">Close POS Session</h1>
+      <p style="font-size:13px;color:#6b7280;margin:2px 0 0">
+        Session #{{ session.session_number }} — opened {{ session.opened_at|date:"d M Y H:i" }}
+      </p>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+      {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Blind Declaration Form — no cash summary shown -->
+  <div class="z-close-card">
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px;color:#374151">
+      <i class="bi bi-lock me-2" style="color:#dc2626"></i>Declare Closing Cash
+    </div>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:24px">
+      Count the cash in the drawer and enter the total below. Do not refer to any system figures — this is a blind count.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-4">
+        <label class="z-close-label">
+          Closing Cash (KES) <span style="color:#dc2626">*</span>
+        </label>
+        <input type="number" name="closing_cash" class="form-control form-control-lg z-close-input"
+               step="0.01" min="0" required placeholder="0.00"
+               >
+      </div>
+
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;font-size:12px;color:#92400e;margin-bottom:20px">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        Closing the session will generate an immutable Z-Report. This action cannot be undone.
+      </div>
+
+      <div class="d-flex gap-3">
+        <a href="{% url 'zreport_session_status' slug=business.slug %}"
+           class="btn btn-outline-secondary flex-grow-1">Cancel</a>
+        <button type="submit" class="btn btn-danger flex-grow-1"
+                onclick="return confirm('Close session #{{ session.session_number }} and generate Z-Report?')">
+          <i class="bi bi-stop-circle me-1"></i>Close Session & Generate Z-Report
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

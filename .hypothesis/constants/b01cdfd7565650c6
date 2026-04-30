@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\django\caching.py
+# hypothesis_version: 6.151.10
+
+['://', 'Any', 'CacheHandler', 'Callable[..., Any]', 'LOCATION', 'Optional[int]', 'Optional[str]', '_sentry_patched', 'default', 'dict[str, Any]', 'get', 'get_many', 'set', 'set_many', 'tuple[Any, ...]', 'tuple[Any]', '{}://{}{}']

@@ -42,6 +42,56 @@
         </div>
       </div>
 
+      {% if merge_candidates %}
+      <div class="ui-card mb-3">
+        <div class="ui-card-header"><span class="ui-card-title">Merge Duplicate Record</span></div>
+        <div class="ui-card-body">
+          <p class="small text-muted mb-2">Duplicate customers with the same phone number were found. Merge one into this customer to consolidate history.</p>
+          <form method="post" action="{% url 'customer_merge' slug=business_slug pk=customer.pk %}">
+            {% csrf_token %}
+            <div class="mb-2">
+              <label class="form-label small">Source Customer</label>
+              <select name="source_customer_id" class="form-select form-select-sm" required>
+                <option value="">Select duplicate customer</option>
+                {% for duplicate in merge_candidates %}
+                <option
+                  value="{{ duplicate.customer.pk }}"
+                  data-name="{{ duplicate.customer.name }}"
+                  data-code="{{ duplicate.customer.customer_code }}"
+                  data-sales="{{ duplicate.sales_count }}"
+                  data-credit-payments="{{ duplicate.credit_payments_count }}"
+                  data-loyalty-txns="{{ duplicate.loyalty_transactions_count }}"
+                  data-loyalty-points="{{ duplicate.loyalty_points }}"
+                  data-lifetime-points="{{ duplicate.lifetime_points }}"
+                  data-total-purchases="{{ duplicate.total_purchases|floatformat:2 }}"
+                  data-visit-count="{{ duplicate.visit_count }}"
+                  data-credit-balance="{{ duplicate.credit_balance|floatformat:2 }}"
+                  data-credit-limit="{{ duplicate.credit_limit|floatformat:2 }}"
+                >{{ duplicate.customer.customer_code }} - {{ duplicate.customer.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="alert alert-light border small mb-3" id="merge-preview" style="display:none;">
+              <div class="fw-bold mb-2">Merge Preview</div>
+              <div class="mb-1"><span class="text-muted">Source:</span> <span id="merge-preview-source">-</span></div>
+              <div class="mb-1"><span class="text-muted">Sales to move:</span> <span id="merge-preview-sales">0</span></div>
+              <div class="mb-1"><span class="text-muted">Credit payments to move:</span> <span id="merge-preview-credit-payments">0</span></div>
+              <div class="mb-1"><span class="text-muted">Loyalty transactions to move:</span> <span id="merge-preview-loyalty-txns">0</span></div>
+              <div class="mb-1"><span class="text-muted">Points to add:</span> <span id="merge-preview-loyalty-points">0</span></div>
+              <div class="mb-1"><span class="text-muted">Lifetime points to add:</span> <span id="merge-preview-lifetime-points">0</span></div>
+              <div class="mb-1"><span class="text-muted">Visits to add:</span> <span id="merge-preview-visits">0</span></div>
+              <div class="mb-1"><span class="text-muted">Total spend to add:</span> KES <span id="merge-preview-total-purchases">0.00</span></div>
+              <div class="mb-1"><span class="text-muted">Outstanding credit to add:</span> KES <span id="merge-preview-credit-balance">0.00</span></div>
+              <div><span class="text-muted">Higher credit limit kept:</span> KES <span id="merge-preview-credit-limit">0.00</span></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Merge selected customer into {{ customer.name }}? This will move sales, payments, and loyalty history.')">
+              <i class="bi bi-diagram-3"></i> Merge Into This Customer
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Stats -->
       <div class="ui-card mb-3">
         <div class="ui-card-header"><span class="ui-card-title">Stats</span></div>
@@ -187,4 +237,36 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const mergeSelect = document.querySelector('select[name="source_customer_id"]');
+  const preview = document.getElementById('merge-preview');
+  if (!mergeSelect || !preview) {
+    return;
+  }
+
+  function updateMergePreview() {
+    const selected = mergeSelect.options[mergeSelect.selectedIndex];
+    if (!selected || !selected.value) {
+      preview.style.display = 'none';
+      return;
+    }
+
+    document.getElementById('merge-preview-source').textContent = `${selected.dataset.code} - ${selected.dataset.name}`;
+    document.getElementById('merge-preview-sales').textContent = selected.dataset.sales || '0';
+    document.getElementById('merge-preview-credit-payments').textContent = selected.dataset.creditPayments || '0';
+    document.getElementById('merge-preview-loyalty-txns').textContent = selected.dataset.loyaltyTxns || '0';
+    document.getElementById('merge-preview-loyalty-points').textContent = selected.dataset.loyaltyPoints || '0';
+    document.getElementById('merge-preview-lifetime-points').textContent = selected.dataset.lifetimePoints || '0';
+    document.getElementById('merge-preview-visits').textContent = selected.dataset.visitCount || '0';
+    document.getElementById('merge-preview-total-purchases').textContent = selected.dataset.totalPurchases || '0.00';
+    document.getElementById('merge-preview-credit-balance').textContent = selected.dataset.creditBalance || '0.00';
+    document.getElementById('merge-preview-credit-limit').textContent = selected.dataset.creditLimit || '0.00';
+    preview.style.display = 'block';
+  }
+
+  mergeSelect.addEventListener('change', updateMergePreview);
+  updateMergePreview();
+});
+</script>
 {% endblock %}

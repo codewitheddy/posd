@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0026_alter_businesssettings_vat_rate_and_more.py
+# hypothesis_version: 6.151.10
+
+[100, 'business', 'businesssettings', 'customer', 'customer_code', 'invoice_number', 'name', 'pos', 'product', 'product_code', 'purchase', 'purchase_number', 'sale', 'supplier', 'vat_rate']

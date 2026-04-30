@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\drf_spectacular\contrib\rest_framework_gis.py
+# hypothesis_version: 6.151.10
+
+[0.0, 12.9721, 22.4707, 50.0, 70.0577, 77.5933, '.', 'Feature', 'FeatureCollection', 'GeometryCollection', 'GisFeatureEnum', 'LineString', 'MultiLineString', 'MultiPoint', 'MultiPolygon', 'Point', 'Polygon', 'array', 'bbox', 'coordinates', 'description', 'enum', 'example', 'features', 'float', 'format', 'geometry', 'id', 'items', 'maxItems', 'minItems', 'number', 'oneOf', 'properties', 'required', 'string', 'type']

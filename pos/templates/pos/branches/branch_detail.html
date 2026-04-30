@@ -1,0 +1,88 @@
+{% extends 'pos/base.html' %}
+{% block title %}{{ branch.name }} — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.form-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:28px 32px}
+.field-label{font-size:12px;font-weight:700;color:#374151;margin-bottom:5px;display:block}
+.form-control,.form-select{border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;padding:9px 12px}
+.form-control:focus,.form-select:focus{border-color:#224195;box-shadow:0 0 0 3px rgba(34,65,149,.08);outline:none}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'branch_list' slug=business.slug %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h1 style="font-size:20px;font-weight:700;margin:0">{{ branch.name }}</h1>
+      <p style="font-size:13px;color:#6b7280;margin:2px 0 0">Code: <strong>{{ branch.code }}</strong></p>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="form-card">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="field-label">Branch Name</label>
+              <input type="text" name="name" class="form-control" value="{{ branch.name }}" required>
+            </div>
+            <div class="col-12">
+              <label class="field-label">Address</label>
+              <textarea name="address" class="form-control" rows="2" required>{{ branch.address }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label">Phone</label>
+              <input type="text" name="phone" class="form-control" value="{{ branch.phone }}">
+            </div>
+            <div class="col-md-6">
+              <label class="field-label">Email</label>
+              <input type="email" name="email" class="form-control" value="{{ branch.email }}">
+            </div>
+            <div class="col-md-6">
+              <label class="field-label">Status</label>
+              <select name="is_active" class="form-select">
+                <option value="1" {% if branch.is_active %}selected{% endif %}>Active</option>
+                <option value="0" {% if not branch.is_active %}selected{% endif %}>Inactive</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label">Default Branch</label>
+              <select name="is_default" class="form-select">
+                <option value="0" {% if not branch.is_default %}selected{% endif %}>No</option>
+                <option value="1" {% if branch.is_default %}selected{% endif %}>Yes</option>
+              </select>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-4 pt-3" style="border-top:1px solid #f3f4f6">
+            <a href="{% url 'branch_list' slug=business.slug %}" class="btn-outline-sm">Cancel</a>
+            <button type="submit" class="btn-primary-sm"><i class="bi bi-save"></i> Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="form-card" style="padding:22px 24px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:16px">Quick Links</div>
+        <div class="d-grid gap-2">
+          <a href="{% url 'branch_stock' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-boxes"></i> View Stock</a>
+          <a href="{% url 'transfer_list' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-arrow-left-right"></i> Transfers</a>
+          <a href="{% url 'branch_membership_list' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-people"></i> Staff ({{ memberships.count }})</a>
+          <a href="{% url 'price_override_list' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm"><i class="bi bi-tag"></i> Price Overrides</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

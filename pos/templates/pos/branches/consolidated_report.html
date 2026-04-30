@@ -1,0 +1,168 @@
+{% extends 'pos/base.html' %}
+{% block title %}Consolidated Report — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.an-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:24px}
+.stat-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:20px 24px;display:flex;align-items:center;gap:16px}
+.stat-icon{width:48px;height:48px;border-radius:12px;background:#eef1fb;display:flex;align-items:center;justify-content:center;font-size:22px;color:#224195;flex-shrink:0}
+.stat-value{font-size:24px;font-weight:700;color:#111;line-height:1}
+.stat-label{font-size:12px;color:#6b7280;margin-top:3px}
+.r-table{width:100%;border-collapse:collapse;font-size:13px}
+.r-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:10px 14px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.r-table tbody tr{border-bottom:1px solid #f3f4f6}
+.r-table tbody tr:hover{background:#f8f9fc}
+.r-table tbody td{padding:11px 14px;vertical-align:middle}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'branch_list' slug=business.slug %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">Consolidated Report</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Cross-branch performance overview.</p>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="an-card mb-4">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label style="font-size:12px;font-weight:700">From</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}" style="border-radius:7px">
+      </div>
+      <div class="col-md-3">
+        <label style="font-size:12px;font-weight:700">To</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}" style="border-radius:7px">
+      </div>
+      <div class="col-md-4">
+        <label style="font-size:12px;font-weight:700">Branches</label>
+        <select name="branch_ids" class="form-select form-select-sm" multiple style="border-radius:7px;height:auto">
+          {% for b in all_branches %}
+          <option value="{{ b.pk }}" {% if b.pk|stringformat:"s" in selected_branch_ids %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn-primary-sm w-100 justify-content-center">Apply</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon"><i class="bi bi-cash-stack"></i></div>
+        <div>
+          <div class="stat-value" style="font-size:18px">KES {{ sales.total_revenue|floatformat:0 }}</div>
+          <div class="stat-label">Total Revenue</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="bi bi-graph-up-arrow"></i></div>
+        <div>
+          <div class="stat-value" style="font-size:18px">KES {{ sales.total_profit|floatformat:0 }}</div>
+          <div class="stat-label">Gross Profit</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="bi bi-receipt"></i></div>
+        <div>
+          <div class="stat-value">{{ sales.total_transactions }}</div>
+          <div class="stat-label">Transactions</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#fef3c7;color:#92400e"><i class="bi bi-building"></i></div>
+        <div>
+          <div class="stat-value">{{ sales.rows|length }}</div>
+          <div class="stat-label">Branches</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-Branch Sales -->
+  <div class="an-card mb-4" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;font-weight:700;font-size:14px">
+      <i class="bi bi-bar-chart me-2" style="color:#224195"></i>Sales by Branch
+    </div>
+    <div class="table-responsive">
+      <table class="r-table">
+        <thead><tr><th>Branch</th><th class="text-end">Revenue (KES)</th><th class="text-end">Transactions</th><th class="text-end">Gross Profit (KES)</th></tr></thead>
+        <tbody>
+          {% for row in sales.rows %}
+          <tr>
+            <td style="font-weight:600">{{ row.branch_name }}</td>
+            <td class="text-end">{{ row.revenue|floatformat:0 }}</td>
+            <td class="text-end">{{ row.tx_count }}</td>
+            <td class="text-end" style="color:#16a34a;font-weight:600">{{ row.gross_profit|floatformat:0 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" style="text-align:center;padding:32px;color:#9ca3af">No sales data for this period.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Top Products -->
+  {% if top_products %}
+  <div class="an-card mb-4" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;font-weight:700;font-size:14px">
+      <i class="bi bi-trophy me-2" style="color:#f59e0b"></i>Top Products
+    </div>
+    <div class="table-responsive">
+      <table class="r-table">
+        <thead><tr><th>#</th><th>Product</th><th>Category</th><th class="text-end">Units Sold</th><th class="text-end">Revenue (KES)</th></tr></thead>
+        <tbody>
+          {% for p in top_products %}
+          <tr>
+            <td style="color:#6b7280;font-weight:600">{{ forloop.counter }}</td>
+            <td style="font-weight:600">{{ p.name }}</td>
+            <td style="color:#6b7280">{{ p.category }}</td>
+            <td class="text-end">{{ p.units_sold|floatformat:0 }}</td>
+            <td class="text-end" style="font-weight:600">{{ p.revenue|floatformat:0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Stock Valuation -->
+  {% if stock %}
+  <div class="an-card" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;font-weight:700;font-size:14px">
+      <i class="bi bi-boxes me-2" style="color:#7c3aed"></i>Stock Valuation by Branch
+    </div>
+    <div class="table-responsive">
+      <table class="r-table">
+        <thead><tr><th>Branch</th><th class="text-end">Cost Value (KES)</th><th class="text-end">Sell Value (KES)</th></tr></thead>
+        <tbody>
+          {% for s in stock %}
+          <tr>
+            <td style="font-weight:600">{{ s.branch_name }}</td>
+            <td class="text-end">{{ s.cost_value|floatformat:0 }}</td>
+            <td class="text-end" style="font-weight:600">{{ s.sell_value|floatformat:0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -2,188 +2,220 @@
 
 {% block title %}{% if customer %}Edit Customer{% else %}Add Customer{% endif %}{% endblock %}
 
+{% block extra_css %}
+<style>
+  .form-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; padding:28px 32px; }
+  .field-label { font-size:12px; font-weight:700; color:#374151; margin-bottom:5px; display:block; }
+  .field-hint  { font-size:11px; color:#9ca3af; margin-top:4px; }
+  .form-control, .form-select {
+    border:1.5px solid #e5e7eb; border-radius:8px; font-size:13px;
+    padding:9px 12px; color:#111; transition:border-color .15s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color:#224195; box-shadow:0 0 0 3px rgba(34,65,149,.08); outline:none;
+  }
+  .form-control.is-invalid { border-color:#dc2626; }
+  .invalid-feedback { font-size:12px; color:#dc2626; margin-top:4px; }
+  .btn-primary-sm { background:#224195; color:#fff; border:none; border-radius:8px;
+                    padding:10px 22px; font-size:14px; font-weight:600; cursor:pointer;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary-sm:hover { background:#1a3278; color:#fff; }
+  .btn-outline-sm { background:#fff; color:#374151; border:1.5px solid #e5e7eb;
+                    border-radius:8px; padding:9px 18px; font-size:14px; font-weight:600;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-outline-sm:hover { border-color:#9ca3af; color:#111; }
+  .info-row { display:flex; gap:24px; flex-wrap:wrap; background:#f8f9fc;
+              border:1.5px solid #e5e7eb; border-radius:10px; padding:16px 20px; font-size:13px; }
+  .info-item { display:flex; flex-direction:column; gap:2px; }
+  .info-item-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .info-item-value { font-weight:700; color:#111; }
+  .section-divider { font-size:11px; font-weight:700; text-transform:uppercase;
+                     letter-spacing:.06em; color:#9ca3af; margin:24px 0 16px;
+                     padding-bottom:8px; border-bottom:1px solid #f3f4f6; }
+  .form-check-input:checked { background-color:#224195; border-color:#224195; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h4>{% if customer %}<i class="bi bi-pencil"></i> Edit Customer{% else %}<i class="bi bi-plus-circle"></i> Add New Customer{% endif %}</h4>
-                </div>
-                <div class="card-body">
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+<div class="container-fluid py-4 px-3 px-md-5">
 
-                    <form method="post">
-                        {% csrf_token %}
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="name" class="form-label">Full Name *</label>
-                                <input type="text" class="form-control" id="name" name="name" 
-                                       value="{% if customer %}{{ customer.name }}{% endif %}" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="phone" class="form-label">Phone Number *</label>
-                                <input type="text" class="form-control" id="phone" name="phone" 
-                                       value="{% if customer %}{{ customer.phone }}{% endif %}" required>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">
-                                    Email
-                                    <span class="text-muted" style="font-size:0.8rem; font-weight:normal;">
-                                        — used for receipts &amp; campaigns
-                                    </span>
-                                </label>
-                                <input type="email" class="form-control" id="email" name="email" 
-                                       value="{% if customer %}{{ customer.email }}{% endif %}"
-                                       placeholder="customer@example.com">
-                                <div class="form-text">
-                                    <i class="bi bi-info-circle"></i>
-                                    A valid email enables email receipts, loyalty updates, and marketing campaigns.
-                                </div>
-                            </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="customer_type" class="form-label">Customer Type</label>
-                                <select class="form-select" id="customer_type" name="customer_type">
-                                    <option value="regular" {% if customer and customer.customer_type == 'regular' %}selected{% endif %}>Regular</option>
-                                    <option value="vip" {% if customer and customer.customer_type == 'vip' %}selected{% endif %}>VIP</option>
-                                    <option value="wholesale" {% if customer and customer.customer_type == 'wholesale' %}selected{% endif %}>Wholesale</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="address" class="form-label">Address</label>
-                            <textarea class="form-control" id="address" name="address" rows="2">{% if customer %}{{ customer.address }}{% endif %}</textarea>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="date_of_birth" class="form-label">Date of Birth <small class="text-muted">(Must be 18+ years old)</small></label>
-                                <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" 
-                                       value="{% if customer.date_of_birth %}{{ customer.date_of_birth|date:'Y-m-d' }}{% endif %}"
-                                       max="{{ max_date }}">
-                                <div class="invalid-feedback" id="age-error">
-                                    Customer must be at least 18 years old.
-                                </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label d-block">Status</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
-                                           {% if not customer or customer.is_active %}checked{% endif %}>
-                                    <label class="form-check-label" for="is_active">Active</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="credit_limit" class="form-label">Credit Limit (KES)</label>
-                                <input type="number" class="form-control" id="credit_limit" name="credit_limit" min="0" step="0.01"
-                                       value="{% if customer %}{{ customer.credit_limit }}{% else %}0{% endif %}">
-                                <small class="text-muted">Set to 0 to disable credit for this customer.</small>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="tags" class="form-label">Tags</label>
-                                <input type="text" class="form-control" id="tags" name="tags"
-                                       value="{% if customer %}{{ customer.tags }}{% endif %}"
-                                       placeholder="e.g. vip, bulk-buyer, referral">
-                                <small class="text-muted">Comma-separated tags.</small>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="notes" class="form-label">Notes</label>
-                            <textarea class="form-control" id="notes" name="notes" rows="3">{% if customer %}{{ customer.notes }}{% endif %}</textarea>
-                        </div>
-
-                        {% if customer %}
-                        <div class="alert alert-info">
-                            <strong>Customer Code:</strong> {{ customer.customer_code }}<br>
-                            <strong>Loyalty Points:</strong> {{ customer.loyalty_points }} points<br>
-                            <strong>Total Purchases:</strong> KES {{ customer.total_purchases|floatformat:2 }}<br>
-                            <strong>Visit Count:</strong> {{ customer.visit_count }}
-                        </div>
-                        {% endif %}
-
-                        <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'customer_list' slug=request.business.slug  %}" class="btn btn-secondary">
-                                <i class="bi bi-arrow-left"></i> Back
-                            </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i> {% if customer %}Update Customer{% else %}Add Customer{% endif %}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+  <!-- Header -->
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn-outline-sm" style="padding:7px 12px">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+      <h1 style="font-size:20px;font-weight:700;margin:0">
+        {% if customer %}Edit Customer{% else %}Add Customer{% endif %}
+      </h1>
+      <p style="font-size:13px;color:#6b7280;margin:2px 0 0">
+        {% if customer %}Update details for {{ customer.name }}{% else %}Create a new customer record{% endif %}
+      </p>
     </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert" style="border-radius:10px;font-size:13px">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-4 justify-content-center">
+    <div class="col-lg-8">
+      <div class="form-card">
+        <form method="post" id="customerForm">
+          {% csrf_token %}
+
+          <!-- Basic Info -->
+          <div class="section-divider">Basic Information</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="field-label" for="name">Full Name <span style="color:#dc2626">*</span></label>
+              <input type="text" class="form-control" id="name" name="name"
+                     value="{% if customer %}{{ customer.name }}{% endif %}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label" for="phone">Phone Number <span style="color:#dc2626">*</span></label>
+              <input type="text" class="form-control" id="phone" name="phone"
+                     value="{% if customer %}{{ customer.phone }}{% endif %}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label" for="email">Email</label>
+              <input type="email" class="form-control" id="email" name="email"
+                     value="{% if customer %}{{ customer.email }}{% endif %}"
+                     placeholder="customer@example.com">
+              <div class="field-hint"><i class="bi bi-info-circle"></i> Used for receipts, loyalty updates &amp; campaigns.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label" for="customer_type">Customer Type</label>
+              <select class="form-select" id="customer_type" name="customer_type">
+                <option value="regular" {% if customer and customer.customer_type == 'regular' %}selected{% endif %}>Regular</option>
+                <option value="vip"     {% if customer and customer.customer_type == 'vip'     %}selected{% endif %}>VIP</option>
+                <option value="wholesale" {% if customer and customer.customer_type == 'wholesale' %}selected{% endif %}>Wholesale</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="field-label" for="address">Address</label>
+              <textarea class="form-control" id="address" name="address" rows="2">{% if customer %}{{ customer.address }}{% endif %}</textarea>
+            </div>
+          </div>
+
+          <!-- Additional Details -->
+          <div class="section-divider">Additional Details</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="field-label" for="date_of_birth">Date of Birth</label>
+              <input type="date" class="form-control" id="date_of_birth" name="date_of_birth"
+                     value="{% if customer.date_of_birth %}{{ customer.date_of_birth|date:'Y-m-d' }}{% endif %}"
+                     max="{{ max_date }}">
+              <div class="field-hint">Customer must be 18+ years old.</div>
+              <div class="invalid-feedback" id="age-error">Customer must be at least 18 years old.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label" for="credit_limit">Credit Limit (KES)</label>
+              <input type="number" class="form-control" id="credit_limit" name="credit_limit"
+                     min="0" step="0.01"
+                     value="{% if customer %}{{ customer.credit_limit }}{% else %}0{% endif %}">
+              <div class="field-hint">Set to 0 to disable credit for this customer.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label" for="tags">Tags</label>
+              <input type="text" class="form-control" id="tags" name="tags"
+                     value="{% if customer %}{{ customer.tags }}{% endif %}"
+                     placeholder="e.g. vip, bulk-buyer, referral">
+              <div class="field-hint">Comma-separated tags.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="field-label d-block">Status</label>
+              <div style="margin-top:10px">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
+                         {% if not customer or customer.is_active %}checked{% endif %}>
+                  <label class="form-check-label" for="is_active" style="font-size:13px">Active</label>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="field-label" for="notes">Notes</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3">{% if customer %}{{ customer.notes }}{% endif %}</textarea>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="d-flex justify-content-between align-items-center mt-4 pt-3" style="border-top:1px solid #f3f4f6">
+            <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn-outline-sm">
+              <i class="bi bi-arrow-left"></i> Cancel
+            </a>
+            <button type="submit" class="btn-primary-sm">
+              <i class="bi bi-save"></i> {% if customer %}Update Customer{% else %}Add Customer{% endif %}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Side panel: customer stats (edit mode only) -->
+    {% if customer %}
+    <div class="col-lg-4">
+      <div class="form-card" style="padding:22px 24px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:16px;color:#374151">Customer Summary</div>
+        <div style="display:grid;gap:14px">
+          <div class="info-item">
+            <span class="info-item-label">Customer Code</span>
+            <span class="info-item-value" style="font-family:monospace;color:#224195">{{ customer.customer_code }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-item-label">Loyalty Points</span>
+            <span class="info-item-value">{{ customer.loyalty_points }} pts</span>
+          </div>
+          <div class="info-item">
+            <span class="info-item-label">Total Purchases</span>
+            <span class="info-item-value">KES {{ customer.total_purchases|floatformat:2 }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-item-label">Visit Count</span>
+            <span class="info-item-value">{{ customer.visit_count }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const dobInput = document.getElementById('date_of_birth');
-    const form = document.querySelector('form');
-    const ageError = document.getElementById('age-error');
-    
-    // Set max date to 18 years ago from today
-    const today = new Date();
-    const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
-    const maxDateStr = maxDate.toISOString().split('T')[0];
-    dobInput.setAttribute('max', maxDateStr);
-    
-    // Validate age on input change
-    dobInput.addEventListener('change', function() {
-        validateAge();
-    });
-    
-    // Validate on form submit
-    form.addEventListener('submit', function(e) {
-        if (dobInput.value && !validateAge()) {
-            e.preventDefault();
-            dobInput.focus();
-        }
-    });
-    
-    function validateAge() {
-        if (!dobInput.value) {
-            dobInput.classList.remove('is-invalid');
-            return true;
-        }
-        
-        const dob = new Date(dobInput.value);
-        const today = new Date();
-        let age = today.getFullYear() - dob.getFullYear();
-        const monthDiff = today.getMonth() - dob.getMonth();
-        
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-            age--;
-        }
-        
-        if (age < 18) {
-            dobInput.classList.add('is-invalid');
-            ageError.textContent = `Customer must be at least 18 years old. Current age: ${age} years.`;
-            ageError.style.display = 'block';
-            return false;
-        } else {
-            dobInput.classList.remove('is-invalid');
-            ageError.style.display = 'none';
-            return true;
-        }
+document.addEventListener('DOMContentLoaded', function () {
+  const dobInput = document.getElementById('date_of_birth');
+  const form = document.getElementById('customerForm');
+  const ageError = document.getElementById('age-error');
+
+  const today = new Date();
+  const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+  dobInput.setAttribute('max', maxDate.toISOString().split('T')[0]);
+
+  function validateAge() {
+    if (!dobInput.value) { dobInput.classList.remove('is-invalid'); return true; }
+    const dob = new Date(dobInput.value);
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    if (age < 18) {
+      dobInput.classList.add('is-invalid');
+      ageError.textContent = `Customer must be at least 18 years old. Current age: ${age} years.`;
+      return false;
     }
+    dobInput.classList.remove('is-invalid');
+    return true;
+  }
+
+  dobInput.addEventListener('change', validateAge);
+  form.addEventListener('submit', function (e) {
+    if (dobInput.value && !validateAge()) { e.preventDefault(); dobInput.focus(); }
+  });
 });
 </script>
 {% endblock %}

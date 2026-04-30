@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\utils\humanize_datetime.py
+# hypothesis_version: 6.151.10
+
+['%A', '%B', '%H', '%I', '%M', '%S', '%Y', '%a', '%b', '%d', '%f', '%m', '%p', '%y', '%z', ', ', 'DD', 'MM', 'YY', 'YYYY', 'YYYY-MM-DD', '[+HHMM|-HHMM]', '[AM|PM]', '[Jan-Dec]', '[January-December]', '[Mon-Sun]', '[Monday-Sunday]', 'hh', 'hh:mm[:ss[.uuuuuu]]', 'mm', 'ss', 'uuuuuu']

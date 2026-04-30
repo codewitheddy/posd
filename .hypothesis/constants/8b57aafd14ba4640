@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\redis\_sync_common.py
+# hypothesis_version: 6.151.10
+
+['Any', 'description', 'is_cache_key', 'op']

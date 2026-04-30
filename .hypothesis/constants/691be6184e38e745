@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\contrib\postgres\search.py
+# hypothesis_version: 6.151.10
+
+[' <-> ', ' <<-> ', ' <<<-> ', " || ' ' || ", '!!(%s)', '%s @@ %s', '%s::regconfig', '&&', '(%s)', ', ', ', %s', 'FragmentDelimiter', 'HighlightAll', 'MaxFragments', 'MaxWords', 'MinWords', 'SIMILARITY', 'ShortWord', 'StartSel', 'StopSel', 'WORD_SIMILARITY', 'config', 'exact', 'float4', 'phrase', 'phraseto_tsquery', 'plain', 'plainto_tsquery', 'raw', 'resolve_expression', 'setweight({}, {})', 'to_tsquery', 'to_tsvector', 'ts_headline', 'ts_rank', 'ts_rank_cd', 'tsquery', 'tsvector', 'websearch', 'websearch_to_tsquery', '||', '~%s']

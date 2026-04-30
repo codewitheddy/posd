@@ -1,0 +1,153 @@
+{% extends 'pos/base.html' %}
+{% block title %}Backup Settings{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4" style="max-width:860px">
+
+  <div class="page-header mb-3">
+    <div>
+      <h1><i class="bi bi-database me-2 text-primary"></i>Backup Settings</h1>
+      <p class="page-subtitle">Configure how your business data is backed up and protected.</p>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Sync status strip -->
+  {% if sync_statuses %}
+  <div class="row g-2 mb-4">
+    {% for s in sync_statuses %}
+    <div class="col-auto">
+      <div class="card border-0 shadow-sm px-3 py-2 d-flex flex-row align-items-center gap-2">
+        {% if s.status == 'synced' %}
+          <i class="bi bi-check-circle-fill text-success"></i>
+          <span class="small fw-semibold">{{ s.device_id }}: Synced</span>
+        {% elif s.status == 'pending' %}
+          <i class="bi bi-arrow-repeat text-warning"></i>
+          <span class="small fw-semibold">{{ s.device_id }}: Syncing…</span>
+        {% else %}
+          <i class="bi bi-exclamation-circle-fill text-danger"></i>
+          <span class="small fw-semibold">{{ s.device_id }}: Error</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Settings form -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="fw-bold mb-3"><i class="bi bi-sliders me-2"></i>Backup Configuration</h5>
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Backup Mode</label>
+            <select class="form-select" name="backup_mode" id="backup_mode" onchange="toggleSchedule()">
+              {% for val, label in backup_modes %}
+              <option value="{{ val }}" {% if settings.backup_mode == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">
+              <strong>Automatic</strong> — continuous background sync.<br>
+              <strong>Scheduled</strong> — backup at set intervals.<br>
+              <strong>Manual</strong> — you control when backups run.
+            </div>
+          </div>
+
+          <div class="col-md-6" id="interval-row" style="{% if settings.backup_mode != 'scheduled' %}display:none{% endif %}">
+            <label class="form-label fw-semibold">Backup Interval</label>
+            <select class="form-select" name="schedule_interval_hours">
+              {% for h in valid_intervals %}
+              <option value="{{ h }}" {% if settings.schedule_interval_hours == h %}selected{% endif %}>Every {{ h }} hours</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Retention Period (days)</label>
+            <input type="number" class="form-control" name="retention_days"
+                   value="{{ settings.retention_days }}" min="1" max="365">
+            <div class="form-text">Backups older than this are deleted automatically.</div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Storage Mode</label>
+            <select class="form-select" name="storage_mode">
+              {% for val, label in storage_modes %}
+              <option value="{{ val }}" {% if settings.storage_mode == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Local Storage Limit (MB)</label>
+            <input type="number" class="form-control" name="local_storage_limit_mb"
+                   value="{{ settings.local_storage_limit_mb|default:'' }}" min="0" placeholder="Unlimited">
+          </div>
+
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Save Settings
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Recent snapshots -->
+  {% if recent_snapshots %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="px-3 py-2 border-bottom fw-bold small">Recent Backups</div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:13px">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Version</th>
+              <th>Date</th>
+              <th>Events</th>
+              <th>Size</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for snap in recent_snapshots %}
+            <tr>
+              <td class="ps-3 fw-semibold">v{{ snap.version }}</td>
+              <td>{{ snap.created_at|date:"d M Y H:i" }}</td>
+              <td>{{ snap.event_count }}</td>
+              <td>{{ snap.file_size_bytes|filesizeformat }}</td>
+              <td>
+                {% if snap.status == 'uploaded' %}<span class="badge bg-success">Uploaded</span>
+                {% elif snap.status == 'corrupted' %}<span class="badge bg-danger">Corrupted</span>
+                {% elif snap.status == 'deleted' %}<span class="badge bg-secondary">Deleted</span>
+                {% else %}<span class="badge bg-warning text-dark">Pending</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+function toggleSchedule() {
+  const mode = document.getElementById('backup_mode').value;
+  document.getElementById('interval-row').style.display = mode === 'scheduled' ? '' : 'none';
+}
+</script>
+{% endblock %}

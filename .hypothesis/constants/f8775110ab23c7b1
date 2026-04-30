@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0051_add_performance_indexes.py
+# hypothesis_version: 6.151.10
+
+[100, 'barcode', 'customer', 'date', 'phone', 'pos', 'product', 'purchase', 'sale']

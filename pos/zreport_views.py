@@ -20,6 +20,40 @@ from .models import Business, POSSession, ZReport, ZReportAuditLog, SalePayment
 from .zreport_service import ZReportService
 
 
+def _membership_has(request, permission_code):
+    membership = getattr(request, 'business_membership', None)
+    return bool(membership and membership.has_permission(permission_code))
+
+
+def _has_report_access(request):
+    return (
+        request.user.is_superuser
+        or _membership_has(request, 'can_view_reports')
+        or _membership_has(request, 'reports')
+    )
+
+
+def _has_close_session_access(request):
+    return (
+        request.user.is_superuser
+        or request.user.has_perm('pos.can_close_session')
+        or _membership_has(request, 'reports')
+    )
+
+
+def _has_verify_access(request):
+    return request.user.is_superuser or request.user.has_perm('pos.can_verify_zreport') or _has_report_access(request)
+
+
+def _has_export_access(request):
+    return request.user.is_superuser or request.user.has_perm('pos.can_export_zreport') or _has_report_access(request)
+
+
+def _redirect_no_access(request, slug, message):
+    messages.error(request, message)
+    return redirect('zreport_session_status', slug=slug)
+
+
 # ============================================================================
 # SESSION MANAGEMENT VIEWS
 # ============================================================================
@@ -109,14 +143,9 @@ def session_close(request, slug=None):
         return redirect('zreport_list', slug=business.slug)
     
     # Check permission - superusers have all permissions
-    if not request.user.is_superuser:
-        if hasattr(request, 'business_membership') and request.business_membership:
-            if not request.business_membership.has_permission('reports'):
-                messages.error(request, "You don't have permission to close sessions.")
-                return redirect('zreport_session_status', slug=business.slug)
-        else:
-            messages.error(request, "You don't have permission to close sessions.")
-            return redirect('zreport_session_status', slug=business.slug)
+    if not _has_close_session_access(request):
+        messages.error(request, "You don't have permission to close sessions.")
+        return redirect('zreport_session_status', slug=business.slug)
     
     if request.method == 'POST':
         try:
@@ -177,6 +206,9 @@ def session_close(request, slug=None):
 def zreport_list(request, slug=None):
     """List all Z-Reports for the business"""
     business = request.business
+
+    if not _has_report_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to view Z-Reports.")
     
     # Get filter parameters
     start_date = request.GET.get('start_date')
@@ -224,6 +256,9 @@ def zreport_list(request, slug=None):
 def zreport_detail(request, slug=None, z_number=None):
     """View detailed Z-Report"""
     business = request.business
+
+    if not _has_report_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to view Z-Reports.")
     
     zreport = get_object_or_404(
         ZReport,
@@ -251,6 +286,9 @@ def zreport_detail(request, slug=None, z_number=None):
         'zreport': zreport,
         'report_data': zreport.report_data,
         'audit_logs': audit_logs,
+        'can_verify_zreport': _has_verify_access(request),
+        'can_export_zreport': _has_export_access(request),
+        'can_void_zreport': request.user.is_superuser or request.user.has_perm('pos.can_void_zreport'),
     }
     return render(request, 'pos/zreport_detail.html', context)
 
@@ -260,6 +298,9 @@ def zreport_detail(request, slug=None, z_number=None):
 def zreport_verify(request, slug=None, z_number=None):
     """Verify Z-Report integrity"""
     business = request.business
+
+    if not _has_verify_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to verify Z-Reports.")
     
     zreport = get_object_or_404(
         ZReport,
@@ -351,6 +392,9 @@ def zreport_void(request, slug=None, z_number=None):
 def zreport_export_json(request, slug=None, z_number=None):
     """Export Z-Report as JSON"""
     business = request.business
+
+    if not _has_export_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to export Z-Reports.")
     
     zreport = get_object_or_404(
         ZReport,
@@ -391,6 +435,9 @@ def zreport_export_json(request, slug=None, z_number=None):
 def zreport_export_csv(request, slug=None, z_number=None):
     """Export Z-Report as CSV"""
     business = request.business
+
+    if not _has_export_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to export Z-Reports.")
     
     zreport = get_object_or_404(
         ZReport,
@@ -472,6 +519,9 @@ def zreport_export_csv(request, slug=None, z_number=None):
 def zreport_export_pdf(request, slug=None, z_number=None):
     """Export Z-Report as PDF"""
     business = request.business
+
+    if not _has_export_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to export Z-Reports.")
     
     zreport = get_object_or_404(
         ZReport,
@@ -510,6 +560,9 @@ def zreport_export_pdf(request, slug=None, z_number=None):
 def zreport_print(request, slug=None, z_number=None):
     """Print-friendly Z-Report view"""
     business = request.business
+
+    if not _has_report_access(request):
+        return _redirect_no_access(request, business.slug, "You don't have permission to view Z-Reports.")
     
     zreport = get_object_or_404(
         ZReport,
@@ -581,6 +634,9 @@ def api_session_status(request, slug=None):
 def api_zreport_data(request, slug=None, z_number=None):
     """API: Get Z-Report data as JSON"""
     business = request.business
+
+    if not _has_report_access(request):
+        return JsonResponse({'error': "You don't have permission to view Z-Reports."}, status=403)
     
     zreport = get_object_or_404(
         ZReport,

@@ -39,6 +39,14 @@
 .dash-card .card-header{background:#fff;border-bottom:1px solid #f0f2f5;padding:16px 20px}
 .dash-card .card-body{padding:16px 20px}
 
+/* ── Attendance Widget ───────────────────────────────────── */
+.attendance-widget{border:1px solid #e7edf7}
+.attendance-state{font-size:12px;font-weight:700;letter-spacing:.2px;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:6px}
+.attendance-state.in{background:#dcfce7;color:#166534}
+.attendance-state.out{background:#f1f5f9;color:#334155}
+.attendance-meta{font-size:12px;color:#64748b;margin-top:4px}
+.attendance-actions{display:flex;gap:10px;flex-wrap:wrap}
+
 /* ── Tables ───────────────────────────────────────────────── */
 .dash-table{font-size:13.5px}
 .dash-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8a94a6;border-bottom:1px solid #f0f2f5;padding:10px 12px;background:#fafbfc}
@@ -73,7 +81,39 @@
 .empty-state i{font-size:2.5rem;opacity:.4;display:block;margin-bottom:8px}
 .empty-state p{margin:0;font-size:13px}
 
-@media(max-width:576px){.stat-value{font-size:20px}.qa-grid{grid-template-columns:repeat(3,1fr)}.qa-btn{padding:12px 8px;font-size:11px}.qa-btn i{font-size:18px}}
+@media(max-width:576px){
+  .stat-value{font-size:20px}
+  .qa-grid{grid-template-columns:repeat(3,1fr)}
+  .qa-btn{padding:12px 8px;font-size:11px}
+  .qa-btn i{font-size:18px}
+  /* Stack charts vertically on mobile */
+  .dash-card .card-header{padding:12px 14px}
+  .dash-card .card-body{padding:12px 14px}
+  /* Tighter stat cards on mobile */
+  .stat-card{padding:14px 16px;gap:12px}
+  .stat-icon-box{width:42px;height:42px;font-size:18px}
+  .stat-value{font-size:18px}
+  /* Hide less important columns in tables on mobile */
+  .dash-table .hide-mobile{display:none}
+  /* Full-width alerts */
+  .alert-strip{padding:12px 14px}
+  /* Trial banner compact */
+  .trial-banner{padding:14px 16px}
+  .trial-icon{width:38px;height:38px;font-size:18px}
+  .attendance-actions .btn{flex:1 1 auto}
+}
+
+@media(min-width:577px) and (max-width:991px){
+  /* Tablet: 2-col stat grid already handled by col-6 */
+  .stat-value{font-size:22px}
+  /* Charts stack on tablet */
+  .dash-card .card-header .badge{display:none}
+}
+
+@media(min-width:992px){
+  /* Desktop: show all */
+  .stat-value{font-size:26px}
+}
 </style>
 {% endblock %}
 
@@ -142,6 +182,55 @@
   </div>
   <span class="text-muted small d-none d-md-block" id="dashClock"></span>
 </div>
+
+{% if show_attendance_widget %}
+<div class="dash-card attendance-widget mb-3">
+  <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="section-title"><i class="bi bi-fingerprint text-primary me-1"></i>My Attendance</span>
+        {% if attendance_is_clocked_in %}
+        <span class="attendance-state in"><i class="bi bi-check-circle-fill"></i>Clocked In</span>
+        {% else %}
+        <span class="attendance-state out"><i class="bi bi-circle"></i>Not Clocked In</span>
+        {% endif %}
+      </div>
+      <div class="attendance-meta">
+        {% if attendance_clock_in_time %}
+          In: {{ attendance_clock_in_time|time:"H:i" }}
+          {% if attendance_clock_out_time %}
+            • Out: {{ attendance_clock_out_time|time:"H:i" }}
+          {% endif %}
+          {% if attendance_total_hours and attendance_clock_out_time %}
+            • Hours: {{ attendance_total_hours|floatformat:2 }}
+          {% endif %}
+        {% else %}
+          No attendance record for today yet.
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="attendance-actions">
+      {% if attendance_is_clocked_in %}
+      <form method="post" action="{% url 'hr_clock_out' slug=request.business.slug %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'dashboard' slug=request.business.slug %}">
+        <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-stop-circle me-1"></i>Clock Out</button>
+      </form>
+      {% else %}
+      <form method="post" action="{% url 'hr_clock_in' slug=request.business.slug %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'dashboard' slug=request.business.slug %}">
+        <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-play-circle me-1"></i>Clock In</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'hr_attendance_list' slug=request.business.slug %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-calendar3 me-1"></i>Attendance Log
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- ── Stat Cards ─────────────────────────────────────────── -->
 <div class="row g-3 mb-3">
@@ -242,13 +331,13 @@
 <!-- ── Charts Row ─────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
   <!-- Sales Sparkline -->
-  <div class="col-12 col-lg-8">
+  <div class="col-12 col-xl-8">
     <div class="dash-card h-100">
-      <div class="card-header d-flex align-items-center justify-content-between">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="section-title"><i class="bi bi-graph-up text-primary me-2"></i>Sales Overview — Today</span>
         <div class="d-flex gap-2">
-          <span class="badge bg-light text-dark">Week: KES {{ week_revenue|floatformat:0 }}</span>
-          <span class="badge bg-light text-dark">Month: KES {{ month_revenue|floatformat:0 }}</span>
+          <span class="badge bg-light text-dark d-none d-sm-inline">Week: KES {{ week_revenue|floatformat:0 }}</span>
+          <span class="badge bg-light text-dark d-none d-sm-inline">Month: KES {{ month_revenue|floatformat:0 }}</span>
         </div>
       </div>
       <div class="card-body">
@@ -257,7 +346,7 @@
     </div>
   </div>
   <!-- Payment Methods -->
-  <div class="col-12 col-lg-4">
+  <div class="col-12 col-xl-4">
     <div class="dash-card h-100">
       <div class="card-header">
         <span class="section-title"><i class="bi bi-credit-card text-success me-2"></i>Payment Methods</span>
@@ -290,7 +379,7 @@
 <!-- ── Top Products + Recent Sales ───────────────────────── -->
 <div class="row g-3 mb-4">
   <!-- Top Selling Today -->
-  <div class="col-12 col-lg-5">
+  <div class="col-12 col-xl-5">
     <div class="dash-card h-100">
       <div class="card-header d-flex align-items-center justify-content-between">
         <span class="section-title"><i class="bi bi-trophy text-warning me-2"></i>Top Selling Today</span>
@@ -318,7 +407,7 @@
   </div>
 
   <!-- Recent Sales -->
-  <div class="col-12 col-lg-7">
+  <div class="col-12 col-xl-7">
     <div class="dash-card h-100">
       <div class="card-header d-flex align-items-center justify-content-between">
         <span class="section-title"><i class="bi bi-clock-history text-info me-2"></i>Recent Transactions</span>
@@ -331,9 +420,9 @@
             <thead>
               <tr>
                 <th>Invoice</th>
-                <th>Customer</th>
-                <th>Cashier</th>
-                <th>Payment</th>
+                <th class="hide-mobile">Customer</th>
+                <th class="hide-mobile">Cashier</th>
+                <th class="hide-mobile">Payment</th>
                 <th class="text-end">Total</th>
                 <th></th>
               </tr>
@@ -345,9 +434,9 @@
                   <div style="font-weight:600;color:#1a202c">{{ sale.invoice_number }}</div>
                   <div style="font-size:11px;color:#8a94a6">{{ sale.date|date:"d/m H:i" }}</div>
                 </td>
-                <td>{% if sale.customer %}{{ sale.customer.name }}{% else %}<span class="text-muted">Walk-in</span>{% endif %}</td>
-                <td>{{ sale.cashier.username }}</td>
-                <td>
+                <td class="hide-mobile">{% if sale.customer %}{{ sale.customer.name }}{% else %}<span class="text-muted">Walk-in</span>{% endif %}</td>
+                <td class="hide-mobile">{{ sale.cashier.username }}</td>
+                <td class="hide-mobile">
                   {% for payment in sale.payments.all %}
                   <span class="badge bg-light text-dark" style="font-size:11px">{{ payment.payment_method.name }}</span>
                   {% endfor %}
@@ -459,8 +548,8 @@
 </div>
 {% endif %}
 
-<!-- ── Quick Actions ──────────────────────────────────────── -->
-<div class="dash-card mb-4">
+<!-- ── Quick Actions — desktop only ──────────────────────── -->
+<div class="dash-card mb-4 d-none d-lg-block">
   <div class="card-header"><span class="section-title"><i class="bi bi-lightning-charge text-warning me-2"></i>Quick Actions</span></div>
   <div class="card-body">
     <div class="qa-grid">

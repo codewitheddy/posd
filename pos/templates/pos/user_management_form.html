@@ -88,6 +88,20 @@
             <label for="employee_id" class="form-label">Employee ID</label>
             <input type="text" name="employee_id" id="employee_id" class="form-control"
                    value="{% if is_edit %}{{ user.profile.employee_id }}{% endif %}" placeholder="EMP001">
+            <small class="text-muted">If left blank for staff users, the HR staff code will be used automatically.</small>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label for="branch_id" class="form-label">HR Branch Assignment</label>
+            <select name="branch_id" id="branch_id" class="form-select">
+              <option value="">Use default active branch</option>
+              {% for branch in branches %}
+              <option value="{{ branch.id }}"
+                {% if linked_employee and linked_employee.branch_id == branch.id %}selected{% endif %}>
+                {{ branch.name }}{% if branch.is_default %} (Default){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Cashier, sales, stock manager, manager, and admin users are auto-registered in HR.</small>
           </div>
           {% if is_edit %}
           <div class="col-md-6 mb-3">
@@ -101,10 +115,69 @@
           {% endif %}
         </div>
 
+        {% if is_edit and linked_employee %}
+        <div class="alert alert-light border mb-3" style="font-size:13px;">
+          <i class="bi bi-person-badge me-1 text-primary"></i>
+          Linked HR employee: <strong>{{ linked_employee.staff_code }}</strong>
+          {% if linked_employee.branch %} in {{ linked_employee.branch.name }}{% endif %}.
+          Salary, statutory numbers, and other HR details can be updated from the HR module.
+        </div>
+        {% endif %}
+
+        {% if not branches %}
+        <div class="alert alert-warning mb-3" style="font-size:13px;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          No active branch is available. Staff users will be created, but HR auto-registration will be skipped until a branch exists.
+        </div>
+        {% endif %}
+
         <div class="alert alert-info mb-3" style="font-size:13px;">
           <i class="bi bi-info-circle me-1"></i><strong>Role Permissions</strong>
           <div id="roleDescription" class="mt-1">Select a role to see its permissions</div>
         </div>
+
+        {% if is_edit and permission_list %}
+        <hr class="my-4">
+        <div class="mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h6 class="mb-0"><i class="bi bi-shield-check me-1 text-primary"></i>Granular Permissions</h6>
+              <small class="text-muted">Fine-tune what this user can do beyond their role defaults.</small>
+            </div>
+            <div class="btn-group btn-group-sm">
+              <button type="button" class="btn btn-outline-secondary" onclick="setAllPerms(true)">Select All</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setAllPerms(false)">Clear All</button>
+            </div>
+          </div>
+          <div class="row g-3">
+            {% for code, label in permission_list %}
+            <div class="col-md-6">
+              <label for="perm_{{ code }}" class="d-flex align-items-start gap-3 p-3 border rounded-3 h-100 {% if code in membership.permissions %}bg-light border-primary{% endif %}" style="cursor:pointer">
+                <input class="perm-check flex-shrink-0 mt-1" type="checkbox" name="permissions"
+                       value="{{ code }}" id="perm_{{ code }}"
+                       {% if code in membership.permissions %}checked{% endif %}
+                       style="width:1.1em;height:1.1em;cursor:pointer;accent-color:#0d6efd">
+                <span>
+                  <span class="fw-semibold d-block">{{ label }}</span>
+                  <small class="text-muted">{{ code }}</small>
+                </span>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="mt-4 p-3 border rounded-3 bg-light">
+            <label class="form-label fw-semibold mb-1">Max Discount %</label>
+            <div class="input-group" style="max-width:220px">
+              <input type="number" class="form-control" name="max_discount_pct"
+                     value="{{ membership.max_discount_pct }}" step="0.01" min="0" max="100">
+              <span class="input-group-text">%</span>
+            </div>
+            <small class="text-muted mt-1 d-block">Maximum discount this user can apply at POS.</small>
+          </div>
+        </div>
+        <hr class="my-4">
+        {% endif %}
 
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary">
@@ -132,6 +205,12 @@ document.getElementById('role').addEventListener('change', function() {
   const desc = document.getElementById('roleDescription');
   desc.innerHTML = roleDescriptions[this.value] || 'Select a role to see its permissions';
 });
+
+document.getElementById('role').dispatchEvent(new Event('change'));
+
+function setAllPerms(checked) {
+  document.querySelectorAll('.perm-check').forEach(cb => cb.checked = checked);
+}
 {% if not is_edit %}
 document.getElementById('password_confirm').addEventListener('input', function() {
   this.setCustomValidity(this.value !== document.getElementById('password').value ? 'Passwords do not match' : '');

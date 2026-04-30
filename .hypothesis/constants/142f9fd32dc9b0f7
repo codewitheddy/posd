@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0054_add_theme_colors.py
+# hypothesis_version: 6.151.10
+
+[100, '#1a1514', '#224195', '#cd8a4c', '#d5d3d4', 'barcode', 'businesssettings', 'customer', 'date', 'phone', 'pos', 'product', 'purchase', 'sale', 'theme_accent', 'theme_dark', 'theme_light', 'theme_primary']

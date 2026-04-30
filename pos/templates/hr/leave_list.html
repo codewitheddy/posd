@@ -1,0 +1,59 @@
+{% extends 'pos/base.html' %}
+{% block title %}Leave Requests{% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="page-header">
+  <div><h1><i class="bi bi-calendar-x me-2 text-primary"></i>Leave Requests</h1></div>
+  <a href="{% url 'hr_leave_create' slug=request.business.slug %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Request Leave</a>
+</div>
+
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2">
+    <div class="col-md-3">
+      <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Status</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="form-card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-light"><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for l in leave_requests %}
+        <tr>
+          <td>{{ l.employee.get_full_name }}</td>
+          <td><span class="badge bg-info text-dark">{{ l.get_leave_type_display }}</span></td>
+          <td>{{ l.start_date|date:"d M Y" }}</td>
+          <td>{{ l.end_date|date:"d M Y" }}</td>
+          <td>{{ l.days_count }}</td>
+          <td class="small text-muted">{{ l.reason|truncatechars:40 }}</td>
+          <td>
+            <span class="badge {% if l.status == 'approved' %}bg-success{% elif l.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ l.get_status_display }}</span>
+            {% if l.approved_by %}<br><small class="text-muted">by {{ l.approved_by.get_full_name }}</small>{% endif %}
+          </td>
+          <td>
+            {% if l.status == 'pending' %}
+            <form method="POST" action="{% url 'hr_leave_approve' slug=request.business.slug pk=l.pk %}" style="display:inline">{% csrf_token %}
+              <button type="submit" class="btn btn-xs btn-success"><i class="bi bi-check"></i></button>
+            </form>
+            <form method="POST" action="{% url 'hr_leave_reject' slug=request.business.slug pk=l.pk %}" style="display:inline">{% csrf_token %}
+              <button type="submit" class="btn btn-xs btn-danger"><i class="bi bi-x"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No leave requests found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endblock %}

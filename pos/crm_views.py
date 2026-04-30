@@ -4,7 +4,8 @@ CRM Views: Customer Credit, Campaigns, Segments, Reports
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Q, F, Avg
+from django.db import transaction
+from django.db.models import Sum, Count, Q, F, Avg, ExpressionWrapper, DecimalField
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from decimal import Decimal
@@ -13,9 +14,34 @@ import json
 
 from .models import (
     Customer, CustomerPayment, CustomerSegment, Campaign,
-    Sale, PaymentMethod, LoyaltyTransaction, Business
+    Sale, PaymentMethod, LoyaltyTransaction, LoyaltyRedemption, ActivityLog, Business
 )
 from .decorators import business_required, business_permission_required
+
+
+def _build_merge_candidate_previews(customer):
+    candidates = Customer.get_same_phone_customers(
+        business=customer.business,
+        phone=customer.phone,
+        exclude_pk=customer.pk,
+        is_active=True,
+    )
+
+    previews = []
+    for candidate in candidates:
+        previews.append({
+            'customer': candidate,
+            'sales_count': candidate.purchases.count(),
+            'credit_payments_count': candidate.credit_payments.count(),
+            'loyalty_transactions_count': candidate.loyalty_transactions.count(),
+            'loyalty_points': candidate.loyalty_points,
+            'lifetime_points': candidate.lifetime_points,
+            'total_purchases': candidate.total_purchases,
+            'visit_count': candidate.visit_count,
+            'credit_balance': candidate.credit_balance,
+            'credit_limit': candidate.credit_limit,
+        })
+    return previews
 
 
 # ==================== CUSTOMER CREDIT ====================
@@ -69,22 +95,22 @@ def customer_credit_detail(request, slug=None, pk=None):
 
     payment_methods = PaymentMethod.objects.filter(business=request.business, is_active=True)
 
-    # Aging buckets
+    # Compute aging buckets in a single pass (no extra queries)
     today = timezone.now().date()
     aging = {'current': 0, '30': 0, '60': 0, '90plus': 0}
     for sale in credit_sales:
-        days_old = (today - sale.date.date()).days
-        outstanding = sale.total - sale.credit_paid
+        outstanding = float(sale.total - sale.credit_paid)
         if outstanding <= 0:
             continue
+        days_old = (today - sale.date.date()).days
         if days_old <= 30:
-            aging['current'] += float(outstanding)
+            aging['current'] += outstanding
         elif days_old <= 60:
-            aging['30'] += float(outstanding)
+            aging['30'] += outstanding
         elif days_old <= 90:
-            aging['60'] += float(outstanding)
+            aging['60'] += outstanding
         else:
-            aging['90plus'] += float(outstanding)
+            aging['90plus'] += outstanding
 
     context = {
         'customer': customer,
@@ -137,43 +163,64 @@ def customer_credit_payment(request, slug=None, pk=None):
 
 @business_required
 def credit_aging_report(request, slug=None):
-    """Aging report for all customers with credit"""
-    customers = Customer.objects.filter(
-        business=request.business,
-        credit_balance__gt=0,
-    )
+    """Aging report for all customers with credit — single query, no N+1"""
+    from django.db.models import Case, When, FloatField
+    from django.db.models.functions import Greatest
 
     today = timezone.now().date()
+
+    # Pull all outstanding credit sales in one query, annotate days_old
+    credit_sales = (
+        Sale.objects
+        .filter(
+            business=request.business,
+            is_credit_sale=True,
+            customer__credit_balance__gt=0,
+        )
+        .select_related('customer')
+        .annotate(
+            outstanding=ExpressionWrapper(
+                F('total') - F('credit_paid'),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
+        .filter(outstanding__gt=0)
+        .values('customer_id', 'customer__name', 'customer__phone', 'date', 'outstanding')
+    )
+
+    # Aggregate in Python — single DB round-trip
+    from collections import defaultdict
+    customer_aging = defaultdict(lambda: {
+        'name': '', 'phone': '', 'current': 0, '30': 0, '60': 0, '90plus': 0
+    })
+
+    for sale in credit_sales:
+        cid = sale['customer_id']
+        customer_aging[cid]['name'] = sale['customer__name']
+        customer_aging[cid]['phone'] = sale['customer__phone']
+        days_old = (today - sale['date'].date()).days
+        amt = float(sale['outstanding'])
+        if days_old <= 30:
+            customer_aging[cid]['current'] += amt
+        elif days_old <= 60:
+            customer_aging[cid]['30'] += amt
+        elif days_old <= 90:
+            customer_aging[cid]['60'] += amt
+        else:
+            customer_aging[cid]['90plus'] += amt
+
     rows = []
     totals = {'current': 0, '30': 0, '60': 0, '90plus': 0, 'total': 0}
-
-    for customer in customers:
-        aging = {'current': 0, '30': 0, '60': 0, '90plus': 0}
-        credit_sales = Sale.objects.filter(
-            business=request.business,
-            customer=customer,
-            is_credit_sale=True,
-        )
-        for sale in credit_sales:
-            outstanding = float(sale.total - sale.credit_paid)
-            if outstanding <= 0:
-                continue
-            days_old = (today - sale.date.date()).days
-            if days_old <= 30:
-                aging['current'] += outstanding
-            elif days_old <= 60:
-                aging['30'] += outstanding
-            elif days_old <= 90:
-                aging['60'] += outstanding
-            else:
-                aging['90plus'] += outstanding
-
-        row_total = sum(aging.values())
+    for cid, data in customer_aging.items():
+        row_total = data['current'] + data['30'] + data['60'] + data['90plus']
         if row_total > 0:
-            rows.append({'customer': customer, **aging, 'total': row_total})
-            for k in totals:
-                if k != 'total':
-                    totals[k] += aging.get(k, 0)
+            rows.append({
+                'customer': type('obj', (object,), {'name': data['name'], 'phone': data['phone']})(),
+                'current': data['current'], '30': data['30'],
+                '60': data['60'], '90plus': data['90plus'], 'total': row_total,
+            })
+            for k in ('current', '30', '60', '90plus'):
+                totals[k] += data[k]
             totals['total'] += row_total
 
     if request.GET.get('export') == 'csv':
@@ -228,7 +275,7 @@ def customer_statement(request, slug=None, pk=None):
     for p in payments:
         timeline.append({
             'date': p.created_at.date(), 'type': 'payment',
-            'description': f'Payment{" - " + p.reference if p.reference else ""}',
+            'description': f'Payment{" - " + p.reference_number if p.reference_number else ""}',
             'debit': Decimal('0'), 'credit': p.amount,
         })
     timeline.sort(key=lambda x: x['date'])
@@ -344,34 +391,20 @@ def campaign_detail(request, slug=None, pk=None):
 @business_required
 @business_permission_required('is_manager')
 def campaign_send(request, slug=None, pk=None):
-    """Mark campaign as sent (actual sending via email_service)"""
+    """Dispatch campaign emails as a background task"""
     campaign = get_object_or_404(Campaign, business=request.business, pk=pk)
     if request.method == 'POST' and campaign.status == 'draft':
-        customers = campaign.segment.get_customers() if campaign.segment else Customer.objects.filter(business=request.business, is_active=True)
-        sent = 0
-        failed = 0
-
         if campaign.channel == 'email':
-            from .email_service import EmailService
-            email_service = EmailService(request.business)
-            for customer in customers:
-                if customer.email:
-                    try:
-                        email_service.send_custom_email(
-                            to_email=customer.email,
-                            subject=campaign.subject or campaign.name,
-                            message=campaign.message,
-                            customer_name=customer.name,
-                        )
-                        sent += 1
-                    except Exception:
-                        failed += 1
-
-        campaign.status = 'sent'
-        campaign.sent_at = timezone.now()
-        campaign.recipients_count = sent
-        campaign.save()
-        messages.success(request, f'Campaign sent to {sent} customers. {failed} failed.')
+            from .tasks import send_campaign_emails
+            send_campaign_emails.delay(campaign.pk)
+            campaign.status = 'sending'
+            campaign.save(update_fields=['status'])
+            messages.success(request, 'Campaign is being sent in the background.')
+        else:
+            campaign.status = 'sent'
+            campaign.sent_at = timezone.now()
+            campaign.save(update_fields=['status', 'sent_at'])
+            messages.success(request, 'Campaign marked as sent.')
     return redirect('campaign_detail', slug=slug, pk=pk)
 
 
@@ -498,6 +531,8 @@ def customer_detail_enhanced(request, slug=None, pk=None):
         points_to_next = tier_info['next'] - customer.lifetime_points
         progress_percentage = min(100, (customer.lifetime_points / tier_info['next']) * 100)
 
+    merge_candidates = _build_merge_candidate_previews(customer)
+
     context = {
         'customer': customer,
         'purchases': purchases,
@@ -507,8 +542,110 @@ def customer_detail_enhanced(request, slug=None, pk=None):
         'progress_percentage': progress_percentage,
         'points_to_next': points_to_next,
         'tags': customer.get_tags_list(),
+        'merge_candidates': merge_candidates,
     }
     return render(request, 'pos/crm/customer_detail.html', context)
+
+
+@business_required
+def customer_merge(request, slug=None, pk=None):
+    """Merge a duplicate customer into the selected primary customer."""
+    target_customer = get_object_or_404(Customer, business=request.business, pk=pk)
+
+    if request.method != 'POST':
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    source_id = request.POST.get('source_customer_id')
+    if not source_id:
+        messages.error(request, 'Select a source customer to merge.')
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    try:
+        source_id = int(source_id)
+    except (TypeError, ValueError):
+        messages.error(request, 'Invalid source customer selected.')
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    if source_id == target_customer.pk:
+        messages.error(request, 'Cannot merge a customer into itself.')
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    source_customer = Customer.objects.filter(business=request.business, pk=source_id).first()
+    if source_customer is None:
+        messages.error(request, 'Source customer not found in this business.')
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    if not source_customer.is_active:
+        messages.error(request, 'Source customer is already inactive.')
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    if source_customer.normalized_phone != target_customer.normalized_phone:
+        messages.error(request, 'Only customers with the same normalized phone number can be merged.')
+        return redirect('customer_detail', slug=slug, pk=pk)
+
+    with transaction.atomic():
+        # Move related history to the target customer.
+        Sale.objects.filter(business=request.business, customer=source_customer).update(customer=target_customer)
+        CustomerPayment.objects.filter(business=request.business, customer=source_customer).update(customer=target_customer)
+        LoyaltyTransaction.objects.filter(customer=source_customer).update(customer=target_customer)
+        LoyaltyRedemption.objects.filter(customer=source_customer).update(customer=target_customer)
+
+        # Consolidate summary fields on target.
+        target_customer.loyalty_points += source_customer.loyalty_points
+        target_customer.lifetime_points += source_customer.lifetime_points
+        target_customer.total_purchases += source_customer.total_purchases
+        target_customer.visit_count += source_customer.visit_count
+        target_customer.credit_balance += source_customer.credit_balance
+        target_customer.credit_limit = max(target_customer.credit_limit, source_customer.credit_limit)
+
+        if not target_customer.email and source_customer.email:
+            target_customer.email = source_customer.email
+        if not target_customer.address and source_customer.address:
+            target_customer.address = source_customer.address
+        if not target_customer.date_of_birth and source_customer.date_of_birth:
+            target_customer.date_of_birth = source_customer.date_of_birth
+
+        target_tags = set(target_customer.get_tags_list())
+        source_tags = set(source_customer.get_tags_list())
+        all_tags = sorted(tag for tag in target_tags.union(source_tags) if tag)
+        target_customer.tags = ', '.join(all_tags)
+
+        if source_customer.notes:
+            if target_customer.notes:
+                target_customer.notes = f"{target_customer.notes}\n\nMerged notes from {source_customer.customer_code}: {source_customer.notes}"
+            else:
+                target_customer.notes = f"Merged notes from {source_customer.customer_code}: {source_customer.notes}"
+
+        target_customer.save()
+
+        source_customer.is_active = False
+        source_customer.loyalty_points = 0
+        source_customer.lifetime_points = 0
+        source_customer.total_purchases = Decimal('0.00')
+        source_customer.visit_count = 0
+        source_customer.credit_balance = Decimal('0.00')
+        merge_note = f"Merged into {target_customer.customer_code} ({target_customer.name})"
+        if source_customer.notes:
+            if merge_note not in source_customer.notes:
+                source_customer.notes = f"{source_customer.notes}\n\n{merge_note}"
+        else:
+            source_customer.notes = merge_note
+        source_customer.save()
+
+    ActivityLog.log_activity(
+        user=request.user,
+        action_type='update',
+        model_name='Customer',
+        object_id=target_customer.id,
+        description=f'Merged customer {source_customer.customer_code} into {target_customer.customer_code}',
+        request=request,
+    )
+
+    messages.success(
+        request,
+        f'Customer {source_customer.customer_code} was merged into {target_customer.customer_code}.',
+    )
+    return redirect('customer_detail', slug=slug, pk=target_customer.pk)
 
 
 # ==================== CREDIT SALE API ====================

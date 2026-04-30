@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0018_fix_sale_invoice_unique.py
+# hypothesis_version: 6.151.10
+
+['invoice_number', 'pos', 'sale']

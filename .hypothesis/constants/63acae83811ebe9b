@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0029_add_tax_class_to_product.py
+# hypothesis_version: 6.151.10
+
+['Exempt (No VAT)', 'Standard (16% VAT)', 'Zero Rated (0% VAT)', 'exempt', 'pos', 'product', 'standard', 'tax_class', 'zero_rated']

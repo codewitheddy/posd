@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\core\management\commands\check.py
+# hypothesis_version: 6.151.10
+
+['*', '--database', '--deploy', '--fail-level', '--list-tags', '--tag', '-t', 'CRITICAL', 'DEBUG', 'ERROR', 'INFO', 'WARNING', 'app_label', 'append', 'args', 'databases', 'deploy', 'fail_level', 'list_tags', 'store_true', 'tags']

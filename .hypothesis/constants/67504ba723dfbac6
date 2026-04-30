@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\django\transactions.py
+# hypothesis_version: 6.151.10
+
+['$', '%s', '([A-Z]+)([a-z])', '/', '//', '?', 'Optional[str]', 'Pattern[str]', 'URLResolver', '\\', '\\([^\\)]+\\)', '\\(\\?\\:([^\\)]+)\\)', '\\A', '\\Z', '^', 'pattern', '{%s}', '{var}']

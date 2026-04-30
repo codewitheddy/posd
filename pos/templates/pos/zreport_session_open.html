@@ -3,6 +3,18 @@
 
 {% block title %}Open POS Session — {{ business.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+  .z-form-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:16px; padding:24px 26px; }
+  .z-field-label { font-size:12px; font-weight:700; color:#374151; margin-bottom:6px; display:block; }
+  .z-field-hint { font-size:12px; color:#8a94a6; margin-top:6px; }
+  .z-input, .z-textarea, .z-prefix { border:1.5px solid #e5e7eb; font-size:13px; }
+  .z-input, .z-textarea { border-radius:10px; }
+  .z-prefix { border-radius:10px 0 0 10px; background:#f8fafc; color:#475569; }
+  .z-input:focus, .z-textarea:focus { border-color:#224195; box-shadow:0 0 0 3px rgba(34,65,149,.08); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-3 px-3 px-md-4">
 
@@ -18,7 +30,7 @@
 
 <div class="row justify-content-center">
   <div class="col-md-7">
-    <div class="form-card mb-3">
+    <div class="z-form-card mb-3">
       <div class="alert alert-info mb-4" style="font-size:13px;">
         <i class="bi bi-info-circle me-1"></i>
         Enter the opening cash amount in the drawer to begin. All sales will be tracked under this session until you close it and generate a Z-Report.
@@ -28,26 +40,26 @@
         {% csrf_token %}
 
         <div class="mb-3">
-          <label for="opening_cash" class="form-label">Opening Cash Amount <span class="text-danger">*</span></label>
+          <label for="opening_cash" class="z-field-label">Opening Cash Amount <span class="text-danger">*</span></label>
           <div class="input-group">
-            <span class="input-group-text">KES</span>
-            <input type="number" class="form-control" id="opening_cash" name="opening_cash"
+            <span class="input-group-text z-prefix">KES</span>
+            <input type="number" class="form-control z-input" id="opening_cash" name="opening_cash"
                    step="0.01" min="0" value="0.00" required autofocus>
           </div>
-          <small class="text-muted">Enter the total cash in the drawer at the start of this session</small>
+          <div class="z-field-hint">Enter the total cash in the drawer at the start of this session.</div>
         </div>
 
         <div class="mb-4">
-          <label for="notes" class="form-label">Notes (Optional)</label>
-          <textarea class="form-control" id="notes" name="notes" rows="3"
+          <label for="notes" class="z-field-label">Notes (Optional)</label>
+          <textarea class="form-control z-textarea" id="notes" name="notes" rows="3"
                     placeholder="e.g. Morning shift, Weekend shift"></textarea>
         </div>
 
         <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-success">
+          <button type="submit" class="btn btn-success btn-sm px-3">
             <i class="bi bi-play-circle me-1"></i>Open Session
           </button>
-          <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+          <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary btn-sm px-3">Cancel</a>
         </div>
       </form>
     </div>

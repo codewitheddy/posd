@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\templatetags\business_tags.py
+# hypothesis_version: 6.151.10
+
+['business', 'business_list', 'request', 'slug']

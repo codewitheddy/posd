@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0067_enhance_purchase_workflow.py
+# hypothesis_version: 6.151.10
+
+[255, 'Approved', 'Cancelled', 'Closed', 'Draft', 'Ordered', 'Partially Received', 'Pending', 'Pending Approval', 'Received', 'Sent to Supplier', 'approved', 'approved_at', 'approved_by', 'approved_purchases', 'cancelled', 'closed', 'created_by', 'created_purchases', 'description', 'discount', 'discount_amount', 'draft', 'ordered', 'partially_received', 'pending', 'pending_approval', 'pos', 'purchase', 'purchaseitem', 'received', 'sent', 'sent_at', 'status', 'submitted_at', 'submitted_by', 'submitted_purchases']

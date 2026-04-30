@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\user_management_views.py
+# hypothesis_version: 6.151.10
+
+[100, 'Administrator', 'Apply Discounts', 'BusinessMembership', 'Cashier', 'Manage Team Members', 'Manager', 'Override Item Price', 'Owner', 'POST', 'Process Refunds', 'Sales Associate', 'Stock Manager', 'User', 'View Cost Price', 'View Reports', 'Viewer', 'Void Sales', 'admin', 'business', 'business_membership', 'can_apply_discount', 'can_edit_price', 'can_manage_stock', 'can_manage_users', 'can_refund_sale', 'can_view_cost_price', 'can_view_reports', 'can_void_sale', 'cashier', 'create', 'dashboard', 'delete', 'email', 'employee_id', 'first_name', 'is_active', 'is_edit', 'last_name', 'manager', 'max_discount_pct', 'membership', 'memberships', 'on', 'owner', 'password', 'password_confirm', 'permission_list', 'permissions', 'phone', 'profile', 'role', 'roles', 'sales', 'stock_manager', 'total', 'update', 'user', 'user_management_list', 'username', 'viewer']

@@ -1,0 +1,85 @@
+{% extends 'pos/base.html' %}
+{% block title %}Payroll{% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+<div class="page-header">
+  <div><h1><i class="bi bi-cash-stack me-2 text-primary"></i>Payroll</h1></div>
+</div>
+
+<!-- Calculate Payroll -->
+<div class="form-card mb-3">
+  <h6 class="mb-3"><i class="bi bi-calculator me-1"></i>Calculate Payroll for Period</h6>
+  <form method="POST" action="{% url 'hr_payroll_calculate' slug=request.business.slug %}" class="row g-2 align-items-end">
+    {% csrf_token %}
+    <div class="col-md-3">
+      <label class="form-label form-label-sm">Period Start</label>
+      <input type="date" name="period_start" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label form-label-sm">Period End</label>
+      <input type="date" name="period_end" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-play-fill me-1"></i>Calculate</button>
+    </div>
+  </form>
+  <div class="alert alert-info py-2 px-3 mt-3 mb-0 small" role="alert">
+    Payroll is prorated by the selected period. Monthly basic salary and fixed allowances are calculated based on working days in the chosen date range (using a 26-working-day monthly base).
+  </div>
+</div>
+
+<!-- Filter -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label form-label-sm">Status</label>
+      <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="paid" {% if status_filter == 'paid' %}selected{% endif %}>Paid</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="form-card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-light">
+        <tr><th>Employee</th><th>Period</th><th>Overtime Hrs</th><th>Overtime Pay</th><th>Gross</th><th>Deductions</th><th>Net Salary</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for p in payrolls %}
+        <tr>
+          <td>{{ p.employee.get_full_name }}</td>
+          <td class="small text-muted">{{ p.period_start|date:"d M" }} – {{ p.period_end|date:"d M Y" }}</td>
+          <td>{{ p.overtime_hours|floatformat:2 }}h</td>
+          <td>KES {{ p.overtime_amount|floatformat:2 }}</td>
+          <td>KES {{ p.gross_salary|floatformat:2 }}</td>
+          <td>KES {{ p.total_deductions|floatformat:2 }}</td>
+          <td class="fw-bold">KES {{ p.net_salary|floatformat:2 }}</td>
+          <td>
+            <span class="badge {% if p.status == 'paid' %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ p.get_status_display }}</span>
+            {% if p.pay_date %}<br><small class="text-muted">{{ p.pay_date|date:"d M Y" }}</small>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'hr_payslip_download' slug=request.business.slug payroll_pk=p.pk %}" class="btn btn-xs btn-outline-primary" target="_blank">
+              <i class="bi bi-file-earmark-pdf"></i> Payslip
+            </a>
+            {% if p.status == 'pending' %}
+            <form method="POST" action="{% url 'hr_payroll_mark_paid' slug=request.business.slug pk=p.pk %}" style="display:inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-xs btn-success" onclick="return confirm('Mark as paid?')"><i class="bi bi-check-circle"></i> Mark Paid</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">No payroll records. Calculate payroll above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endblock %}

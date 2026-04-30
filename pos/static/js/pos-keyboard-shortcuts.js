@@ -10,7 +10,6 @@ class POSKeyboardShortcuts {
             'F1': { action: () => this.focusBarcode(), description: 'Focus barcode input' },
             'F2': { action: () => this.focusSearch(), description: 'Focus product search' },
             'F3': { action: () => this.focusCustomer(), description: 'Focus customer search' },
-            'F4': { action: () => this.toggleView(), description: 'Toggle grid/list view' },
             
             // Cart Operations
             'F5': { action: () => this.clearCart(), description: 'Clear cart' },
@@ -109,18 +108,6 @@ class POSKeyboardShortcuts {
         if (input) {
             input.focus();
             input.select();
-        }
-    }
-    
-    toggleView() {
-        const gridBtn = document.getElementById('grid-view-btn');
-        const listBtn = document.getElementById('list-view-btn');
-        if (gridBtn && listBtn) {
-            if (gridBtn.classList.contains('active')) {
-                listBtn.click();
-            } else {
-                gridBtn.click();
-            }
         }
     }
     

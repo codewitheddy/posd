@@ -48,6 +48,10 @@ class SupplierPaymentService:
         if not payment_method.is_active:
             raise ValidationError("Cannot use inactive payment method")
         
+        # Validate payment method belongs to the same business as the supplier
+        if hasattr(payment_method, 'business') and payment_method.business != supplier.business:
+            raise ValidationError("Payment method does not belong to this business")
+        
         # Validate amount
         if amount <= Decimal('0.00'):
             raise ValidationError("Payment amount must be greater than zero")
@@ -74,9 +78,11 @@ class SupplierPaymentService:
                 if purchase.supplier != supplier:
                     raise ValidationError(f"Purchase {purchase.purchase_number} does not belong to this supplier")
                 
-                # Validate purchase is received
-                if purchase.status != 'received':
-                    raise ValidationError(f"Purchase {purchase.purchase_number} is not received")
+                # Validate purchase is in a payable status
+                if purchase.status not in ('received', 'partially_received', 'closed'):
+                    raise ValidationError(
+                        f"Purchase {purchase.purchase_number} must be received, partially received, or closed"
+                    )
                 
                 # Validate allocation doesn't exceed remaining balance
                 remaining = purchase.remaining_balance()
@@ -123,7 +129,7 @@ class SupplierPaymentService:
         # Get unpaid purchases ordered by date (oldest first)
         unpaid_purchases = Purchase.objects.filter(
             supplier=payment.supplier,
-            status='received'
+            status__in=('received', 'partially_received', 'closed')
         ).annotate(
             allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
         ).filter(
@@ -166,20 +172,24 @@ class SupplierStatementService:
             # Default to end of today to include all of today's transactions
             end_date = timezone.now().date()
         
-        # Convert end_date to end of day for datetime comparisons
-        # This ensures we include all transactions from the end_date
-        from datetime import time
-        end_datetime = timezone.make_aware(
-            datetime.combine(end_date, time(23, 59, 59))
-        )
+        # Convert end_date to start of NEXT day in UTC (exclusive upper bound).
+        # Using local timezone midnight causes UTC-stored datetimes to be cut off
+        # when the local timezone is ahead of UTC (e.g. EAT = UTC+3 means local
+        # midnight = 21:00 UTC, excluding transactions between 21:00-24:00 UTC).
+        from datetime import timedelta, timezone as dt_timezone
+        end_datetime = datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=dt_timezone.utc)
         
         # Calculate opening balance (transactions before start_date)
         opening_balance = Decimal('0.00')
         if start_date:
+            # Build UTC midnight for start_date for DateTimeField comparisons
+            from datetime import timezone as dt_timezone
+            start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=dt_timezone.utc)
+
             opening_purchases = supplier.purchases.filter(
-                status='received'
+                status__in=('received', 'partially_received', 'closed')
             ).filter(
-                Q(received_date__lt=start_date) |
+                Q(received_date__lt=start_datetime) |
                 Q(received_date__isnull=True, date__date__lt=start_date)
             ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
             
@@ -198,9 +208,9 @@ class SupplierStatementService:
         # Get transactions in period
         if start_date:
             purchases = supplier.purchases.filter(
-                status='received'
+                status__in=('received', 'partially_received', 'closed')
             ).filter(
-                Q(received_date__gte=start_date, received_date__lte=end_datetime) |
+                Q(received_date__gte=start_datetime, received_date__lt=end_datetime) |
                 Q(received_date__isnull=True, date__date__gte=start_date, date__date__lte=end_date)
             ).prefetch_related('items').order_by('date')
             
@@ -218,9 +228,9 @@ class SupplierStatementService:
         else:
             # No start date - get all transactions up to end_date (end of day)
             purchases = supplier.purchases.filter(
-                status='received'
+                status__in=('received', 'partially_received', 'closed')
             ).filter(
-                Q(received_date__lte=end_datetime) |
+                Q(received_date__lt=end_datetime) |
                 Q(received_date__isnull=True, date__date__lte=end_date)
             ).prefetch_related('items').order_by('date')
             
@@ -327,7 +337,7 @@ class SupplierStatementService:
             as_of_date = timezone.now().date()
         
         suppliers_with_balance = Supplier.objects.filter(
-            purchases__status='received'
+            purchases__status__in=('received', 'partially_received', 'closed')
         ).distinct()
         
         aging_data = []
@@ -336,7 +346,7 @@ class SupplierStatementService:
             # Get unpaid or partially paid purchases
             purchases = Purchase.objects.filter(
                 supplier=supplier,
-                status='received'
+                status__in=('received', 'partially_received', 'closed')
             ).annotate(
                 allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00'))
             ).filter(

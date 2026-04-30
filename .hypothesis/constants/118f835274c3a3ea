@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\api_authentication.py
+# hypothesis_version: 6.151.10
+
+['Authorization', 'Bearer ', '[0-9a-fA-F]{64}', 'business', 'created_by']

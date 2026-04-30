@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\redis\modules\caches.py
+# hypothesis_version: 6.151.10
+
+[', ', '...', 'Any', 'Optional[Any]', 'Optional[str]', 'RedisIntegration', 'Span', 'description', 'dict[str, Any]', 'get', 'host', 'is_cache_key', 'key', 'key_as_string', 'mget', 'op', 'port', 'redis_command', 'set', 'setex', 'tuple[Any, ...]', 'utf-8', 'value']

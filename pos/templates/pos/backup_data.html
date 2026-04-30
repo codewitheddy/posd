@@ -1,245 +1,392 @@
 {% extends 'pos/base.html' %}
 {% load static %}
 
-{% block title %}Data Backup - {{ business.name }}{% endblock %}
+{% block title %}Data Backup — {{ business.name }}{% endblock %}
 
-{% block content %}
-<div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h2><i class="bi bi-database"></i> Data Backup & Export</h2>
-            <p class="text-muted">Download and secure your business data</p>
-        </div>
-        <div class="col-md-4 text-end">
-            <a href="{% url 'download_backup' slug=business.slug %}" class="btn btn-primary btn-lg">
-                <i class="bi bi-download"></i> Download Backup Now
-            </a>
-        </div>
-    </div>
+{% block extra_css %}
+<style>
+.backup-mode-card {
+  display: block; cursor: pointer;
+}
+.backup-mode-card input[type="radio"] {
+  position: absolute; opacity: 0; width: 0; height: 0;
+}
+.backup-mode-inner {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 18px; border: 2px solid #e5e7eb; border-radius: 10px;
+  background: #fff; transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.backup-mode-card:hover .backup-mode-inner { border-color: #93c5fd; background: #eff6ff; }
+.backup-mode-card input:checked + .backup-mode-inner {
+  border-color: #3b82f6; background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+.mode-dot {
+  width: 18px; height: 18px; border-radius: 50%; border: 2px solid #d1d5db;
+  flex-shrink: 0; margin-top: 2px; position: relative; transition: border-color .15s;
+}
+.mode-dot::after {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%) scale(0);
+  width: 8px; height: 8px; border-radius: 50%; background: #3b82f6;
+  transition: transform .15s;
+}
+.backup-mode-card input:checked + .backup-mode-inner .mode-dot { border-color: #3b82f6; }
+.backup-mode-card input:checked + .backup-mode-inner .mode-dot::after { transform: translate(-50%,-50%) scale(1); }
 
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        {% endfor %}
-    {% endif %}
+.sync-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.sync-dot-green  { background: #22c55e; }
+.sync-dot-orange { background: #f59e0b; animation: pulse .8s infinite; }
+.sync-dot-red    { background: #ef4444; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-icon-box" style="background:#dbeafe; color:#2563eb;">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <div>
-                    <div class="stat-label">Products</div>
-                    <div class="stat-value">{{ stats.products }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-icon-box" style="background:#dcfce7; color:#16a34a;">
-                    <i class="bi bi-receipt"></i>
-                </div>
-                <div>
-                    <div class="stat-label">Sales</div>
-                    <div class="stat-value">{{ stats.sales }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-icon-box" style="background:#dbeafe; color:#2563eb;">
-                    <i class="bi bi-people"></i>
-                </div>
-                <div>
-                    <div class="stat-label">Customers</div>
-                    <div class="stat-value">{{ stats.customers }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-icon-box" style="background:#fef9c3; color:#ca8a04;">
-                    <i class="bi bi-truck"></i>
-                </div>
-                <div>
-                    <div class="stat-label">Suppliers</div>
-                    <div class="stat-value">{{ stats.suppliers }}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Backup Info Cards -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="ui-card h-100">
-                <div class="ui-card-header">
-                    <span class="ui-card-title"><i class="bi bi-info-circle"></i> What's Included in Backup</span>
-                </div>
-                <div class="ui-card-body">
-                    <ul class="list-unstyled">
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> All products and inventory data</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Complete sales history</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Customer information</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Supplier details</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Purchase orders</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Categories and settings</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> User accounts</li>
-                    </ul>
-                    <div class="alert alert-info mb-0">
-                        <small><i class="bi bi-info-circle"></i> Backup format: JSON (can be imported back if needed)</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="ui-card h-100">
-                <div class="ui-card-header">
-                    <span class="ui-card-title"><i class="bi bi-shield-check"></i> Data Security</span>
-                </div>
-                <div class="ui-card-body">
-                    <ul class="list-unstyled">
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Automated daily backups by platform</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 30-day retention period</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Secure encrypted storage</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Download anytime you need</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success"></i> Your data, your control</li>
-                    </ul>
-                    <div class="alert alert-success mb-0">
-                        <small><i class="bi bi-shield-check"></i> We take data security seriously. Your data is backed up daily and stored securely.</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- How to Use -->
-    <div class="ui-card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="bi bi-question-circle"></i> How to Use Your Backup</h5>
-        </div>
-        <div class="ui-card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="text-center mb-3">
-                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
-                            <h3 class="mb-0">1</h3>
-                        </div>
-                    </div>
-                    <h6 class="text-center">Download Backup</h6>
-                    <p class="text-center text-muted">Click the "Download Backup Now" button above to get your data file</p>
-                </div>
-                <div class="col-md-4">
-                    <div class="text-center mb-3">
-                        <div class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
-                            <h3 class="mb-0">2</h3>
-                        </div>
-                    </div>
-                    <h6 class="text-center">Store Safely</h6>
-                    <p class="text-center text-muted">Save the file to your computer, external drive, or cloud storage</p>
-                </div>
-                <div class="col-md-4">
-                    <div class="text-center mb-3">
-                        <div class="bg-info text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
-                            <h3 class="mb-0">3</h3>
-                        </div>
-                    </div>
-                    <h6 class="text-center">Restore if Needed</h6>
-                    <p class="text-center text-muted">Contact support if you need to restore data from your backup</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Backup History -->
-    <div class="ui-card">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Backup Activity</h5>
-        </div>
-        <div class="ui-card-body">
-            {% if backups %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Date & Time</th>
-                            <th>Downloaded By</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for backup in backups %}
-                        <tr>
-                            <td>
-                                <i class="bi bi-calendar3"></i>
-                                {{ backup.created_at|date:"M d, Y" }} at {{ backup.created_at|date:"H:i" }}
-                            </td>
-                            <td>
-                                <i class="bi bi-person"></i>
-                                {{ backup.user.get_full_name|default:backup.user.username }}
-                            </td>
-                            <td>
-                                <span class="badge bg-success">
-                                    <i class="bi bi-check-circle"></i> Completed
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="text-center py-5">
-                <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
-                <p class="text-muted mt-3">No backup history yet</p>
-                <p class="text-muted">Download your first backup using the button above</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Help Section -->
-        <div class="ui-card mb-4">
-            <div class="ui-card-header">
-                <span class="ui-card-title"><i class="bi bi-life-preserver"></i> Need Help?</span>
-            </div>
-        <div class="ui-card-body">
-            <p class="mb-3">If you need assistance with backups, data restoration, or have any questions:</p>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-envelope text-primary me-2" style="font-size: 1.5rem;"></i>
-                        <div>
-                            <strong>Email</strong><br>
-                            <a href="mailto:ropenixkenya@gmail.com">ropenixkenya@gmail.com</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-whatsapp text-success me-2" style="font-size: 1.5rem;"></i>
-                        <div>
-                            <strong>WhatsApp</strong><br>
-                            <a href="https://wa.me/254717147007" target="_blank">+254 717 147 007</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-telephone text-info me-2" style="font-size: 1.5rem;"></i>
-                        <div>
-                            <strong>Phone</strong><br>
-                            <a href="tel:0717147007">0717147007</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+.snap-row:hover { background: #f8f9fc; }
+</style>
 {% endblock %}
 
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <!-- Header -->
+  <div class="page-header mb-3">
+    <div>
+      <h1><i class="bi bi-database me-2 text-primary"></i>Data Backup &amp; Recovery</h1>
+      <p class="page-subtitle">Protect your business data with automated cloud backups and instant restore.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'download_backup' slug=business.slug %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-download me-1"></i>Download JSON
+      </a>
+      <form method="post" action="{% url 'backup_data' slug=business.slug %}" class="d-inline">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="manual_snapshot">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-cloud-upload me-1"></i>Backup Now
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Stats strip -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-primary">{{ stats.products }}</div>
+        <div class="text-muted small">Products</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-success">{{ stats.sales }}</div>
+        <div class="text-muted small">Sales</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-info">{{ stats.customers }}</div>
+        <div class="text-muted small">Customers</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold {% if pending_events > 0 %}text-warning{% else %}text-success{% endif %}">
+          {{ pending_events }}
+        </div>
+        <div class="text-muted small">Pending Events</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    <!-- LEFT: Backup mode settings -->
+    <div class="col-12 col-lg-7">
+
+      <!-- Backup mode -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          <h5 class="fw-bold mb-3"><i class="bi bi-sliders me-2"></i>Backup Configuration</h5>
+          <form method="post" action="{% url 'backup_data' slug=business.slug %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_settings">
+
+            <label class="form-label fw-semibold mb-2">Backup Mode</label>
+            <div class="row g-2 mb-3">
+              <div class="col-12 col-sm-4">
+                <label class="backup-mode-card w-100" for="mode_automatic">
+                  <input type="radio" name="backup_mode" id="mode_automatic" value="automatic"
+                         {% if backup_settings.backup_mode == 'automatic' or not backup_settings %}checked{% endif %}>
+                  <span class="backup-mode-inner">
+                    <span class="mode-dot"></span>
+                    <span>
+                      <strong style="font-size:13px">Automatic</strong>
+                      <span class="d-block text-muted" style="font-size:11px">Continuous background sync</span>
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div class="col-12 col-sm-4">
+                <label class="backup-mode-card w-100" for="mode_scheduled">
+                  <input type="radio" name="backup_mode" id="mode_scheduled" value="scheduled"
+                         {% if backup_settings.backup_mode == 'scheduled' %}checked{% endif %}>
+                  <span class="backup-mode-inner">
+                    <span class="mode-dot"></span>
+                    <span>
+                      <strong style="font-size:13px">Scheduled</strong>
+                      <span class="d-block text-muted" style="font-size:11px">Set interval (6/12/24h)</span>
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div class="col-12 col-sm-4">
+                <label class="backup-mode-card w-100" for="mode_manual">
+                  <input type="radio" name="backup_mode" id="mode_manual" value="manual"
+                         {% if backup_settings.backup_mode == 'manual' %}checked{% endif %}>
+                  <span class="backup-mode-inner">
+                    <span class="mode-dot"></span>
+                    <span>
+                      <strong style="font-size:13px">Manual</strong>
+                      <span class="d-block text-muted" style="font-size:11px">You control when</span>
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Scheduled interval (shown only for scheduled) -->
+            <div id="interval-row" class="mb-3" style="{% if backup_settings.backup_mode != 'scheduled' %}display:none{% endif %}">
+              <label class="form-label fw-semibold">Backup Interval</label>
+              <select class="form-select form-select-sm" name="schedule_interval_hours" style="max-width:200px">
+                {% for h in valid_intervals %}
+                <option value="{{ h }}" {% if backup_settings.schedule_interval_hours == h %}selected{% endif %}>Every {{ h }} hours</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Retention (days)</label>
+                <input type="number" class="form-control form-control-sm" name="retention_days"
+                       value="{{ backup_settings.retention_days|default:30 }}" min="1" max="365">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Storage Mode</label>
+                <select class="form-select form-select-sm" name="storage_mode">
+                  <option value="hybrid"     {% if backup_settings.storage_mode == 'hybrid' or not backup_settings %}selected{% endif %}>Hybrid (local + cloud)</option>
+                  <option value="cloud_only" {% if backup_settings.storage_mode == 'cloud_only' %}selected{% endif %}>Cloud only</option>
+                  <option value="local_only" {% if backup_settings.storage_mode == 'local_only' %}selected{% endif %}>Local only</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-save me-1"></i>Save Settings
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Snapshot history -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+          <div class="px-3 py-2 border-bottom d-flex align-items-center justify-content-between">
+            <span class="fw-bold small"><i class="bi bi-clock-history me-1"></i>Backup History</span>
+            <span class="text-muted small">{{ snapshots|length }} snapshot{{ snapshots|length|pluralize }}</span>
+          </div>
+          {% if snapshots %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:13px">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">Version</th>
+                  <th>Date</th>
+                  <th>Events</th>
+                  <th>Size</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for snap in snapshots %}
+                <tr class="snap-row">
+                  <td class="ps-3 fw-semibold">v{{ snap.version }}</td>
+                  <td>{{ snap.created_at|date:"d M Y H:i" }}</td>
+                  <td>{{ snap.event_count }}</td>
+                  <td>{{ snap.file_size_bytes|filesizeformat }}</td>
+                  <td>
+                    {% if snap.status == 'uploaded' %}<span class="badge bg-success">Uploaded</span>
+                    {% elif snap.status == 'corrupted' %}<span class="badge bg-danger">Corrupted</span>
+                    {% elif snap.status == 'deleted' %}<span class="badge bg-secondary">Deleted</span>
+                    {% else %}<span class="badge bg-warning text-dark">Pending</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-cloud-slash fs-2 d-block mb-2 opacity-25"></i>
+            No cloud snapshots yet. Click <strong>Backup Now</strong> to create your first.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Sync status + legacy restore -->
+    <div class="col-12 col-lg-5">
+
+      <!-- Sync status -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="bi bi-wifi me-2"></i>Sync Status</h6>
+          {% if sync_statuses %}
+            {% for s in sync_statuses %}
+            <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+              <div class="d-flex align-items-center gap-2">
+                {% if s.status == 'synced' %}
+                  <span class="sync-dot sync-dot-green"></span>
+                  <span class="small fw-semibold">{{ s.device_id }}</span>
+                {% elif s.status == 'pending' %}
+                  <span class="sync-dot sync-dot-orange"></span>
+                  <span class="small fw-semibold">{{ s.device_id }}</span>
+                {% else %}
+                  <span class="sync-dot sync-dot-red"></span>
+                  <span class="small fw-semibold">{{ s.device_id }}</span>
+                {% endif %}
+              </div>
+              <div class="text-end">
+                {% if s.status == 'synced' %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle">Synced</span>
+                {% elif s.status == 'pending' %}
+                  <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Syncing…</span>
+                {% else %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Error</span>
+                {% endif %}
+                {% if s.last_synced_at %}
+                  <div class="text-muted" style="font-size:10px">{{ s.last_synced_at|date:"d M H:i" }}</div>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted small text-center py-3">
+              <i class="bi bi-info-circle me-1"></i>No sync activity yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- What's included -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="fw-bold mb-2"><i class="bi bi-check-circle me-2 text-success"></i>What's Backed Up</h6>
+          <ul class="list-unstyled mb-0" style="font-size:13px">
+            <li class="mb-1"><i class="bi bi-check text-success me-1"></i>All sales &amp; transactions</li>
+            <li class="mb-1"><i class="bi bi-check text-success me-1"></i>Products &amp; inventory</li>
+            <li class="mb-1"><i class="bi bi-check text-success me-1"></i>Customers &amp; loyalty points</li>
+            <li class="mb-1"><i class="bi bi-check text-success me-1"></i>Suppliers &amp; purchase orders</li>
+            <li class="mb-1"><i class="bi bi-check text-success me-1"></i>Business settings</li>
+            <li><i class="bi bi-check text-success me-1"></i>Event log (immutable audit trail)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Legacy restore -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="fw-bold mb-2"><i class="bi bi-arrow-counterclockwise me-2 text-warning"></i>Restore from File</h6>
+          <p class="text-muted small mb-3">Upload a <code>.json</code> backup file to restore data.</p>
+          <div class="alert alert-warning py-2 mb-3" style="font-size:12px">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Existing records may be duplicated. Only restore from a trusted backup.
+          </div>
+          <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#restoreModal">
+            <i class="bi bi-upload me-1"></i>Restore from JSON
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Legacy backup history (from old BackupAuditLog) -->
+  {% if backups %}
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-body p-0">
+      <div class="px-3 py-2 border-bottom fw-bold small">
+        <i class="bi bi-download me-1"></i>Manual Download History
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:13px">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Date</th>
+              <th>Downloaded By</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for backup in backups %}
+            <tr>
+              <td class="ps-3">{{ backup.created_at|date:"d M Y H:i" }}</td>
+              <td>{{ backup.user.get_full_name|default:backup.user.username }}</td>
+              <td><span class="badge bg-success">Completed</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Restore modal -->
+<div class="modal fade" id="restoreModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Restore Data</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'restore_backup' slug=business.slug %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p class="small">Select the <code>.json</code> backup file to restore from:</p>
+          <input type="file" class="form-control form-control-sm mb-3" name="backup_file" accept=".json" required>
+          <div class="alert alert-danger py-2 mb-0" style="font-size:12px">
+            <i class="bi bi-shield-exclamation me-1"></i>
+            This cannot be undone. Make sure you have a current backup first.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Restore Now
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('input[name="backup_mode"]').forEach(function(r) {
+  r.addEventListener('change', function() {
+    document.getElementById('interval-row').style.display =
+      this.value === 'scheduled' ? '' : 'none';
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\db\migrations\questioner.py
+# hypothesis_version: 6.151.10
+
+[' %s) %s', '.py', '>>> ', 'Invalid input: %s', 'Select an option: ', '[default: {}] >>> ', '__file__', '__init__.py', '__path__', 'ask_initial', 'ask_merge', 'ask_rename', 'ask_rename_model', 'datetime', 'exit', 'timezone', 'timezone.now', 'y', 'yn']

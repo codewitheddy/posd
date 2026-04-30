@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\services\audit_service.py
+# hypothesis_version: 6.151.10
+
+[' (FAILED)', ' (ROLLED BACK)', ',', 'Customer', 'HTTP_USER_AGENT', 'HTTP_X_FORWARDED_FOR', 'Product', 'Purchase', 'REMOTE_ADDR', 'Sale', 'SupplierPayment', 'adjustment_type', 'allocations', 'amount', 'amount_paid', 'change_given', 'customer_id', 'customer_name', 'discount_amount', 'failure', 'invoice_number', 'items', 'new_balance', 'new_quantity', 'operation_type', 'payment_id', 'payment_method', 'payment_processing', 'points_change', 'previous_balance', 'previous_quantity', 'product_id', 'product_name', 'purchase_id', 'purchase_number', 'purchase_receiving', 'quantity', 'quantity_change', 'reason', 'receiving_data', 'reference_number', 'rollback', 'sale_completion', 'sale_id', 'sale_invoice', 'status', 'stock_adjustment', 'subtotal', 'success', 'supplier_id', 'supplier_name', 'total', 'total_price', 'unit_price', 'vat_amount']

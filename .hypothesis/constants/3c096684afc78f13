@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\registration_admin_views.py
+# hypothesis_version: 6.151.10
+
+['POST', 'activated', 'active', 'all', 'allowed_domains', 'business', 'codes', 'count', 'created_by', 'deactivated', 'expired', 'inactive', 'invitation_code', 'max_uses', 'new_codes', 'notes', 'on', 'reason', 'registration', 'registration_enabled', 'registrations', 'registrations_list', 'require_kra_pin', 'reviewed_by', 'settings', 'status', 'status_choices', 'status_filter', 'user', 'valid_days']

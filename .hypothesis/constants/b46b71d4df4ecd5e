@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0056_add_idempotency_key.py
+# hypothesis_version: 6.151.10
+
+[255, 'Completed', 'Failed', 'ID', 'IdempotencyKey', 'Processing', 'business', 'completed', 'created_at', 'expires_at', 'failed', 'id', 'indexes', 'key', 'operation_type', 'pos', 'pos.business', 'processing', 'request_data', 'response_data', 'status']

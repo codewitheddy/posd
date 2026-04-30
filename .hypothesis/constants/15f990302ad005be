@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\validators.py
+# hypothesis_version: 6.151.10
+
+[55296, 57343, '%s__%s', '%s__day', '%s__month', '%s__year', ', ', '<%s(queryset=%s)>', 'exact', 'instance', 'required', 'unique']

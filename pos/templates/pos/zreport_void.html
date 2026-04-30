@@ -3,14 +3,27 @@
 
 {% block title %}Void Z-Report #{{ zreport.z_number|stringformat:"05d" }} — {{ business.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+  .z-void-shell { max-width:640px; margin:32px auto; }
+  .z-void-card { background:#fff; border:1.5px solid #fecaca; border-radius:18px; overflow:hidden; }
+  .z-void-header { background:linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); color:#991b1b; padding:18px 22px; font-size:16px; font-weight:700; display:flex; align-items:center; gap:10px; }
+  .z-void-body { padding:22px; }
+  .z-void-label { font-size:12px; font-weight:700; color:#374151; margin-bottom:6px; display:block; }
+  .z-void-textarea { border:1.5px solid #e5e7eb; border-radius:10px; font-size:13px; }
+  .z-void-textarea:focus { border-color:#b91c1c; box-shadow:0 0 0 3px rgba(185,28,28,.08); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-3 px-3 px-md-4">
 
-<div class="confirm-card" style="max-width:580px;margin:40px auto;">
-  <div class="confirm-card-header" style="background:#fee2e2;color:#b91c1c;">
+<div class="z-void-shell">
+<div class="z-void-card">
+  <div class="z-void-header">
     <i class="bi bi-ban"></i> Void Z-Report #{{ zreport.z_number|stringformat:"05d" }}
   </div>
-  <div class="confirm-card-body">
+  <div class="z-void-body">
 
     <div class="alert alert-danger mb-3" style="font-size:13px;">
       <i class="bi bi-exclamation-triangle me-1"></i>
@@ -29,8 +42,8 @@
     <form method="post" id="voidForm">
       {% csrf_token %}
       <div class="mb-3">
-        <label for="reason" class="form-label">Reason for Voiding <span class="text-danger">*</span></label>
-        <textarea class="form-control" id="reason" name="reason" rows="4" required minlength="10"
+        <label for="reason" class="z-void-label">Reason for Voiding <span class="text-danger">*</span></label>
+        <textarea class="form-control z-void-textarea" id="reason" name="reason" rows="4" required minlength="10"
                   placeholder="Provide a detailed reason (minimum 10 characters)"></textarea>
         <small class="text-muted">This reason will be permanently recorded in the audit log</small>
       </div>
@@ -45,6 +58,7 @@
       </div>
     </form>
   </div>
+</div>
 </div>
 
 </div>

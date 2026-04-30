@@ -202,7 +202,7 @@
             display: flex;
             align-items: center;
             padding: 0 30px;
-            z-index: 10000; /* Higher than cart (999) to ensure dropdown appears on top */
+            z-index: 1030; /* Below Bootstrap modal (1050) and backdrop (1040) */
         }
 
         .search-bar {
@@ -291,6 +291,10 @@
             margin-top: var(--topbar-height);
             padding: 30px;
             min-height: calc(100vh - var(--topbar-height));
+        }
+
+        .section-return-link {
+            margin-bottom: 1rem;
         }
 
         /* Cards */
@@ -413,16 +417,16 @@
             border: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             border-radius: 8px;
-            z-index: 10000 !important; /* Ensure dropdown is always on top */
+            z-index: 1031 !important; /* Just above topbar, still below modal */
         }
         
         /* Ensure dropdown parent has proper z-index */
         .topbar .dropdown {
-            z-index: 10000 !important;
+            z-index: 1031 !important;
         }
         
         .topbar .dropdown.show {
-            z-index: 10001 !important;
+            z-index: 1032 !important;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -473,6 +477,11 @@
             <li>
                 <a href="{% url 'product_list' slug=business_slug %}" class="{% if 'product' in request.path %}active{% endif %}">
                     <i class="bi bi-box-seam"></i> Products
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hscode_list' slug=business_slug %}" class="{% if 'hs-code' in request.path %}active{% endif %}">
+                    <i class="bi bi-upc"></i> HS Codes
                 </a>
             </li>
             <li>
@@ -556,6 +565,11 @@
                         <i class="bi bi-gift"></i> Rewards Catalog
                     </a>
                 </li>
+                <li>
+                    <a href="{% url 'promotion_list' slug=business_slug %}" class="{% if 'promotions' in request.path %}active{% endif %}">
+                        <i class="bi bi-tag"></i> Promotions
+                    </a>
+                </li>
             {% endif %}
 
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
@@ -616,7 +630,7 @@
             </li>
             {% endif %}
 
-            {% if user_permissions.can_view_reports or user_permissions.is_manager %}
+            {% if user_permissions.is_manager %}
             <li class="nav-section">Finances</li>
             <li>
                 <a href="{% url 'expense_list' slug=business_slug %}" class="{% if 'finances/expenses' in request.path %}active{% endif %}">
@@ -635,7 +649,16 @@
             </li>
             {% endif %}
 
-            {% if user_permissions.is_manager %}
+            {% if user_permissions.is_admin %}
+            <li class="nav-section">My Work</li>
+            <li>
+                <a href="{% url 'hr_attendance_list' slug=business_slug %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
+                    <i class="bi bi-clock-history"></i> My Attendance
+                </a>
+            </li>
+            {% endif %}
+
+            {% if user_permissions.is_admin %}
             <li class="nav-section">Administration</li>
             {% if user_permissions.can_manage_users %}
             <li>
@@ -649,9 +672,25 @@
                 </a>
             </li>
             {% endif %}
+            <li class="nav-section">HR & Staff</li>
+            <li>
+                <a href="{% url 'hr_dashboard' slug=business_slug %}" class="{% if '/hr/' in request.path and 'department' not in request.path %}active{% endif %}">
+                    <i class="bi bi-person-badge"></i> HR Module
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_attendance_list' slug=business_slug %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
+                    <i class="bi bi-clock-history"></i> Attendance
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_department_list' slug=business_slug %}" class="{% if 'department' in request.path %}active{% endif %}">
+                    <i class="bi bi-diagram-3"></i> Departments
+                </a>
+            </li>
             {% if user_permissions.can_manage_settings %}
             <li>
-                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'settings' in request.path and 'payment' not in request.path and 'backup' not in request.path and 'support-access' not in request.path %}active{% endif %}">
+                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'business-settings' in request.path or '/settings/' in request.path %}active{% endif %}">
                     <i class="bi bi-gear"></i> Business Settings
                 </a>
             </li>
@@ -668,6 +707,11 @@
             <li>
                 <a href="{% url 'backup_data' slug=business_slug %}" class="{% if 'backup' in request.path %}active{% endif %}">
                     <i class="bi bi-database"></i> Data Backup
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'integration_hub' slug=business_slug %}" class="{% if 'integrations' in request.path or 'webhooks' in request.path %}active{% endif %}">
+                    <i class="bi bi-plug"></i> Integrations
                 </a>
             </li>
             {% if not user.is_superuser %}
@@ -698,7 +742,7 @@
             {% if user.is_superuser or user.is_staff %}
             <li class="nav-section">System Admin</li>
             <li>
-                <a href="/admin/" target="_blank" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <a href="/admin/" target="_blank" style="background: #224195; color: white; border-left: 3px solid rgba(255,255,255,0.4)">
                     <i class="bi bi-shield-lock-fill"></i> Django Admin Panel
                     <span class="badge bg-light text-dark">Admin</span>
                 </a>
@@ -805,6 +849,14 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
+        {% endif %}
+
+        {% if has_business and '/hr/' in request.path and request.resolver_match.url_name != 'hr_dashboard' %}
+            <div class="section-return-link">
+                <a href="{% url 'hr_dashboard' slug=business_slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Back to HR Dashboard
+                </a>
+            </div>
         {% endif %}
 
         {% block content %}{% endblock %}

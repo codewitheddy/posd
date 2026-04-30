@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0055_update_expiry_alert_days_default.py
+# hypothesis_version: 6.151.10
+
+['businesssettings', 'expiry_alert_days', 'pos', 'product']

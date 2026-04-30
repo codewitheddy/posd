@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\views.py
+# hypothesis_version: 6.151.10
+
+['%d', ', ', 'ATOMIC_REQUESTS', 'Accept', 'Allow', 'Retry-After', 'Vary', 'View', 'ViewSet', 'WWW-Authenticate', '_negotiator', 'accepted_renderer', 'admin', 'api', 'args', 'auth_header', 'code', 'description', 'detail', 'format', 'html', 'kwargs', 'message', 'name', 'queryset', 'request', 'suffix', 'view', 'wait']

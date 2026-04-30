@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\cache_utils.py
+# hypothesis_version: 6.151.10
+
+[300, 600, 900, 1800, 3600, ':', 'CACHE_TTL', 'active', 'business_settings', 'categories', 'category', 'customers', 'dashboard', 'delete_pattern', 'loyalty_rewards', 'name', 'payment_methods', 'products', 'reports']

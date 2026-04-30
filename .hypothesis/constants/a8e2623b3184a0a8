@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\hr\migrations\0002_employee_optional_user_account.py
+# hypothesis_version: 6.151.10
+
+[100, '0001_initial', 'employee', 'employee_profile', 'first_name', 'hr', 'last_name', 'ordering', 'user_account']

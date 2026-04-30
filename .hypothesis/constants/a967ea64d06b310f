@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0031_add_unit_of_measurement.py
+# hypothesis_version: 6.151.10
+
+['Area', 'Count/Pieces', 'ID', 'Length', 'Other', 'UnitOfMeasurement', 'Units of Measurement', 'Volume', 'Weight', 'abbreviation', 'area', 'base_unit', 'business', 'conversion_factor', 'count', 'created_at', 'id', 'is_active', 'length', 'low_stock_threshold', 'name', 'ordering', 'other', 'pos', 'pos.business', 'product', 'products', 'stock_quantity', 'unique_together', 'unit', 'unit_type', 'units', 'verbose_name_plural', 'volume', 'weight']

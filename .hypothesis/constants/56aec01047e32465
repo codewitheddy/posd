@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\hr\migrations\0004_employee_kra_pin_employee_nhif_number_and_more.py
+# hypothesis_version: 6.151.10
+
+['NHIF number', 'NSSF number', 'National ID number', 'PAYE number', 'employee', 'hr', 'id_number', 'kra_pin', 'nhif_number', 'nssf_number', 'paye_number', 'staff_code']

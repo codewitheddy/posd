@@ -1,0 +1,50 @@
+{% extends 'pos/base.html' %}
+{% block title %}All Transfers — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden}
+.t-table{width:100%;border-collapse:collapse;font-size:13px}
+.t-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:10px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.t-table tbody tr{border-bottom:1px solid #f3f4f6}
+.t-table tbody tr:hover{background:#f8f9fc}
+.t-table tbody td{padding:11px 16px;vertical-align:middle}
+.badge-completed{background:#dcfce7;color:#166534;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.badge-pending{background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.badge-cancelled{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.badge-in_transit{background:#dbeafe;color:#1e40af;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'branch_list' slug=business.slug %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <h1 style="font-size:20px;font-weight:700;margin:0">All Stock Transfers</h1>
+  </div>
+
+  <div class="int-card">
+    <div class="table-responsive">
+      <table class="t-table">
+        <thead><tr><th>Reference</th><th>Product</th><th>From</th><th>To</th><th class="text-end">Qty</th><th>Status</th><th>By</th><th>Date</th></tr></thead>
+        <tbody>
+          {% for t in transfers %}
+          <tr>
+            <td style="font-family:monospace;font-size:12px;color:#224195">{{ t.reference }}</td>
+            <td style="font-weight:600">{{ t.product.name }}</td>
+            <td style="color:#6b7280">{{ t.source_branch.name }}</td>
+            <td style="color:#6b7280">{{ t.destination_branch.name }}</td>
+            <td class="text-end" style="font-weight:700">{{ t.quantity|floatformat:3 }}</td>
+            <td><span class="badge-{{ t.status }}">{{ t.get_status_display }}</span></td>
+            <td style="color:#6b7280;font-size:12px">{{ t.initiated_by.username }}</td>
+            <td style="color:#6b7280;font-size:12px">{{ t.created_at|date:"d M Y H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" style="text-align:center;padding:48px;color:#9ca3af">No transfers yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0037_product_bulk_unit_name_product_bulk_unit_price_and_more.py
+# hypothesis_version: 6.151.10
+
+['0', '0.001', 'Base Unit', 'Bulk Unit', 'Which unit was sold', 'base', 'bulk', 'bulk_unit_name', 'bulk_unit_price', 'bulk_unit_quantity', 'pos', 'product', 'saleitem', 'unit_name', 'unit_type']

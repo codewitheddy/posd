@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\schemas\generators.py
+# hypothesis_version: 6.151.10
+
+['.{format}', '.{format}/', '/', 'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'actions', 'cls', 'id', 'initkwargs', 'metadata', 'model', 'queryset', 'schema', '{%s}', '{\\g<parameter>}', '{pk}']

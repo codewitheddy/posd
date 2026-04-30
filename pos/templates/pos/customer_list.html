@@ -2,191 +2,256 @@
 
 {% block title %}Customer Management{% endblock %}
 
+{% block extra_css %}
+<style>
+  .int-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+              padding:24px; transition:border-color .15s, box-shadow .15s; }
+  .stat-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+               padding:20px 24px; display:flex; align-items:center; gap:16px; }
+  .stat-icon { width:48px; height:48px; border-radius:12px; background:#eef1fb;
+               display:flex; align-items:center; justify-content:center;
+               font-size:22px; color:#224195; flex-shrink:0; }
+  .stat-value { font-size:26px; font-weight:700; color:#111; line-height:1; }
+  .stat-label { font-size:12px; color:#6b7280; margin-top:3px; }
+  .btn-primary-sm { background:#224195; color:#fff; border:none; border-radius:8px;
+                    padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary-sm:hover { background:#1a3278; color:#fff; }
+  .btn-outline-sm { background:#fff; color:#374151; border:1.5px solid #e5e7eb;
+                    border-radius:8px; padding:7px 14px; font-size:13px; font-weight:600;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-outline-sm:hover { border-color:#9ca3af; color:#111; }
+  .btn-icon { width:32px; height:32px; border-radius:7px; border:1.5px solid #e5e7eb;
+              background:#fff; display:inline-flex; align-items:center; justify-content:center;
+              font-size:14px; color:#374151; text-decoration:none; transition:all .15s; }
+  .btn-icon:hover { border-color:#224195; color:#224195; }
+  .btn-icon.danger:hover { border-color:#dc2626; color:#dc2626; }
+  .cust-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .cust-table thead th { font-size:11px; font-weight:700; text-transform:uppercase;
+                         letter-spacing:.05em; color:#6b7280; padding:10px 14px;
+                         border-bottom:1.5px solid #e5e7eb; white-space:nowrap; }
+  .cust-table tbody tr { border-bottom:1px solid #f3f4f6; transition:background .1s; }
+  .cust-table tbody tr:hover { background:#f8f9fc; }
+  .cust-table tbody td { padding:12px 14px; vertical-align:middle; }
+  .badge-type { display:inline-block; padding:3px 10px; border-radius:20px;
+                font-size:11px; font-weight:700; }
+  .badge-vip      { background:#fef3c7; color:#92400e; }
+  .badge-wholesale{ background:#dbeafe; color:#1e40af; }
+  .badge-regular  { background:#f3f4f6; color:#374151; }
+  .badge-active   { background:#dcfce7; color:#166534; font-size:11px; font-weight:700;
+                    padding:3px 10px; border-radius:20px; }
+  .badge-inactive { background:#fee2e2; color:#991b1b; font-size:11px; font-weight:700;
+                    padding:3px 10px; border-radius:20px; }
+  .filter-bar { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; padding:18px 22px; }
+  .section-title { font-size:17px; font-weight:700; margin-bottom:16px; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-people"></i> Customer Management</h2>
-        <a href="{% url 'customer_create' slug=request.business.slug %}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Add New Customer
+<div class="container-fluid py-4 px-3 px-md-5">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">Customers</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Manage your customer base and loyalty tiers.</p>
+    </div>
+    <a href="{% url 'customer_create' slug=request.business.slug %}" class="btn-primary-sm">
+      <i class="bi bi-plus-circle"></i> Add Customer
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert" style="border-radius:10px;font-size:13px">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon"><i class="bi bi-people"></i></div>
+        <div>
+          <div class="stat-value">{{ total_count }}</div>
+          <div class="stat-label">Total Customers</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#f3f4f6;color:#374151"><i class="bi bi-person"></i></div>
+        <div>
+          <div class="stat-value">{{ regular_count }}</div>
+          <div class="stat-label">Regular</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#fef3c7;color:#92400e"><i class="bi bi-star-fill"></i></div>
+        <div>
+          <div class="stat-value">{{ vip_count }}</div>
+          <div class="stat-label">VIP</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:#dbeafe;color:#1e40af"><i class="bi bi-shop"></i></div>
+        <div>
+          <div class="stat-value">{{ wholesale_count }}</div>
+          <div class="stat-label">Wholesale</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar mb-4">
+    <form method="get" class="row g-2 align-items-end" id="customerFilterForm">
+      <div class="col-md-5">
+        <label style="font-size:12px;font-weight:600;color:#374151">Search</label>
+        <input type="text" name="search" class="form-control form-control-sm"
+               placeholder="Name, phone, or code…" value="{{ search }}"
+               style="border-radius:7px;border-color:#e5e7eb;font-size:13px">
+      </div>
+      <div class="col-md-2">
+        <label style="font-size:12px;font-weight:600;color:#374151">Customer Type</label>
+        <select name="customer_type" class="form-select form-select-sm"
+                style="border-radius:7px;border-color:#e5e7eb;font-size:13px">
+          <option value="">All Types</option>
+          <option value="regular" {% if customer_type == 'regular' %}selected{% endif %}>Regular</option>
+          <option value="vip"     {% if customer_type == 'vip'     %}selected{% endif %}>VIP</option>
+          <option value="wholesale" {% if customer_type == 'wholesale' %}selected{% endif %}>Wholesale</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label style="font-size:12px;font-weight:600;color:#374151">Status</label>
+        <select name="status" class="form-select form-select-sm"
+                style="border-radius:7px;border-color:#e5e7eb;font-size:13px">
+          <option value="">All Status</option>
+          <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label style="font-size:12px;font-weight:600;color:#374151">Sort</label>
+        <select name="sort" class="form-select form-select-sm"
+                style="border-radius:7px;border-color:#e5e7eb;font-size:13px">
+          <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest</option>
+          <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>Oldest</option>
+          <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Name A-Z</option>
+          <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Name Z-A</option>
+          <option value="spending_desc" {% if sort_by == 'spending_desc' %}selected{% endif %}>Top Spenders</option>
+          <option value="points_desc" {% if sort_by == 'points_desc' %}selected{% endif %}>Most Points</option>
+        </select>
+      </div>
+      <div class="col-md-auto d-flex gap-2">
+        <button type="submit" class="btn-primary-sm">
+          <i class="bi bi-search"></i> Search
+        </button>
+        <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn-outline-sm">
+          <i class="bi bi-arrow-clockwise"></i> Reset
         </a>
-    </div>
+      </div>
+    </form>
 
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        {% endfor %}
+    {% if search or customer_type or status_filter or sort_by != 'newest' %}
+    <div class="mt-3" style="font-size:13px;color:#6b7280">
+      Showing <strong style="color:#111">{{ customers.count }}</strong> result{{ customers.count|pluralize }}
+      {% if search %} for "<strong style="color:#111">{{ search }}</strong>"{% endif %}
+      {% if customer_type %} · type: <strong style="color:#111">{{ customer_type|title }}</strong>{% endif %}
+      {% if status_filter %} · status: <strong style="color:#111">{{ status_filter|title }}</strong>{% endif %}
+    </div>
     {% endif %}
+  </div>
 
-    <!-- Customer Statistics -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <h6 class="card-title"><i class="bi bi-people"></i> Total Customers</h6>
-                    <h3>{{ total_count }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-secondary text-white">
-                <div class="card-body">
-                    <h6 class="card-title"><i class="bi bi-person"></i> Regular</h6>
-                    <h3>{{ regular_count }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-dark">
-                <div class="card-body">
-                    <h6 class="card-title"><i class="bi bi-star-fill"></i> VIP</h6>
-                    <h3>{{ vip_count }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <h6 class="card-title"><i class="bi bi-shop"></i> Wholesale</h6>
-                    <h3>{{ wholesale_count }}</h3>
-                </div>
-            </div>
-        </div>
+  <!-- Customer Table -->
+  <div class="int-card" style="padding:0;overflow:hidden">
+    <div class="table-responsive">
+      <table class="cust-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Type</th>
+            <th>Points</th>
+            <th>Total Purchases</th>
+            <th>Visits</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for customer in customers %}
+          <tr>
+            <td><span style="font-weight:700;color:#224195;font-size:12px">{{ customer.customer_code }}</span></td>
+            <td style="font-weight:600">{{ customer.name }}</td>
+            <td style="color:#374151">{{ customer.phone }}</td>
+            <td style="color:#6b7280">{{ customer.email|default:"—" }}</td>
+            <td>
+              {% if customer.customer_type == 'vip' %}
+                <span class="badge-type badge-vip">VIP</span>
+              {% elif customer.customer_type == 'wholesale' %}
+                <span class="badge-type badge-wholesale">Wholesale</span>
+              {% else %}
+                <span class="badge-type badge-regular">Regular</span>
+              {% endif %}
+            </td>
+            <td style="font-weight:600">{{ customer.loyalty_points }} <span style="color:#6b7280;font-weight:400">pts</span></td>
+            <td>KES {{ customer.total_purchases|floatformat:2 }}</td>
+            <td style="color:#374151">{{ customer.visit_count }}</td>
+            <td>
+              {% if customer.is_active %}
+                <span class="badge-active">Active</span>
+              {% else %}
+                <span class="badge-inactive">Inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn-icon" title="View">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn-icon" title="Loyalty">
+                  <i class="bi bi-star-fill"></i>
+                </a>
+                <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn-icon" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'customer_delete' slug=request.business.slug pk=customer.pk %}" class="btn-icon danger" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="10" style="text-align:center;padding:60px 20px;color:#9ca3af">
+              {% if search or customer_type or status_filter or sort_by != 'newest' %}
+                <i class="bi bi-search" style="font-size:2.5rem;display:block;margin-bottom:12px"></i>
+                <div style="font-weight:600;color:#374151;margin-bottom:6px">No customers match your filters</div>
+                <a href="{% url 'customer_list' slug=request.business.slug %}" style="font-size:13px;color:#224195">Reset filters</a>
+              {% else %}
+                <i class="bi bi-people" style="font-size:2.5rem;display:block;margin-bottom:12px"></i>
+                <div style="font-weight:600;color:#374151;margin-bottom:12px">No customers yet</div>
+                <a href="{% url 'customer_create' slug=request.business.slug %}" class="btn-primary-sm" style="margin:0 auto">
+                  <i class="bi bi-plus-circle"></i> Add your first customer
+                </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
 
-    <!-- Search and Filter -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-3" id="customerFilterForm">
-                <div class="col-md-4">
-                    <input type="text" name="search" class="form-control" placeholder="Search by name, phone, or code..." value="{{ search }}">
-                </div>
-                <div class="col-md-3">
-                    <select name="customer_type" class="form-select" id="customerTypeFilter">
-                        <option value="">All Customer Types</option>
-                        <option value="regular" {% if customer_type == 'regular' %}selected{% endif %}>Regular</option>
-                        <option value="vip" {% if customer_type == 'vip' %}selected{% endif %}>VIP</option>
-                        <option value="wholesale" {% if customer_type == 'wholesale' %}selected{% endif %}>Wholesale</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-search"></i> Search
-                    </button>
-                </div>
-                <div class="col-md-2">
-                    <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn btn-secondary w-100">
-                        <i class="bi bi-arrow-clockwise"></i> Reset
-                    </a>
-                </div>
-            </form>
-            
-            <!-- Active Filters Display -->
-            {% if search or customer_type %}
-            <div class="mt-3">
-                <strong>Active Filters:</strong>
-                {% if search %}
-                    <span class="badge bg-info me-2">Search: "{{ search }}"</span>
-                {% endif %}
-                {% if customer_type %}
-                    <span class="badge bg-warning text-dark me-2">Type: {{ customer_type|title }}</span>
-                {% endif %}
-                <span class="text-muted">({{ customers.count }} result{{ customers.count|pluralize }})</span>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Customer List -->
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Customer Code</th>
-                            <th>Name</th>
-                            <th>Phone</th>
-                            <th>Email</th>
-                            <th>Type</th>
-                            <th>Loyalty Points</th>
-                            <th>Total Purchases</th>
-                            <th>Visits</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for customer in customers %}
-                        <tr>
-                            <td><strong>{{ customer.customer_code }}</strong></td>
-                            <td>{{ customer.name }}</td>
-                            <td>{{ customer.phone }}</td>
-                            <td>{{ customer.email|default:"-" }}</td>
-                            <td>
-                                {% if customer.customer_type == 'vip' %}
-                                    <span class="badge bg-warning text-dark">VIP</span>
-                                {% elif customer.customer_type == 'wholesale' %}
-                                    <span class="badge bg-info">Wholesale</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Regular</span>
-                                {% endif %}
-                            </td>
-                            <td><strong>{{ customer.loyalty_points }}</strong> pts</td>
-                            <td>KES {{ customer.total_purchases|floatformat:2 }}</td>
-                            <td>{{ customer.visit_count }}</td>
-                            <td>
-                                {% if customer.is_active %}
-                                    <span class="badge bg-success">Active</span>
-                                {% else %}
-                                    <span class="badge bg-danger">Inactive</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-info" title="View Details">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <a href="{% url 'loyalty_dashboard' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-primary" title="Loyalty">
-                                    <i class="bi bi-star-fill"></i>
-                                </a>
-                                <a href="{% url 'customer_edit' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-warning" title="Edit">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a href="{% url 'customer_delete' slug=request.business.slug pk=customer.pk %}" class="btn btn-sm btn-danger" title="Delete">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="10" class="text-center py-5">
-                                {% if search or customer_type %}
-                                    <i class="bi bi-search" style="font-size: 3rem; color: #ccc;"></i>
-                                    <p class="mt-3 mb-2"><strong>No customers found matching your filters</strong></p>
-                                    <p class="text-muted">
-                                        {% if customer_type %}
-                                            No {{ customer_type }} customers found.
-                                        {% endif %}
-                                        Try adjusting your search criteria or <a href="{% url 'customer_list' slug=request.business.slug %}">reset filters</a>.
-                                    </p>
-                                {% else %}
-                                    <i class="bi bi-people" style="font-size: 3rem; color: #ccc;"></i>
-                                    <p class="mt-3 mb-2"><strong>No customers yet</strong></p>
-                                    <p class="text-muted">
-                                        <a href="{% url 'customer_create' slug=request.business.slug %}" class="btn btn-primary">
-                                            <i class="bi bi-plus-circle"></i> Add your first customer
-                                        </a>
-                                    </p>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}

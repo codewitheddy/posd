@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\amqp\method_framing.py
+# hypothesis_version: 6.151.10
+
+[206, '>BHI%dsB', '>HH', '>HHQ', 'content_encoding', 'frame_handler', 'frame_writer', 'utf-8']

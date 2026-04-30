@@ -1,12 +1,123 @@
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
+from datetime import time
+from django.db.models import Sum
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
 from django.core.exceptions import ValidationError
 from .image_utils import ImageOptimizer, generate_upload_path
 import uuid
+import threading
+import re
+
+# Thread-local storage for current request (used by AuditModelMixin)
+_audit_request = threading.local()
+
+
+def set_audit_request(request):
+    """Call this in middleware or views to attach request to audit logs"""
+    _audit_request.value = request
+
+
+def get_audit_request():
+    return getattr(_audit_request, 'value', None)
+
+
+class AuditModelMixin:
+    """
+    Mixin that auto-logs create/update/delete to ActivityLog.
+    Add to any model that needs full audit trails.
+    Usage: class MyModel(AuditModelMixin, models.Model): ...
+    """
+    _audit_exclude_fields = {'updated_at', 'created_at'}
+
+    def _get_audit_description(self, action):
+        return f"{action.capitalize()} {self.__class__.__name__}: {self}"
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        action = 'create' if is_new else 'update'
+        super().save(*args, **kwargs)
+        try:
+            from .models import ActivityLog
+            request = get_audit_request()
+            user = getattr(request, 'user', None) if request else None
+            business = getattr(self, 'business', None)
+            ActivityLog.log_activity(
+                user=user if (user and getattr(user, 'is_authenticated', False)) else None,
+                action_type=action,
+                description=self._get_audit_description(action),
+                model_name=self.__class__.__name__,
+                object_id=self.pk,
+                request=request,
+                business=business,
+                entity_type=self.__class__.__name__,
+                entity_id=str(self.pk),
+            )
+        except Exception:
+            pass  # Never let audit logging break the main operation
+
+    def delete(self, *args, **kwargs):
+        description = self._get_audit_description('delete')
+        pk = self.pk
+        business = getattr(self, 'business', None)
+        super().delete(*args, **kwargs)
+        try:
+            from .models import ActivityLog
+            request = get_audit_request()
+            user = getattr(request, 'user', None) if request else None
+            ActivityLog.log_activity(
+                user=user if (user and getattr(user, 'is_authenticated', False)) else None,
+                action_type='delete',
+                description=description,
+                model_name=self.__class__.__name__,
+                object_id=pk,
+                request=request,
+                business=business,
+                entity_type=self.__class__.__name__,
+                entity_id=str(pk),
+            )
+        except Exception:
+            pass
+
+
+class CacheInvalidationMixin:
+    """
+    Mixin that invalidates relevant cache keys after save/delete.
+    Apply to Product, Category, BusinessSettings, PaymentMethod, LoyaltyReward, Sale.
+    """
+    _cache_fn_map = {
+        'product': 'invalidate_products',
+        'category': 'invalidate_categories',
+        'businesssettings': 'invalidate_business_settings',
+        'paymentmethod': 'invalidate_payment_methods',
+        'loyaltyreward': 'invalidate_loyalty_rewards',
+        'sale': 'invalidate_dashboard',
+    }
+
+    def _invalidate_cache(self):
+        try:
+            import importlib
+            cu = importlib.import_module('pos.cache_utils')
+            business = getattr(self, 'business', None)
+            if not business:
+                return
+            business_id = business.pk if hasattr(business, 'pk') else business
+            fn_name = self._cache_fn_map.get(self.__class__.__name__.lower())
+            if fn_name:
+                getattr(cu, fn_name)(business_id)
+        except Exception:
+            pass
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self._invalidate_cache()
+
+    def delete(self, *args, **kwargs):
+        self._invalidate_cache()
+        super().delete(*args, **kwargs)
 
 
 from django.utils.text import slugify
@@ -89,6 +200,9 @@ class Business(models.Model):
         help_text="Last successful TIMS sync timestamp"
     )
 
+    # Setup
+    setup_completed = models.BooleanField(default=False, help_text="Whether initial business setup has been completed")
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -169,10 +283,24 @@ class Business(models.Model):
         # Create default payment method: CASH
         PaymentMethod.objects.get_or_create(
             business=self,
-            name='CASH',
+            code='CASH',
             defaults={
+                'name': 'Cash',
                 'is_active': True,
                 'requires_reference': False,
+                'icon': 'bi-cash',
+            }
+        )
+
+        # Create default payment method: M-Pesa
+        PaymentMethod.objects.get_or_create(
+            business=self,
+            code='MPESA',
+            defaults={
+                'name': 'M-Pesa',
+                'is_active': True,
+                'requires_reference': True,
+                'icon': 'bi-phone',
             }
         )
         
@@ -193,6 +321,51 @@ class Business(models.Model):
         )
 
 
+# ==================== USER MANAGEMENT CONSTANTS ====================
+
+PERMISSION_CODES = [
+    'can_refund_sale',
+    'can_void_sale',
+    'can_edit_price',
+    'can_view_cost_price',
+    'can_apply_discount',
+    'can_exceed_max_discount',
+    'can_manage_users',
+    'can_view_reports',
+    'can_manage_stock',
+]
+
+DEFAULT_PERMISSIONS = {
+    'owner':         list(PERMISSION_CODES),
+    'admin':         list(PERMISSION_CODES),
+    'manager':       ['can_refund_sale', 'can_void_sale', 'can_edit_price',
+                      'can_view_cost_price', 'can_apply_discount',
+                      'can_exceed_max_discount', 'can_view_reports', 'can_manage_stock'],
+    'stock_manager': ['can_manage_stock', 'can_view_reports', 'can_view_cost_price'],
+    'cashier':       ['can_apply_discount', 'can_refund_sale'],
+    'sales':         ['can_apply_discount'],
+    'viewer':        ['can_view_reports'],
+}
+
+DEFAULT_MAX_DISCOUNT = {
+    'owner':         Decimal('100.00'),
+    'admin':         Decimal('100.00'),
+    'manager':       Decimal('50.00'),
+    'cashier':       Decimal('20.00'),
+    'sales':         Decimal('20.00'),
+    'stock_manager': Decimal('0.00'),
+    'viewer':        Decimal('0.00'),
+}
+
+
+def get_default_permissions(role):
+    """Return (permissions_list, max_discount_pct) for a given role."""
+    return (
+        list(DEFAULT_PERMISSIONS.get(role, [])),
+        DEFAULT_MAX_DISCOUNT.get(role, Decimal('0.00')),
+    )
+
+
 class BusinessMembership(models.Model):
     """
     User membership in a business with role
@@ -211,6 +384,13 @@ class BusinessMembership(models.Model):
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='cashier')
     is_active = models.BooleanField(default=True)
+    permissions = models.JSONField(default=list, blank=True, help_text="Granular permission codes for this member")
+    max_discount_pct = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        help_text="Maximum discount percentage this member can apply at POS"
+    )
 
     # Timestamps
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -224,8 +404,15 @@ class BusinessMembership(models.Model):
         return f"{self.user.username} - {self.business.name} ({self.role})"
 
     def has_permission(self, permission):
-        """Check if user has specific permission in this business"""
-        role_permissions = {
+        """Check if user has specific permission in this business.
+        Supports both legacy broad codes and new granular permission codes."""
+        if not self.is_active:
+            return False
+        # Granular permission check
+        if permission in PERMISSION_CODES:
+            return permission in self.permissions
+        # Legacy broad permission check (backward compatibility)
+        legacy_map = {
             'owner': ['all'],
             'admin': ['all'],
             'manager': ['view', 'create', 'edit', 'reports', 'users'],
@@ -234,9 +421,26 @@ class BusinessMembership(models.Model):
             'sales': ['view', 'create', 'pos'],
             'viewer': ['view'],
         }
-
-        perms = role_permissions.get(self.role, [])
+        perms = legacy_map.get(self.role, [])
         return 'all' in perms or permission in perms
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_role = None
+        if not is_new:
+            try:
+                old_role = BusinessMembership.objects.filter(pk=self.pk).values_list('role', flat=True).first()
+            except Exception:
+                pass
+        if is_new or old_role != self.role:
+            perms, max_disc = get_default_permissions(self.role)
+            self.permissions = perms
+            self.max_discount_pct = max_disc
+            # If caller passed update_fields, ensure new fields are included
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = list(update_fields) + ['permissions', 'max_discount_pct']
+        super().save(*args, **kwargs)
 
 
 class SubscriptionPayment(models.Model):
@@ -309,7 +513,7 @@ class SubscriptionPayment(models.Model):
         super().save(*args, **kwargs)
 
 
-class Category(models.Model):
+class Category(CacheInvalidationMixin, models.Model):
     """Product categories for organization"""
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)
@@ -385,18 +589,96 @@ def product_image_path(instance, filename):
     return generate_upload_path(instance, filename, 'products')
 
 
-class Product(models.Model):
-    """Products available for sale"""
-    PRODUCT_TYPE_CHOICES = [
-        ('stock', 'Stock Product'),
-        ('service', 'Service (No Inventory)'),
-        ('variant', 'Variant Product'),
-        ('bundle', 'Bundle / Combo'),
-        ('weighted', 'Weighted (kg/L)'),
-        ('serialized', 'Serialized (IMEI/Serial)'),
-        ('batch', 'Batch / Expiry Tracked'),
+# ==================== HS CODES ====================
+
+class HSCode(models.Model):
+    """
+    Harmonized System (HS) Code library — global, shared across all businesses.
+    Based on the WCO HS 2022 nomenclature used by Kenya Revenue Authority (KRA).
+
+    Structure:
+      chapter   — 2-digit  e.g. "09"
+      heading   — 4-digit  e.g. "0901"
+      subheading— 6-digit  e.g. "090121"
+      code      — full code with optional dots e.g. "0901.21"
+    """
+
+    UNIT_CHOICES = [
+        ('kg',  'Kilogram (kg)'),
+        ('g',   'Gram (g)'),
+        ('l',   'Litre (l)'),
+        ('ml',  'Millilitre (ml)'),
+        ('m',   'Metre (m)'),
+        ('m2',  'Square Metre (m²)'),
+        ('m3',  'Cubic Metre (m³)'),
+        ('pcs', 'Pieces (pcs)'),
+        ('doz', 'Dozen'),
+        ('u',   'Unit'),
+        ('t',   'Tonne (t)'),
+        ('',    'No unit'),
     ]
 
+    # Core fields
+    code        = models.CharField(max_length=20, unique=True, db_index=True,
+                                   help_text="Full HS code e.g. 0901.21 or 090121")
+    description = models.CharField(max_length=500,
+                                   help_text="Official WCO/KRA description")
+    chapter     = models.CharField(max_length=2, db_index=True,
+                                   help_text="2-digit chapter e.g. 09")
+    heading     = models.CharField(max_length=4, db_index=True,
+                                   help_text="4-digit heading e.g. 0901")
+
+    # Tax / duty info
+    vat_rate    = models.DecimalField(max_digits=5, decimal_places=2, default=16,
+                                      help_text="Standard VAT rate for this code (%)")
+    excise_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                      help_text="Excise duty rate (%)")
+    import_duty = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                      help_text="Import duty rate (%)")
+    is_excisable= models.BooleanField(default=False)
+    unit        = models.CharField(max_length=10, choices=UNIT_CHOICES, default='',
+                                   blank=True, help_text="Standard unit of quantity")
+
+    # Notes
+    notes       = models.TextField(blank=True,
+                                   help_text="Additional notes, KRA-specific guidance")
+    is_active   = models.BooleanField(default=True)
+
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['code']
+        verbose_name = 'HS Code'
+        verbose_name_plural = 'HS Codes'
+        indexes = [
+            models.Index(fields=['chapter']),
+            models.Index(fields=['heading']),
+        ]
+
+    def __str__(self):
+        return f"{self.code} — {self.description}"
+
+    def save(self, *args, **kwargs):
+        # Auto-derive chapter and heading from code
+        clean = self.code.replace('.', '').replace(' ', '')
+        self.chapter = clean[:2] if len(clean) >= 2 else clean
+        self.heading = clean[:4] if len(clean) >= 4 else clean
+        super().save(*args, **kwargs)
+
+    @property
+    def display_code(self):
+        """Return code formatted with dot e.g. 0901.21"""
+        clean = self.code.replace('.', '')
+        if len(clean) >= 6:
+            return f"{clean[:4]}.{clean[4:]}"
+        if len(clean) == 4:
+            return clean
+        return self.code
+
+
+class Product(CacheInvalidationMixin, models.Model):
+    """Products available for sale"""
     TAX_CLASS_CHOICES = [
         ('standard', 'Standard (16% VAT)'),
         ('zero_rated', 'Zero Rated (0% VAT)'),
@@ -408,7 +690,6 @@ class Product(models.Model):
     description = models.TextField(blank=True, help_text="Product description")
     product_code = models.CharField(max_length=50, blank=True, null=True, help_text="Internal product code or SKU")
     barcode = models.CharField(max_length=100, blank=True, help_text="Barcode for scanning (EAN, UPC, etc.)")
-    product_type = models.CharField(max_length=20, choices=PRODUCT_TYPE_CHOICES, default='stock')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
     brand = models.ForeignKey('Brand', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     unit = models.ForeignKey(UnitOfMeasurement, on_delete=models.SET_NULL, null=True, blank=True,
@@ -441,7 +722,14 @@ class Product(models.Model):
     bulk_unit_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                           validators=[MinValueValidator(Decimal('0'))],
                                           help_text="Selling price for one bulk unit")
-    
+    unit_barcode = models.CharField(max_length=100, blank=True, help_text="Barcode for the individual base unit (distinct from bulk barcode)")
+    bulk_low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True,
+                                                   validators=[MinValueValidator(Decimal('0'))],
+                                                   help_text="Alert when stock falls below this many bulk units")
+    bulk_discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                              validators=[MinValueValidator(Decimal('0'))],
+                                              help_text="Per-unit price when customer buys at least one full bulk unit quantity")
+
     # Variable pricing (for items sold by weight/volume)
     is_variable_price = models.BooleanField(default=False, help_text="Enable variable pricing (price calculated by weight/quantity)")
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
@@ -469,6 +757,14 @@ class Product(models.Model):
         blank=True,
         null=True,
         help_text="Description of HS Code category"
+    )
+    # Structured FK to the HS Code library (preferred over free-text fields above)
+    hs_code_ref = models.ForeignKey(
+        'HSCode',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='products',
+        help_text="Link to the HS Code library entry"
     )
     is_excisable = models.BooleanField(
         default=False,
@@ -528,20 +824,25 @@ class Product(models.Model):
             
             self.product_code = f'PRD-{new_num:04d}'
         
-        # Optimize image on upload (with error handling for missing files)
+        # Optimize image on upload — only for new uploads, not existing saved images
         if self.image and hasattr(self.image, 'file'):
-            try:
-                # Validate image
-                is_valid, error = ImageOptimizer.validate_image(self.image)
-                if not is_valid:
-                    raise ValueError(error)
-                
-                # Optimize image
-                self.image = ImageOptimizer.optimize_image(self.image)
-            except (FileNotFoundError, IOError, OSError):
-                # Image file doesn't exist (e.g., on Heroku ephemeral filesystem)
-                # Skip optimization and continue
-                pass
+            # Only process if it's a newly uploaded file (not an existing ImageFieldFile)
+            from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
+            is_new_upload = isinstance(self.image.file, (InMemoryUploadedFile, TemporaryUploadedFile))
+            if not is_new_upload:
+                # Check if the underlying file object is an upload type
+                try:
+                    is_new_upload = hasattr(self.image.file, 'content_type')
+                except Exception:
+                    is_new_upload = False
+            if is_new_upload:
+                try:
+                    is_valid, error = ImageOptimizer.validate_image(self.image)
+                    if not is_valid:
+                        raise ValueError(error)
+                    self.image = ImageOptimizer.optimize_image(self.image)
+                except (FileNotFoundError, IOError, OSError):
+                    pass
         
         super().save(*args, **kwargs)
     
@@ -559,7 +860,19 @@ class Product(models.Model):
     def is_low_stock(self):
         """Check if product is low on stock"""
         return self.stock_quantity <= self.low_stock_threshold
-    
+
+    def bulk_stock_level(self):
+        """Current stock expressed in bulk units (None if not a bulk product)."""
+        if self.bulk_unit_quantity:
+            return self.stock_quantity / self.bulk_unit_quantity
+        return None
+
+    def is_bulk_low_stock(self):
+        """True when bulk_low_stock_threshold is set and bulk stock level is at or below it."""
+        if self.bulk_low_stock_threshold and self.bulk_unit_quantity:
+            return self.bulk_stock_level() <= self.bulk_low_stock_threshold
+        return False
+
     def is_out_of_stock(self):
         """Check if product is out of stock"""
         return self.stock_quantity <= 0
@@ -695,7 +1008,7 @@ class Product(models.Model):
         return f"KES {self.price_per_unit} per {self.pricing_unit_quantity}{unit_name}"
 
 
-class Sale(models.Model):
+class Sale(AuditModelMixin, CacheInvalidationMixin, models.Model):
     """Sales transactions"""
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sales')
     invoice_number = models.CharField(max_length=20, editable=False)
@@ -758,6 +1071,7 @@ class Sale(models.Model):
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='sales')
 
     class Meta:
         ordering = ['-date']
@@ -773,7 +1087,10 @@ class Sale(models.Model):
             date_str = today.strftime('%Y%m%d')
             last_sale = Sale.objects.filter(business=self.business, invoice_number__startswith=f'INV-{date_str}').order_by('-invoice_number').first()
             if last_sale:
-                last_num = int(last_sale.invoice_number.split('-')[-1])
+                try:
+                    last_num = int(last_sale.invoice_number.split('-')[-1])
+                except (ValueError, IndexError):
+                    last_num = Sale.objects.filter(business=self.business).count()
                 new_num = last_num + 1
             else:
                 new_num = 1
@@ -791,7 +1108,7 @@ class SaleItem(models.Model):
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sale_items')
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, validators=[MinValueValidator(Decimal('0.001'))])
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     note = models.CharField(max_length=255, blank=True, default='', help_text='Per-item note (e.g. no onions, gift wrap)')
@@ -819,14 +1136,16 @@ class SaleItem(models.Model):
         super().save(*args, **kwargs)
 
 
-class StockAdjustment(models.Model):
+class StockAdjustment(AuditModelMixin, models.Model):
     """Track stock adjustments and changes"""
     ADJUSTMENT_TYPES = [
         ('restock', 'Restock'),
         ('damage', 'Damage/Loss'),
+        ('expired', 'Expired Items'),
         ('return', 'Customer Return'),
         ('correction', 'Stock Correction'),
         ('sale', 'Sale'),
+        ('bulk_break', 'Bulk Break'),
     ]
     
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='stock_adjustments')
@@ -837,6 +1156,7 @@ class StockAdjustment(models.Model):
     new_quantity = models.IntegerField()
     reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='stock_adjustments')
     
     class Meta:
         ordering = ['-created_at']
@@ -873,7 +1193,7 @@ class Supplier(models.Model):
     def total_purchases(self):
         """Calculate total amount of all purchases from this supplier based on received quantities"""
         total = Decimal('0.00')
-        for purchase in self.purchases.filter(status='received'):
+        for purchase in self.purchases.filter(status__in=('received', 'partially_received', 'closed')):
             # Calculate actual received amount
             actual_amount = Decimal('0.00')
             for item in purchase.items.all():
@@ -897,7 +1217,7 @@ class Supplier(models.Model):
         """Calculate outstanding balance as sum of remaining balances on unpaid purchases"""
         from django.db.models import Sum, F, ExpressionWrapper, DecimalField
         from django.db.models.functions import Coalesce
-        purchases = self.purchases.filter(status__in=('received', 'partially_received')).annotate(
+        purchases = self.purchases.filter(status__in=('received', 'partially_received', 'closed')).annotate(
             allocated=Coalesce(Sum('payment_allocations__amount'), Decimal('0.00')),
             remaining=ExpressionWrapper(
                 F('total_amount') - Coalesce(Sum('payment_allocations__amount'), Decimal('0.00')),
@@ -915,11 +1235,7 @@ class Supplier(models.Model):
     
     def has_received_purchases(self):
         """Check if supplier has any received purchases"""
-        return self.purchases.filter(status='received').exists()
-
-    def has_received_purchases(self):
-        """Check if supplier has any received purchases"""
-        return self.purchases.filter(status='received').exists()
+        return self.purchases.filter(status__in=('received', 'partially_received', 'closed')).exists()
 
 
 class Purchase(models.Model):
@@ -980,6 +1296,7 @@ class Purchase(models.Model):
         help_text='User who cancelled this purchase order'
     )
     cancelled_at = models.DateTimeField(blank=True, null=True, help_text='When this purchase order was cancelled')
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='purchases')
     
     class Meta:
         ordering = ['-date']
@@ -1029,109 +1346,124 @@ class Purchase(models.Model):
                     ]
                 }
         """
-        if self.status == 'received':
+        from django.db import transaction
+
+        if self.status in ('received', 'closed', 'cancelled'):
             return False
-        
-        self.status = 'received'
-        self.received_date = timezone.now()
-        self.save()
-        
-        # Update stock for all items
-        for item in self.items.all():
-            # Get receiving data for this item if provided
-            item_data = None
-            if receiving_data and 'items' in receiving_data:
-                item_data = next(
-                    (d for d in receiving_data['items'] if d['item_id'] == item.id),
-                    None
-                )
-            
-            if item_data:
-                # Use actual received quantities
-                qty_received = item_data['quantity_received']
-                qty_damaged = item_data['quantity_damaged']
-                notes = item_data.get('notes', '')
-                expiry_date = item_data.get('expiry_date')
-                batch_number = item_data.get('batch_number', '')
-                
-                # Get product reference first
+
+        has_any_receipt = False
+
+        with transaction.atomic():
+            locked_purchase = Purchase.objects.select_for_update().get(pk=self.pk)
+            if locked_purchase.status in ('received', 'closed', 'cancelled'):
+                return False
+
+            for item in locked_purchase.items.select_related('product').all():
+                item_data = None
+                if receiving_data and 'items' in receiving_data:
+                    item_data = next(
+                        (d for d in receiving_data['items'] if d.get('item_id') == item.id),
+                        None
+                    )
+
+                remaining_before = max(item.quantity - item.quantity_received - item.quantity_damaged, 0)
+                if remaining_before <= 0:
+                    continue
+
+                if item_data:
+                    qty_received = int(item_data.get('quantity_received', 0) or 0)
+                    qty_damaged = int(item_data.get('quantity_damaged', 0) or 0)
+                    notes = item_data.get('notes', '')
+                    expiry_date = item_data.get('expiry_date')
+                    batch_number = item_data.get('batch_number', '')
+                else:
+                    # Backward compatibility: receive only what is still outstanding.
+                    qty_received = remaining_before
+                    qty_damaged = 0
+                    notes = ''
+                    expiry_date = None
+                    batch_number = ''
+
+                if qty_received < 0 or qty_damaged < 0:
+                    return False
+                if qty_received + qty_damaged > remaining_before:
+                    return False
+                if qty_received == 0 and qty_damaged == 0:
+                    continue
+
+                has_any_receipt = True
                 product = item.product
-                
-                # Update item receiving details
-                item.quantity_received = qty_received
-                item.quantity_damaged = qty_damaged
+
+                item.quantity_received += qty_received
+                item.quantity_damaged += qty_damaged
                 item.receiving_notes = notes
-                
-                # Update expiry and batch if provided
+
+                update_item_fields = ['quantity_received', 'quantity_damaged', 'receiving_notes']
+
                 if expiry_date:
                     from datetime import datetime
                     try:
                         expiry_date_obj = datetime.strptime(expiry_date, '%Y-%m-%d').date()
                         item.expiry_date = expiry_date_obj
-                        
-                        # Also update the product's expiry date
+                        update_item_fields.append('expiry_date')
+
                         product.expiry_date = expiry_date_obj
-                        # Set default alert days to 7 if not already customized
-                        if product.expiry_alert_days <= 3:  # If using old default or less
+                        if product.expiry_alert_days <= 3:
                             product.expiry_alert_days = 7
                     except ValueError:
-                        pass  # Invalid date format, skip
-                
+                        pass
+
                 if batch_number:
                     item.batch_number = batch_number
-                
-                item.save()
-                
-                # Update stock with received quantity only
+                    update_item_fields.append('batch_number')
+
+                item.save(update_fields=update_item_fields)
+
                 previous_qty = product.stock_quantity
-                product.stock_quantity += Decimal(qty_received)
-                # Save product with all changes (stock + expiry if set)
-                product.save(update_fields=['stock_quantity', 'expiry_date', 'expiry_alert_days'])
-                
-                # Create restock adjustment
-                StockAdjustment.objects.create(
-                    business=self.business,
-                    product=product,
-                    adjustment_type='restock',
-                    quantity_change=qty_received,
-                    previous_quantity=int(previous_qty),
-                    new_quantity=int(product.stock_quantity),
-                    reason=f'Received from {self.purchase_number} ({qty_received} of {item.quantity} ordered)'
-                )
-                
-                # Create damage adjustment if needed
+                if qty_received > 0:
+                    product.stock_quantity += Decimal(qty_received)
+
+                product_update_fields = ['stock_quantity']
+                if item.expiry_date:
+                    product_update_fields.extend(['expiry_date', 'expiry_alert_days'])
+                product.save(update_fields=product_update_fields)
+
+                if qty_received > 0:
+                    StockAdjustment.objects.create(
+                        business=locked_purchase.business,
+                        product=product,
+                        adjustment_type='restock',
+                        quantity_change=qty_received,
+                        previous_quantity=int(previous_qty),
+                        new_quantity=int(product.stock_quantity),
+                        reason=f'Received from {locked_purchase.purchase_number} ({qty_received} of {item.quantity} ordered)'
+                    )
+
                 if qty_damaged > 0:
                     StockAdjustment.objects.create(
-                        business=self.business,
+                        business=locked_purchase.business,
                         product=product,
                         adjustment_type='damage',
                         quantity_change=-qty_damaged,
-                        previous_quantity=0,
-                        new_quantity=0,
-                        reason=f'Damaged on delivery - {self.purchase_number}: {notes}'
+                        previous_quantity=int(product.stock_quantity),
+                        new_quantity=int(product.stock_quantity),
+                        reason=f'Damaged on delivery - {locked_purchase.purchase_number}: {notes}'
                     )
-            else:
-                # No receiving data - use full ordered quantity (backward compatibility)
-                qty_received = item.quantity
-                item.quantity_received = qty_received
-                item.quantity_damaged = 0
-                item.save()
-                
-                product = item.product
-                previous_qty = product.stock_quantity
-                product.stock_quantity += Decimal(qty_received)
-                product.save()
-                
-                StockAdjustment.objects.create(
-                    business=self.business,
-                    product=product,
-                    adjustment_type='restock',
-                    quantity_change=qty_received,
-                    previous_quantity=int(previous_qty),
-                    new_quantity=int(product.stock_quantity),
-                    reason=f'Received from {self.purchase_number}'
-                )
-        
+
+            if not has_any_receipt:
+                return False
+
+            has_pending_items = locked_purchase.items.filter(
+                quantity_received__lt=models.F('quantity') - models.F('quantity_damaged')
+            ).exists()
+
+            locked_purchase.status = 'partially_received' if has_pending_items else 'received'
+            locked_purchase.received_date = timezone.now()
+            locked_purchase.save(update_fields=['status', 'received_date', 'updated_at'])
+
+            self.status = locked_purchase.status
+            self.received_date = locked_purchase.received_date
+
         return True
     
     def total_allocated(self):
@@ -1343,6 +1675,7 @@ class UserProfile(models.Model):
     hire_date = models.DateField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True, help_text="Additional notes about the user")
+    pin_hash = models.CharField(max_length=128, blank=True, null=True, help_text="Hashed PIN for POS quick login")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -1358,10 +1691,37 @@ class UserProfile(models.Model):
             return groups[0].name
         return "No Role"
 
+    @property
+    def has_pin_set(self):
+        """Returns True if a PIN has been set for this user."""
+        return bool(self.pin_hash)
+
+    def set_pin(self, raw_pin):
+        """Validate and hash a 4-6 digit PIN. Raises ValidationError on invalid input."""
+        import re
+        from django.core.exceptions import ValidationError
+        from django.contrib.auth.hashers import make_password
+        if not re.fullmatch(r'\d{4,6}', str(raw_pin)):
+            raise ValidationError('PIN must be 4 to 6 digits.')
+        self.pin_hash = make_password(str(raw_pin))
+        self.save(update_fields=['pin_hash'])
+
+    def check_pin(self, raw_pin):
+        """Returns True if raw_pin matches the stored hash."""
+        if not self.pin_hash:
+            return False
+        from django.contrib.auth.hashers import check_password
+        return check_password(str(raw_pin), self.pin_hash)
+
+    def clear_pin(self):
+        """Remove the stored PIN hash."""
+        self.pin_hash = None
+        self.save(update_fields=['pin_hash'])
+
 
 # ==================== BUSINESS SETTINGS ====================
 
-class BusinessSettings(models.Model):
+class BusinessSettings(CacheInvalidationMixin, models.Model):
     """Per-business settings - each business has its own settings"""
     
     # Link to business (OneToOne)
@@ -1522,6 +1882,28 @@ class BusinessSettings(models.Model):
     allow_negative_stock = models.BooleanField(default=False, help_text="Allow sales when stock is 0")
     require_product_code = models.BooleanField(default=False, help_text="Make product code mandatory")
     auto_generate_product_code = models.BooleanField(default=False)
+
+    # Attendance / Working Hours Settings
+    workday_start_time = models.TimeField(
+        default=time(8, 0),
+        help_text="Official workday start time used to determine lateness"
+    )
+    workday_end_time = models.TimeField(
+        default=time(17, 0),
+        help_text="Official workday end time used to determine overtime"
+    )
+    late_grace_minutes = models.PositiveIntegerField(
+        default=15,
+        validators=[MinValueValidator(0), MaxValueValidator(180)],
+        help_text="Grace period in minutes after start time before marking late"
+    )
+    overtime_rate_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.50'),
+        validators=[MinValueValidator(Decimal('1.00')), MaxValueValidator(Decimal('5.00'))],
+        help_text="Overtime pay rate multiplier against hourly rate (e.g. 1.5 = time-and-a-half)"
+    )
     
     # Theme Customization
     theme_primary = models.CharField(
@@ -1544,7 +1926,39 @@ class BusinessSettings(models.Model):
         default='#cd8a4c',
         help_text="Accent color for highlights (hex code, e.g., #cd8a4c)"
     )
-    
+
+    # ── M-Pesa Configuration ──────────────────────────────────────────────
+    mpesa_enabled = models.BooleanField(
+        default=False,
+        help_text="Show M-Pesa payment details on POS and receipts"
+    )
+    mpesa_type = models.CharField(
+        max_length=10,
+        choices=[('paybill', 'Paybill'), ('till', 'Buy Goods (Till)'), ('phone', 'Phone Number (Send Money)')],
+        default='paybill',
+        help_text="Type of M-Pesa number"
+    )
+    mpesa_shortcode = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Paybill number or Till number"
+    )
+    mpesa_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="M-Pesa phone number for Send Money (e.g. 0712345678)"
+    )
+    mpesa_account_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Account name shown to customers (for Paybill)"
+    )
+    mpesa_account_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Default account reference / prompt shown to cashier (e.g. invoice number)"
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1741,10 +2155,14 @@ class ActivityLog(models.Model):
         ('login', 'Login'),
         ('logout', 'Logout'),
         ('sale', 'Sale'),
+        ('refund', 'Refund'),
         ('stock_adjust', 'Stock Adjustment'),
         ('purchase', 'Purchase'),
         ('settings', 'Settings Change'),
         ('backup', 'Data Backup'),
+        ('restore', 'Data Restore'),
+        ('export', 'Export'),
+        ('password_change', 'Password Change'),
     ]
     
     STATUS_CHOICES = [
@@ -1756,6 +2174,7 @@ class ActivityLog(models.Model):
     # Core fields
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='activity_logs')
     business = models.ForeignKey('Business', on_delete=models.CASCADE, null=True, blank=True, related_name='activity_logs')
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='activity_logs')
     action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
     
     # Enhanced tracking fields
@@ -1842,6 +2261,30 @@ class ActivityLog(models.Model):
             error_details=error_details,
             execution_time_ms=execution_time_ms
         )
+
+
+# ==================== PASSWORD HISTORY ====================
+
+class PasswordHistory(models.Model):
+    """Track previous password hashes to prevent reuse"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_history')
+    password_hash = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+    @classmethod
+    def record(cls, user, raw_password):
+        """Save current password hash before it changes"""
+        from django.contrib.auth.hashers import make_password
+        cls.objects.create(user=user, password_hash=make_password(raw_password))
+        # Keep only last 10 entries
+        old_ids = cls.objects.filter(user=user).order_by('-created_at').values_list('id', flat=True)[10:]
+        cls.objects.filter(id__in=list(old_ids)).delete()
 
 
 # ==================== GOODS RECEIVED NOTE ====================
@@ -2022,30 +2465,49 @@ class GoodsReturnedNote(models.Model):
         """Mark GRN as submitted to supplier"""
         if self.status == 'draft':
             self.status = 'submitted'
-            self.save()
+            self.save(update_fields=['status', 'updated_at'])
             return True
         return False
     
     def mark_collected(self, collection_date=None, notes=''):
         """Mark goods as collected by supplier"""
+        if self.status not in ('submitted', 'acknowledged'):
+            return False
         self.status = 'collected'
         self.collection_date = collection_date or timezone.now().date()
         self.collection_notes = notes
-        self.save()
+        self.save(update_fields=['status', 'collection_date', 'collection_notes', 'updated_at'])
+        return True
     
     def apply_credit_note(self, credit_note_number, amount, date=None):
         """Record credit note received from supplier"""
+        if self.status not in ('submitted', 'acknowledged', 'collected'):
+            return False
+
+        amount = Decimal(amount)
+        if amount <= 0:
+            return False
+        if self.total_value and amount > self.total_value:
+            return False
+
         self.status = 'credited'
         self.credit_note_number = credit_note_number
         self.credit_note_amount = amount
         self.credit_note_date = date or timezone.now().date()
-        self.save()
+        self.save(update_fields=[
+            'status',
+            'credit_note_number',
+            'credit_note_amount',
+            'credit_note_date',
+            'updated_at',
+        ])
+        return True
     
     def cancel(self):
         """Cancel the GRN"""
-        if self.status in ['draft', 'submitted']:
+        if self.status in ['draft', 'submitted', 'acknowledged']:
             self.status = 'cancelled'
-            self.save()
+            self.save(update_fields=['status', 'updated_at'])
             return True
         return False
 
@@ -2080,7 +2542,7 @@ class GoodsReturnedNoteItem(models.Model):
 
 # ==================== CUSTOMER MANAGEMENT ====================
 
-class Customer(models.Model):
+class Customer(AuditModelMixin, models.Model):
     """Customer information and loyalty tracking"""
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='customers')
     customer_code = models.CharField(max_length=20, editable=False)
@@ -2131,8 +2593,61 @@ class Customer(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.customer_code})"
+
+    @staticmethod
+    def normalize_phone(phone):
+        """Normalize customer phone numbers for duplicate detection and storage."""
+        raw_phone = (phone or '').strip()
+        if not raw_phone:
+            return ''
+
+        digits = re.sub(r'\D', '', raw_phone)
+        if not digits:
+            return raw_phone
+
+        if digits.startswith('254') and len(digits) == 12:
+            return f"0{digits[3:]}"
+        if len(digits) == 9 and digits[0] in ('7', '1'):
+            return f"0{digits}"
+        return digits
+
+    @property
+    def normalized_phone(self):
+        return self.normalize_phone(self.phone)
+
+    @classmethod
+    def find_duplicate_by_phone(cls, business, phone, exclude_pk=None):
+        normalized_phone = cls.normalize_phone(phone)
+        if not normalized_phone:
+            return None
+
+        candidates = cls.objects.filter(business=business)
+        if exclude_pk is not None:
+            candidates = candidates.exclude(pk=exclude_pk)
+
+        for candidate in candidates.order_by('name'):
+            if candidate.normalized_phone == normalized_phone:
+                return candidate
+        return None
+
+    @classmethod
+    def get_same_phone_customers(cls, business, phone, exclude_pk=None, is_active=None):
+        normalized_phone = cls.normalize_phone(phone)
+        if not normalized_phone:
+            return []
+
+        candidates = cls.objects.filter(business=business)
+        if exclude_pk is not None:
+            candidates = candidates.exclude(pk=exclude_pk)
+        if is_active is not None:
+            candidates = candidates.filter(is_active=is_active)
+
+        return [candidate for candidate in candidates.order_by('name') if candidate.normalized_phone == normalized_phone]
     
     def save(self, *args, **kwargs):
+        self.name = (self.name or '').strip()
+        self.email = (self.email or '').strip()
+        self.phone = self.normalize_phone(self.phone)
         if not self.customer_code:
             # Generate customer code: CUST-XXXXXX
             last_customer = Customer.objects.filter(business=self.business).order_by('-id').first()
@@ -2268,7 +2783,7 @@ class LoyaltyTransaction(models.Model):
         return f"{self.customer.name} - {self.transaction_type} - {self.points:+d} points"
 
 
-class LoyaltyReward(models.Model):
+class LoyaltyReward(CacheInvalidationMixin, models.Model):
     """Rewards that customers can redeem with points"""
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='loyalty_rewards', null=True, blank=True)
     name = models.CharField(max_length=200)
@@ -2338,7 +2853,7 @@ class LoyaltyRedemption(models.Model):
 
 # ==================== PAYMENT METHODS ====================
 
-class PaymentMethod(models.Model):
+class PaymentMethod(CacheInvalidationMixin, models.Model):
     """Payment methods available in the system"""
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='payment_methods')
     name = models.CharField(max_length=100)
@@ -2355,7 +2870,7 @@ class PaymentMethod(models.Model):
         return self.name
 
 
-class SalePayment(models.Model):
+class SalePayment(AuditModelMixin, models.Model):
     """Track multiple payment methods for a single sale"""
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='sale_payments')
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='payments')
@@ -2616,64 +3131,163 @@ class SaleReturnItem(models.Model):
 # ==================== PROMOTIONS & DISCOUNTS ====================
 
 class Promotion(models.Model):
-    """Promotional campaigns and discounts"""
-    name = models.CharField(max_length=200)
-    code = models.CharField(max_length=50, unique=True, help_text="Promo code customers can enter")
-    description = models.TextField(blank=True)
-    
-    # Discount details
-    DISCOUNT_TYPES = [
-        ('percentage', 'Percentage'),
-        ('fixed', 'Fixed Amount'),
-        ('buy_x_get_y', 'Buy X Get Y'),
+    """
+    Promotional campaigns — multi-tenant, per-business.
+
+    Supported types:
+      percentage   — X% off the cart total or qualifying items
+      fixed        — KES X off the cart total
+      buy_x_get_y  — Buy X qty of a product, get Y qty free (BOGO = buy 1 get 1)
+      price_cut    — Override unit price to a fixed amount for qualifying products
+      bundle       — Buy a set of products together at a reduced total price
+      happy_hour   — Any discount type but only active during a daily time window
+    """
+
+    PROMO_TYPES = [
+        ('percentage',  'Percentage Off'),
+        ('fixed',       'Fixed Amount Off'),
+        ('buy_x_get_y', 'Buy X Get Y Free'),
+        ('price_cut',   'Price Cut (Fixed Price)'),
+        ('bundle',      'Bundle Deal'),
+        ('happy_hour',  'Happy Hour'),
     ]
-    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPES)
-    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    # Buy X Get Y details
-    buy_quantity = models.IntegerField(default=0, help_text="Buy this many")
-    get_quantity = models.IntegerField(default=0, help_text="Get this many free")
-    
+
+    APPLIES_TO = [
+        ('cart',     'Entire Cart'),
+        ('products', 'Specific Products'),
+        ('category', 'Specific Category'),
+    ]
+
+    # Multi-tenancy
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='promotions',
+        null=True, blank=True,  # nullable for migration; enforced at app level
+    )
+
+    # Identity
+    name        = models.CharField(max_length=200)
+    code        = models.CharField(
+        max_length=50, blank=True,
+        help_text="Optional promo code cashier/customer can enter. Leave blank for auto-apply."
+    )
+    description = models.TextField(blank=True)
+    promo_type  = models.CharField(max_length=20, choices=PROMO_TYPES, default='percentage')
+
+    # Discount value (meaning depends on promo_type)
+    discount_value = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="% for percentage; KES amount for fixed; new price for price_cut; total for bundle"
+    )
+
+    # Buy X Get Y
+    buy_quantity = models.PositiveIntegerField(
+        default=1, help_text="Buy this many (BOGO: 1)"
+    )
+    get_quantity = models.PositiveIntegerField(
+        default=1, help_text="Get this many free (BOGO: 1)"
+    )
+
+    # Scope
+    applies_to           = models.CharField(max_length=10, choices=APPLIES_TO, default='cart')
+    applicable_products  = models.ManyToManyField('Product',  blank=True, related_name='promotions')
+    applicable_categories= models.ManyToManyField('Category', blank=True, related_name='promotions')
+
+    # Happy Hour window (daily, in business local time)
+    happy_hour_start = models.TimeField(
+        null=True, blank=True,
+        help_text="Daily start time for happy hour (e.g. 17:00)"
+    )
+    happy_hour_end = models.TimeField(
+        null=True, blank=True,
+        help_text="Daily end time for happy hour (e.g. 19:00)"
+    )
+
     # Validity
     start_date = models.DateTimeField()
-    end_date = models.DateTimeField()
-    is_active = models.BooleanField(default=True)
-    
+    end_date   = models.DateTimeField()
+    is_active  = models.BooleanField(default=True)
+
     # Restrictions
-    min_purchase_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    max_uses = models.IntegerField(default=0, help_text="0 = unlimited")
-    uses_count = models.IntegerField(default=0)
-    
-    # Applicable products/categories
-    applicable_products = models.ManyToManyField(Product, blank=True)
-    applicable_categories = models.ManyToManyField(Category, blank=True)
-    
+    min_purchase_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Minimum cart total to qualify (0 = no minimum)"
+    )
+    max_uses   = models.PositiveIntegerField(default=0, help_text="0 = unlimited")
+    uses_count = models.PositiveIntegerField(default=0, editable=False)
+
+    # Audit
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_promotions'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ['-created_at']
-    
+        # Codes must be unique per business (blank codes are allowed to repeat)
+        constraints = [
+            models.UniqueConstraint(
+                fields=['business', 'code'],
+                condition=models.Q(code__gt=''),
+                name='unique_promo_code_per_business',
+            )
+        ]
+
     def __str__(self):
-        return f"{self.name} ({self.code})"
-    
-    def is_valid(self):
-        """Check if promotion is currently valid"""
-        now = timezone.now()
+        return f"{self.name} [{self.get_promo_type_display()}]"
+
+    # ── Validity helpers ──────────────────────────────────────────────────
+
+    def is_valid(self, now=None):
+        """Return True if the promotion is currently active and within limits."""
+        from django.utils import timezone as tz
+        now = now or tz.now()
         if not self.is_active:
             return False
         if now < self.start_date or now > self.end_date:
             return False
         if self.max_uses > 0 and self.uses_count >= self.max_uses:
             return False
+        if self.promo_type == 'happy_hour':
+            if self.happy_hour_start and self.happy_hour_end:
+                local_time = now.astimezone().time().replace(second=0, microsecond=0)
+                if not (self.happy_hour_start <= local_time <= self.happy_hour_end):
+                    return False
         return True
-    
-    def can_apply_to_sale(self, sale_amount):
-        """Check if promotion can be applied to a sale"""
+
+    def can_apply_to_cart(self, cart_total):
+        """Return True if the cart total meets the minimum purchase requirement."""
         if not self.is_valid():
             return False
-        if sale_amount < self.min_purchase_amount:
-            return False
-        return True
+        return cart_total >= self.min_purchase_amount
+
+    def get_status_display_badge(self):
+        """Return a CSS class string for the status badge."""
+        if not self.is_active:
+            return 'secondary'
+        from django.utils import timezone as tz
+        now = tz.now()
+        if now < self.start_date:
+            return 'info'       # upcoming
+        if now > self.end_date:
+            return 'danger'     # expired
+        if self.max_uses > 0 and self.uses_count >= self.max_uses:
+            return 'warning'    # exhausted
+        return 'success'        # active
+
+    def get_status_label(self):
+        if not self.is_active:
+            return 'Disabled'
+        from django.utils import timezone as tz
+        now = tz.now()
+        if now < self.start_date:
+            return 'Upcoming'
+        if now > self.end_date:
+            return 'Expired'
+        if self.max_uses > 0 and self.uses_count >= self.max_uses:
+            return 'Exhausted'
+        return 'Active'
+
 
 
 # ==================== EXPENSE TRACKING ====================
@@ -3101,6 +3715,7 @@ class POSSession(models.Model):
     
     # Metadata
     notes = models.TextField(blank=True, help_text="Optional notes about this session")
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='pos_sessions')
     
     class Meta:
         unique_together = [['business', 'session_number']]
@@ -3202,6 +3817,20 @@ class ZReport(models.Model):
         return f"Z-{self.z_number:05d} - {self.business.name}{status}"
     
     def save(self, *args, **kwargs):
+        if self.pk:
+            original = ZReport.objects.get(pk=self.pk)
+            immutable_fields = [
+                'business_id',
+                'z_number',
+                'session_id',
+                'created_by_id',
+                'report_data',
+                'data_hash',
+            ]
+            for field_name in immutable_fields:
+                if getattr(self, field_name) != getattr(original, field_name):
+                    raise ValidationError(f"Z-Report field '{field_name}' cannot be modified after creation")
+
         # Auto-generate Z-number if not set
         if not self.z_number:
             last_report = ZReport.objects.filter(business=self.business).order_by('-z_number').first()
@@ -3215,6 +3844,9 @@ class ZReport(models.Model):
             self.data_hash = hashlib.sha256(data_string.encode()).hexdigest()
         
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Z-Reports cannot be deleted")
     
     def verify_integrity(self):
         """Verify that report data hasn't been tampered with"""
@@ -3661,6 +4293,105 @@ class CustomerSegment(models.Model):
         return qs
 
 
+# ==============================
+# Backup & Security Models
+# ==============================
+
+class BackupAuditLog(models.Model):
+    """Audit trail for all backup and restore operations"""
+    
+    OPERATION_TYPES = [
+        ('backup_database', 'Database Backup'),
+        ('backup_media', 'Media Backup'),
+        ('backup_business', 'Business Backup'),
+        ('restore_database', 'Database Restore'),
+        ('restore_media', 'Media Restore'),
+        ('restore_business', 'Business Restore'),
+        ('verify_backup', 'Backup Verification'),
+        ('delete_backup', 'Backup Deletion'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('warning', 'Warning'),
+        ('in_progress', 'In Progress'),
+    ]
+    
+    # Who performed it
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='backup_operations'
+    )
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='backup_audit_logs'
+    )
+    
+    # What happened
+    operation = models.CharField(max_length=30, choices=OPERATION_TYPES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in_progress')
+    
+    # Backup file details
+    backup_file = models.CharField(max_length=255, help_text='Path or name of backup file')
+    backup_size_mb = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text='Size of backup in MB'
+    )
+    backup_checksum = models.CharField(
+        max_length=64, blank=True, help_text='SHA-256 checksum'
+    )
+    is_encrypted = models.BooleanField(default=True, help_text='Whether backup was encrypted')
+    
+    # Timing
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.IntegerField(null=True, blank=True)
+    
+    # Metadata
+    details = models.JSONField(default=dict, blank=True, help_text='Additional operation details')
+    error_message = models.TextField(blank=True, help_text='If failed, the error details')
+    
+    class Meta:
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['user', '-started_at']),
+            models.Index(fields=['business', '-started_at']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_operation_display()} ({self.get_status_display()}) - {self.started_at:%Y-%m-%d %H:%M}"
+    
+    @classmethod
+    def log_backup_operation(cls, operation, user=None, business=None, 
+                            backup_file='', status='success', error_message='', **kwargs):
+        """Log a backup operation with proper timestamps and details"""
+        from django.utils import timezone
+        import time
+        
+        log_entry = cls(
+            operation=operation,
+            user=user,
+            business=business,
+            backup_file=backup_file,
+            status=status,
+            error_message=error_message,
+            details=kwargs,
+            started_at=timezone.now()
+        )
+        
+        if status in ['success', 'failed', 'warning']:
+            log_entry.completed_at = timezone.now()
+            if log_entry.started_at and log_entry.completed_at:
+                log_entry.duration_seconds = int(
+                    (log_entry.completed_at - log_entry.started_at).total_seconds()
+                )
+        
+        log_entry.save()
+        return log_entry
+
+
 class Campaign(models.Model):
     """Email/SMS marketing campaigns"""
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='campaigns')
@@ -3694,3 +4425,290 @@ class Campaign(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.channel})"
+
+
+# ==================== WEBHOOKS ====================
+
+WEBHOOK_EVENTS = [
+    ('sale.created', 'Sale Created'),
+    ('sale.refunded', 'Sale Refunded'),
+    ('product.low_stock', 'Product Low Stock'),
+    ('product.out_of_stock', 'Product Out of Stock'),
+    ('customer.created', 'Customer Created'),
+    ('purchase.created', 'Purchase Created'),
+    ('purchase.received', 'Purchase Received'),
+    ('stock.adjusted', 'Stock Adjusted'),
+    ('payment.received', 'Payment Received'),
+]
+
+
+class Webhook(models.Model):
+    """Outbound webhook subscriptions per business"""
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='webhooks')
+    name = models.CharField(max_length=100)
+    url = models.URLField(max_length=500)
+    secret = models.CharField(max_length=100, blank=True, help_text='HMAC-SHA256 signing secret')
+    events = models.JSONField(default=list, help_text='List of subscribed event types')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} → {self.url}"
+
+    def subscribes_to(self, event: str) -> bool:
+        return '*' in self.events or event in self.events
+
+    def clean(self):
+        if not self.pk and self.is_active:
+            count = Webhook.objects.filter(business=self.business, is_active=True).count()
+            if count >= 20:
+                raise ValidationError('Maximum of 20 active webhooks per business.')
+
+
+class WebhookDelivery(models.Model):
+    """Log of every webhook dispatch attempt"""
+    webhook = models.ForeignKey(Webhook, on_delete=models.CASCADE, related_name='deliveries')
+    event = models.CharField(max_length=100)
+    payload = models.JSONField()
+    response_status = models.IntegerField(null=True, blank=True)
+    response_body = models.TextField(blank=True)
+    success = models.BooleanField(default=False)
+    attempt = models.IntegerField(default=1)
+    delivered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-delivered_at']
+
+    def __str__(self):
+        status = 'OK' if self.success else 'FAIL'
+        return f"[{status}] {self.event} → {self.webhook.url}"
+
+
+# ==================== API KEYS ====================
+
+class APIKey(models.Model):
+    """Long-lived bearer tokens for external Integration API access, scoped to a Business."""
+    key = models.CharField(max_length=64, unique=True, db_index=True)
+    name = models.CharField(max_length=100, help_text='Human-readable label for this key')
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='api_keys')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_api_keys'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.business.slug})"
+
+
+class HeldOrder(models.Model):
+    """Cart saved mid-sale, retrievable from any terminal on the same business."""
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='held_orders')
+    cashier = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='held_orders'
+    )
+    name = models.CharField(max_length=100)
+    cart_json = models.JSONField(help_text='Serialised cart items array')
+    customer_json = models.JSONField(null=True, blank=True, help_text='Selected customer snapshot')
+    discount_type = models.CharField(max_length=20, default='percentage')
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} — {self.business.slug} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+# ---------------------------------------------------------------------------
+# Multi-Branch models
+# ---------------------------------------------------------------------------
+
+class BranchError(Exception):
+    """Base exception for all branch-related errors."""
+    pass
+
+
+class InsufficientStockError(BranchError):
+    def __init__(self, branch=None, product=None, available=None, requested=None):
+        self.branch = branch
+        self.product = product
+        self.available = available
+        self.requested = requested
+        super().__init__(
+            f"Insufficient stock: available={available}, requested={requested}"
+        )
+
+
+class BranchInactiveError(BranchError):
+    pass
+
+
+class PlanLimitError(BranchError):
+    pass
+
+
+class InvalidTransferStateError(BranchError):
+    pass
+
+
+class Branch(models.Model):
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='branches'
+    )
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=20)
+    address = models.TextField()
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['business', 'name'], ['business', 'code']]
+        verbose_name_plural = 'branches'
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+    def _generate_code(self):
+        import re
+        prefix = re.sub(r'[^A-Za-z]', '', self.name)[:3].upper()
+        if not prefix:
+            prefix = 'BRN'
+        count = Branch.objects.filter(business=self.business).count()
+        return f"{prefix}-{count + 1:03d}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self._generate_code()
+        if self.is_default:
+            Branch.objects.filter(
+                business=self.business, is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+
+class BranchMembership(models.Model):
+    ROLE_CHOICES = [
+        ('manager', 'Manager'),
+        ('stock_manager', 'Stock Manager'),
+        ('cashier', 'Cashier'),
+        ('sales', 'Sales Associate'),
+        ('viewer', 'Viewer'),
+    ]
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='branch_memberships'
+    )
+    branch = models.ForeignKey(
+        Branch, on_delete=models.CASCADE, related_name='memberships'
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['user', 'branch']]
+
+    def __str__(self):
+        return f"{self.user} @ {self.branch} ({self.role})"
+
+
+class BranchStock(models.Model):
+    branch = models.ForeignKey(
+        Branch, on_delete=models.CASCADE, related_name='stock_records'
+    )
+    product = models.ForeignKey(
+        'Product', on_delete=models.CASCADE, related_name='branch_stocks'
+    )
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['branch', 'product']]
+        indexes = [models.Index(fields=['branch', 'product'])]
+
+    def __str__(self):
+        return f"{self.product} @ {self.branch}: {self.quantity}"
+
+
+class StockTransfer(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_transit', 'In Transit'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='stock_transfers'
+    )
+    reference = models.CharField(max_length=30, unique=True, editable=False)
+    source_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='transfers_out'
+    )
+    destination_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='transfers_in'
+    )
+    product = models.ForeignKey('Product', on_delete=models.PROTECT)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    note = models.TextField(blank=True)
+    initiated_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='initiated_transfers'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['business', '-created_at']),
+            models.Index(fields=['source_branch', 'status']),
+            models.Index(fields=['destination_branch', 'status']),
+        ]
+
+    def __str__(self):
+        return self.reference
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            from django.utils import timezone as tz
+            today = tz.now().strftime('%Y%m%d')
+            count = StockTransfer.objects.filter(
+                business=self.business,
+                created_at__date=tz.now().date(),
+            ).count()
+            self.reference = f"TRF-{today}-{count + 1:04d}"
+        super().save(*args, **kwargs)
+
+
+class BranchPriceOverride(models.Model):
+    branch = models.ForeignKey(
+        Branch, on_delete=models.CASCADE, related_name='price_overrides'
+    )
+    product = models.ForeignKey(
+        'Product', on_delete=models.CASCADE, related_name='price_overrides'
+    )
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['branch', 'product']]
+
+    def __str__(self):
+        return f"{self.product} @ {self.branch}: {self.price}"

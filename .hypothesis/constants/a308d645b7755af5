@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\permissions.py
+# hypothesis_version: 6.151.10
+
+['Administrator', 'Cashier', 'Manager', 'No Role', 'Sales Associate', 'Stock Manager', 'Viewer', 'admin', 'auth.change_user', 'auth.view_user', 'business_membership', 'can_adjust_stock', 'can_make_sales', 'can_manage_customers', 'can_manage_products', 'can_manage_settings', 'can_manage_suppliers', 'can_manage_users', 'can_view_reports', 'cashier', 'customers', 'dashboard', 'is_admin', 'is_cashier', 'is_manager', 'is_owner', 'is_stock_manager', 'is_viewer', 'manager', 'owner', 'pos.add_sale', 'pos.change_customer', 'pos.change_product', 'pos.change_supplier', 'pos.view_activitylog', 'pos.view_customer', 'pos.view_product', 'pos.view_sale', 'pos.view_supplier', 'products', 'reports', 'sales', 'settings', 'stock', 'stock_manager', 'suppliers', 'user_permissions', 'user_role', 'users']

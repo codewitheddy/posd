@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\contrib\postgres\lookups.py
+# hypothesis_version: 6.151.10
+
+['%%', '%%>', '%%>>', '&&', '<@', '?', '?&', '?|', '@>', 'UNACCENT', 'config', 'contained_by', 'contains', 'has_any_keys', 'has_key', 'has_keys', 'overlap', 'search', 'trigram_similar', 'trigram_word_similar', 'unaccent']

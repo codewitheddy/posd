@@ -1,258 +1,312 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Marid POS</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .login-container {
-            max-width: 450px;
-            width: 100%;
-            padding: 20px;
-        }
-        .login-card {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-        .login-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 40px 30px;
-            text-align: center;
-            color: white;
-        }
-        .login-header h1 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-        .login-header p {
-            font-size: 14px;
-            opacity: 0.9;
-            margin: 0;
-        }
-        .login-icon {
-            width: 80px;
-            height: 80px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 40px;
-        }
-        .login-body {
-            padding: 40px 30px;
-        }
-        .form-label {
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-        .form-control {
-            border-radius: 10px;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            transition: all 0.3s;
-        }
-        .form-control:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
-        }
-        .input-group-text {
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-right: none;
-            border-radius: 10px 0 0 10px;
-            color: #667eea;
-        }
-        .input-group .form-control {
-            border-left: none;
-            border-radius: 0 10px 10px 0;
-        }
-        .input-group:focus-within .input-group-text {
-            border-color: #667eea;
-        }
-        .btn-login {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 10px;
-            padding: 12px;
-            font-weight: 600;
-            font-size: 16px;
-            color: white;
-            width: 100%;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-            color: white;
-        }
-        .btn-outline-primary {
-            color: #667eea;
-            border-color: #667eea;
-            transition: all 0.3s;
-        }
-        .btn-outline-primary:hover {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-color: #667eea;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
-        }
-        .alert {
-            border-radius: 10px;
-            border: none;
-        }
-        .login-footer {
-            text-align: center;
-            padding: 20px;
-            background: #f8f9fa;
-            color: #6c757d;
-            font-size: 13px;
-        }
-        .password-toggle {
-            cursor: pointer;
-            color: #667eea;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Marid POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <style>
+    :root {
+      --primary: #224195;
+      --primary-hover: #1a3278;
+      --primary-light: #eef1fb;
+      --text-main: #1a202c;
+      --text-muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #f8f9fc;
+      --card-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    .brand-panel { display: none; }
+
+    .form-panel {
+      width: 100%;
+      max-width: 460px;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
+      padding: 40px 44px;
+    }
+    @media (max-width: 520px) {
+      .form-panel { padding: 28px 20px; border-radius: 12px; }
+    }
+
+    .form-logo-mobile {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 28px;
+    }
+    .form-logo-mobile .logo-icon {
+      width: 40px; height: 40px;
+      background: var(--primary);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 20px;
+    }
+    .form-logo-mobile span { font-size: 18px; font-weight: 700; color: var(--text-main); }
+
+    .form-heading { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .form-subheading { font-size: 14px; color: var(--text-muted); margin-bottom: 32px; }
+
+    .form-label {
+      font-size: 13px; font-weight: 600;
+      color: var(--text-main); margin-bottom: 6px;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 15px; pointer-events: none;
+    }
+    .form-control {
+      width: 100%;
+      padding: 10px 14px 10px 38px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-main);
+      background: #fff;
+      transition: border-color .15s, box-shadow .15s;
+      outline: none;
+    }
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(34,65,149,.1);
+    }
+    .form-control.no-left-icon { padding-left: 14px; }
+    .toggle-pw {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); cursor: pointer; font-size: 16px;
+      background: none; border: none; padding: 0; line-height: 1;
+    }
+    .toggle-pw:hover { color: var(--primary); }
+
+    .forgot-link {
+      font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 500;
+    }
+    .forgot-link:hover { text-decoration: underline; }
+
+    .btn-primary-solid {
+      display: block; width: 100%;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 8px;
+      padding: 11px 20px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: background .15s, transform .15s;
+      text-align: center; text-decoration: none;
+    }
+    .btn-primary-solid:hover { background: var(--primary-hover); transform: translateY(-1px); color: #fff; }
+    .btn-primary-solid:active { transform: none; }
+
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      color: var(--text-muted); font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      margin: 20px 0;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .btn-outline-solid {
+      display: block; width: 100%;
+      background: #fff; color: var(--primary);
+      border: 1.5px solid var(--primary); border-radius: 8px;
+      padding: 10px 20px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: background .15s, color .15s;
+      text-align: center; text-decoration: none;
+    }
+    .btn-outline-solid:hover { background: var(--primary-light); color: var(--primary); }
+
+    .trust-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-muted);
+      justify-content: center; margin-top: 20px;
+    }
+
+    .page-footer {
+      margin-top: 40px; text-align: center;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .page-footer a { color: var(--text-muted); text-decoration: none; }
+    .page-footer a:hover { color: var(--primary); }
+
+    .alert {
+      border-radius: 8px; font-size: 14px;
+      border: 1px solid transparent; padding: 10px 14px;
+    }
+    .alert-danger  { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .alert-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .alert-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .alert-info    { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+  </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="login-icon">
-                    <i class="bi bi-shop"></i>
-                </div>
-                <h1>Marid POS</h1>
-                <p>Sign in to access your dashboard</p>
-            </div>
-            
-            <div class="login-body">
-                {% if messages %}
-                    {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
 
-                <form method="POST">
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label for="username" class="form-label">
-                            <i class="bi bi-person"></i> Username or Email
-                        </label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="bi bi-person-fill"></i>
-                            </span>
-                            <input type="text" class="form-control" id="username" name="username" 
-                                   placeholder="Enter your username or email" required autofocus>
-                        </div>
-                    </div>
+  <!-- Form panel -->
+  <main class="form-panel">
 
-                    <div class="mb-4">
-                        <label for="password" class="form-label">
-                            <i class="bi bi-lock"></i> Password
-                        </label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="bi bi-lock-fill"></i>
-                            </span>
-                            <input type="password" class="form-control" id="password" name="password" 
-                                   placeholder="Enter your password" required>
-                            <span class="input-group-text password-toggle" onclick="togglePassword()">
-                                <i class="bi bi-eye" id="toggleIcon"></i>
-                            </span>
-                        </div>
-                        <div class="text-end mt-2">
-                            <a href="{% url 'password_reset_request' %}" class="text-decoration-none" style="color: #667eea; font-size: 14px;">
-                                <i class="bi bi-key"></i> Forgot Password?
-                            </a>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-login">
-                        <i class="bi bi-box-arrow-in-right"></i> Sign In
-                    </button>
-                </form>
-
-                <div class="text-center mt-4">
-                    <div class="d-flex align-items-center justify-content-center mb-3">
-                        <hr class="flex-grow-1">
-                        <span class="px-3 text-muted small">OR</span>
-                        <hr class="flex-grow-1">
-                    </div>
-                    
-                    <a href="{% url 'register_business' %}" class="btn btn-outline-primary w-100" style="border-radius: 10px; border-width: 2px; font-weight: 600;">
-                        <i class="bi bi-person-plus"></i> Create New Account
-                    </a>
-                    
-                    <small class="text-muted d-block mt-3">
-                        <i class="bi bi-gift"></i> Get 30 days free trial • No credit card required
-                    </small>
-                </div>
-
-                <div class="text-center mt-4">
-                    <small class="text-muted">
-                        <i class="bi bi-shield-check"></i> Secure login with encrypted connection
-                    </small>
-                </div>
-            </div>
-
-            <div class="login-footer">
-                <div class="mb-2">
-                    <i class="bi bi-c-circle"></i> 2026 Marid POS. All rights reserved.
-                </div>
-                <div class="text-muted small">
-                    <i class="bi bi-envelope"></i> info@marid.co.ke | 
-                    <i class="bi bi-phone"></i> +254 717 147 700
-                </div>
-            </div>
-        </div>
-
-        <div class="text-center mt-4">
-            <p class="text-white">
-                <small>
-                    <i class="bi bi-info-circle"></i> 
-                    Default credentials: admin / admin (change after first login)
-                </small>
-            </p>
-        </div>
+    <!-- Logo -->
+    <div class="form-logo-mobile">
+      <div class="logo-icon"><i class="bi bi-shop"></i></div>
+      <span>Marid POS</span>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        function togglePassword() {
-            const passwordInput = document.getElementById('password');
-            const toggleIcon = document.getElementById('toggleIcon');
-            
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                toggleIcon.classList.remove('bi-eye');
-                toggleIcon.classList.add('bi-eye-slash');
-            } else {
-                passwordInput.type = 'password';
-                toggleIcon.classList.remove('bi-eye-slash');
-                toggleIcon.classList.add('bi-eye');
-            }
-        }
-    </script>
+    <h1 class="form-heading">Welcome back</h1>
+    <p class="form-subheading">Sign in to your account to continue</p>
+
+    {% if messages %}
+      {% for message in messages %}
+        {% if message.tags == 'error' or message.tags == 'warning' or message.tags == 'danger' %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" style="font-size:12px"></button>
+        </div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    <!-- Login mode tabs -->
+    <div class="d-flex gap-2 mb-4">
+      <button type="button" id="tab-password" onclick="switchTab('password')"
+              class="btn btn-sm flex-fill"
+              style="border:1.5px solid var(--primary);border-radius:8px;font-weight:600;background:var(--primary);color:#fff">
+        <i class="bi bi-lock me-1"></i>Password
+      </button>
+      <button type="button" id="tab-pin" onclick="switchTab('pin')"
+              class="btn btn-sm flex-fill"
+              style="border:1.5px solid var(--border);border-radius:8px;font-weight:600;background:#fff;color:var(--text-muted)">
+        <i class="bi bi-grid-3x3-gap me-1"></i>PIN
+      </button>
+    </div>
+
+    <!-- Password login form -->
+    <div id="form-password">
+    <form method="POST" novalidate>
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label class="form-label" for="username">Username or Email</label>
+        <div class="input-wrap">
+          <i class="bi bi-person input-icon"></i>
+          <input type="text" class="form-control" id="username" name="username"
+                 placeholder="Enter your username or email" required autofocus autocomplete="username">
+        </div>
+      </div>
+
+      <div class="mb-2">
+        <label class="form-label" for="password">Password</label>
+        <div class="input-wrap">
+          <i class="bi bi-lock input-icon"></i>
+          <input type="password" class="form-control" id="password" name="password"
+                 placeholder="Enter your password" required autocomplete="current-password"
+                 style="padding-right:40px">
+          <button type="button" class="toggle-pw" onclick="togglePw()" aria-label="Toggle password visibility">
+            <i class="bi bi-eye" id="pwIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="text-end mb-4">
+        <a href="{% url 'password_reset_request' %}" class="forgot-link">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="btn-primary-solid">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+      </button>
+    </form>
+    </div><!-- /form-password -->
+
+    <!-- PIN login form -->
+    <div id="form-pin" style="display:none;">
+      {% if request.resolver_match.kwargs.slug %}
+      <form method="POST" action="{% url 'pos_pin_login' slug=request.resolver_match.kwargs.slug %}" novalidate>
+      {% else %}
+      <form method="POST" novalidate>
+      {% endif %}
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label" for="employee_id">Employee ID</label>
+          <div class="input-wrap">
+            <i class="bi bi-person-badge input-icon"></i>
+            <input type="text" class="form-control" id="employee_id" name="employee_id"
+                   placeholder="Your employee ID" autocomplete="off">
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="pin">PIN</label>
+          <div class="input-wrap">
+            <i class="bi bi-grid-3x3-gap input-icon"></i>
+            <input type="password" class="form-control" id="pin" name="pin"
+                   placeholder="4–6 digit PIN" maxlength="6" inputmode="numeric"
+                   autocomplete="off" style="letter-spacing:0.3em">
+          </div>
+          <div class="mt-1" style="font-size:12px;color:var(--text-muted)">
+            PIN login requires your Employee ID to be set by your manager.
+          </div>
+        </div>
+        <button type="submit" class="btn-primary-solid">
+          <i class="bi bi-grid-3x3-gap me-2"></i>Sign In with PIN
+        </button>
+      </form>
+    </div><!-- /form-pin -->
+
+    <div class="divider">or</div>
+
+    <a href="{% url 'register_business' %}" class="btn-outline-solid">
+      <i class="bi bi-person-plus me-2"></i>Create a new account
+    </a>
+
+    <div class="trust-row">
+      <i class="bi bi-shield-lock-fill" style="color:var(--primary)"></i>
+      Secure, encrypted connection
+    </div>
+
+    <div class="page-footer">
+      © 2026 Marid POS &nbsp;·&nbsp;
+      <a href="{% url 'terms' %}">Terms</a> &nbsp;·&nbsp;
+      <a href="{% url 'privacy' %}">Privacy</a>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    function togglePw() {
+      const inp = document.getElementById('password');
+      const ico = document.getElementById('pwIcon');
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      ico.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    }
+
+    function switchTab(tab) {
+      const isPin = tab === 'pin';
+      document.getElementById('form-password').style.display = isPin ? 'none' : '';
+      document.getElementById('form-pin').style.display = isPin ? '' : 'none';
+      const tabPw = document.getElementById('tab-password');
+      const tabPin = document.getElementById('tab-pin');
+      tabPw.style.background = isPin ? '#fff' : 'var(--primary)';
+      tabPw.style.color = isPin ? 'var(--text-muted)' : '#fff';
+      tabPw.style.borderColor = isPin ? 'var(--border)' : 'var(--primary)';
+      tabPin.style.background = isPin ? 'var(--primary)' : '#fff';
+      tabPin.style.color = isPin ? '#fff' : 'var(--text-muted)';
+      tabPin.style.borderColor = isPin ? 'var(--primary)' : 'var(--border)';
+      if (isPin) document.getElementById('employee_id').focus();
+      else document.getElementById('username').focus();
+    }
+  </script>
 </body>
 </html>

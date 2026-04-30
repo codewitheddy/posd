@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\chardet\pipeline\markup.py
+# hypothesis_version: 6.151.10
+
+[b'\n', b'#', b'<\\?xml[^>]+encoding\\s*=\\s*[\'"]([^\'"]+)[\'"]', b'<meta[^>]+charset\\s*=\\s*[\'"]?\\s*([^\\s\'">;]+)', b'^[ \\t\\f]*#.*?coding[:=][ \\t]*([-\\w.]+)', 200, 4096, 'ascii', 'text/html', 'text/x-python', 'text/xml']

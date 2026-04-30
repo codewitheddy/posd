@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos_system\__init__.py
+# hypothesis_version: 6.151.10
+
+['celery_app']

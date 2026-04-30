@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0083_bulk_advanced_fields.py
+# hypothesis_version: 6.151.10
+
+[100, '0', 'Bulk Break', 'Customer Return', 'Damage/Loss', 'Restock', 'Sale', 'Stock Correction', 'adjustment_type', 'bulk_break', 'bulk_discount_price', 'correction', 'damage', 'pos', 'product', 'restock', 'return', 'sale', 'stockadjustment', 'unit_barcode']

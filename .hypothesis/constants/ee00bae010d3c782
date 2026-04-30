@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0011_supplierpayment_paymentallocation_and_more.py
+# hypothesis_version: 6.151.10
+
+[100, '-created_at', '-payment_date', '0.01', 'ID', 'PaymentAllocation', 'SupplierPayment', 'allocations', 'amount', 'created_at', 'created_by', 'id', 'notes', 'ordering', 'payment', 'payment_allocations', 'payment_date', 'payment_method', 'payment_number', 'paymentallocation', 'payments', 'pos', 'pos.paymentmethod', 'pos.purchase', 'pos.supplier', 'pos.supplierpayment', 'purchase', 'reference_number', 'supplier', 'supplierpayment', 'updated_at']

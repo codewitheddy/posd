@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\chardet\models\__init__.py
+# hypothesis_version: 6.151.10
+
+[b'\x01', b'CMD2', 0.0, 256, 10000, 65536, '/', '>I', '>d', 'BigramProfile', 'chardet.models', 'freq', 'idf.bin', 'input_norm', 'models.bin', 'nonzero', 'utf-8', 'weight_sum']

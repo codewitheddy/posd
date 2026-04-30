@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\permissions.py
+# hypothesis_version: 6.151.10
+
+['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'app_label', 'get_queryset', 'model_name', 'queryset']

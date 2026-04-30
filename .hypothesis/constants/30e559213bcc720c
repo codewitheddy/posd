@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0032_add_license_expiry.py
+# hypothesis_version: 6.151.10
+
+['Active', 'Expired', 'Suspended', 'active', 'business', 'expired', 'license_expires_at', 'license_status', 'pos', 'suspended']

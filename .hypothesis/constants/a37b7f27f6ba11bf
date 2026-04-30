@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0045_add_subscription_payments.py
+# hypothesis_version: 6.151.10
+
+[200, '-payment_date', 'Bank Transfer', 'Basic', 'Card', 'Cash', 'Completed', 'Enterprise', 'Failed', 'Free', 'ID', 'KES', 'M-Pesa', 'Other', 'PayPal', 'Payment amount', 'Pending', 'Professional', 'Refunded', 'Subscription Payment', 'SubscriptionPayment', 'amount', 'bank_transfer', 'basic', 'business', 'card', 'cash', 'completed', 'created_at', 'currency', 'enterprise', 'failed', 'free', 'id', 'mpesa', 'notes', 'ordering', 'other', 'payment_date', 'payment_method', 'payment_reference', 'paypal', 'pending', 'period_end', 'period_start', 'plan', 'pos', 'pos.business', 'professional', 'recorded_by', 'recorded_payments', 'refunded', 'status', 'subscriptionpayment', 'updated_at', 'verbose_name', 'verbose_name_plural']

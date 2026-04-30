@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\django\middleware.py
+# hypothesis_version: 6.151.10
+
+['Any', 'Callable[..., Any]', 'F', 'Optional[Span]', '__module__', '__name__', '__qualname__', 'async_capable', 'async_route_check', 'django.function_name', 'process_exception', 'process_request', 'process_response', 'process_view', 'sync_capable', '{}.{}']

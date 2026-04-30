@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0065_set_default_blocked_domains.py
+# hypothesis_version: 6.151.10
+
+[', ', '10minutemail.com', 'RegistrationSettings', 'discard.email', 'emailondeck.com', 'fakeinbox.com', 'getnada.com', 'grr.la', 'guerrillamail.com', 'maildrop.cc', 'mailinator.com', 'pos', 'sharklasers.com', 'spamgourmet.com', 'temp-mail.org', 'tempmail.com', 'throwaway.email', 'trashmail.com', 'yopmail.com']

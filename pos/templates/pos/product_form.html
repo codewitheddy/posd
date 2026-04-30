@@ -49,20 +49,12 @@
                                 <label class="form-label">Product Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" name="name" value="{{ product.name|default:'' }}" required placeholder="e.g. Coca Cola 500ml">
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Product Type</label>
-                                <select class="form-select" name="product_type">
-                                    {% for val, label in product_types %}
-                                    {% if val != 'variant' %}
-                                    <option value="{{ val }}" {% if product.product_type == val %}selected{% endif %}>{{ label }}</option>
-                                    {% endif %}
-                                    {% endfor %}
-                                </select>
-                            </div>
+                            {% if product %}
                             <div class="col-12">
                                 <label class="form-label">Description</label>
                                 <textarea class="form-control" name="description" rows="2" placeholder="Optional product description">{{ product.description|default:'' }}</textarea>
                             </div>
+                            {% endif %}
                             <div class="col-md-4">
                                 <label class="form-label">SKU / Product Code</label>
                                 <input type="text" class="form-control" name="product_code" value="{{ product.product_code|default:'' }}" placeholder="Auto-generated if blank">
@@ -77,12 +69,68 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Unit of Measure</label>
-                                <select class="form-select" name="unit" id="unit-field">
-                                    <option value="">-- None --</option>
-                                    {% for u in units %}
-                                    <option value="{{ u.pk }}" {% if product.unit_id == u.pk %}selected{% endif %}>{{ u.name }} ({{ u.abbreviation }})</option>
-                                    {% endfor %}
-                                </select>
+                                <div class="input-group">
+                                    <select class="form-select" name="unit" id="unit-field">
+                                        <option value="">-- None --</option>
+                                        {% for u in units %}
+                                        <option value="{{ u.pk }}" {% if product.unit_id == u.pk %}selected{% endif %}>{{ u.name }} ({{ u.abbreviation }})</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addUnitModal" title="Add unit"><i class="bi bi-plus"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="tab-section-title mt-3">Bulk / Multi-Unit Pricing</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Bulk Unit Name</label>
+                                <input type="text" class="form-control" name="bulk_unit_name" id="bulkUnitName"
+                                       value="{{ product.bulk_unit_name|default:'' }}" placeholder="e.g. Carton, Box, Sack"
+                                       oninput="recalcBulk()">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Units per Bulk</label>
+                                <input type="number" class="form-control" name="bulk_unit_quantity" id="bulkUnitQty"
+                                       value="{{ product.bulk_unit_quantity|default:'' }}" step="0.001" min="0.001" placeholder="e.g. 12"
+                                       oninput="recalcBulk()">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Bulk Unit Price (KES)</label>
+                                <input type="number" class="form-control" name="bulk_unit_price" id="bulkUnitPrice"
+                                       value="{{ product.bulk_unit_price|default:'' }}" step="0.01" min="0" placeholder="e.g. 1200"
+                                       oninput="recalcBulk()">
+                            </div>
+                            <div class="col-md-12" id="bulkUnitPriceHint" style="display:none;">
+                                <div class="alert alert-info py-2 px-3 mb-0 small">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Unit price per <strong id="bulkUnitNameDisplay">unit</strong>:
+                                    <strong id="bulkUnitPricePerUnit">—</strong> KES
+                                    &nbsp;|&nbsp; This will be set as the <strong>Cost Price</strong> in the Pricing tab.
+                                </div>
+                            </div>
+                            <!-- Advanced bulk fields — shown when bulk unit name is set -->
+                            <div class="col-md-4" id="bulkAdvancedFields" style="display:none;">
+                                <label class="form-label">Unit Barcode</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="unit_barcode" id="unitBarcode"
+                                           value="{{ product.unit_barcode|default:'' }}" placeholder="Barcode for single unit">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="scanUnitBarcode()" title="Scan unit barcode"><i class="bi bi-upc-scan"></i></button>
+                                </div>
+                                <div class="field-hint">Scan this to sell 1 unit at POS</div>
+                            </div>
+                            <div class="col-md-4" id="bulkLowStockField" style="display:none;">
+                                <label class="form-label">Bulk Low Stock Alert</label>
+                                <input type="number" class="form-control" name="bulk_low_stock_threshold" id="bulkLowStockThreshold"
+                                       value="{{ product.bulk_low_stock_threshold|default:'' }}" step="0.001" min="0" placeholder="e.g. 2">
+                                <div class="field-hint">Alert when fewer than this many bulk units remain</div>
+                            </div>
+                            <div class="col-md-4" id="bulkDiscountField" style="display:none;">
+                                <label class="form-label">Bulk Discount Price (KES/unit)</label>
+                                <input type="number" class="form-control" name="bulk_discount_price" id="bulkDiscountPrice"
+                                       value="{{ product.bulk_discount_price|default:'' }}" step="0.01" min="0" placeholder="e.g. 95"
+                                       oninput="validateBulkDiscount()">
+                                <div class="field-hint">Per-unit price when buying a full bulk quantity</div>
+                                <div id="bulkDiscountWarning" class="text-warning small mt-1" style="display:none;"></div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Category</label>
@@ -97,15 +145,15 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Brand</label>
+                                <label class="form-label">Department</label>
                                 <div class="input-group">
                                     <select class="form-select" name="brand">
-                                        <option value="">-- No Brand --</option>
+                                        <option value="">-- No Department --</option>
                                         {% for b in brands %}
                                         <option value="{{ b.pk }}" {% if product.brand_id == b.pk %}selected{% endif %}>{{ b.name }}</option>
                                         {% endfor %}
                                     </select>
-                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addBrandModal" title="Add brand"><i class="bi bi-plus"></i></button>
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addDepartmentModal" title="Add department"><i class="bi bi-plus"></i></button>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -152,18 +200,14 @@
                                        oninput="recalcPricing()">
                                 <div class="field-hint">Retail / default price</div>
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Wholesale Price (KES)</label>
-                                <input type="number" class="form-control" name="wholesale_price"
-                                       value="{{ product.wholesale_price|default:'' }}" step="0.01" min="0" placeholder="Optional">
-                                <div class="field-hint">For wholesale customers</div>
-                            </div>
+                            {% if product %}
                             <div class="col-md-4">
                                 <label class="form-label">Minimum Price (KES)</label>
                                 <input type="number" class="form-control" name="minimum_price"
                                        value="{{ product.minimum_price|default:'' }}" step="0.01" min="0" placeholder="Optional">
                                 <div class="field-hint">Floor price — cannot sell below this</div>
                             </div>
+                            {% endif %}
                             <div class="col-md-4">
                                 <label class="form-label">Profit Summary</label>
                                 <div class="d-flex gap-2 flex-wrap mt-1">
@@ -174,24 +218,6 @@
                             </div>
                         </div>
 
-                        <div class="tab-section-title mt-4" id="bulk-pricing-title">Bulk / Multi-Unit Pricing</div>
-                        <div class="row g-3" id="bulk-pricing-fields">
-                            <div class="col-md-4">
-                                <label class="form-label">Bulk Unit Name</label>
-                                <input type="text" class="form-control" name="bulk_unit_name"
-                                       value="{{ product.bulk_unit_name|default:'' }}" placeholder="e.g. Carton, Box, Sack">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Units per Bulk</label>
-                                <input type="number" class="form-control" name="bulk_unit_quantity"
-                                       value="{{ product.bulk_unit_quantity|default:'' }}" step="0.001" min="0.001" placeholder="e.g. 12">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Bulk Unit Price (KES)</label>
-                                <input type="number" class="form-control" name="bulk_unit_price"
-                                       value="{{ product.bulk_unit_price|default:'' }}" step="0.01" min="0" placeholder="e.g. 1200">
-                            </div>
-                        </div>
                     </div>
 
                     <!-- TAB 3: INVENTORY -->
@@ -230,6 +256,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
+                            {% if product %}
                             <div class="col-md-3" id="inv-expiry-date">
                                 <label class="form-label" id="expiry-date-label">Expiry Date</label>
                                 <input type="date" class="form-control" name="expiry_date"
@@ -240,30 +267,89 @@
                                 <input type="number" class="form-control" name="expiry_alert_days"
                                        value="{{ product.expiry_alert_days|default:'7' }}" min="1">
                             </div>
+                            {% endif %}
                         </div>
 
                         <div class="tab-section-title mt-4">Kenyan Tax Compliance</div>
                         <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label">HS Code</label>
-                                <input type="text" class="form-control" name="hs_code"
-                                       value="{{ product.hs_code|default:'' }}" placeholder="e.g. 0901.21">
-                            </div>
-                            <div class="col-md-8">
-                                <label class="form-label">HS Code Description</label>
-                                <input type="text" class="form-control" name="hs_code_description"
+
+                            <!-- HS Code autocomplete -->
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">HS Code</label>
+                                <div class="position-relative">
+                                    <div class="input-group">
+                                        <span class="input-group-text text-muted"><i class="bi bi-upc"></i></span>
+                                        <input type="text" class="form-control" id="hs-code-search"
+                                               placeholder="Type code or description to search… e.g. 0901 or coffee"
+                                               value="{% if product and product.hs_code_ref %}{{ product.hs_code_ref.display_code }} — {{ product.hs_code_ref.description }}{% elif product and product.hs_code %}{{ product.hs_code }}{% endif %}"
+                                               autocomplete="off" role="combobox" aria-expanded="false"
+                                               aria-autocomplete="list" aria-controls="hs-code-dropdown">
+                                        <span class="input-group-text text-muted small" id="hs-search-spinner" style="display:none">
+                                            <span class="spinner-border spinner-border-sm"></span>
+                                        </span>
+                                        <button type="button" class="btn btn-outline-secondary" id="hs-code-clear"
+                                                title="Clear HS code"
+                                                style="display:{% if product and product.hs_code_ref %}inline-flex{% else %}none{% endif %}">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Dropdown -->
+                                    <ul id="hs-code-dropdown" role="listbox"
+                                        class="list-group shadow"
+                                        style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1060;
+                                               max-height:240px;overflow-y:auto;border-radius:0 0 8px 8px;
+                                               border:1px solid #dee2e6;border-top:none;background:#fff">
+                                    </ul>
+                                </div>
+
+                                <!-- Hidden fields -->
+                                <input type="hidden" name="hs_code_ref" id="hs-code-ref-id"
+                                       value="{{ product.hs_code_ref_id|default:'' }}">
+                                <input type="hidden" name="hs_code" id="hs-code-text"
+                                       value="{{ product.hs_code|default:'' }}">
+                                <input type="hidden" name="hs_code_description" id="hs-code-desc-text"
                                        value="{{ product.hs_code_description|default:'' }}">
+
+                                <div class="form-text">
+                                    Type at least 2 characters to search by code or description.
+                                    <a href="{% url 'hscode_list' slug=request.business.slug %}" target="_blank" class="ms-1">
+                                        <i class="bi bi-box-arrow-up-right me-1" style="font-size:11px"></i>Browse all codes
+                                    </a>
+                                </div>
                             </div>
+
+                            <!-- Selected HS code info card -->
+                            <div class="col-12" id="hs-code-info"
+                                 style="display:{% if product and product.hs_code_ref %}block{% else %}none{% endif %}">
+                                <div class="d-flex align-items-start gap-3 p-3 rounded"
+                                     style="background:#f0f9ff;border:1px solid #bae6fd;font-size:13px">
+                                    <i class="bi bi-check-circle-fill text-primary mt-1" style="font-size:16px;flex-shrink:0"></i>
+                                    <div>
+                                        <div class="fw-semibold mb-1">
+                                            <code id="hs-info-code" style="font-size:13px">{% if product and product.hs_code_ref %}{{ product.hs_code_ref.display_code }}{% endif %}</code>
+                                            &nbsp;—&nbsp;
+                                            <span id="hs-info-desc">{% if product and product.hs_code_ref %}{{ product.hs_code_ref.description }}{% endif %}</span>
+                                        </div>
+                                        <div class="d-flex gap-3" style="color:#374151">
+                                            <span>VAT: <strong id="hs-info-vat">{% if product and product.hs_code_ref %}{{ product.hs_code_ref.vat_rate }}%{% endif %}</strong></span>
+                                            <span>Excise: <strong id="hs-info-excise">{% if product and product.hs_code_ref %}{{ product.hs_code_ref.excise_rate }}%{% endif %}</strong></span>
+                                            <span>Import duty: <strong id="hs-info-duty">{% if product and product.hs_code_ref %}{{ product.hs_code_ref.import_duty }}%{% endif %}</strong></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="col-md-4">
                                 <label class="form-label">Excisable?</label>
-                                <select class="form-select" name="is_excisable">
+                                <select class="form-select" name="is_excisable" id="is-excisable-select">
                                     <option value="0" {% if not product.is_excisable %}selected{% endif %}>No</option>
                                     <option value="1" {% if product.is_excisable %}selected{% endif %}>Yes</option>
                                 </select>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Excise Rate %</label>
-                                <input type="number" class="form-control" name="excise_rate"
+                                <input type="number" class="form-control" name="excise_rate" id="excise-rate-input"
                                        value="{{ product.excise_rate|default:'0' }}" step="0.01" min="0">
                             </div>
                         </div>
@@ -283,7 +369,7 @@
                                     <div class="text-center text-muted" id="dropPlaceholder">
                                         <i class="bi bi-cloud-upload fs-1 d-block mb-2"></i>
                                         <div>Click or drag image here</div>
-                                        <small>JPG, PNG, GIF — max 5MB</small>
+                                        <small>JPG, PNG, GIF — max 10KB</small>
                                     </div>
                                     {% endif %}
                                 </div>
@@ -332,6 +418,34 @@
                         {% else %}
                         <p class="text-muted">No stock movements recorded yet.</p>
                         {% endif %}
+
+                        {% if product.bulk_unit_name and product.bulk_unit_quantity %}
+                        <div class="tab-section-title mt-4">Break Bulk</div>
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <div class="alert alert-secondary py-2 px-3 small mb-2">
+                                    <i class="bi bi-box-arrow-in-down-left me-1"></i>
+                                    Record when a <strong>{{ product.bulk_unit_name }}</strong> is broken into
+                                    <strong>{{ product.bulk_unit_quantity|floatformat:0 }}</strong> individual units.
+                                    This creates an audit trail — stock quantity is unchanged.
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <form method="POST" action="{% url 'break_bulk' slug=request.business.slug pk=product.pk %}">
+                                    {% csrf_token %}
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" name="bulk_units_to_break"
+                                               min="1" step="1" placeholder="e.g. 1" required>
+                                        <span class="input-group-text">{{ product.bulk_unit_name }}</span>
+                                        <button type="submit" class="btn btn-outline-warning">
+                                            <i class="bi bi-scissors"></i> Break
+                                        </button>
+                                    </div>
+                                    <div class="field-hint">Enter how many {{ product.bulk_unit_name }}s to break open</div>
+                                </form>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                     {% endif %}
 
@@ -353,7 +467,6 @@
                             <span class="badge {% if product.is_active %}bg-success{% else %}bg-secondary{% endif %}">
                                 {% if product.is_active %}Active{% else %}Inactive{% endif %}
                             </span>
-                            <span class="badge bg-light text-dark border">{{ product.get_product_type_display }}</span>
                         </div>
                     </div>
                     {% endif %}
@@ -400,13 +513,33 @@
     </div>
 </div>
 
-<!-- Quick Add Brand Modal -->
-<div class="modal fade" id="addBrandModal" tabindex="-1">
+<!-- Quick Add Unit Modal -->
+<div class="modal fade" id="addUnitModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
-            <div class="modal-header"><h6 class="modal-title">Add Brand</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header"><h6 class="modal-title">Add Unit of Measure</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
-                <input type="text" class="form-control" id="newBrandName" placeholder="Brand name">
+                <div class="mb-2">
+                    <label class="form-label form-label-sm">Name</label>
+                    <input type="text" class="form-control form-control-sm" id="newUnitName" placeholder="e.g. Kilograms">
+                </div>
+                <div>
+                    <label class="form-label form-label-sm">Abbreviation</label>
+                    <input type="text" class="form-control form-control-sm" id="newUnitAbbr" placeholder="e.g. kg" maxlength="10">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" onclick="quickAddUnit()">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="addDepartmentModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Add Department</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="text" class="form-control" id="newDepartmentName" placeholder="Department name">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary btn-sm" onclick="quickAddBrand()">Add</button>
@@ -442,8 +575,61 @@ function applyMarkup() {
     }
 }
 
+function recalcBulk() {
+    const bulkPrice = parseFloat(document.getElementById('bulkUnitPrice').value) || 0;
+    const bulkQty = parseFloat(document.getElementById('bulkUnitQty').value) || 0;
+    const bulkName = document.getElementById('bulkUnitName').value.trim();
+    const hint = document.getElementById('bulkUnitPriceHint');
+    const advFields = ['bulkAdvancedFields', 'bulkLowStockField', 'bulkDiscountField'];
+
+    // Show/hide advanced fields based on whether bulk unit name is set
+    advFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = bulkName ? '' : 'none';
+    });
+
+    if (bulkPrice > 0 && bulkQty > 0) {
+        const unitPrice = bulkPrice / bulkQty;
+        document.getElementById('bulkUnitPricePerUnit').textContent = unitPrice.toFixed(2);
+        document.getElementById('bulkUnitNameDisplay').textContent = bulkName || 'unit';
+        hint.style.display = '';
+
+        // Auto-fill cost price in Pricing tab
+        const costPriceInput = document.getElementById('costPrice');
+        costPriceInput.value = unitPrice.toFixed(2);
+        recalcPricing();
+    } else {
+        hint.style.display = 'none';
+    }
+}
+
+function validateBulkDiscount() {
+    const bdp = parseFloat(document.getElementById('bulkDiscountPrice').value) || 0;
+    const sell = parseFloat(document.getElementById('sellingPrice').value) || 0;
+    const warn = document.getElementById('bulkDiscountWarning');
+    if (bdp > 0 && sell > 0 && bdp >= sell) {
+        warn.textContent = 'Bulk discount price should be lower than the selling price.';
+        warn.style.display = '';
+    } else {
+        warn.style.display = 'none';
+    }
+}
+
+function scanUnitBarcode() {
+    const code = prompt('Enter or scan unit barcode:');
+    if (code) document.getElementById('unitBarcode').value = code;
+}
+
+
 function previewImage(input) {
     if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const maxSize = 10 * 1024; // 10KB
+        if (file.size > maxSize) {
+            alert('Image is too large. Maximum allowed size is 10KB. Please compress or resize the image before uploading.');
+            input.value = '';
+            return;
+        }
         const reader = new FileReader();
         reader.onload = e => {
             const zone = document.getElementById('dropZone');
@@ -459,6 +645,10 @@ function handleDrop(e) {
     document.getElementById('dropZone').classList.remove('dragover');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
+        if (file.size > 10 * 1024) {
+            alert('Image is too large. Maximum allowed size is 10KB. Please compress or resize the image before uploading.');
+            return;
+        }
         const dt = new DataTransfer();
         dt.items.add(file);
         document.getElementById('imageInput').files = dt.files;
@@ -473,7 +663,7 @@ function removeImage() {
         <div class="text-center text-muted" id="dropPlaceholder">
             <i class="bi bi-cloud-upload fs-1 d-block mb-2"></i>
             <div>Click or drag image here</div>
-            <small>JPG, PNG, GIF — max 5MB</small>
+            <small>JPG, PNG, GIF — max 10KB</small>
         </div>`;
 }
 
@@ -500,7 +690,7 @@ function quickAddCategory() {
 }
 
 function quickAddBrand() {
-    const name = document.getElementById('newBrandName').value.trim();
+    const name = document.getElementById('newDepartmentName').value.trim();
     if (!name) return;
     fetch('{% url "api_create_brand" slug=request.business.slug %}', {
         method: 'POST',
@@ -511,125 +701,179 @@ function quickAddBrand() {
             const sel = document.querySelector('select[name="brand"]');
             const opt = new Option(data.name, data.id, true, true);
             sel.add(opt);
-            bootstrap.Modal.getInstance(document.getElementById('addBrandModal')).hide();
+            bootstrap.Modal.getInstance(document.getElementById('addDepartmentModal')).hide();
         }
-    }).catch(() => alert('Could not add brand. Try refreshing.'));
+    }).catch(() => alert('Could not add department. Try refreshing.'));
+}
+
+function quickAddUnit() {
+    const name = document.getElementById('newUnitName').value.trim();
+    const abbreviation = document.getElementById('newUnitAbbr').value.trim();
+    if (!name || !abbreviation) { alert('Both name and abbreviation are required.'); return; }
+    fetch('{% url "api_create_unit" slug=request.business.slug %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({name, abbreviation})
+    }).then(r => r.json()).then(data => {
+        if (data.id) {
+            const sel = document.getElementById('unit-field');
+            const opt = new Option(data.name + ' (' + data.abbreviation + ')', data.id, true, true);
+            sel.add(opt);
+            bootstrap.Modal.getInstance(document.getElementById('addUnitModal')).hide();
+        }
+    }).catch(() => alert('Could not add unit. Try refreshing.'));
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     recalcPricing();
-    const typeSelect = document.querySelector('select[name="product_type"]');
-    if (typeSelect) {
-        applyProductType(typeSelect.value);
-        typeSelect.addEventListener('change', () => applyProductType(typeSelect.value));
-    }
+    recalcBulk();
 });
+</script>
 
-function applyProductType(type) {
-    // ── helpers ──────────────────────────────────────────────────────────────
-    function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
-    function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
-    function setNotice(html, cls) {
-        const n = document.getElementById('inv-type-notice');
-        if (!n) return;
-        if (html) { n.innerHTML = `<div class="alert alert-${cls} mb-3">${html}</div>`; }
-        else { n.innerHTML = ''; }
+<script>
+/* ── HS Code autocomplete ─────────────────────────────────────────────── */
+(function () {
+  const searchInput   = document.getElementById('hs-code-search');
+  const dropdown      = document.getElementById('hs-code-dropdown');
+  const refInput      = document.getElementById('hs-code-ref-id');
+  const textInput     = document.getElementById('hs-code-text');
+  const descInput     = document.getElementById('hs-code-desc-text');
+  const clearBtn      = document.getElementById('hs-code-clear');
+  const spinner       = document.getElementById('hs-search-spinner');
+  const infoCard      = document.getElementById('hs-code-info');
+  const infoCode      = document.getElementById('hs-info-code');
+  const infoDesc      = document.getElementById('hs-info-desc');
+  const infoVat       = document.getElementById('hs-info-vat');
+  const infoExcise    = document.getElementById('hs-info-excise');
+  const infoDuty      = document.getElementById('hs-info-duty');
+  const exciseSel     = document.getElementById('is-excisable-select');
+  const exciseRate    = document.getElementById('excise-rate-input');
+
+  if (!searchInput) return;   // guard: not on this page
+
+  let debounce, activeIdx = -1, items = [];
+
+  /* ── fetch ── */
+  function fetchCodes(q) {
+    spinner.style.display = '';
+    fetch(`{% url 'hscode_search' slug=request.business.slug %}?q=${encodeURIComponent(q)}&limit=15`)
+      .then(r => r.json())
+      .then(data => {
+        spinner.style.display = 'none';
+        items = data.results || [];
+        renderDropdown();
+      })
+      .catch(() => { spinner.style.display = 'none'; });
+  }
+
+  /* ── render ── */
+  function renderDropdown() {
+    dropdown.innerHTML = '';
+    activeIdx = -1;
+    if (!items.length) {
+      dropdown.innerHTML = '<li class="list-group-item text-muted small py-2 px-3">No matching HS codes found</li>';
+      dropdown.style.display = 'block';
+      return;
     }
-    function setInvTabVisible(visible) {
-        const link = document.querySelector('a[href="#tab-inventory"]');
-        if (!link) return;
-        link.parentElement.style.display = visible ? '' : 'none';
-        if (!visible && link.classList.contains('active')) {
-            document.querySelector('a[href="#tab-general"]').click();
-        }
+    items.forEach((item, i) => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item list-group-item-action py-2 px-3';
+      li.style.cssText = 'cursor:pointer;font-size:13px;border-left:none;border-right:none';
+      li.setAttribute('role', 'option');
+      li.innerHTML =
+        `<div><code class="me-1" style="font-size:12px">${item.code}</code><span>${item.description}</span></div>` +
+        `<div class="text-muted" style="font-size:11px">VAT ${item.vat_rate}%` +
+        (item.excise_rate > 0 ? ` · Excise ${item.excise_rate}%` : '') +
+        (item.is_excisable ? ' · <span class="badge bg-warning-subtle text-warning border border-warning-subtle" style="font-size:10px">Excisable</span>' : '') +
+        `</div>`;
+      li.addEventListener('mousedown', e => { e.preventDefault(); selectCode(item); });
+      li.addEventListener('mouseover', () => setActive(i));
+      dropdown.appendChild(li);
+    });
+    dropdown.style.display = 'block';
+    searchInput.setAttribute('aria-expanded', 'true');
+  }
+
+  function setActive(i) {
+    const lis = dropdown.querySelectorAll('li.list-group-item-action');
+    lis.forEach((el, idx) => el.classList.toggle('active', idx === i));
+    activeIdx = i;
+  }
+
+  function closeDropdown() {
+    dropdown.style.display = 'none';
+    searchInput.setAttribute('aria-expanded', 'false');
+    activeIdx = -1;
+  }
+
+  /* ── select ── */
+  function selectCode(item) {
+    searchInput.value = `${item.code} — ${item.description}`;
+    refInput.value    = item.id;
+    textInput.value   = item.code;
+    descInput.value   = item.description;
+    closeDropdown();
+    clearBtn.style.display = '';
+
+    // Info card
+    infoCode.textContent    = item.code;
+    infoDesc.textContent    = item.description;
+    infoVat.textContent     = item.vat_rate + '%';
+    infoExcise.textContent  = item.excise_rate + '%';
+    if (infoDuty) infoDuty.textContent = (item.import_duty || 0) + '%';
+    infoCard.style.display  = 'block';
+
+    // Auto-fill excise
+    if (item.is_excisable) {
+      if (exciseSel)  exciseSel.value  = '1';
+      if (exciseRate) exciseRate.value = item.excise_rate;
     }
-    function disableInvFields(disabled) {
-        document.querySelectorAll('#tab-inventory input, #tab-inventory select').forEach(el => {
-            el.disabled = disabled;
-        });
+  }
+
+  /* ── clear ── */
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    refInput.value = textInput.value = descInput.value = '';
+    infoCard.style.display = 'none';
+    clearBtn.style.display = 'none';
+    closeDropdown();
+    searchInput.focus();
+  });
+
+  /* ── input ── */
+  searchInput.addEventListener('input', function () {
+    clearTimeout(debounce);
+    const q = this.value.trim();
+    if (q.length < 2) { closeDropdown(); return; }
+    debounce = setTimeout(() => fetchCodes(q), 280);
+  });
+
+  /* ── keyboard ── */
+  searchInput.addEventListener('keydown', function (e) {
+    const lis = dropdown.querySelectorAll('li.list-group-item-action');
+    if (dropdown.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive(Math.min(activeIdx + 1, lis.length - 1));
+      lis[activeIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive(Math.max(activeIdx - 1, 0));
+      lis[activeIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      selectCode(items[activeIdx]);
+    } else if (e.key === 'Escape') {
+      closeDropdown();
     }
-    function highlightField(id, highlight) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const input = el.querySelector('input,select');
-        if (input) input.classList.toggle('border-warning', highlight);
-        const label = el.querySelector('label');
-        if (label) { label.style.fontWeight = highlight ? '700' : ''; label.style.color = highlight ? '#ca8a04' : ''; }
+  });
+
+  /* ── close on outside click ── */
+  document.addEventListener('click', e => {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      closeDropdown();
     }
-
-    // ── reset everything to default ──────────────────────────────────────────
-    setInvTabVisible(true);
-    disableInvFields(false);
-    setNotice('', '');
-    show('inv-stock-fields');
-    show('inv-low-stock');
-    show('inv-reorder');
-    show('inv-expiry-date');
-    show('inv-expiry-alert');
-    show('bulk-pricing-title');
-    show('bulk-pricing-fields');
-    highlightField('inv-expiry-date', false);
-    // unit of measure — reset label
-    const unitLabel = document.querySelector('#unit-field')?.previousElementSibling;
-    if (unitLabel) { unitLabel.style.fontWeight = ''; unitLabel.style.color = ''; }
-
-    // ── per-type behaviour ───────────────────────────────────────────────────
-    switch (type) {
-
-        case 'stock':
-            // Default — everything visible, nothing special
-            break;
-
-        case 'service':
-            setInvTabVisible(false);
-            disableInvFields(true);
-            hide('bulk-pricing-title');
-            hide('bulk-pricing-fields');
-            setNotice('<i class="bi bi-tools me-2"></i><strong>Service product</strong> — no physical stock. Inventory tracking is disabled. You can still set a cost price and selling price.', 'info');
-            break;
-
-        case 'bundle':
-            setNotice('<i class="bi bi-box2-heart me-2"></i><strong>Bundle / Combo</strong> — stock is not tracked directly. Set the selling price and cost for the bundle as a whole. Inventory fields are informational only.', 'warning');
-            hide('inv-low-stock');
-            hide('inv-reorder');
-            hide('inv-expiry-date');
-            hide('inv-expiry-alert');
-            hide('bulk-pricing-title');
-            hide('bulk-pricing-fields');
-            break;
-
-        case 'weighted':
-            setNotice('<i class="bi bi-speedometer2 me-2"></i><strong>Weighted product</strong> — sold by weight or volume (e.g. kg, L). Make sure to set a Unit of Measure and use variable pricing in the Pricing tab.', 'info');
-            // Highlight unit of measure field
-            const unitSel = document.getElementById('unit-field');
-            if (unitSel) {
-                const lbl = unitSel.closest('.col-md-4')?.querySelector('label');
-                if (lbl) { lbl.style.fontWeight = '700'; lbl.style.color = '#2563eb'; }
-            }
-            hide('bulk-pricing-title');
-            hide('bulk-pricing-fields');
-            break;
-
-        case 'serialized':
-            setNotice('<i class="bi bi-upc me-2"></i><strong>Serialized product</strong> — each unit has a unique serial number / IMEI. Make sure to set a barcode for scanning. Expiry tracking is not applicable.', 'secondary');
-            hide('inv-expiry-date');
-            hide('inv-expiry-alert');
-            // Highlight barcode field
-            const barcodeInput = document.getElementById('barcodeInput');
-            if (barcodeInput) {
-                barcodeInput.placeholder = 'IMEI / Serial Number';
-                barcodeInput.closest('.col-md-4')?.querySelector('label') && (barcodeInput.closest('.col-md-4').querySelector('label').style.fontWeight = '700');
-            }
-            break;
-
-        case 'batch':
-            setNotice('<i class="bi bi-calendar-check me-2"></i><strong>Batch / Expiry tracked</strong> — expiry date is required for this product type. Set the expiry date and alert threshold below.', 'warning');
-            highlightField('inv-expiry-date', true);
-            // Make expiry date required
-            const expiryInput = document.querySelector('input[name="expiry_date"]');
-            if (expiryInput) expiryInput.required = true;
-            break;
-    }
-}
+  });
+})();
 </script>
 {% endblock %}

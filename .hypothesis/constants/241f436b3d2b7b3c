@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0050_add_cash_float_management.py
+# hypothesis_version: 6.151.10
+
+['-given_at', 'Active', 'Additional Float', 'CashFloat', 'ID', 'Opening Float', 'Reconciled', 'Returned', 'active', 'additional', 'amount', 'business', 'cash_floats', 'cashier', 'float_number', 'float_type', 'floats_given', 'given_at', 'given_by', 'id', 'indexes', 'notes', 'opening', 'ordering', 'pos', 'pos.business', 'reconciled', 'returned', 'returned_amount', 'returned_at', 'status', 'variance']

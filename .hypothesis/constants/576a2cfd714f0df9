@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\relations.py
+# hypothesis_version: 6.151.10
+
+['%s', '*', '.', '/', 'Invalid value.', 'None', '__', '__func__', '__iter__', 'all', 'allow_empty', 'child_relation', 'default', 'does_not_exist', 'empty', 'error_messages', 'format', 'get_queryset', 'help_text', 'html_cutoff', 'html_cutoff_text', 'http:', 'https:', 'incorrect_match', 'incorrect_type', 'initial', 'invalid', 'label', 'lookup_field', 'lookup_url_kwarg', 'many', 'no_match', 'not_a_list', 'partial', 'pk', 'pk_field', 'queryset', 'read_only', 'request', 'required', 'source', 'style', 'the empty string', 'write_only']

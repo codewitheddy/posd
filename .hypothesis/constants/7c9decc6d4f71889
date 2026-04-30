@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\test.py
+# hypothesis_version: 6.151.10
+
+["'", ', ', '-', '?', 'CONNECTION', 'CONTENT-LENGTH', 'CONTENT-TYPE', 'CONTENT_TYPE', 'DELETE', 'GET', 'HTTP_%s', 'OPTIONS', 'PATCH', 'POST', 'PUT', 'QUERY_STRING', '_', '_module_urlpatterns', 'body', 'content-type', 'content_type', 'data', 'headers', 'http', 'http://', 'https://', 'iso-8859-1', 'original_response', 'preload_content', 'read', 'reason', 'status', 'transports', 'urlpatterns', 'version', '{}; charset={}']

@@ -24,8 +24,8 @@ class ImageOptimizer:
     WEBP_QUALITY = 80
     PNG_QUALITY = 85
     
-    # Max file size (5MB)
-    MAX_FILE_SIZE = 5 * 1024 * 1024
+    # Max file size (10KB)
+    MAX_FILE_SIZE = 10 * 1024
     
     @staticmethod
     def optimize_image(image_file, max_size=(1200, 1200), quality=85):
@@ -114,7 +114,7 @@ class ImageOptimizer:
         """
         # Check file size
         if image_file.size > ImageOptimizer.MAX_FILE_SIZE:
-            return False, f"Image too large. Maximum size is {ImageOptimizer.MAX_FILE_SIZE / (1024*1024):.1f}MB"
+            return False, f"Image too large. Maximum size is {ImageOptimizer.MAX_FILE_SIZE // 1024}KB"
         
         # Check if it's a valid image
         try:
@@ -139,8 +139,8 @@ def generate_upload_path(instance, filename, folder='products'):
     Generate organized upload path
     Format: media/{folder}/{year}/{month}/{filename}
     """
-    from datetime import datetime
-    now = datetime.now()
+    from django.utils import timezone
+    now = timezone.now()
     ext = filename.split('.')[-1]
     
     # Create unique filename

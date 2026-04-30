@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0063_remove_business_pos_business_cu_number_idx_and_more.py
+# hypothesis_version: 6.151.10
+
+['business', 'pos', 'product', 'sale']

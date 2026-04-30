@@ -9,7 +9,7 @@ import logging
 import traceback
 import uuid
 import re
-from datetime import datetime
+from django.utils import timezone
 from typing import Dict, Any, Optional
 from django.http import HttpRequest, JsonResponse
 from django.contrib.auth.models import User
@@ -164,7 +164,7 @@ class ErrorLogger:
         # Build error log entry
         log_entry = {
             'error_ref_id': error_ref_id,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': timezone.now().isoformat(),
             'error_type': type(error).__name__,
             'error_message': str(error),
             'stack_trace': traceback.format_exc(),

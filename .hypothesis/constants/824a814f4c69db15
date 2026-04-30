@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0058_fix_activitylog_index_names.py
+# hypothesis_version: 6.151.10
+
+['activitylog', 'business', 'operation_type', 'pos', 'timestamp', 'user']

@@ -382,10 +382,18 @@
             font-weight: 600;
         }
         
+        /* ── Thermal paper size — must be top-level, not inside @media ── */
+        @page {
+            size: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} auto;
+            margin: 0mm;
+        }
+
         @media print {
             body {
                 background: white;
                 padding: 0;
+                margin: 0;
+                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
             }
             
             .page-footer,
@@ -398,36 +406,29 @@
             .receipt-wrapper {
                 box-shadow: none;
                 border-radius: 0;
-                max-width: 80mm;
+                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
+                max-width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
                 margin: 0;
+                padding: 0;
             }
             
             .receipt-container {
-                padding: 5mm;
-            }
-            
-            @page {
-                size: 80mm auto;
-                margin: 0;
+                padding: 3mm 4mm;
+                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
             }
         }
         
-        /* For 58mm thermal printers */
+        /* For 58mm thermal printers — set paper-width via JS or browser setting */
         @media print and (max-width: 58mm) {
             .receipt-wrapper {
                 max-width: 58mm;
+                width: 58mm;
             }
-            
             .receipt-container {
                 font-size: 11px;
             }
-            
             .shop-name {
                 font-size: 16px;
-            }
-            
-            @page {
-                size: 58mm auto;
             }
         }
         
@@ -454,7 +455,7 @@
 </head>
 <body>
     <!-- Receipt First -->
-    <div class="receipt-wrapper">
+    <div class="receipt-wrapper" id="receipt-content">
         <div class="receipt-container">
         <div class="receipt">
         <!-- Header -->
@@ -642,7 +643,7 @@
         </div>
         
         <div class="action-bar">
-            <button onclick="window.print()" class="btn btn-primary" title="Print Receipt (P)">
+            <button onclick="thermalPrint()" class="btn btn-primary" title="Print Receipt (P)">
                 🖨️ Print Receipt
             </button>
             <button onclick="showEmailModal()" class="btn btn-secondary" title="Email Receipt (E)">
@@ -706,45 +707,88 @@
         
         // Close modal on outside click
         document.getElementById('emailModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                hideEmailModal();
-            }
+            if (e.target === this) hideEmailModal();
         });
-        
+
+        // ── Thermal print via popup window ──────────────────────────────────
+        // Opens a new 80mm-wide window, prints it, then closes it.
+        // This bypasses the browser's A4 default paper size.
+        function thermalPrint() {
+            const receiptHtml = document.getElementById('receipt-content').outerHTML;
+            const styles = Array.from(document.querySelectorAll('style'))
+                .map(s => s.outerHTML).join('\n');
+
+            const popup = window.open('', '_blank',
+                'width=320,height=600,toolbar=0,scrollbars=0,status=0,resizable=0');
+            if (!popup) {
+                // Popup blocked — fall back to normal print
+                window.print();
+                return;
+            }
+
+            popup.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Receipt</title>
+${styles}
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  body { margin: 0; padding: 0; width: 80mm; background: white; }
+  .receipt-wrapper { box-shadow: none; border-radius: 0; width: 80mm; max-width: 80mm; margin: 0; }
+  .receipt-container { padding: 3mm 4mm; }
+</style>
+</head>
+<body>${receiptHtml}</body>
+</html>`);
+            popup.document.close();
+            popup.focus();
+            // Wait for content to render then print
+            popup.onload = function() {
+                popup.print();
+                setTimeout(function() { popup.close(); }, 1000);
+            };
+            // Fallback if onload doesn't fire
+            setTimeout(function() {
+                if (!popup.closed) {
+                    popup.print();
+                    setTimeout(function() { popup.close(); }, 1000);
+                }
+            }, 800);
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
-            // Press 'P' to print
             if (e.key === 'p' || e.key === 'P') {
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
-                    window.print();
+                    thermalPrint();
                 }
             }
-            // Press 'E' to email
             if (e.key === 'e' || e.key === 'E') {
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
                     showEmailModal();
                 }
             }
-            // Press 'N' for new sale
             if (e.key === 'n' || e.key === 'N') {
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
-                    window.location.href = "{% url 'pos_screen' slug=request.business.slug  %}";
+                    window.location.href = "{% url 'pos_screen' slug=request.business.slug %}";
                 }
             }
-            // Press 'D' for dashboard
             if (e.key === 'd' || e.key === 'D') {
                 if (!e.target.matches('input, textarea, select')) {
                     e.preventDefault();
-                    window.location.href = "{% url 'dashboard' slug=request.business.slug  %}";
+                    window.location.href = "{% url 'dashboard' slug=request.business.slug %}";
                 }
             }
-            // Press 'Esc' to close modal
-            if (e.key === 'Escape') {
-                hideEmailModal();
-            }
+            if (e.key === 'Escape') hideEmailModal();
+        });
+
+        // Auto-print after page fully loads — slight delay so the page is visible first
+        window.addEventListener('load', function() {
+            setTimeout(thermalPrint, 800);
         });
     </script>
 

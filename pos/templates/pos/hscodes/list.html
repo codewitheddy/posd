@@ -1,0 +1,148 @@
+{% extends 'pos/base.html' %}
+{% block title %}HS Code Library{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <div class="page-header mb-3">
+    <div>
+      <h1><i class="bi bi-upc me-2 text-primary"></i>HS Code Library</h1>
+      <p class="page-subtitle">Harmonized System codes for KRA tax compliance — shared across all businesses</p>
+    </div>
+    {% if request.user.is_superuser %}
+    <a href="{% url 'hscode_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Add HS Code
+    </a>
+    {% endif %}
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Filters -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Search code or description…">
+          </div>
+        </div>
+        <div class="col-6 col-md-2">
+          <select class="form-select form-select-sm" name="chapter">
+            <option value="">All Chapters</option>
+            {% for ch in chapters %}
+            <option value="{{ ch }}" {% if chapter == ch %}selected{% endif %}>Chapter {{ ch }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+          <a href="{% url 'hscode_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">Reset</a>
+        </div>
+        <div class="col-auto ms-auto text-muted small align-self-center">{{ total }} codes</div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:13px">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3" style="width:110px">Code</th>
+              <th>Description</th>
+              <th style="width:70px">VAT %</th>
+              <th style="width:80px">Excise %</th>
+              <th style="width:80px">Import %</th>
+              <th style="width:60px">Unit</th>
+              <th style="width:80px">Products</th>
+              <th style="width:70px">Status</th>
+              {% if request.user.is_superuser %}<th style="width:90px"></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for hs in page_obj %}
+            <tr>
+              <td class="ps-3">
+                <code class="bg-light px-2 py-1 rounded fw-semibold">{{ hs.display_code }}</code>
+              </td>
+              <td>
+                {{ hs.description }}
+                {% if hs.notes %}<div class="text-muted small">{{ hs.notes|truncatechars:80 }}</div>{% endif %}
+              </td>
+              <td>{{ hs.vat_rate }}%</td>
+              <td>{% if hs.excise_rate %}{{ hs.excise_rate }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td>{% if hs.import_duty %}{{ hs.import_duty }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td class="text-muted">{{ hs.unit|default:"—" }}</td>
+              <td>
+                {% if hs.product_count %}
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ hs.product_count }}</span>
+                {% else %}
+                  <span class="text-muted">0</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if hs.is_active %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>
+                {% endif %}
+              </td>
+              {% if request.user.is_superuser %}
+              <td class="pe-3">
+                <div class="d-flex gap-1 justify-content-end">
+                  <a href="{% url 'hscode_edit' slug=request.business.slug pk=hs.pk %}"
+                     class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i></a>
+                  <form method="post" action="{% url 'hscode_delete' slug=request.business.slug pk=hs.pk %}"
+                        class="d-inline" onsubmit="return confirm('Delete {{ hs.code|escapejs }}?')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                  </form>
+                </div>
+              </td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">
+                <i class="bi bi-upc fs-2 d-block mb-2"></i>
+                No HS codes found{% if q %} matching "{{ q }}"{% endif %}.
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'hscode_create' slug=request.business.slug %}">Add the first one</a>.
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+        <small class="text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+              <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&chapter={{ chapter }}">‹</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+            {% if page_obj.has_next %}
+              <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&chapter={{ chapter }}">›</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

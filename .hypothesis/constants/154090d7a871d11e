@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\dj_database_url\__init__.py
+# hypothesis_version: 6.151.10
+
+[', ', ':memory:', 'CONN_HEALTH_CHECKS', 'CONN_MAX_AGE', 'DATABASE_URL', 'ENGINE', 'Engine', 'HOST', 'NAME', 'OPTIONS', 'PASSWORD', 'PORT', 'TEST', 'USER', 'ca', 'cockroach', 'currentSchema', 'django_cockroachdb', 'false', 'mssql', 'mssqlms', 'mysql', 'mysql-connector', 'mysql2', 'mysqlgis', 'options', 'oracle', 'oraclegis', 'pgsql', 'postgis', 'postgres', 'postgresql', 'redshift', 'require', 'spatialite', 'sql_server.pyodbc', 'sqlite', 'sqlite://:memory:', 'ssl', 'ssl-ca', 'sslmode', 'timescale', 'timescalegis', 'true']

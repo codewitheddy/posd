@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0049_add_business_defaults.py
+# hypothesis_version: 6.151.10
+
+['Business', 'CASH', 'Category', 'GENERAL', 'PaymentMethod', 'Pieces', 'UnitOfMeasurement', 'abbreviation', 'is_active', 'pcs', 'pos', 'requires_reference']

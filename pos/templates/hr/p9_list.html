@@ -1,0 +1,89 @@
+{% extends 'pos/base.html' %}
+{% block title %}P9 Forms — Tax Year {{ tax_year }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-file-earmark-text me-2 text-primary"></i>P9 Tax Deduction Cards</h1>
+    <p class="page-subtitle">Kenya Revenue Authority — Annual Tax Filing</p>
+  </div>
+</div>
+
+<div class="alert alert-info" style="font-size:13px;">
+  <i class="bi bi-info-circle me-1"></i>
+  <strong>P9 Form</strong> is required by KRA for annual income tax filing (iTax). It shows each employee's monthly gross pay, PAYE deducted, NHIF, and NSSF contributions.
+  PAYE is calculated using the <strong>2024/2025 KRA tax bands</strong>. Verify with a certified tax consultant before filing.
+</div>
+
+<!-- Year selector -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-2">
+      <label class="form-label form-label-sm">Tax Year</label>
+      <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for y in years %}
+        <option value="{{ y }}" {% if y == tax_year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="form-card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>Employee</th>
+          <th>Job Title</th>
+          <th>KRA PIN / ID</th>
+          <th>Status</th>
+          <th class="text-end">P9 Form</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        <tr>
+          <td>
+            <strong>{{ emp.get_full_name }}</strong>
+            {% if emp.user_account %}
+              <br><small class="text-muted">{{ emp.user_account.username }}</small>
+            {% endif %}
+          </td>
+          <td>{{ emp.job_title }}</td>
+          <td>
+            {% if emp.id_number %}
+              <code>{{ emp.id_number }}</code>
+            {% else %}
+              <span class="text-muted small">Not set</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {% if emp.status == 'active' %}bg-success{% elif emp.status == 'terminated' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+              {{ emp.get_status_display }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a href="{% url 'hr_p9_download' slug=request.business.slug employee_pk=emp.pk %}?year={{ tax_year }}"
+               class="btn btn-sm btn-primary">
+              <i class="bi bi-file-earmark-pdf me-1"></i>Download P9 {{ tax_year }}
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No employees found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="alert alert-warning mt-3" style="font-size:12px;">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  <strong>Note:</strong> P9 forms are generated from <strong>paid payroll records</strong> only. Ensure all monthly payrolls for {{ tax_year }} are calculated and marked as paid before generating P9 forms.
+  The employee's <strong>ID Number</strong> field is used as the KRA PIN — update it in the employee profile if needed.
+</div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\drf_spectacular\authentication.py
+# hypothesis_version: 6.151.10
+
+['Authorization', 'apiKey', 'basic', 'basicAuth', 'cookie', 'cookieAuth', 'http', 'in', 'name', 'scheme', 'tokenAuth', 'type']

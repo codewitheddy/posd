@@ -35,7 +35,7 @@
     .product-placeholder {
         width: 100%;
         height: 120px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #f1f3f5;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -43,8 +43,8 @@
         padding: 10px;
     }
     .product-placeholder i {
-        font-size: 2.5rem;
-        color: rgba(255,255,255,0.7);
+        font-size: 2.2rem;
+        color: #adb5bd;
     }
     .cart-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
     #cart-total { font-size: 1.5rem; font-weight: bold; }
@@ -157,6 +157,16 @@
     }
     .category-pills::-webkit-scrollbar { height: 4px; }
     .category-pills::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 2px; }
+
+    /* Cart scrollbar — thin, subtle, no harsh line */
+    #cart-items::-webkit-scrollbar { width: 4px; }
+    #cart-items::-webkit-scrollbar-track { background: transparent; }
+    #cart-items::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 4px; }
+    #cart-items::-webkit-scrollbar-thumb:hover { background: #adb5bd; }
+
+    #mobile-cart-items::-webkit-scrollbar { width: 4px; }
+    #mobile-cart-items::-webkit-scrollbar-track { background: transparent; }
+    #mobile-cart-items::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 4px; }
     .cat-pill {
         white-space: nowrap;
         padding: 5px 14px;
@@ -225,7 +235,7 @@
             </div>
         </div>
         <div class="card-body">
-            <div id="mobile-cart-items" style="max-height: 200px; overflow-y: auto;">
+            <div id="mobile-cart-items" style="max-height: 200px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
                 <p class="text-muted text-center">Cart is empty</p>
             </div>
 
@@ -379,6 +389,7 @@
                 <i class="bi bi-x-lg text-muted"></i>
             </button>
         </div>
+        <div id="filter-info-text" class="text-muted small mt-1"></div>
 
         <!-- Category Pill Buttons -->
         <div class="category-pills mb-3" id="category-pills">
@@ -505,11 +516,26 @@
                 </button>
             </div>
             <div class="card-body">
-                <div id="cart-items" style="max-height: 300px; overflow-y: auto;">
+                <div id="cart-items" style="max-height: 300px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
                     <p class="text-muted text-center">Cart is empty</p>
                 </div>
 
                 <hr>
+
+                <!-- Promo Code -->
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold"><i class="bi bi-tag me-1"></i>Promo Code</label>
+                  <div class="input-group input-group-sm">
+                    <input type="text" id="promo-code-input" class="form-control text-uppercase"
+                           placeholder="Enter code…" style="text-transform:uppercase">
+                    <button class="btn btn-outline-success" type="button" onclick="applyPromoCode()">Apply</button>
+                    <button class="btn btn-outline-secondary" type="button" id="clear-promo-btn"
+                            onclick="clearPromo()" style="display:none" title="Remove promo">
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </div>
+                  <div id="promo-feedback" class="mt-1" style="font-size:12px"></div>
+                </div>
 
                 <div class="mb-3">
                     <label>Discount Type:</label>
@@ -609,6 +635,8 @@
     <input type="hidden" name="customer_id" id="form-customer-id">
     <input type="hidden" name="discount_type" id="form-discount-type">
     <input type="hidden" name="discount_value" id="form-discount-value">
+    <input type="hidden" name="promo_code" id="form-promo-code">
+    <input type="hidden" name="promo_id" id="form-promo-id">
     <input type="hidden" name="order_notes" id="form-order-notes">
     <input type="hidden" name="is_credit_sale" id="form-is-credit-sale" value="0">
     <div id="form-items"></div>
@@ -617,7 +645,7 @@
 
 <!-- Weight/Quantity Modal for Variable Pricing -->
 <div class="modal fade" id="weightModal" tabindex="-1" aria-labelledby="weightModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title" id="weightModalLabel">
@@ -687,7 +715,7 @@
 
 <!-- Payment Method Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title" id="paymentModalLabel">
@@ -733,10 +761,40 @@
                         <input type="number" class="form-control" id="payment-amount-input" step="0.01" min="0" placeholder="0.00" oninput="updateCashChange()">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Reference (Optional)</label>
+                        <label class="form-label">Reference <span id="ref-label-hint" class="text-muted small">(Optional)</span></label>
                         <input type="text" class="form-control" id="payment-reference-input" placeholder="Transaction ID, Check #, etc.">
                     </div>
                 </div>
+
+                <!-- M-Pesa Instructions (shown when M-Pesa is selected) -->
+                {% if mpesa_enabled and mpesa_shortcode or mpesa_enabled and mpesa_phone %}
+                <div id="mpesa-instructions" class="mb-3" style="display:none;">
+                  <div class="alert alert-success py-2 mb-0" style="border-left:4px solid #4caf50">
+                    <div class="d-flex align-items-start gap-2">
+                      <i class="bi bi-phone-fill text-success mt-1"></i>
+                      <div style="font-size:13px">
+                        <strong>M-Pesa Payment Instructions</strong>
+                        <ol class="mb-1 mt-1 ps-3" style="line-height:1.9">
+                          {% if mpesa_type == 'paybill' %}
+                            <li>Go to <strong>M-Pesa → Lipa na M-Pesa → Pay Bill</strong></li>
+                            <li>Business No: <strong class="text-success fs-6">{{ mpesa_shortcode }}</strong></li>
+                            <li>Account No: <strong>{% if mpesa_account_reference %}{{ mpesa_account_reference }}{% else %}Invoice Number{% endif %}</strong></li>
+                            {% if mpesa_account_name %}<li>Name: <strong>{{ mpesa_account_name }}</strong></li>{% endif %}
+                          {% elif mpesa_type == 'till' %}
+                            <li>Go to <strong>M-Pesa → Lipa na M-Pesa → Buy Goods</strong></li>
+                            <li>Till No: <strong class="text-success fs-6">{{ mpesa_shortcode }}</strong></li>
+                          {% elif mpesa_type == 'phone' %}
+                            <li>Go to <strong>M-Pesa → Send Money</strong></li>
+                            <li>Phone No: <strong class="text-success fs-6">{{ mpesa_phone }}</strong></li>
+                          {% endif %}
+                          <li>Enter amount and confirm with PIN</li>
+                        </ol>
+                        <div class="text-muted small">Enter the M-Pesa confirmation code in the Reference field above.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {% endif %}
 
                 <!-- Cash Received / Change Calculator (shown for cash payments) -->
                 <div id="cash-change-section" class="alert alert-info py-2 mb-3" style="display:none;">
@@ -787,7 +845,7 @@
 
 <!-- Held Orders Modal -->
 <div class="modal fade" id="heldOrdersModal" tabindex="-1" aria-labelledby="heldOrdersModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning">
                 <h5 class="modal-title" id="heldOrdersModalLabel">
@@ -811,6 +869,7 @@
 {% block extra_js %}
 <script>
 let cart = [];
+let cartLoaded = false;
 const VAT_RATE = {{ vat_rate|default:16 }};
 const productStock = {};
 const productData = {}; // stores full product objects for unit picker
@@ -827,11 +886,8 @@ let currentSearchQuery = '';
 let currentCategoryFilter = '';
 
 // ==================== VIEW (LIST ONLY) ====================
+// List view only
 const currentView = 'list';
-
-function switchView(view) { /* no-op, list view only */ }
-
-// Initialize view on page load
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎬 POS Screen initializing...');
     console.log('   Current URL:', window.location.href);
@@ -850,8 +906,8 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Starting product load...');
     loadProducts(true);
     
-    // Update held orders count
-    updateHeldOrdersCount();
+    // Migrate legacy local held orders to server, then refresh count
+    migrateLegacyHeldOrders();
 
     // Live clock
     function updateClock() {
@@ -983,6 +1039,18 @@ function loadProducts(reset = false) {
             }
             
             renderProducts(data.products);
+            if (cart.length > 0) {
+                let warnings = 0;
+                cart.forEach(item => {
+                    const available = productStock[item.id];
+                    if (available !== undefined && item.quantity > available) {
+                        warnings++;
+                    }
+                });
+                if (warnings > 0) {
+                    showNotification(`${warnings} cart item(s) exceed current stock. Please review quantities.`, 'warning');
+                }
+            }
             productsOffset += data.products.length;
             productsHasMore = data.has_more;
             
@@ -1232,6 +1300,8 @@ function filterByCategory(categoryId) {
 
 // Load cart from localStorage on page load
 function loadCartFromStorage() {
+    if (cartLoaded) return;
+    cartLoaded = true;
     try {
         const savedCart = localStorage.getItem('pos_cart');
         const savedCustomer = localStorage.getItem('pos_customer');
@@ -1339,10 +1409,8 @@ window.addEventListener('beforeunload', function(e) {
 // Handle page visibility change (when user returns to tab)
 document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
-        // Only reload cart from storage when returning to tab
-        // Don't clear cart here - let the page load handler do it after successful sale
-        loadCartFromStorage();
-        console.log('Tab became visible - cart reloaded from storage');
+        // Cart is loaded once on page load; avoid duplicate restores here
+        console.log('Tab became visible');
     } else {
         // Save cart when leaving tab
         if (cart.length > 0) {
@@ -1399,6 +1467,9 @@ function searchCustomer() {
                 // Update hidden field
                 const hiddenField = document.getElementById('selected-customer-id');
                 if (hiddenField) hiddenField.value = data.customer.id;
+                // Also sync form-customer-id immediately so it's ready at submission
+                const formCustomerField = document.getElementById('form-customer-id');
+                if (formCustomerField) formCustomerField.value = data.customer.id;
                 
                 // Show customer info with null checks
                 const nameEl = document.getElementById('customer-name');
@@ -1643,7 +1714,9 @@ if (customerPhoneInput) {
         
         // Only auto-search if input looks like a phone number (at least 9 digits)
         // or a customer code (starts with CUST-)
-        const isPhoneNumber = /^\d{9,}$/.test(query);
+        const normalizedQuery = query.replace(/[\s\-()]/g, '');
+        const localPhone = normalizedQuery.replace(/^\+?254/, '0');
+        const isPhoneNumber = /^\d{9,}$/.test(normalizedQuery) || /^0\d{9}$/.test(localPhone);
         const isCustomerCode = /^CUST-/i.test(query);
         
         if (isPhoneNumber || isCustomerCode) {
@@ -1787,9 +1860,7 @@ function addVariablePriceToCart() {
 
 // Add event listener for weight input to calculate price in real-time
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize lazy loading - always load products
-    loadProducts(true);
-    
+    // Product loading is handled by the main initializer above.
     const weightInput = document.getElementById('weight-input');
     if (weightInput) {
         weightInput.addEventListener('input', calculateVariablePrice);
@@ -1834,12 +1905,14 @@ function showUnitPickerModal(product) {
 
     // Piece handler
     pieceBtn.onclick = function() {
+        this.blur();
         bootstrap.Modal.getInstance(document.getElementById('unitPickerModal')).hide();
         addToCart(product.id, product.name, product.unit_price, product.stock_quantity, product.tax_class || 'standard');
     };
 
     // Bulk handler — add 1 carton: quantity = bulkQty pieces, price = bulkPrice
     bulkBtn.onclick = function() {
+        this.blur();
         bootstrap.Modal.getInstance(document.getElementById('unitPickerModal')).hide();
         addBulkToCart(product.id, product.name, bulkName, bulkPrice, bulkQty, product.stock_quantity, product.tax_class || 'standard');
     };
@@ -1848,6 +1921,11 @@ function showUnitPickerModal(product) {
 }
 
 function addBulkToCart(id, name, bulkName, bulkPrice, bulkQty, availableStock, taxClass) {
+    // Coerce to numbers — API may return strings
+    bulkPrice = parseFloat(bulkPrice) || 0;
+    bulkQty = parseFloat(bulkQty) || 1;
+    availableStock = parseFloat(availableStock) || 0;
+
     // Display name shows bulk unit, e.g. "Milk (Carton)"
     const displayName = `${name} (${bulkName})`;
     const existing = cart.find(item => item.id === id && item.isBulk);
@@ -1860,7 +1938,7 @@ function addBulkToCart(id, name, bulkName, bulkPrice, bulkQty, availableStock, t
     }
 
     if (existing) {
-        existing.quantity += bulkQty;
+        existing.quantity = parseFloat(existing.quantity) + bulkQty;
     } else {
         cart.push({
             id,
@@ -1879,6 +1957,17 @@ function addBulkToCart(id, name, bulkName, bulkPrice, bulkQty, availableStock, t
     showNotification(`Added 1 ${bulkName} of ${name} to cart`, 'success');
 }
 
+function getEffectivePrice(product, qty) {
+    if (
+        product.bulk_discount_price &&
+        product.bulk_unit_quantity &&
+        qty >= product.bulk_unit_quantity
+    ) {
+        return product.bulk_discount_price;
+    }
+    return product.unit_price;
+}
+
 function addToCart(id, name, price, availableStock, taxClass = 'standard') {
     console.log('addToCart called:', {id, name, price, availableStock, taxClass});
     
@@ -1894,7 +1983,7 @@ function addToCart(id, name, price, availableStock, taxClass = 'standard') {
     if (existing) {
         existing.quantity++;
     } else {
-        cart.push({ id, name, price, quantity: 1, availableStock, taxClass });
+        cart.push({ id, name, price, base_price: price, quantity: 1, availableStock, taxClass });
     }
     
     console.log('Cart after adding:', cart);
@@ -1910,6 +1999,38 @@ function removeFromCart(id) {
     saveCartToStorage(); // Save after removing from cart
 }
 
+function addToCartWithQty(id, name, price, availableStock, taxClass, qty, productData) {
+    if (qty > availableStock) {
+        showNotification(`Cannot add ${qty}x ${name}. Only ${availableStock} in stock!`, 'error');
+        return;
+    }
+    const existing = cart.find(item => item.id === id);
+    if (existing) {
+        const newQty = existing.quantity + qty;
+        if (newQty > availableStock) {
+            showNotification(`Cannot add more ${name}. Only ${availableStock} in stock!`, 'error');
+            return;
+        }
+        existing.quantity = newQty;
+        // Apply bulk discount
+        if (existing.bulk_discount_price && existing.bulk_unit_quantity && newQty >= existing.bulk_unit_quantity) {
+            existing.price = existing.bulk_discount_price;
+        }
+    } else {
+        const bulkDiscountPrice = productData ? productData.bulk_discount_price : null;
+        const bulkUnitQty = productData ? productData.bulk_unit_quantity : null;
+        const effectivePrice = (bulkDiscountPrice && bulkUnitQty && qty >= bulkUnitQty) ? bulkDiscountPrice : price;
+        cart.push({
+            id, name, price: effectivePrice, base_price: price, quantity: qty,
+            availableStock, taxClass,
+            bulk_discount_price: bulkDiscountPrice,
+            bulk_unit_quantity: bulkUnitQty,
+        });
+    }
+    updateCart();
+    saveCartToStorage();
+}
+
 function adjustQty(id, delta) {
     const item = cart.find(i => i.id === id && !i.isBulk) || cart.find(i => i.id === id);
     if (!item) return;
@@ -1921,6 +2042,10 @@ function adjustQty(id, delta) {
         return;
     }
     item.quantity = newQty;
+    // Apply bulk discount if applicable
+    if (item.bulk_discount_price && item.bulk_unit_quantity) {
+        item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
+    }
     updateCart();
     saveCartToStorage();
 }
@@ -1946,7 +2071,10 @@ function onPaymentMethodChange() {
     const sel = document.getElementById('payment-method-select');
     const opt = sel.options[sel.selectedIndex];
     const code = opt ? opt.getAttribute('data-code') : '';
-    const isCash = code === 'cash' || (opt && opt.text.toLowerCase().includes('cash'));
+    const isCash = code === 'CASH' || code === 'cash' || (opt && opt.text.toLowerCase() === 'cash');
+    const isMpesa = code === 'MPESA' || code === 'mpesa';
+
+    // Cash change section
     const section = document.getElementById('cash-change-section');
     if (section) {
         section.style.display = isCash ? 'block' : 'none';
@@ -1957,6 +2085,34 @@ function onPaymentMethodChange() {
             // Auto-fill remaining
             const remaining = totalDue - paymentMethods.reduce((s, m) => s + m.amount, 0);
             if (remaining > 0) document.getElementById('payment-amount-input').value = remaining.toFixed(2);
+        }
+    }
+
+    // M-Pesa instructions
+    const mpesaSection = document.getElementById('mpesa-instructions');
+    if (mpesaSection) {
+        mpesaSection.style.display = isMpesa ? 'block' : 'none';
+        if (isMpesa) {
+            // Auto-fill remaining balance
+            const remaining = totalDue - paymentMethods.reduce((s, m) => s + m.amount, 0);
+            if (remaining > 0) document.getElementById('payment-amount-input').value = remaining.toFixed(2);
+            // Focus reference field so cashier can type the M-Pesa code
+            setTimeout(() => document.getElementById('payment-reference-input').focus(), 100);
+        }
+    }
+
+    // Update reference field hint
+    const refInput = document.getElementById('payment-reference-input');
+    const refHint = document.getElementById('ref-label-hint');
+    if (refInput) {
+        if (isMpesa) {
+            refInput.placeholder = 'M-Pesa code e.g. QAB1234XYZ';
+            refInput.required = true;
+            if (refHint) refHint.textContent = '(Required)';
+        } else {
+            refInput.placeholder = 'Transaction ID, Check #, etc.';
+            refInput.required = false;
+            if (refHint) refHint.textContent = '(Optional)';
         }
     }
 }
@@ -2012,6 +2168,10 @@ function updateQuantity(id, quantity) {
         }
         
         item.quantity = newQty;
+        // Apply bulk discount if applicable
+        if (item.bulk_discount_price && item.bulk_unit_quantity) {
+            item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
+        }
         updateCart();
         saveCartToStorage(); // Save after quantity update
     }
@@ -2029,6 +2189,9 @@ function updateCart() {
     } else {
         let html = '';
         cart.forEach((item, idx) => {
+            // Ensure numeric types (guards against localStorage string coercion)
+            item.price = parseFloat(item.price) || 0;
+            item.quantity = parseFloat(item.quantity) || 0;
             const itemDiscount = item.discount || 0;
             const itemTotal = (item.price * item.quantity) * (1 - itemDiscount / 100);
             const qtyDisplay = item.isVariable ? 
@@ -2036,7 +2199,9 @@ function updateCart() {
                 item.quantity;
             const priceDisplay = item.isVariable ?
                 `KES ${(item.price * item.quantity).toFixed(2)} total` :
-                `KES ${item.price.toFixed(2)} each`;
+                (item.bulk_discount_price && item.bulk_unit_quantity && item.quantity >= item.bulk_unit_quantity
+                    ? `<del class="text-muted small">KES ${parseFloat(item.base_price || item.price).toFixed(2)}</del> <span class="text-success">KES ${item.price.toFixed(2)}</span> each`
+                    : `KES ${item.price.toFixed(2)} each`);
             
             html += `
                 <div class="cart-item" id="cart-item-${item.id}">
@@ -2302,6 +2467,77 @@ function clearCart() {
 }
 
 // Hold current order
+function migrateLegacyHeldOrders() {
+    const partialFailureKey = 'pos_held_orders_migration_partial_failure';
+    if (sessionStorage.getItem(partialFailureKey) === '1') {
+        updateHeldOrdersCount();
+        return;
+    }
+
+    const legacyRaw = localStorage.getItem('pos_held_orders');
+    if (!legacyRaw) {
+        sessionStorage.removeItem(partialFailureKey);
+        updateHeldOrdersCount();
+        return;
+    }
+
+    let legacyOrders = [];
+    try {
+        legacyOrders = JSON.parse(legacyRaw) || [];
+    } catch (error) {
+        console.error('Invalid legacy held order payload. Clearing local data.', error);
+        localStorage.removeItem('pos_held_orders');
+        sessionStorage.removeItem(partialFailureKey);
+        updateHeldOrdersCount();
+        return;
+    }
+
+    if (!Array.isArray(legacyOrders) || legacyOrders.length === 0) {
+        localStorage.removeItem('pos_held_orders');
+        sessionStorage.removeItem(partialFailureKey);
+        updateHeldOrdersCount();
+        return;
+    }
+
+    const requests = legacyOrders.map((legacyOrder) => {
+        const payload = {
+            name: (legacyOrder.name || `Order ${new Date().toLocaleTimeString()}`).toString(),
+            cart: Array.isArray(legacyOrder.cart) ? legacyOrder.cart : [],
+            customer: legacyOrder.customer || null,
+            discount_type: legacyOrder.discountType || legacyOrder.discount_type || 'percentage',
+            discount_value: parseFloat(legacyOrder.discountValue ?? legacyOrder.discount_value ?? 0) || 0
+        };
+
+        return fetch(`/b/{{ request.business.slug }}/pos/held-orders/save/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(payload)
+        }).then(response => response.json());
+    });
+
+    Promise.allSettled(requests)
+        .then(results => {
+            const failed = results.filter(r => r.status !== 'fulfilled' || !r.value || !r.value.success).length;
+            if (failed === 0) {
+                localStorage.removeItem('pos_held_orders');
+                sessionStorage.removeItem(partialFailureKey);
+                showNotification(`Migrated ${legacyOrders.length} held order(s) to server storage`, 'success');
+            } else {
+                sessionStorage.setItem(partialFailureKey, '1');
+                showNotification(`Migrated ${legacyOrders.length - failed}/${legacyOrders.length} held order(s). Remaining legacy orders will retry next browser session.`, 'warning');
+            }
+            updateHeldOrdersCount();
+        })
+        .catch(error => {
+            console.error('Legacy held order migration failed:', error);
+            sessionStorage.setItem(partialFailureKey, '1');
+            updateHeldOrdersCount();
+        });
+}
+
 function holdOrder() {
     if (cart.length === 0) {
         alert('Cart is empty. Add items before holding order.');
@@ -2315,114 +2551,138 @@ function holdOrder() {
     calculateTotal();
     const currentTotal = parseFloat(document.getElementById('cart-total').textContent.replace('KES ', '').replace(',', '')) || 0;
     
-    // Get held orders from localStorage
-    let heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
-    
-    // Create held order object
-    const heldOrder = {
-        id: Date.now(),
+    const heldOrderPayload = {
         name: orderName,
-        cart: JSON.parse(JSON.stringify(cart)), // Deep copy
+        cart: JSON.parse(JSON.stringify(cart)),
         customer: selectedCustomer ? JSON.parse(JSON.stringify(selectedCustomer)) : null,
-        discountType: document.getElementById('discount-type').value,
-        discountValue: parseFloat(document.getElementById('discount-value').value) || 0,
-        timestamp: new Date().toISOString(),
-        total: currentTotal
+        discount_type: document.getElementById('discount-type').value,
+        discount_value: parseFloat(document.getElementById('discount-value').value) || 0
     };
-    
-    // Add to held orders
-    heldOrders.push(heldOrder);
-    localStorage.setItem('pos_held_orders', JSON.stringify(heldOrders));
-    
-    // Clear current cart
-    cart = [];
-    selectedCustomer = null;
-    document.getElementById('discount-type').value = 'percentage';
-    document.getElementById('discount-value').value = '0';
-    
-    // Clear customer selection UI
-    const customerSelect = document.getElementById('customer-select');
-    if (customerSelect) customerSelect.value = '';
-    const customerInfo = document.getElementById('customer-info');
-    if (customerInfo) customerInfo.style.display = 'none';
-    
-    updateCart();
-    updateMobileCart();
-    clearCartStorage();
-    
-    alert(`Order "${orderName}" has been held successfully!\n\nTotal: KES ${currentTotal.toFixed(2)}\nYou can retrieve it later from held orders.`);
-    
-    // Update held orders count
-    updateHeldOrdersCount();
+
+    fetch(`/b/{{ request.business.slug }}/pos/held-orders/save/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(heldOrderPayload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to hold order');
+        }
+
+        // Clear current cart
+        cart = [];
+        selectedCustomer = null;
+        document.getElementById('discount-type').value = 'percentage';
+        document.getElementById('discount-value').value = '0';
+        
+        // Clear customer selection UI
+        const customerSelect = document.getElementById('customer-select');
+        if (customerSelect) customerSelect.value = '';
+        const customerInfo = document.getElementById('customer-info');
+        if (customerInfo) customerInfo.style.display = 'none';
+        
+        updateCart();
+        updateMobileCart();
+        clearCartStorage();
+
+        showNotification(`Order "${orderName}" held successfully. Total: KES ${currentTotal.toFixed(2)}`, 'success');
+        updateHeldOrdersCount();
+    })
+    .catch(error => {
+        console.error('Hold order error:', error);
+        showNotification(error.message || 'Failed to hold order', 'error');
+    });
 }
 
 // Update held orders count (you can add a badge to show count)
 function updateHeldOrdersCount() {
-    const heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
     const badge = document.getElementById('held-orders-badge');
-    
-    if (heldOrders.length > 0) {
-        badge.textContent = heldOrders.length;
-        badge.style.display = 'inline-block';
-    } else {
-        badge.style.display = 'none';
-    }
-    
-    console.log(`${heldOrders.length} order(s) on hold`);
+
+    fetch(`/b/{{ request.business.slug }}/pos/held-orders/`)
+        .then(response => response.json())
+        .then(data => {
+            const count = (data.success && data.orders) ? data.orders.length : 0;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+            console.log(`${count} order(s) on hold`);
+        })
+        .catch(() => {
+            badge.style.display = 'none';
+        });
 }
 
 // Show held orders modal
 function showHeldOrders() {
-    const heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
     const listContainer = document.getElementById('held-orders-list');
-    
-    if (heldOrders.length === 0) {
-        listContainer.innerHTML = '<p class="text-muted text-center">No held orders</p>';
-    } else {
-        let html = '<div class="list-group">';
-        
-        heldOrders.forEach((order, index) => {
-            const orderDate = new Date(order.timestamp);
-            const itemCount = order.cart.length;
-            const itemsText = itemCount === 1 ? '1 item' : `${itemCount} items`;
-            
-            html += `
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <h6 class="mb-1">
-                                <i class="bi bi-receipt"></i> ${order.name}
-                            </h6>
-                            <p class="mb-1">
-                                <small class="text-muted">
-                                    <i class="bi bi-clock"></i> ${orderDate.toLocaleString()}
-                                </small>
-                            </p>
-                            <p class="mb-1">
-                                <span class="badge bg-info">${itemsText}</span>
-                                ${order.customer ? `<span class="badge bg-success ms-1"><i class="bi bi-person"></i> ${order.customer.name}</span>` : ''}
-                                ${order.discountValue > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-tag"></i> Discount</span>` : ''}
-                            </p>
-                            <p class="mb-0">
-                                <strong>Total: KES ${order.total.toFixed(2)}</strong>
-                            </p>
-                        </div>
-                        <div class="btn-group-vertical" role="group">
-                            <button class="btn btn-sm btn-success" onclick="retrieveHeldOrder(${index})" title="Retrieve this order">
-                                <i class="bi bi-arrow-clockwise"></i> Retrieve
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteHeldOrder(${index})" title="Delete this order">
-                                <i class="bi bi-trash"></i> Delete
-                            </button>
+
+    fetch(`/b/{{ request.business.slug }}/pos/held-orders/`)
+        .then(response => response.json())
+        .then(data => {
+            const heldOrders = (data.success && data.orders) ? data.orders : [];
+
+            if (heldOrders.length === 0) {
+                listContainer.innerHTML = '<p class="text-muted text-center">No held orders</p>';
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            heldOrders.forEach((order) => {
+                const orderDate = new Date(order.timestamp);
+                const itemCount = (order.cart || []).length;
+                const itemsText = itemCount === 1 ? '1 item' : `${itemCount} items`;
+                const orderTotal = (order.cart || []).reduce((sum, item) => {
+                    return sum + ((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0));
+                }, 0);
+
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <i class="bi bi-receipt"></i> ${order.name}
+                                </h6>
+                                <p class="mb-1">
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock"></i> ${orderDate.toLocaleString()}
+                                    </small>
+                                </p>
+                                <p class="mb-1">
+                                    <span class="badge bg-info">${itemsText}</span>
+                                    ${order.customer ? `<span class="badge bg-success ms-1"><i class="bi bi-person"></i> ${order.customer.name}</span>` : ''}
+                                    ${parseFloat(order.discount_value) > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-tag"></i> Discount</span>` : ''}
+                                </p>
+                                <p class="mb-0">
+                                    <strong>Total: KES ${orderTotal.toFixed(2)}</strong>
+                                </p>
+                            </div>
+                            <div class="btn-group-vertical" role="group">
+                                <button class="btn btn-sm btn-success" onclick="retrieveHeldOrder(${order.id})" title="Retrieve this order">
+                                    <i class="bi bi-arrow-clockwise"></i> Retrieve
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteHeldOrder(${order.id}, '${order.name.replace(/'/g, "\\'")}')" title="Delete this order">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            });
+
+            html += '</div>';
+            listContainer.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Failed to load held orders:', error);
+            listContainer.innerHTML = '<p class="text-danger text-center">Failed to load held orders</p>';
         });
-        
-        html += '</div>';
-        listContainer.innerHTML = html;
-    }
     
     // Show modal
     const modal = new bootstrap.Modal(document.getElementById('heldOrdersModal'));
@@ -2431,96 +2691,95 @@ function showHeldOrders() {
 
 // Retrieve a held order
 function retrieveHeldOrder(index) {
-    const heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
-    
-    if (index < 0 || index >= heldOrders.length) {
-        alert('Order not found');
-        return;
-    }
-    
+
     // Check if current cart has items
     if (cart.length > 0) {
         if (!confirm('Current cart has items. Do you want to replace it with the held order?')) {
             return;
         }
     }
-    
-    const order = heldOrders[index];
-    
-    // Restore cart
-    cart = [...order.cart];
-    
-    // Restore customer
-    selectedCustomer = order.customer;
-    if (selectedCustomer) {
-        // Update customer UI
-        const customerInfo = document.getElementById('customer-info');
-        if (customerInfo) {
-            customerInfo.style.display = 'block';
-            document.getElementById('customer-name-display').textContent = selectedCustomer.name;
-            document.getElementById('customer-phone-display').textContent = selectedCustomer.phone;
-            document.getElementById('customer-points-display').textContent = selectedCustomer.loyalty_points || 0;
-            document.getElementById('customer-tier-display').textContent = selectedCustomer.loyalty_tier || 'Regular';
-        }
-        const clearBtn = document.getElementById('clear-customer-btn');
-        if (clearBtn) clearBtn.style.display = 'inline-block';
-    }
-    
-    // Restore discount
-    document.getElementById('discount-type').value = order.discountType;
-    document.getElementById('discount-value').value = order.discountValue;
-    
-    // Sync mobile discount fields
-    const mobileDiscountType = document.getElementById('mobile-discount-type');
-    const mobileDiscountValue = document.getElementById('mobile-discount-value');
-    if (mobileDiscountType) mobileDiscountType.value = order.discountType;
-    if (mobileDiscountValue) mobileDiscountValue.value = order.discountValue;
-    
-    // Remove from held orders
-    heldOrders.splice(index, 1);
-    localStorage.setItem('pos_held_orders', JSON.stringify(heldOrders));
-    
-    // Update cart display
-    updateCart();
-    updateMobileCart();
-    saveCartToStorage();
-    
-    // Update held orders count
-    updateHeldOrdersCount();
-    
-    // Close modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('heldOrdersModal'));
-    if (modal) modal.hide();
-    
-    alert(`Order "${order.name}" has been retrieved successfully!`);
+
+    fetch(`/b/{{ request.business.slug }}/pos/held-orders/`)
+        .then(response => response.json())
+        .then(data => {
+            const orders = (data.success && data.orders) ? data.orders : [];
+            const order = orders.find(o => o.id === index);
+            if (!order) {
+                throw new Error('Order not found');
+            }
+
+            cart = [...(order.cart || [])];
+            selectedCustomer = order.customer || null;
+
+            if (selectedCustomer) {
+                const customerInfo = document.getElementById('customer-info');
+                if (customerInfo) customerInfo.style.display = 'block';
+                const nameEl = document.getElementById('customer-name');
+                const tierEl = document.getElementById('customer-tier');
+                const pointsEl = document.getElementById('customer-points');
+                if (nameEl) nameEl.textContent = selectedCustomer.name || '';
+                if (tierEl) tierEl.textContent = (selectedCustomer.tier || 'bronze').toUpperCase();
+                if (pointsEl) pointsEl.textContent = `${selectedCustomer.points || 0} points`;
+                const clearBtn = document.getElementById('clear-customer-btn');
+                if (clearBtn) clearBtn.style.display = 'inline-block';
+            }
+
+            document.getElementById('discount-type').value = order.discount_type || 'percentage';
+            document.getElementById('discount-value').value = order.discount_value || 0;
+
+            const mobileDiscountType = document.getElementById('mobile-discount-type');
+            const mobileDiscountValue = document.getElementById('mobile-discount-value');
+            if (mobileDiscountType) mobileDiscountType.value = order.discount_type || 'percentage';
+            if (mobileDiscountValue) mobileDiscountValue.value = order.discount_value || 0;
+
+            updateCart();
+            updateMobileCart();
+            saveCartToStorage();
+
+            return fetch(`/b/{{ request.business.slug }}/pos/held-orders/${order.id}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            }).then(r => r.json()).then(() => order.name);
+        })
+        .then(orderName => {
+            updateHeldOrdersCount();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('heldOrdersModal'));
+            if (modal) modal.hide();
+            showNotification(`Order "${orderName}" retrieved successfully`, 'success');
+        })
+        .catch(error => {
+            console.error('Retrieve held order failed:', error);
+            showNotification(error.message || 'Failed to retrieve held order', 'error');
+        });
 }
 
 // Delete a held order
-function deleteHeldOrder(index) {
-    const heldOrders = JSON.parse(localStorage.getItem('pos_held_orders') || '[]');
-    
-    if (index < 0 || index >= heldOrders.length) {
-        alert('Order not found');
+function deleteHeldOrder(orderId, orderName) {
+    if (!confirm(`Delete held order "${orderName}"?\n\nThis action cannot be undone.`)) {
         return;
     }
-    
-    const order = heldOrders[index];
-    
-    if (!confirm(`Delete held order "${order.name}"?\n\nThis action cannot be undone.`)) {
-        return;
-    }
-    
-    // Remove from held orders
-    heldOrders.splice(index, 1);
-    localStorage.setItem('pos_held_orders', JSON.stringify(heldOrders));
-    
-    // Update held orders count
-    updateHeldOrdersCount();
-    
-    // Refresh the modal
-    showHeldOrders();
-    
-    alert(`Order "${order.name}" has been deleted.`);
+
+    fetch(`/b/{{ request.business.slug }}/pos/held-orders/${orderId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to delete held order');
+        }
+        updateHeldOrdersCount();
+        showHeldOrders();
+        showNotification(`Order "${orderName}" deleted`, 'success');
+    })
+    .catch(error => {
+        console.error('Delete held order failed:', error);
+        showNotification(error.message || 'Failed to delete held order', 'error');
+    });
 }
 
 
@@ -2598,17 +2857,35 @@ function searchByBarcode() {
                     return;
                 }
                 
-                // Add product to cart with tax_class
-                addToCart(data.product.id, data.product.name, data.product.price, data.product.stock_quantity, data.product.tax_class || 'standard');
+                const qtyToAdd = data.product.quantity_to_add || 1;
+                const scanType = data.product.scan_type || 'unit';
                 
-                // Show success message
-                showNotification(`Added ${data.product.name} to cart`, 'success');
+                // For bulk scans, add bulk_unit_quantity items at once
+                if (scanType === 'bulk' && qtyToAdd > 1) {
+                    // Add the product with bulk quantity
+                    addToCartWithQty(
+                        data.product.id,
+                        data.product.name,
+                        data.product.price,
+                        data.product.stock_quantity,
+                        data.product.tax_class || 'standard',
+                        qtyToAdd,
+                        data.product
+                    );
+                    showNotification(`Added ${qtyToAdd}x ${data.product.name} (bulk scan)`, 'success');
+                } else {
+                    addToCart(data.product.id, data.product.name, data.product.price, data.product.stock_quantity, data.product.tax_class || 'standard');
+                    showNotification(`Added ${data.product.name} to cart`, 'success');
+                }
                 
-                // Clear input
-                barcodeInput.value = '';
+                // Handle ambiguous barcode
+            } else if (data.ambiguous) {
+                showNotification('Multiple products match this barcode. Please search manually.', 'warning');
             } else {
                 showNotification(data.error || 'Product not found', 'error');
             }
+            // Clear input
+            barcodeInput.value = '';
         })
         .catch(error => {
             console.error('Error:', error);
@@ -2621,7 +2898,8 @@ function searchByBarcode() {
 }
 
 // Handle Enter key in barcode input
-document.getElementById('barcode-input').addEventListener('keypress', function(e) {
+const barcodeInput = document.getElementById('barcode-input');
+if (barcodeInput) barcodeInput.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
         searchByBarcode();
@@ -2671,14 +2949,15 @@ window.addEventListener('load', function() {
 function showNotification(message, type) {
     const alertClass = type === 'success' ? 'alert-success' : (type === 'warning' ? 'alert-warning' : 'alert-danger');
     const alertHtml = `
-        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+        <div class="alert ${alertClass} alert-dismissible fade show pos-notification" role="alert">
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     `;
     
     // Insert at top of page
-    const container = document.querySelector('.container-fluid');
+    const container = document.querySelector('.container-fluid') || document.body;
+    container.querySelectorAll('.alert.pos-notification').forEach(a => a.remove());
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = alertHtml;
     container.insertBefore(tempDiv.firstElementChild, container.firstChild);
@@ -2693,7 +2972,8 @@ function showNotification(message, type) {
 }
 
 // Search and filter
-document.getElementById('search').addEventListener('input', function(e) {
+const searchEl = document.getElementById('search');
+if (searchEl) searchEl.addEventListener('input', function(e) {
     const search = e.target.value.toLowerCase();
     document.querySelectorAll('.product-item').forEach(item => {
         const name = item.dataset.name;
@@ -2701,7 +2981,8 @@ document.getElementById('search').addEventListener('input', function(e) {
     });
 });
 
-document.getElementById('category-filter').addEventListener('change', function(e) {
+const categoryFilter = document.getElementById('category-filter');
+if (categoryFilter) categoryFilter.addEventListener('change', function(e) {
     const categoryId = e.target.value;
     document.querySelectorAll('.product-item').forEach(item => {
         if (!categoryId || item.dataset.category === categoryId) {
@@ -2715,7 +2996,8 @@ document.getElementById('category-filter').addEventListener('change', function(e
 // ==================== PAYMENT METHOD HANDLING ====================
 
 // Add listener to payment method select to show/hide reference requirement
-document.getElementById('payment-method-select').addEventListener('change', function() {
+const pmSelect = document.getElementById('payment-method-select');
+if (pmSelect) pmSelect.addEventListener('change', function() {
     const selectedOption = this.options[this.selectedIndex];
     const methodCode = selectedOption.getAttribute('data-code');
     const referenceInput = document.getElementById('payment-reference-input');
@@ -3215,6 +3497,77 @@ window.addEventListener('resize', function() {
             updateMobileCart();
         }
     }, 250);
+});
+
+// ── Promotion / Promo Code ────────────────────────────────────────────────────
+let appliedPromo = null;  // { discount_amount, description, promo_type, free_items, promo_id }
+
+function applyPromoCode() {
+    const code = document.getElementById('promo-code-input').value.trim();
+    if (!code) return;
+
+    const cartItems = cart.map(item => ({
+        product_id: item.id,
+        product_name: item.name,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.price * item.quantity,
+        category_id: item.category_id || null,
+    }));
+
+    const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+    fetch('{% url "validate_promo_code" slug=request.business.slug %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: JSON.stringify({ code, cart_total: cartTotal, items: cartItems }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const fb = document.getElementById('promo-feedback');
+        if (data.ok) {
+            appliedPromo = data;
+            // Override discount fields
+            document.getElementById('discount-type').value = 'fixed';
+            document.getElementById('discount-value').value = data.discount_amount;
+            document.getElementById('form-promo-code').value = code;
+            document.getElementById('form-promo-id').value = data.promo_id;
+            document.getElementById('clear-promo-btn').style.display = '';
+            fb.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${data.description}</span>`;
+            calculateTotal();
+        } else {
+            fb.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+        }
+    })
+    .catch(() => {
+        document.getElementById('promo-feedback').innerHTML =
+            '<span class="text-danger">Network error. Try again.</span>';
+    });
+}
+
+function clearPromo() {
+    appliedPromo = null;
+    document.getElementById('promo-code-input').value = '';
+    document.getElementById('promo-feedback').innerHTML = '';
+    document.getElementById('clear-promo-btn').style.display = 'none';
+    document.getElementById('form-promo-code').value = '';
+    document.getElementById('form-promo-id').value = '';
+    document.getElementById('discount-type').value = 'percentage';
+    document.getElementById('discount-value').value = '0';
+    calculateTotal();
+}
+
+// Allow Enter key in promo code input
+document.addEventListener('DOMContentLoaded', function() {
+    const promoInput = document.getElementById('promo-code-input');
+    if (promoInput) {
+        promoInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); applyPromoCode(); }
+        });
+    }
 });
 </script>
 

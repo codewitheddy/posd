@@ -13,12 +13,47 @@ from decimal import Decimal
 from datetime import date, timedelta
 import csv
 import json
+import os
 
 from .models import (
     Expense, ExpenseCategory, Sale, SaleItem, Product, Business
 )
 from .decorators import business_required, business_permission_required
 import datetime as _dt
+
+MAX_CUSTOM_FINANCE_RANGE_DAYS = 366
+
+
+def _can_manage_expenses(request):
+    if request.user.is_superuser:
+        return True
+    membership = getattr(request, 'business_membership', None)
+    return bool(membership and membership.role in ('owner', 'admin', 'manager'))
+
+
+def _can_view_finances(request):
+    if request.user.is_superuser:
+        return True
+    membership = getattr(request, 'business_membership', None)
+    return bool(membership and membership.role in ('owner', 'admin', 'manager'))
+
+
+def _validate_expense_attachment(attachment):
+    """Validate optional expense attachment type and size."""
+    if not attachment:
+        return None
+
+    allowed_exts = {'.jpg', '.jpeg', '.png', '.webp', '.pdf'}
+    max_size_bytes = 5 * 1024 * 1024  # 5 MB
+
+    ext = os.path.splitext((attachment.name or '').lower())[1]
+    if ext not in allowed_exts:
+        return 'Attachment must be a PDF or image file (JPG, JPEG, PNG, WEBP).'
+
+    if attachment.size and attachment.size > max_size_bytes:
+        return 'Attachment size must be 5 MB or less.'
+
+    return None
 
 
 def _to_date(v):
@@ -46,6 +81,28 @@ def _date_range(period, custom_from=None, custom_to=None):
     elif period == 'custom' and custom_from and custom_to:
         return custom_from, custom_to
     return today.replace(month=1, day=1), today  # default: year
+
+
+def _resolve_finance_period(period, custom_from, custom_to, fallback='month'):
+    """Validate custom finance ranges and return (date_from, date_to, normalized_period, error)."""
+    if period != 'custom':
+        d_from, d_to = _date_range(period)
+        return d_from, d_to, period, None
+
+    if not custom_from or not custom_to:
+        d_from, d_to = _date_range(fallback)
+        return d_from, d_to, fallback, 'Custom range requires both start and end dates.'
+
+    if custom_from > custom_to:
+        d_from, d_to = _date_range(fallback)
+        return d_from, d_to, fallback, 'Custom start date cannot be after end date.'
+
+    span = (custom_to - custom_from).days + 1
+    if span > MAX_CUSTOM_FINANCE_RANGE_DAYS:
+        d_from, d_to = _date_range(fallback)
+        return d_from, d_to, fallback, f'Custom range cannot exceed {MAX_CUSTOM_FINANCE_RANGE_DAYS} days.'
+
+    return custom_from, custom_to, 'custom', None
 
 
 def _ensure_expense_categories(business):
@@ -93,16 +150,24 @@ def _expense_total(business, date_from, date_to):
 @business_required
 @business_permission_required('view')
 def expense_list(request, slug=None):
+    if not _can_view_finances(request):
+        messages.error(request, 'You do not have permission to view financial reports in this business.')
+        return redirect('dashboard', slug=request.business.slug)
+
     _ensure_expense_categories(request.business)
     today = timezone.now().date()
 
     # filters
-    period = request.GET.get('period', 'month')
+    requested_period = request.GET.get('period', 'month')
     cat_id = request.GET.get('category', '')
     pm = request.GET.get('payment_method', '')
     custom_from = parse_date(request.GET.get('date_from', '')) or None
     custom_to = parse_date(request.GET.get('date_to', '')) or None
-    date_from, date_to = _date_range(period, custom_from, custom_to)
+    date_from, date_to, resolved_period, period_error = _resolve_finance_period(requested_period, custom_from, custom_to)
+    show_custom_picker = requested_period == 'custom'
+    period = 'custom' if show_custom_picker else resolved_period
+    if period_error:
+        messages.error(request, period_error)
 
     qs = Expense.objects.filter(
         business=request.business,
@@ -158,11 +223,15 @@ def expense_list(request, slug=None):
         'week_total': week_total,
         'month_total': month_total,
         'period': period,
+        'resolved_period': resolved_period,
         'periods': ['today', 'week', 'month', 'quarter', 'year', 'custom'],
         'cat_id': cat_id,
         'pm': pm,
         'date_from': date_from,
         'date_to': date_to,
+        'date_from_input': custom_from,
+        'date_to_input': custom_to,
+        'show_custom_picker': show_custom_picker,
         'payment_choices': Expense.PAYMENT_CHOICES,
         'chart_labels': chart_labels,
         'chart_values': chart_values,
@@ -179,6 +248,10 @@ def expense_list(request, slug=None):
 @business_required
 @business_permission_required('create')
 def expense_create(request, slug=None):
+    if not _can_manage_expenses(request):
+        messages.error(request, 'You do not have permission to manage expenses in this business.')
+        return redirect('expense_list', slug=request.business.slug)
+
     _ensure_expense_categories(request.business)
     categories = ExpenseCategory.objects.filter(
         Q(business=request.business) | Q(business__isnull=True)
@@ -188,11 +261,20 @@ def expense_create(request, slug=None):
         cat_id = request.POST.get('category')
         description = request.POST.get('description', '').strip()
         amount_str = request.POST.get('amount', '0')
-        expense_date = request.POST.get('expense_date') or timezone.now().date()
+        expense_date_raw = request.POST.get('expense_date', '').strip()
         payment_method = request.POST.get('payment_method', 'cash')
         reference_number = request.POST.get('reference_number', '').strip()
         notes = request.POST.get('notes', '').strip()
         attachment = request.FILES.get('attachment')
+
+        attachment_error = _validate_expense_attachment(attachment)
+        if attachment_error:
+            messages.error(request, attachment_error)
+            return render(request, 'pos/expense_form.html', {
+                'categories': categories,
+                'payment_choices': Expense.PAYMENT_CHOICES,
+                'today': timezone.now().date(),
+            })
 
         try:
             amount = Decimal(amount_str)
@@ -200,13 +282,39 @@ def expense_create(request, slug=None):
                 raise ValueError
         except Exception:
             messages.error(request, 'Enter a valid positive amount.')
-            return render(request, 'pos/expense_form.html', {'categories': categories, 'payment_choices': Expense.PAYMENT_CHOICES})
+            return render(request, 'pos/expense_form.html', {
+                'categories': categories,
+                'payment_choices': Expense.PAYMENT_CHOICES,
+                'today': timezone.now().date(),
+            })
+
+        expense_date = parse_date(expense_date_raw) if expense_date_raw else timezone.now().date()
+        if not expense_date:
+            messages.error(request, 'Enter a valid expense date.')
+            return render(request, 'pos/expense_form.html', {
+                'categories': categories,
+                'payment_choices': Expense.PAYMENT_CHOICES,
+                'today': timezone.now().date(),
+            })
+
+        payment_codes = {code for code, _label in Expense.PAYMENT_CHOICES}
+        if payment_method not in payment_codes:
+            messages.error(request, 'Invalid payment method.')
+            return render(request, 'pos/expense_form.html', {
+                'categories': categories,
+                'payment_choices': Expense.PAYMENT_CHOICES,
+                'today': timezone.now().date(),
+            })
 
         try:
-            category = ExpenseCategory.objects.get(pk=cat_id)
+            category = categories.get(pk=cat_id)
         except ExpenseCategory.DoesNotExist:
             messages.error(request, 'Invalid category.')
-            return render(request, 'pos/expense_form.html', {'categories': categories, 'payment_choices': Expense.PAYMENT_CHOICES})
+            return render(request, 'pos/expense_form.html', {
+                'categories': categories,
+                'payment_choices': Expense.PAYMENT_CHOICES,
+                'today': timezone.now().date(),
+            })
 
         expense = Expense(
             business=request.business,
@@ -221,6 +329,7 @@ def expense_create(request, slug=None):
         )
         if attachment:
             expense.attachment = attachment
+        expense.full_clean()
         expense.save()
         messages.success(request, f'Expense {expense.expense_number} recorded.')
         return redirect('expense_list', slug=request.business.slug)
@@ -237,6 +346,10 @@ def expense_create(request, slug=None):
 @business_required
 @business_permission_required('edit')
 def expense_edit(request, pk, slug=None):
+    if not _can_manage_expenses(request):
+        messages.error(request, 'You do not have permission to manage expenses in this business.')
+        return redirect('expense_list', slug=request.business.slug)
+
     expense = get_object_or_404(Expense, pk=pk, business=request.business)
     categories = ExpenseCategory.objects.filter(
         Q(business=request.business) | Q(business__isnull=True)
@@ -244,15 +357,33 @@ def expense_edit(request, pk, slug=None):
 
     if request.method == 'POST':
         try:
-            expense.category = ExpenseCategory.objects.get(pk=request.POST.get('category'))
+            expense.category = categories.get(pk=request.POST.get('category'))
             expense.description = request.POST.get('description', '').strip()
-            expense.amount = Decimal(request.POST.get('amount', '0'))
-            expense.expense_date = request.POST.get('expense_date') or expense.expense_date
+            expense.amount = Decimal(request.POST.get('amount', '0').strip())
+            if expense.amount <= 0:
+                raise ValueError('Enter a valid positive amount.')
+
+            expense_date_raw = request.POST.get('expense_date', '').strip()
+            if expense_date_raw:
+                parsed_date = parse_date(expense_date_raw)
+                if not parsed_date:
+                    raise ValueError('Enter a valid expense date.')
+                expense.expense_date = parsed_date
+
             expense.payment_method = request.POST.get('payment_method', 'cash')
+            payment_codes = {code for code, _label in Expense.PAYMENT_CHOICES}
+            if expense.payment_method not in payment_codes:
+                raise ValueError('Invalid payment method.')
+
             expense.reference_number = request.POST.get('reference_number', '').strip()
             expense.notes = request.POST.get('notes', '').strip()
-            if request.FILES.get('attachment'):
-                expense.attachment = request.FILES['attachment']
+            attachment = request.FILES.get('attachment')
+            attachment_error = _validate_expense_attachment(attachment)
+            if attachment_error:
+                raise ValueError(attachment_error)
+            if attachment:
+                expense.attachment = attachment
+            expense.full_clean()
             expense.save()
             messages.success(request, 'Expense updated.')
             return redirect('expense_list', slug=request.business.slug)
@@ -272,6 +403,10 @@ def expense_edit(request, pk, slug=None):
 @business_required
 @business_permission_required('delete')
 def expense_delete(request, pk, slug=None):
+    if not _can_manage_expenses(request):
+        messages.error(request, 'You do not have permission to manage expenses in this business.')
+        return redirect('expense_list', slug=request.business.slug)
+
     expense = get_object_or_404(Expense, pk=pk, business=request.business)
     if request.method == 'POST':
         expense.delete()
@@ -285,13 +420,29 @@ def expense_delete(request, pk, slug=None):
 @business_required
 @business_permission_required('view')
 def expense_export_csv(request, slug=None):
+    if not _can_view_finances(request):
+        messages.error(request, 'You do not have permission to view financial reports in this business.')
+        return redirect('dashboard', slug=request.business.slug)
+
     period = request.GET.get('period', 'month')
-    date_from, date_to = _date_range(period)
+    cat_id = request.GET.get('category', '')
+    pm = request.GET.get('payment_method', '')
+    custom_from = parse_date(request.GET.get('date_from', '')) or None
+    custom_to = parse_date(request.GET.get('date_to', '')) or None
+    date_from, date_to, period, period_error = _resolve_finance_period(period, custom_from, custom_to)
+    if period_error:
+        messages.error(request, period_error)
+        return redirect('expense_list', slug=request.business.slug)
     qs = Expense.objects.filter(
         business=request.business,
         expense_date__gte=date_from,
         expense_date__lte=date_to,
     ).select_related('category', 'recorded_by').order_by('-expense_date')
+
+    if cat_id:
+        qs = qs.filter(category_id=cat_id)
+    if pm:
+        qs = qs.filter(payment_method=pm)
 
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="expenses_{date_from}_{date_to}.csv"'
@@ -312,6 +463,10 @@ def expense_export_csv(request, slug=None):
 @business_required
 @business_permission_required('view')
 def profit_dashboard(request, slug=None):
+    if not _can_view_finances(request):
+        messages.error(request, 'You do not have permission to view financial reports in this business.')
+        return redirect('dashboard', slug=request.business.slug)
+
     today = timezone.now().date()
     period = request.GET.get('period', 'month')
     date_from, date_to = _date_range(period)
@@ -345,7 +500,7 @@ def profit_dashboard(request, slug=None):
         units=Sum('quantity'),
         revenue=Sum('total_price'),
         cogs=Sum(ExpressionWrapper(
-            F('quantity') * F('product__cost_price'),
+            F('quantity') * Coalesce(F('cost_price_at_sale'), F('product__cost_price')),
             output_field=DecimalField(max_digits=14, decimal_places=2)
         )),
     ).annotate(
@@ -363,7 +518,7 @@ def profit_dashboard(request, slug=None):
     ).annotate(day=TruncDay('sale__date')).values('day').annotate(
         rev=Sum('total_price'),
         cogs=Sum(ExpressionWrapper(
-            F('quantity') * F('product__cost_price'),
+            F('quantity') * Coalesce(F('cost_price_at_sale'), F('product__cost_price')),
             output_field=DecimalField(max_digits=14, decimal_places=2)
         )),
     ).order_by('day')
@@ -396,11 +551,21 @@ def profit_dashboard(request, slug=None):
 @business_required
 @business_permission_required('view')
 def pl_statement(request, slug=None):
+    if not _can_view_finances(request):
+        messages.error(request, 'You do not have permission to view financial reports in this business.')
+        return redirect('dashboard', slug=request.business.slug)
+
     today = timezone.now().date()
-    period = request.GET.get('period', 'month')
+    requested_period = request.GET.get('period', 'month')
     custom_from = parse_date(request.GET.get('date_from', '')) or None
     custom_to = parse_date(request.GET.get('date_to', '')) or None
-    date_from, date_to = _date_range(period, custom_from, custom_to)
+    date_from, date_to, resolved_period, period_error = _resolve_finance_period(requested_period, custom_from, custom_to)
+    show_custom_picker = requested_period == 'custom'
+    period = 'custom' if show_custom_picker else resolved_period
+    if period_error:
+        messages.error(request, period_error)
+        if request.GET.get('export') == 'csv':
+            return redirect('pl_statement', slug=request.business.slug)
 
     revenue, cogs, gross_profit = _sales_stats(request.business, date_from, date_to)
 
@@ -424,7 +589,7 @@ def pl_statement(request, slug=None):
     ).annotate(month=TruncMonth('sale__date')).values('month').annotate(
         rev=Sum('total_price'),
         cogs=Sum(ExpressionWrapper(
-            F('quantity') * F('product__cost_price'),
+            F('quantity') * Coalesce(F('cost_price_at_sale'), F('product__cost_price')),
             output_field=DecimalField(max_digits=14, decimal_places=2)
         )),
     ).order_by('month')
@@ -432,22 +597,37 @@ def pl_statement(request, slug=None):
     monthly_expenses = Expense.objects.filter(
         business=request.business,
         expense_date__gte=trend_from,
+        expense_date__lte=today,
     ).annotate(month=TruncMonth('expense_date')).values('month').annotate(
         total=Sum('amount')
     ).order_by('month')
 
+    sales_map = {
+        _to_date(row['month']).replace(day=1): {
+            'rev': float(row['rev'] or 0),
+            'cogs': float(row['cogs'] or 0),
+        }
+        for row in monthly_sales
+    }
     exp_map = {_to_date(e['month']).replace(day=1): float(e['total'] or 0) for e in monthly_expenses}
 
     chart_labels, chart_rev, chart_profit, chart_exp = [], [], [], []
-    for row in monthly_sales:
-        m = _to_date(row['month']).replace(day=1)
-        r = float(row['rev'] or 0)
-        c = float(row['cogs'] or 0)
-        e = exp_map.get(m, 0)
-        chart_labels.append(m.strftime('%b %Y'))
+    month_cursor = trend_from.replace(day=1)
+    month_end = today.replace(day=1)
+    while month_cursor <= month_end:
+        sales = sales_map.get(month_cursor, {'rev': 0.0, 'cogs': 0.0})
+        r = float(sales['rev'])
+        c = float(sales['cogs'])
+        e = float(exp_map.get(month_cursor, 0))
+        chart_labels.append(month_cursor.strftime('%b %Y'))
         chart_rev.append(r)
         chart_profit.append(round(r - c - e, 2))
         chart_exp.append(e)
+
+        if month_cursor.month == 12:
+            month_cursor = month_cursor.replace(year=month_cursor.year + 1, month=1)
+        else:
+            month_cursor = month_cursor.replace(month=month_cursor.month + 1)
 
     # Expense pie
     pie_labels = [e['category__name'] for e in expense_by_cat]
@@ -476,8 +656,12 @@ def pl_statement(request, slug=None):
 
     context = {
         'period': period,
+        'resolved_period': resolved_period,
         'date_from': date_from,
         'date_to': date_to,
+        'date_from_input': custom_from,
+        'date_to_input': custom_to,
+        'show_custom_picker': show_custom_picker,
         'revenue': revenue,
         'cogs': cogs,
         'gross_profit': gross_profit,

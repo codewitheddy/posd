@@ -6,11 +6,32 @@ Wraps existing URLs with business slug prefix
 from django.urls import path, include
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
-from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views, registration_admin_views, financial_views, crm_views
+from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views, registration_admin_views, financial_views, crm_views, webhook_views, branch_views, promotion_views, hscode_views
 
 
 def ping(request):
     return HttpResponse('ok', content_type='text/plain')
+
+
+def service_worker(request):
+    """Serve service worker from root scope so it can control all pages."""
+    import os
+    from django.conf import settings as django_settings
+    sw_path = os.path.join(django_settings.BASE_DIR, 'pos', 'static', 'js', 'service-worker.js')
+    try:
+        with open(sw_path, 'r') as f:
+            content = f.read()
+    except FileNotFoundError:
+        return HttpResponse('// service worker not found', content_type='application/javascript', status=404)
+    response = HttpResponse(content, content_type='application/javascript')
+    response['Service-Worker-Allowed'] = '/'
+    response['Cache-Control'] = 'no-cache'
+    return response
+
+
+def offline_page(request):
+    """Offline fallback page served by the service worker."""
+    return render(request, 'pos/offline.html')
 
 
 def landing_page(request):
@@ -47,6 +68,13 @@ def root_redirect(request):
 public_urlpatterns = [
     # Root - smart redirect based on auth status
     path('', root_redirect, name='home'),
+
+    # PWA
+    path('sw.js', service_worker, name='service_worker'),
+    path('offline/', offline_page, name='offline'),
+
+    # Branch login — public, no auth required (user logs in here)
+    path('b/<slug:slug>/branch-login/<int:branch_id>/', branch_views.branch_login, name='branch_login'),
     
     # Landing page - always accessible
     path('home/', landing_page, name='landing'),
@@ -61,6 +89,7 @@ public_urlpatterns = [
     path('platform-admin/create-business/', views.admin_create_business, name='admin_create_business'),
     path('platform-admin/extend-license/', views.extend_license, name='extend_license'),
     path('platform-admin/activate-business/<int:business_id>/', views.activate_business, name='activate_business'),
+    path('platform-admin/reset-password/', views.admin_reset_password, name='admin_reset_password'),
     
     # Support Access Management (platform admin)
     path('support-access/my-requests/', support_access_views.my_support_access_requests, name='my_support_access_requests'),
@@ -97,14 +126,19 @@ business_urlpatterns = [
     
     # Business Setup & Settings
     path('setup/', tenant_views.business_setup, name='business_setup'),
-    path('settings/', tenant_views.business_settings, name='business_settings_tenant'),
+    path('setup/skip/', tenant_views.skip_setup, name='skip_setup'),
+    # /settings/ kept as alias; canonical name is 'business_settings' at /business-settings/
+    path('settings/', tenant_views.business_settings, name='business_settings_alias'),
     path('members/', tenant_views.business_members, name='business_members'),
     path('members/invite/', tenant_views.invite_member, name='invite_member'),
     path('members/<int:member_id>/remove/', tenant_views.remove_member, name='remove_member'),
+    path('members/<int:member_id>/edit/', tenant_views.edit_member, name='edit_member'),
+    path('pos/pin-login/', tenant_views.pos_pin_login, name='pos_pin_login'),
     
     # Data Backup
     path('backup/', tenant_views.backup_data, name='backup_data'),
     path('backup/download/', tenant_views.download_backup, name='download_backup'),
+    path('backup/restore/', tenant_views.restore_backup, name='restore_backup'),
     
     # Support Access Management (business owner)
     path('support-access/', support_access_views.view_support_access_requests, name='view_support_access_requests'),
@@ -118,11 +152,21 @@ business_urlpatterns = [
     path('products/<int:pk>/edit/', views.product_edit, name='product_edit'),
     path('products/<int:pk>/delete/', views.product_delete, name='product_delete'),
     path('products/<int:pk>/toggle-active/', views.product_toggle_active, name='product_toggle_active'),
+    path('products/<int:pk>/break-bulk/', views.break_bulk, name='break_bulk'),
     path('products/bulk-upload/', views.product_bulk_upload, name='product_bulk_upload'),
     path('products/export/', views.product_export_csv, name='product_export_csv'),
     path('products/template/', views.product_download_template, name='product_download_template'),
     path('api/products/create-category/', views.api_create_category, name='api_create_category'),
     path('api/products/create-brand/', views.api_create_brand, name='api_create_brand'),
+    path('api/products/create-unit/', views.api_create_unit, name='api_create_unit'),
+
+    # HS Code Library
+    path('hs-codes/', hscode_views.hscode_list, name='hscode_list'),
+    path('hs-codes/create/', hscode_views.hscode_create, name='hscode_create'),
+    path('hs-codes/<int:pk>/edit/', hscode_views.hscode_edit, name='hscode_edit'),
+    path('hs-codes/<int:pk>/delete/', hscode_views.hscode_delete, name='hscode_delete'),
+    path('api/hs-codes/search/', hscode_views.hscode_search, name='hscode_search'),
+    path('api/hs-codes/<int:pk>/', hscode_views.hscode_detail, name='hscode_detail'),
     
     # Categories
     path('categories/', views.category_list, name='category_list'),
@@ -187,10 +231,14 @@ business_urlpatterns = [
     path('grn/<int:pk>/cancel/', views.grn_cancel, name='grn_cancel'),
     path('grn/<int:pk>/print/', views.grn_print, name='grn_print'),
     path('api/grn/supplier-purchases/', views.api_grn_supplier_purchases, name='api_grn_supplier_purchases'),
+    path('api/grn/purchase-defaults/', views.api_grn_purchase_defaults, name='api_grn_purchase_defaults'),
     
     # POS
     path('pos/', views.pos_screen, name='pos_screen'),
     path('pos/complete/', views.complete_sale, name='complete_sale'),
+        path('pos/held-orders/', views.held_orders_list, name='held_orders_list'),
+        path('pos/held-orders/save/', views.held_order_save, name='held_order_save'),
+        path('pos/held-orders/<int:pk>/delete/', views.held_order_delete, name='held_order_delete'),
     path('api/product/search/', views.search_product_by_code, name='search_product_by_code'),
     path('api/customer/search/', views.search_customer_by_phone, name='search_customer_by_phone'),
     
@@ -280,23 +328,26 @@ business_urlpatterns = [
         path('<int:pk>/change-role/', user_management_views.user_change_role_view, name='user_management_change_role'),
     ])),
     path('users/roles-permissions/', views.roles_permissions, name='roles_permissions'),
+    path('hr/', views.hr_hub, name='hr_hub'),
     path('users/create/', views.user_create, name='user_create'),
     path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     path('profile/', views.user_profile, name='user_profile'),
     
-    # Business Settings (legacy)
-    path('business-settings/', views.business_settings, name='business_settings'),
+    # Business Settings — canonical URL points to tenant view
+    path('business-settings/', tenant_views.business_settings, name='business_settings'),
     
     # Activity Log
     path('activity-log/', views.activity_log, name='activity_log'),
     path('activity-log/clear/', views.clear_old_logs, name='clear_old_logs'),
+    path('activity-log/user/<int:user_id>/', views.user_activity, name='user_activity'),
     
     # Customer Management
     path('customers/', views.customer_list, name='customer_list'),
     path('customers/create/', views.customer_create, name='customer_create'),
     path('customers/<int:pk>/edit/', views.customer_edit, name='customer_edit'),
     path('customers/<int:pk>/delete/', views.customer_delete, name='customer_delete'),
+    path('customers/<int:pk>/merge/', crm_views.customer_merge, name='customer_merge'),
     path('customers/<int:pk>/', crm_views.customer_detail_enhanced, name='customer_detail'),
 
     # Customer Credit
@@ -335,8 +386,15 @@ business_urlpatterns = [
     path('loyalty/rewards/', views.loyalty_rewards_list, name='loyalty_rewards_list'),
     path('loyalty/rewards/create/', views.loyalty_reward_create, name='loyalty_reward_create'),
     path('loyalty/rewards/<int:pk>/edit/', views.loyalty_reward_edit, name='loyalty_reward_edit'),
-    
-    # Payment Methods Management
+
+    # Promotions
+    path('promotions/', promotion_views.promotion_list, name='promotion_list'),
+    path('promotions/create/', promotion_views.promotion_create, name='promotion_create'),
+    path('promotions/<int:pk>/edit/', promotion_views.promotion_edit, name='promotion_edit'),
+    path('promotions/<int:pk>/toggle/', promotion_views.promotion_toggle, name='promotion_toggle'),
+    path('promotions/<int:pk>/delete/', promotion_views.promotion_delete, name='promotion_delete'),
+    path('api/promotions/validate/', promotion_views.validate_promo_code, name='validate_promo_code'),
+
     path('payment-methods/', views.payment_method_list, name='payment_method_list'),
     path('payment-methods/create/', views.payment_method_create, name='payment_method_create'),
     path('payment-methods/<int:pk>/edit/', views.payment_method_edit, name='payment_method_edit'),
@@ -345,6 +403,33 @@ business_urlpatterns = [
     # Offline Sync API
     path('api/sales/sync/', sync_views.sync_sale, name='api_sync_sale'),
     path('api/sync/status/', sync_views.sync_status, name='api_sync_status'),
+
+    # Webhooks
+    path('webhooks/', webhook_views.webhook_list, name='webhook_list'),
+    path('webhooks/create/', webhook_views.webhook_create, name='webhook_create'),
+    path('webhooks/<int:pk>/edit/', webhook_views.webhook_edit, name='webhook_edit'),
+    path('webhooks/<int:pk>/delete/', webhook_views.webhook_delete, name='webhook_delete'),
+    path('webhooks/<int:pk>/test/', webhook_views.webhook_test, name='webhook_test'),
+    path('webhooks/<int:pk>/deliveries/', webhook_views.webhook_deliveries, name='webhook_deliveries'),
+
+    # Integration Hub + Exports
+    path('integrations/', webhook_views.integration_hub, name='integration_hub'),
+    path('integrations/export/sales.csv', webhook_views.export_sales_csv, name='export_sales_csv'),
+    path('integrations/export/sales.json', webhook_views.export_sales_json, name='export_sales_json'),
+    path('integrations/export/products.csv', webhook_views.export_products_csv, name='export_products_csv'),
+    path('integrations/export/customers.csv', webhook_views.export_customers_csv, name='export_customers_csv'),
+
+    # Multi-Branch
+    path('branches/', branch_views.branch_list, name='branch_list'),
+    path('branches/<int:branch_id>/', branch_views.branch_detail, name='branch_detail'),
+    path('branches/<int:branch_id>/stock/', branch_views.branch_stock, name='branch_stock'),
+    path('branches/<int:branch_id>/transfers/', branch_views.transfer_list, name='transfer_list'),
+    path('branches/<int:branch_id>/transfers/create/', branch_views.transfer_create, name='transfer_create'),
+    path('branches/<int:branch_id>/staff/', branch_views.branch_membership_list, name='branch_membership_list'),
+    path('branches/<int:branch_id>/prices/', branch_views.price_override_list, name='price_override_list'),
+    path('transfers/', branch_views.business_transfer_list, name='business_transfer_list'),
+    path('reports/consolidated/', branch_views.consolidated_report, name='consolidated_report'),
+    path('api/branch/set/', branch_views.set_active_branch, name='set_active_branch'),
 ]
 
 # Combine all patterns

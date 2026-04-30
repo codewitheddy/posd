@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0053_add_purchase_cancellation_tracking.py
+# hypothesis_version: 6.151.10
+
+['cancellation_reason', 'cancelled_at', 'cancelled_by', 'cancelled_purchases', 'pos', 'purchase']

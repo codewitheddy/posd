@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0082_backfill_expense_business.py
+# hypothesis_version: 6.151.10
+
+['0081_branch_models', 'Expense', 'business', 'business_id', 'category', 'expense', 'expenses', 'pos', 'pos.business']

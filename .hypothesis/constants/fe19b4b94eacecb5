@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django_ratelimit\checks.py
+# hypothesis_version: 6.151.10
+
+['BACKEND', 'CACHES', 'RATELIMIT_USE_CACHE', 'default', 'django_ratelimit', 'is not a real cache']

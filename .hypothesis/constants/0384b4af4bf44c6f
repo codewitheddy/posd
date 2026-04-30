@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0062_add_kenyan_tax_compliance.py
+# hypothesis_version: 6.151.10
+
+[200, 255, 'business', 'created_at', 'cu_number', 'cu_serial_number', 'excise_rate', 'hs_code', 'hs_code_description', 'is_excisable', 'kra_pin', 'pos', 'product', 'sale', 'tims_enabled', 'tims_invoice_number', 'tims_last_sync', 'tims_qr_code', 'tims_sync_date', 'tims_synced']

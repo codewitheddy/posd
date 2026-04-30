@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0038_purchaseitem_quantity_damaged_and_more.py
+# hypothesis_version: 6.151.10
+
+['Quantity ordered', 'pos', 'purchaseitem', 'quantity', 'quantity_damaged', 'quantity_received', 'receiving_notes']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\kombu\utils\url.py
+# hypothesis_version: 6.151.10
+
+['**', '/', ':', '://', '@', 'CERT_NONE', 'CERT_OPTIONAL', 'CERT_REQUIRED', 'false', 'http://', 'none', 'optional', 'required', 'ssl', 'ssl_', 'ssl_cert_reqs', 'ssl_check_hostname']

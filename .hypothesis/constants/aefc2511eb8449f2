@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0003_product_low_stock_threshold_product_stock_quantity_and_more.py
+# hypothesis_version: 6.151.10
+
+['-created_at', 'Customer Return', 'Damage/Loss', 'ID', 'Restock', 'Sale', 'Stock Correction', 'StockAdjustment', 'adjustment_type', 'correction', 'created_at', 'damage', 'id', 'low_stock_threshold', 'new_quantity', 'ordering', 'pos', 'pos.product', 'previous_quantity', 'product', 'quantity_change', 'reason', 'restock', 'return', 'sale', 'stock_adjustments', 'stock_quantity']

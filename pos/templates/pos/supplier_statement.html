@@ -1,202 +1,441 @@
 {% extends 'pos/base.html' %}
+{% block title %}Statement — {{ supplier.name }}{% endblock %}
 
-{% block title %}Supplier Statement - {{ supplier.name }}{% endblock %}
+{% block extra_css %}
+<style>
+/* ── Full-width, no max-width constraint ── */
+.stmt-page { padding: 0 4px; }
+
+/* ── Top bar ── */
+.stmt-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ── Statement document header ── */
+.stmt-doc-header {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.stmt-doc-header .biz-name  { font-size: 18px; font-weight: 800; color: #1a202c; }
+.stmt-doc-header .biz-meta  { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+.stmt-doc-header .sup-name  { font-size: 16px; font-weight: 700; color: #1a202c; }
+.stmt-doc-header .sup-meta  { font-size: 12px; color: #6b7280; margin-top: 3px; line-height: 1.7; }
+.stmt-doc-header .stmt-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #9ca3af; margin-bottom: 4px;
+}
+.stmt-doc-header .stmt-period { font-size: 14px; font-weight: 600; color: #374151; }
+.stmt-divider { border: none; border-top: 1px solid #f0f2f5; margin: 16px 0; }
+
+/* ── Filter bar ── */
+.stmt-filter {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+/* ── KPI strip ── */
+.stmt-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media (max-width: 1100px) { .stmt-kpis { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px)  { .stmt-kpis { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
+             letter-spacing: .05em; color: #9ca3af; margin-bottom: 5px; }
+.kpi-value { font-size: 15px; font-weight: 700; color: #1a202c; }
+.kpi-sub   { font-size: 10px; color: #9ca3af; margin-top: 3px; }
+.kpi-accent-red    {}
+.kpi-accent-green  {}
+.kpi-accent-blue   {}
+.kpi-accent-amber  {}
+.kpi-accent-gray   {}
+
+/* ── Ledger ── */
+.stmt-ledger {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  margin-bottom: 16px;
+}
+.stmt-ledger-header {
+  padding: 13px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a202c;
+}
+
+.ledger { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+.ledger thead th {
+  background: #f8f9fc;
+  padding: 9px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.ledger tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f5f5f5;
+  vertical-align: top;
+  color: #374151;
+}
+.ledger tbody tr:last-child td { border-bottom: none; }
+.ledger tbody tr:hover td { background: #fafbfc; }
+
+.row-opening td { background: #eff6ff !important; }
+.row-totals  td { background: #f8f9fc !important; font-weight: 700;
+                  border-top: 2px solid #e5e7eb !important; }
+
+/* Type pills */
+.pill {
+  display: inline-block; padding: 2px 7px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.pill-purchase { background: #fee2e2; color: #b91c1c; }
+.pill-payment  { background: #dcfce7; color: #15803d; }
+.pill-return   { background: #dbeafe; color: #1d4ed8; }
+.pill-partial  { background: #fef9c3; color: #92400e; }
+
+/* Balance colours */
+.c-owe  { color: #dc2626; font-weight: 600; }
+.c-ok   { color: #16a34a; font-weight: 600; }
+.c-zero { color: #9ca3af; }
+
+/* ── Print ── */
+@media print {
+  .no-print { display: none !important; }
+  .stmt-doc-header, .stmt-ledger, .kpi {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+  }
+  body { background: #fff !important; }
+  .stmt-page { padding: 0; }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="page-header">
-        <div>
-            <h2><i class="bi bi-file-text"></i> Supplier Statement - {{ supplier.name }}</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug %}">Suppliers</a></li>
-                    <li class="breadcrumb-item active">Statement</li>
-                </ol>
-            </nav>
+<div class="container-fluid py-3 px-3 px-md-4 stmt-page">
+
+  <!-- ── Top bar ── -->
+  <div class="stmt-topbar no-print">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0" style="font-size:13px">
+        <li class="breadcrumb-item"><a href="{% url 'dashboard' slug=request.business.slug %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'supplier_list' slug=request.business.slug %}">Suppliers</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'supplier_edit' slug=request.business.slug pk=supplier.id %}">{{ supplier.name }}</a></li>
+        <li class="breadcrumb-item active">Statement</li>
+      </ol>
+    </nav>
+    <div class="d-flex gap-2">
+      <button onclick="window.print()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-printer me-1"></i>Print
+      </button>
+      <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}"
+         class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-cash-coin me-1"></i>Payments
+      </a>
+      <a href="{% url 'create_payment' slug=request.business.slug supplier_id=supplier.id %}"
+         class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>Record Payment
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show no-print">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- ── Statement document header ── -->
+  <div class="stmt-doc-header">
+    <div class="row align-items-start g-3">
+
+      <!-- Business (issuer) -->
+      <div class="col-md-4">
+        <div class="biz-name">{{ request.business.name }}</div>
+        <div class="biz-meta">
+          {% if request.business.address %}{{ request.business.address }}<br>{% endif %}
+          {% if request.business.phone %}{{ request.business.phone }}{% endif %}
+          {% if request.business.email %} &middot; {{ request.business.email }}{% endif %}
+          {% if request.business.tax_id %}<br>KRA PIN: {{ request.business.tax_id }}{% endif %}
         </div>
-        <div class="d-flex gap-2">
-            <button onclick="location.reload(true)" class="btn-action" title="Refresh statement">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
-            <a href="{% url 'supplier_payments' slug=request.business.slug supplier_id=supplier.id %}" class="btn btn-primary">
-                <i class="bi bi-cash-coin"></i> View Payments
-            </a>
+      </div>
+
+      <!-- Statement title + period (centre) -->
+      <div class="col-md-4 text-center">
+        <div class="stmt-title">Statement of Account</div>
+        <div class="stmt-period">
+          {% if start_date %}
+            {{ start_date|date:"d M Y" }} — {{ end_date|date:"d M Y" }}
+          {% else %}
+            Up to {{ end_date|date:"d M Y" }}
+          {% endif %}
         </div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px">
+          Generated {{ end_date|date:"d M Y" }}
+        </div>
+      </div>
+
+      <!-- Supplier (recipient) -->
+      <div class="col-md-4 text-md-end">
+        <div class="stmt-title">Supplier</div>
+        <div class="sup-name">{{ supplier.name }}</div>
+        <div class="sup-meta">
+          {% if supplier.contact_person %}<span><i class="bi bi-person me-1"></i>{{ supplier.contact_person }}</span><br>{% endif %}
+          {% if supplier.phone %}<span><i class="bi bi-telephone me-1"></i>{{ supplier.phone }}</span><br>{% endif %}
+          {% if supplier.email %}<span><i class="bi bi-envelope me-1"></i>{{ supplier.email }}</span><br>{% endif %}
+          {% if supplier.address %}<span><i class="bi bi-geo-alt me-1"></i>{{ supplier.address }}</span>{% endif %}
+        </div>
+      </div>
+
     </div>
 
-    <!-- Date Filter -->
-    <div class="filter-bar mb-4">
-        <form method="get" class="row g-3">
-            <div class="col-md-5">
-                <label class="form-label">Start Date</label>
-                <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d'|default:'' }}">
-            </div>
-            <div class="col-md-5">
-                <label class="form-label">End Date</label>
-                <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d'|default:'' }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">&nbsp;</label>
-                <div>
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-funnel"></i> Filter
-                    </button>
-                </div>
-            </div>
-        </form>
+    <!-- Balance highlight -->
+    <hr class="stmt-divider">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div style="font-size:13px;color:#6b7280">
+        {% if closing_balance > 0 %}
+          <i class="bi bi-exclamation-circle text-warning me-1"></i>
+          Outstanding amount owed to <strong>{{ supplier.name }}</strong>
+        {% elif closing_balance < 0 %}
+          <i class="bi bi-check-circle text-success me-1"></i>
+          Supplier owes you a credit of
+        {% else %}
+          <i class="bi bi-check-circle-fill text-success me-1"></i>
+          Account fully settled with <strong>{{ supplier.name }}</strong>
+        {% endif %}
+      </div>
+      <div style="font-size:22px;font-weight:800"
+           class="{% if closing_balance > 0 %}c-owe{% elif closing_balance < 0 %}c-ok{% else %}c-zero{% endif %}">
+        KES {{ closing_balance|floatformat:2 }}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Date filter ── -->
+  <div class="stmt-filter no-print">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4 col-sm-5">
+        <label class="form-label small fw-semibold mb-1">From</label>
+        <input type="date" name="start_date" class="form-control form-control-sm"
+               value="{{ start_date|date:'Y-m-d'|default:'' }}">
+      </div>
+      <div class="col-md-4 col-sm-5">
+        <label class="form-label small fw-semibold mb-1">To</label>
+        <input type="date" name="end_date" class="form-control form-control-sm"
+               value="{{ end_date|date:'Y-m-d'|default:'' }}">
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+        <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.id %}"
+           class="btn btn-outline-secondary btn-sm">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── KPI strip ── -->
+  <div class="stmt-kpis">
+    <div class="kpi">
+      <div class="kpi-label">Opening Balance</div>
+      <div class="kpi-value">KES {{ opening_balance|floatformat:2 }}</div>
+      <div class="kpi-sub">Before period</div>
+    </div>
+    <div class="kpi kpi-accent-red">
+      <div class="kpi-label">Purchases</div>
+      <div class="kpi-value c-owe">KES {{ total_purchases|floatformat:2 }}</div>
+      <div class="kpi-sub">Amount owed</div>
+    </div>
+    <div class="kpi kpi-accent-green">
+      <div class="kpi-label">Payments</div>
+      <div class="kpi-value c-ok">KES {{ total_payments|floatformat:2 }}</div>
+      <div class="kpi-sub">Cash paid out</div>
+    </div>
+    <div class="kpi kpi-accent-blue">
+      <div class="kpi-label">Returns</div>
+      <div class="kpi-value" style="color:#2563eb">KES {{ total_returns|floatformat:2|default:"0.00" }}</div>
+      <div class="kpi-sub">Credit notes</div>
+    </div>
+    <div class="kpi kpi-accent-green">
+      <div class="kpi-label">Net Credits</div>
+      <div class="kpi-value c-ok">KES {{ total_payments|add:total_returns|floatformat:2 }}</div>
+      <div class="kpi-sub">Payments + returns</div>
+    </div>
+    <div class="kpi {% if closing_balance > 0 %}kpi-accent-amber{% elif closing_balance < 0 %}kpi-accent-green{% else %}kpi-accent-gray{% endif %}">
+      <div class="kpi-label">Closing Balance</div>
+      <div class="kpi-value {% if closing_balance > 0 %}c-owe{% elif closing_balance < 0 %}c-ok{% else %}c-zero{% endif %}">
+        KES {{ closing_balance|floatformat:2 }}
+      </div>
+      <div class="kpi-sub">
+        {% if closing_balance > 0 %}You owe
+        {% elif closing_balance < 0 %}Supplier owes you
+        {% else %}Settled{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Ledger ── -->
+  <div class="stmt-ledger">
+    <div class="stmt-ledger-header">
+      <span><i class="bi bi-journal-text me-2 text-primary"></i>Transaction Ledger</span>
+      <span class="text-muted" style="font-size:12px;font-weight:400">
+        {{ transactions|length }} transaction{{ transactions|length|pluralize }}
+      </span>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="row mb-4">
-        <div class="col-md-2">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Opening Balance</div>
-                    <div class="stat-value" style="font-size:16px;">KES {{ opening_balance|floatformat:2 }}</div>
+    {% if transactions %}
+    <div class="table-responsive">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Reference</th>
+            <th>Description</th>
+            <th class="text-end">Debit (Purchases)</th>
+            <th class="text-end">Credit (Payments)</th>
+            <th class="text-end">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          {% if opening_balance != 0 %}
+          <tr class="row-opening">
+            <td colspan="3">
+              <i class="bi bi-arrow-right-circle me-1 text-primary"></i>
+              <strong>Opening Balance</strong>
+            </td>
+            <td class="text-end">—</td>
+            <td class="text-end">—</td>
+            <td class="text-end {% if opening_balance > 0 %}c-owe{% else %}c-ok{% endif %}">
+              <strong>KES {{ opening_balance|floatformat:2 }}</strong>
+            </td>
+          </tr>
+          {% endif %}
+
+          {% for trans in transactions %}
+          <tr>
+            <td class="text-nowrap" style="color:#6b7280;font-size:12px">{{ trans.date|date:"d M Y" }}</td>
+            <td>
+              <div class="fw-semibold" style="font-size:12px">{{ trans.reference }}</div>
+              {% if trans.type == 'purchase' %}
+                <span class="pill pill-purchase">Purchase</span>
+                {% if trans.ordered_amount != trans.received_amount %}
+                  <span class="pill pill-partial ms-1">Partial</span>
+                {% endif %}
+              {% elif trans.type == 'payment' %}
+                <span class="pill pill-payment">Payment</span>
+              {% elif trans.type == 'grn' %}
+                <span class="pill pill-return">Return</span>
+              {% endif %}
+            </td>
+            <td>
+              <div>{{ trans.description }}</div>
+              {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
+                <div style="font-size:11px;color:#9ca3af;margin-top:2px">
+                  Ordered: KES {{ trans.ordered_amount|floatformat:2 }}
+                  &nbsp;·&nbsp; Received: KES {{ trans.received_amount|floatformat:2 }}
                 </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Total Purchases</div>
-                    <div class="stat-value text-loss" style="font-size:16px;">KES {{ total_purchases|floatformat:2 }}</div>
+              {% elif trans.type == 'grn' and trans.credit_note %}
+                <div style="font-size:11px;color:#9ca3af;margin-top:2px">
+                  Credit Note: {{ trans.credit_note }}
                 </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Total Payments</div>
-                    <div class="stat-value text-profit" style="font-size:16px;">KES {{ total_payments|floatformat:2 }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Total Returns</div>
-                    <div class="stat-value" style="font-size:16px; color:#2563eb;">KES {{ total_returns|floatformat:2|default:"0.00" }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Net Credits</div>
-                    <div class="stat-value text-profit" style="font-size:16px;">KES {{ total_payments|add:total_returns|floatformat:2 }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Closing Balance</div>
-                    <div class="stat-value {% if closing_balance > 0 %}text-loss{% elif closing_balance < 0 %}text-profit{% endif %}" style="font-size:16px;">
-                        KES {{ closing_balance|floatformat:2 }}
-                    </div>
-                    <div class="stat-sub">
-                        {% if closing_balance > 0 %}You owe{% elif closing_balance < 0 %}Credit{% else %}Settled{% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
+              {% endif %}
+            </td>
+            <td class="text-end text-nowrap">
+              {% if trans.debit > 0 %}
+                <span class="c-owe">KES {{ trans.debit|floatformat:2 }}</span>
+              {% else %}
+                <span style="color:#d1d5db">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end text-nowrap">
+              {% if trans.credit > 0 %}
+                <span class="c-ok">KES {{ trans.credit|floatformat:2 }}</span>
+              {% else %}
+                <span style="color:#d1d5db">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end text-nowrap">
+              <span class="{% if trans.balance > 0 %}c-owe{% elif trans.balance < 0 %}c-ok{% else %}c-zero{% endif %}">
+                KES {{ trans.balance|floatformat:2 }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+
+          <!-- Totals -->
+          <tr class="row-totals">
+            <td colspan="3"><i class="bi bi-calculator me-1"></i>Period Totals</td>
+            <td class="text-end text-nowrap c-owe">KES {{ total_purchases|floatformat:2 }}</td>
+            <td class="text-end text-nowrap">
+              <span class="c-ok">KES {{ total_payments|add:total_returns|floatformat:2 }}</span>
+              <div style="font-size:10px;font-weight:400;color:#9ca3af;margin-top:2px">
+                Paid {{ total_payments|floatformat:2 }} + Returns {{ total_returns|floatformat:2|default:"0.00" }}
+              </div>
+            </td>
+            <td class="text-end text-nowrap">
+              <span class="{% if closing_balance > 0 %}c-owe{% elif closing_balance < 0 %}c-ok{% else %}c-zero{% endif %}">
+                KES {{ closing_balance|floatformat:2 }}
+              </span>
+              <div style="font-size:10px;font-weight:400;color:#9ca3af;margin-top:2px">
+                {% if closing_balance > 0 %}Outstanding{% elif closing_balance < 0 %}Overpaid{% else %}Settled{% endif %}
+              </div>
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
     </div>
 
-    <!-- Statement Card -->
-    <div class="ui-card">
-        <div class="ui-card-header">
-            <div>
-                <span class="ui-card-title">Statement of Account</span>
-                <div class="text-muted" style="font-size:12px;">
-                    {% if start_date %}From {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}
-                    {% else %}Up to {{ end_date|date:"d M Y" }}{% endif %}
-                </div>
-            </div>
-            <div class="text-end">
-                <strong>{{ supplier.name }}</strong>
-                <div class="text-muted" style="font-size:12px;">{{ supplier.contact_person }} &middot; {{ supplier.phone }}</div>
-            </div>
-        </div>
-        <div class="ui-card-body p-0">
-            {% if transactions %}
-            <div class="table-responsive">
-                <table class="ui-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Reference</th>
-                            <th>Description</th>
-                            <th class="text-end">Debit (Purchases)</th>
-                            <th class="text-end">Credit (Payments)</th>
-                            <th class="text-end">Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if opening_balance != 0 %}
-                        <tr style="background:#dbeafe;">
-                            <td colspan="3"><strong>Opening Balance</strong></td>
-                            <td class="text-end">-</td>
-                            <td class="text-end">-</td>
-                            <td class="text-end"><strong>KES {{ opening_balance|floatformat:2 }}</strong></td>
-                        </tr>
-                        {% endif %}
-
-                        {% for trans in transactions %}
-                        <tr>
-                            <td>{{ trans.date|date:"Y-m-d" }}</td>
-                            <td>
-                                {{ trans.reference }}
-                                {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
-                                    <span class="status-badge status-warning ms-1">Partial</span>
-                                {% elif trans.type == 'grn' %}
-                                    <span class="status-badge status-info ms-1">Return</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {{ trans.description }}
-                                {% if trans.type == 'purchase' and trans.ordered_amount != trans.received_amount %}
-                                    <br><small class="text-muted">Ordered: KES {{ trans.ordered_amount|floatformat:2 }} | Received: KES {{ trans.received_amount|floatformat:2 }}</small>
-                                {% elif trans.type == 'grn' and trans.credit_note %}
-                                    <br><small class="text-muted">Credit Note: {{ trans.credit_note }}</small>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">
-                                {% if trans.debit > 0 %}<span class="text-danger">KES {{ trans.debit|floatformat:2 }}</span>{% else %}-{% endif %}
-                            </td>
-                            <td class="text-end">
-                                {% if trans.credit > 0 %}<span class="text-success">KES {{ trans.credit|floatformat:2 }}</span>{% else %}-{% endif %}
-                            </td>
-                            <td class="text-end">
-                                <strong class="{% if trans.balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                    KES {{ trans.balance|floatformat:2 }}
-                                </strong>
-                            </td>
-                        </tr>
-                        {% endfor %}
-
-                        <tr style="background:#ede9fe; font-weight:700;">
-                            <td colspan="3">Totals</td>
-                            <td class="text-end text-danger">KES {{ total_purchases|floatformat:2 }}</td>
-                            <td class="text-end text-success">
-                                KES {{ total_payments|add:total_returns|floatformat:2 }}
-                                <br><small class="text-muted fw-normal">(Payments: {{ total_payments|floatformat:2 }} + Returns: {{ total_returns|floatformat:2|default:"0.00" }})</small>
-                            </td>
-                            <td class="text-end {% if closing_balance > 0 %}text-danger{% else %}text-success{% endif %}">
-                                KES {{ closing_balance|floatformat:2 }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="empty-state">
-                <i class="bi bi-file-text"></i>
-                <p>No transactions found for the selected period.</p>
-            </div>
-            {% endif %}
-        </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal-x" style="font-size:2.5rem;display:block;margin-bottom:12px;opacity:.35"></i>
+      No transactions found for the selected period.
+      <div class="mt-2">
+        <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.id %}"
+           class="btn btn-outline-secondary btn-sm">View all transactions</a>
+      </div>
     </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Footer ── -->
+  <div class="text-muted text-center no-print" style="font-size:11px;padding-bottom:24px">
+    Positive balance = amount owed to supplier &nbsp;·&nbsp; {{ request.business.name }}
+  </div>
+
 </div>
 {% endblock %}

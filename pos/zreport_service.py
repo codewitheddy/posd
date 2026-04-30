@@ -179,6 +179,19 @@ class ZReportService:
         
         # Generate hash
         data_hash = ZReportService._generate_hash(report_data)
+
+        # Ensure all values are JSON-serializable (convert any remaining Decimals)
+        import json as _json
+        from decimal import Decimal as _Decimal
+
+        class _SafeEncoder(_json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, _Decimal):
+                    return float(obj)
+                return super().default(obj)
+
+        # Round-trip through JSON to sanitize all Decimal values
+        report_data = _json.loads(_json.dumps(report_data, cls=_SafeEncoder))
         
         # Get next Z-number (thread-safe)
         z_number = ZReportService._get_next_z_number(session.business)
@@ -335,8 +348,8 @@ class ZReportService:
         top_products = [
             {
                 'name': item['product__name'],
-                'quantity': item['quantity'],
-                'revenue': float(item['revenue'])
+                'quantity': float(item['quantity'] or 0),
+                'revenue': float(item['revenue'] or 0)
             }
             for item in top_products_data
         ]
@@ -396,15 +409,16 @@ class ZReportService:
     def _generate_hash(report_data: Dict) -> str:
         """
         Generate SHA256 hash of report data for integrity verification.
-        
-        Args:
-            report_data: Report data dictionary
-            
-        Returns:
-            SHA256 hash as hex string
         """
-        # Convert to JSON with sorted keys for consistent hashing
-        data_string = json.dumps(report_data, sort_keys=True)
+        from decimal import Decimal as _Decimal
+
+        class _SafeEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, _Decimal):
+                    return float(obj)
+                return super().default(obj)
+
+        data_string = json.dumps(report_data, sort_keys=True, cls=_SafeEncoder)
         return hashlib.sha256(data_string.encode()).hexdigest()
     
     @staticmethod

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\redis\redis_cluster.py
+# hypothesis_version: 6.151.10
+
+['RedisCluster[Any]', 'Span', 'cluster_client', 'host', 'port']

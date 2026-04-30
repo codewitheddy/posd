@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\_asgi_common.py
+# hypothesis_version: 6.151.10
+
+[443, '%s://%s%s', '%s://%s:%s%s', ',', ', ', 'Any', 'Dict[str, Any]', 'Dict[str, str]', 'REMOTE_ADDR', 'client', 'env', 'headers', 'host', 'http', 'https', 'latin-1', 'method', 'path', 'query_string', 'root_path', 'scheme', 'server', 'type', 'url', 'websocket', 'ws', 'wss', 'x-forwarded-for', 'x-real-ip']

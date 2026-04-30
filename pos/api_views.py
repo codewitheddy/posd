@@ -7,12 +7,13 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.exceptions import ValidationError
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Q, F
 from datetime import datetime, timedelta
-
+from django_ratelimit.decorators import ratelimit
 from .models import (
     Product, Category, Sale, SaleItem, Customer, Supplier,
     Purchase, PurchaseItem, StockAdjustment, UserProfile,
@@ -26,6 +27,21 @@ from .serializers import (
     ActivityLogSerializer, LoyaltyTransactionSerializer, LoyaltyRewardSerializer,
     PaymentMethodSerializer, SyncRequestSerializer, SyncResponseSerializer
 )
+from .throttling import LoginThrottle, AuthThrottle
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom token obtain view with rate limiting for login attempts
+    """
+    throttle_classes = [LoginThrottle]
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """
+    Custom token refresh view with rate limiting
+    """
+    throttle_classes = [AuthThrottle]
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -33,15 +49,52 @@ class ProductViewSet(viewsets.ModelViewSet):
     API endpoint for products
     Supports filtering, searching, and pagination
     """
-    queryset = Product.objects.all()
+    queryset = Product.objects.all().select_related('category', 'brand')
     serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'product_code', 'barcode']
-    ordering_fields = ['name', 'price', 'stock_quantity', 'created_at']
+    ordering_fields = ['name', 'unit_price', 'stock_quantity', 'created_at']
     ordering = ['-created_at']
+
+    def _get_request_business(self):
+        """Resolve the business context for the current request."""
+        business = getattr(self.request, 'business', None)
+        if business is not None:
+            return business
+
+        if self.request.user.is_superuser:
+            return None
+
+        memberships = getattr(self.request.user, 'business_memberships', None)
+        if memberships is None:
+            return None
+
+        active_memberships = memberships.filter(is_active=True).select_related('business')
+        if active_memberships.count() == 1:
+            return active_memberships.first().business
+        return None
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['business'] = self._get_request_business()
+        return context
     
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        # Scope products to the current business context.
+        business = getattr(self.request, 'business', None)
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        elif self.request.user.is_superuser:
+            queryset = queryset
+        else:
+            memberships = getattr(self.request.user, 'business_memberships', None)
+            if memberships is None:
+                return queryset.none()
+            business_ids = memberships.filter(is_active=True).values_list('business_id', flat=True)
+            queryset = queryset.filter(business_id__in=business_ids)
         
         # Filter by category
         category_id = self.request.query_params.get('category', None)
@@ -68,11 +121,20 @@ class ProductViewSet(viewsets.ModelViewSet):
                 pass
         
         return queryset
+
+    def perform_create(self, serializer):
+        business = self._get_request_business()
+        if business is None:
+            raise ValidationError(
+                'Unable to determine business for this product creation request. '
+                'Use a business-scoped request context.'
+            )
+        serializer.save(business=business)
     
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
         """Get products with low stock"""
-        products = self.queryset.filter(
+        products = self.get_queryset().filter(
             stock_quantity__lte=F('low_stock_threshold'),
             is_active=True
         )
@@ -85,7 +147,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         days = int(request.query_params.get('days', 30))
         cutoff_date = timezone.now().date() + timedelta(days=days)
         
-        products = self.queryset.filter(
+        products = self.get_queryset().filter(
             expiry_date__lte=cutoff_date,
             expiry_date__gte=timezone.now().date(),
             is_active=True
@@ -105,12 +167,62 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 class CustomerViewSet(viewsets.ModelViewSet):
     """API endpoint for customers"""
-    queryset = Customer.objects.all()
+    queryset = Customer.objects.all().select_related('business')
     serializer_class = CustomerSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'email', 'phone']
     ordering_fields = ['name', 'total_purchases', 'loyalty_points', 'created_at']
     ordering = ['-created_at']
+
+    def _get_request_business(self):
+        """Resolve the business context for the current request."""
+        business = getattr(self.request, 'business', None)
+        if business is not None:
+            return business
+
+        if self.request.user.is_superuser:
+            return None
+
+        memberships = getattr(self.request.user, 'business_memberships', None)
+        if memberships is None:
+            return None
+
+        active_memberships = memberships.filter(is_active=True).select_related('business')
+        if active_memberships.count() == 1:
+            return active_memberships.first().business
+        return None
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        business = getattr(self.request, 'business', None)
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        elif self.request.user.is_superuser:
+            queryset = queryset
+        else:
+            memberships = getattr(self.request.user, 'business_memberships', None)
+            if memberships is None:
+                return queryset.none()
+            business_ids = memberships.filter(is_active=True).values_list('business_id', flat=True)
+            queryset = queryset.filter(business_id__in=business_ids)
+
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['business'] = self._get_request_business()
+        return context
+
+    def perform_create(self, serializer):
+        business = self._get_request_business()
+        if business is None:
+            raise ValidationError(
+                'Unable to determine business for this customer creation request. '
+                'Use a business-scoped request context.'
+            )
+        serializer.save(business=business)
     
     @action(detail=True, methods=['post'])
     def add_points(self, request, pk=None):
@@ -139,9 +251,29 @@ class SupplierViewSet(viewsets.ModelViewSet):
     """API endpoint for suppliers"""
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'contact_person', 'email', 'phone']
     ordering = ['name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Prefer middleware-provided business context.
+        business = getattr(self.request, 'business', None)
+        if business is not None:
+            return queryset.filter(business=business)
+
+        # Fallback for API clients: scope by active business memberships.
+        if self.request.user.is_superuser:
+            return queryset
+
+        memberships = getattr(self.request.user, 'business_memberships', None)
+        if memberships is None:
+            return queryset.none()
+
+        business_ids = memberships.filter(is_active=True).values_list('business_id', flat=True)
+        return queryset.filter(business_id__in=business_ids)
 
 
 class SaleViewSet(viewsets.ModelViewSet):
@@ -284,7 +416,7 @@ class BusinessSettingsViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """API endpoint for users (read-only)"""
-    queryset = User.objects.filter(is_active=True)
+    queryset = User.objects.filter(is_active=True).select_related('userprofile').prefetch_related('groups')
     serializer_class = UserSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['username', 'first_name', 'last_name', 'email']
@@ -294,6 +426,7 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
 def sync_pull(request):
     """
     Pull updates from server
@@ -356,6 +489,7 @@ def sync_pull(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate='20/m', method='POST', block=True)
 def sync_push(request):
     """
     Push local changes to server

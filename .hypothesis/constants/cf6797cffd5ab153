@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0027_add_cost_price_to_product.py
+# hypothesis_version: 6.151.10
+
+['0.00', 'Product', 'cost_price', 'pos', 'product']

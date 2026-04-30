@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\schemas\coreapi.py
+# hypothesis_version: 6.151.10
+
+['*/*', '/', 'PATCH', 'POST', 'PUT', 'action', 'application/json', 'base_template', 'body', 'create', 'data', 'date', 'date-time', 'delete', 'destroy', 'filter_backends', 'form', 'get', 'get_serializer', 'head', 'list', 'lookup_value_regex', 'media_type', 'model', 'multipart/form-data', 'pagination_class', 'parser_classes', 'partial_update', 'patch', 'path', 'pattern', 'post', 'put', 'queryset', 'retrieve', 'textarea', 'textarea.html', 'update', '{', '{}_{}']

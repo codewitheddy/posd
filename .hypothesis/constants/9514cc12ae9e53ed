@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0080_apikey.py
+# hypothesis_version: 6.151.10
+
+[100, '-created_at', '0079_webhooks', 'APIKey', 'api_keys', 'business', 'created_api_keys', 'created_at', 'created_by', 'id', 'is_active', 'key', 'last_used_at', 'name', 'ordering', 'pos', 'pos.business']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\celery\utils\dispatch\signal.py
+# hypothesis_version: 6.151.10
+
+['Signal', '__func__', '__traceback__', 'dispatch_uid', 'in', 'receiver', 'weak', 'when']

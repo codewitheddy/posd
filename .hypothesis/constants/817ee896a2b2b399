@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0040_add_variable_pricing.py
+# hypothesis_version: 6.151.10
+
+['1.000', 'is_variable_price', 'pos', 'price_per_unit', 'product']

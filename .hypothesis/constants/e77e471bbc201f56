@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\decorators.py
+# hypothesis_version: 6.151.10
+
+['-', 'GET', 'WrappedAPIView', '_', '__doc__', 'delete', 'description', 'get', 'head', 'name', 'options', 'parser_classes', 'patch', 'permission_classes', 'post', 'put', 'renderer_classes', 'schema', 'suffix', 'throttle_classes', 'trace']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\vine\synchronization.py
+# hypothesis_version: 6.151.10
+
+['__dict__', '__weakref__', '_value', 'args', 'barrier', 'cancelled', 'finalized', 'kwargs', 'p', 'ready', 'reason', 'size']

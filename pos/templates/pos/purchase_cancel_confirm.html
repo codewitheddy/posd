@@ -11,10 +11,10 @@
   </div>
   <div class="confirm-card-body">
 
-    {% if purchase.status in 'received,closed' %}
+    {% if purchase.status == 'received' or purchase.status == 'closed' %}
     <div class="alert alert-danger mb-3" style="font-size:13px;">
       <i class="bi bi-x-circle me-1"></i><strong>Cannot Cancel Received Purchase Order.</strong>
-      Stock has already been updated. To return items, create a <a href="{% url 'grn_create' slug=request.business.slug %}" class="alert-link">Goods Returned Note (GRN)</a>.
+      Stock has already been updated. To return items, create a <a href="{% url 'grn_create' slug=request.business.slug %}?purchase_id={{ purchase.id }}" class="alert-link">Goods Returned Note (GRN)</a>.
     </div>
     <a href="{% url 'purchase_detail' slug=request.business.slug pk=purchase.pk %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-arrow-left me-1"></i>Back to Purchase

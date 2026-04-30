@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\integrations\asgi.py
+# hypothesis_version: 6.151.10
+
+[400, 'Any', 'Attributes', 'Dict[str, Any]', 'Event', 'Hint', 'Optional[Event]', 'Optional[int]', 'SentryAsgiMiddleware', 'Tuple[str, ...]', 'Tuple[str, str]', '__await__', '__call__', '_experiments', 'app', 'asgi', 'asgi.type', 'asgi_scope', 'endpoint', 'error', 'generic ASGI request', 'handled', 'http', 'http.response.start', 'lifespan', 'manual', 'mechanism_type', 'method', 'ok', 'path', 'request', 'route', 'sentry.op', 'sentry.origin', 'sentry.span.source', 'source', 'span_origin', 'starlette', 'status', 'transaction', 'transaction_info', 'transaction_style', 'type', 'url', 'value', 'websocket', 'ws', '{}.server']

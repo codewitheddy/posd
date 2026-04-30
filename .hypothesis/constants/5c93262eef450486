@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0003_fix_paymentmethod_unique.py
+# hypothesis_version: 6.151.10
+
+['0002_multi_tenancy', 'business', 'code', 'paymentmethod', 'pos']

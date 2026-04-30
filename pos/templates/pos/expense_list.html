@@ -40,7 +40,7 @@
     <p class="text-muted small mb-0">Track and manage business expenses</p>
   </div>
   <div class="d-flex gap-2">
-    <a href="{% url 'expense_export_csv' slug=request.business.slug %}?period={{ period }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
+    <a href="{% url 'expense_export_csv' slug=request.business.slug %}?period={% if period == 'custom' and date_from_input and date_to_input %}custom{% else %}{{ resolved_period }}{% endif %}{% if cat_id %}&category={{ cat_id }}{% endif %}{% if pm %}&payment_method={{ pm }}{% endif %}{% if period == 'custom' and date_from_input and date_to_input %}&date_from={{ date_from_input|date:'Y-m-d' }}&date_to={{ date_to_input|date:'Y-m-d' }}{% endif %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
     <a href="{% url 'expense_create' slug=request.business.slug %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Add Expense</a>
   </div>
 </div>
@@ -84,9 +84,9 @@
           {% endfor %}
         </div>
       </div>
-      {% if period == 'custom' %}
-      <div class="col-auto"><input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}"></div>
-      <div class="col-auto"><input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}"></div>
+      {% if show_custom_picker %}
+      <div class="col-auto"><input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from_input|date:'Y-m-d' }}"></div>
+      <div class="col-auto"><input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to_input|date:'Y-m-d' }}"></div>
       {% endif %}
       <input type="hidden" name="period" value="{{ period }}">
       <div class="col-auto">

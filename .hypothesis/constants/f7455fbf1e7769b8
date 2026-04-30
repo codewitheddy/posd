@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django_ratelimit\core.py
+# hypothesis_version: 6.151.10
+
+['%d/%ds', '-', '.', ':', 'HTTP_', 'RATELIMIT_ENABLE', 'RATELIMIT_FAIL_OPEN', 'RATELIMIT_IPV4_MASK', 'RATELIMIT_IPV6_MASK', 'RATELIMIT_USE_CACHE', 'REMOTE_ADDR', '_', '__module__', '__self__', 'bound_func', 'count', 'd', 'default', 'get', 'get_usage', 'h', 'header', 'ip', 'is_ratelimited', 'limit', 'm', 'post', 'rl:', 's', 'should_limit', 'time_left', 'user', 'user_or_ip', 'utf-8']

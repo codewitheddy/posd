@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0087_heldorder.py
+# hypothesis_version: 6.151.10
+
+[100, '-created_at', 'HeldOrder', 'ID', 'business', 'cart_json', 'cashier', 'created_at', 'customer_json', 'discount_type', 'discount_value', 'held_orders', 'id', 'name', 'ordering', 'percentage', 'pos', 'pos.business', 'total_amount']

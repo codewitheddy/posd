@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\throttling.py
+# hypothesis_version: 6.151.10
+
+['2/minute', '3/minute', '5/minute', 'auth', 'login']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\contrib\admindocs\views.py
+# hypothesis_version: 6.151.10
+
+['%s.all', '%s.count', ', ', '.', '/', ':', '=', 'Integer', 'List', '_', '_count', '_list', 'add_', 'all %s', 'app_label', 'arguments', 'body', 'callback', 'contents', 'data_type', 'delete', 'description', 'exists', 'fields', 'file', 'filter', 'filter:', 'filters', 'full_name', 'get_', 'get_dirs', 'help_text', 'library', 'meta', 'methods', 'model', 'model:', 'model_name', 'models', 'name', 'namespace', 'number of %s', 'object_name', 'order', 'save', 'set_', 'summary', 'tag', 'tag:', 'tags', 'template', 'templates', 'title', 'url', 'url_name', 'url_patterns', 'verbose', 'view', 'view:', 'views']

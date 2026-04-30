@@ -1,0 +1,137 @@
+{% extends 'pos/base.html' %}
+{% block title %}Promotions{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <div class="page-header mb-3">
+    <div>
+      <h1><i class="bi bi-tag me-2 text-primary"></i>Promotions</h1>
+      <p class="page-subtitle">Manage discount campaigns, BOGO deals, happy hours and more</p>
+    </div>
+    <a href="{% url 'promotion_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Promotion
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Stats -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-primary">{{ promos|length }}</div>
+        <div class="text-muted small">Total</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-3 fw-bold text-success">{{ active_count }}</div>
+        <div class="text-muted small">Active Now</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Name</th>
+              <th>Type</th>
+              <th>Code</th>
+              <th>Discount</th>
+              <th>Validity</th>
+              <th>Uses</th>
+              <th>Status</th>
+              <th style="width:130px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in promos %}
+            <tr>
+              <td class="ps-3">
+                <div class="fw-semibold">{{ p.name }}</div>
+                {% if p.description %}<div class="text-muted small">{{ p.description|truncatechars:60 }}</div>{% endif %}
+              </td>
+              <td>
+                {% if p.promo_type == 'percentage' %}<span class="badge bg-primary-subtle text-primary border border-primary-subtle">% Off</span>
+                {% elif p.promo_type == 'fixed' %}<span class="badge bg-info-subtle text-info border border-info-subtle">Fixed Off</span>
+                {% elif p.promo_type == 'buy_x_get_y' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Buy X Get Y</span>
+                {% elif p.promo_type == 'price_cut' %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Price Cut</span>
+                {% elif p.promo_type == 'bundle' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Bundle</span>
+                {% elif p.promo_type == 'happy_hour' %}<span class="badge bg-orange-subtle border" style="background:#fff3e0;color:#e65100;border-color:#ffcc80!important">Happy Hour</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.code %}
+                  <code class="bg-light px-2 py-1 rounded">{{ p.code }}</code>
+                {% else %}
+                  <span class="text-muted small">Auto-apply</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.promo_type == 'percentage' or p.promo_type == 'happy_hour' %}{{ p.discount_value }}%
+                {% elif p.promo_type == 'fixed' %}KES {{ p.discount_value }}
+                {% elif p.promo_type == 'buy_x_get_y' %}Buy {{ p.buy_quantity }} Get {{ p.get_quantity }} Free
+                {% elif p.promo_type == 'price_cut' %}KES {{ p.discount_value }} each
+                {% elif p.promo_type == 'bundle' %}KES {{ p.discount_value }} total
+                {% endif %}
+              </td>
+              <td class="small">
+                <div>{{ p.start_date|date:"d M Y" }}</div>
+                <div class="text-muted">→ {{ p.end_date|date:"d M Y" }}</div>
+                {% if p.promo_type == 'happy_hour' and p.happy_hour_start %}
+                  <div class="text-warning small">⏰ {{ p.happy_hour_start|time:"H:i" }}–{{ p.happy_hour_end|time:"H:i" }}</div>
+                {% endif %}
+              </td>
+              <td class="small">
+                {{ p.uses_count }}{% if p.max_uses %} / {{ p.max_uses }}{% else %} / ∞{% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ p.get_status_display_badge }}">{{ p.get_status_label }}</span>
+              </td>
+              <td class="text-end pe-3">
+                <a href="{% url 'promotion_edit' slug=request.business.slug pk=p.pk %}"
+                   class="btn btn-outline-primary btn-sm me-1">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'promotion_toggle' slug=request.business.slug pk=p.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm {% if p.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}" title="{% if p.is_active %}Disable{% else %}Enable{% endif %}">
+                    <i class="bi bi-{% if p.is_active %}pause{% else %}play{% endif %}"></i>
+                  </button>
+                </form>
+                <form method="post" action="{% url 'promotion_delete' slug=request.business.slug pk=p.pk %}" class="d-inline"
+                      onsubmit="return confirm('Delete promotion {{ p.name|escapejs }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-danger btn-sm ms-1">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" class="text-center py-5 text-muted">
+                <i class="bi bi-tag fs-2 d-block mb-2"></i>
+                No promotions yet.
+                <a href="{% url 'promotion_create' slug=request.business.slug %}">Create your first one</a>.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

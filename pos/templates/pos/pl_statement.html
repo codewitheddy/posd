@@ -28,7 +28,7 @@
     <p class="text-muted small mb-0">{{ request.business.name }} · {{ date_from }} to {{ date_to }}</p>
   </div>
   <div class="d-flex gap-2 flex-wrap">
-    <a href="?period={{ period }}&export=csv" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
+    <a href="?period={% if period == 'custom' and date_from_input and date_to_input %}custom{% else %}{{ resolved_period }}{% endif %}{% if period == 'custom' and date_from_input and date_to_input %}&date_from={{ date_from_input|date:'Y-m-d' }}&date_to={{ date_to_input|date:'Y-m-d' }}{% endif %}&export=csv" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
     <button onclick="window.print()" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>Print</button>
   </div>
 </div>
@@ -43,10 +43,10 @@
       <a href="?period=quarter" class="period-btn {% if period == 'quarter' %}active{% endif %}">Quarter</a>
       <a href="?period=year" class="period-btn {% if period == 'year' %}active{% endif %}">Year</a>
       <a href="?period=custom" class="period-btn {% if period == 'custom' %}active{% endif %}">Custom</a>
-      {% if period == 'custom' %}
-      <input type="date" name="date_from" class="form-control form-control-sm" style="width:auto" value="{{ date_from }}">
+      {% if show_custom_picker %}
+      <input type="date" name="date_from" class="form-control form-control-sm" style="width:auto" value="{{ date_from_input|date:'Y-m-d' }}">
       <span class="text-muted small">to</span>
-      <input type="date" name="date_to" class="form-control form-control-sm" style="width:auto" value="{{ date_to }}">
+      <input type="date" name="date_to" class="form-control form-control-sm" style="width:auto" value="{{ date_to_input|date:'Y-m-d' }}">
       <input type="hidden" name="period" value="custom">
       <button type="submit" class="btn btn-primary btn-sm">Apply</button>
       {% endif %}

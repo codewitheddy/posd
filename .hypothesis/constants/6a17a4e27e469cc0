@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\templatetags\rest_framework.py
+# hypothesis_version: 6.151.10
+
+[160, ' class="%s">', '"', '%s', '%s > %s', '&gt;', '&lt;', "'", "']", "'}", '(', '(\\s+)', ')', ',', ', <br>', '.', '.)', '/', ':', ';', '<', '<a href=%s>%s</a>', '<br> ', '<code>%s</code>', '<pre>%s</pre>', '>', '@', '[', '\\s', ']', '^\\S+@\\S+\\.\\S+$', '^https?://\\[?\\w', 'class=nested', 'code', 'emacs', 'endcode', 'false', 'http:', 'https:', 'is_hyperlink', 'log in', 'null', 'renderer', 'rest_framework:login', 'style', 'template_pack', 'true', 'value']

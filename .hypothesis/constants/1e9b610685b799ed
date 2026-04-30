@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0071_fix_expense_payment_method.py
+# hypothesis_version: 6.151.10
+
+['0070_financial_suite', 'expense', 'payment_method', 'payment_method_str', 'pos']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\contrib\admindocs\utils.py
+# hypothesis_version: 6.151.10
+
+['%s/filters/#%s', '%s/models/%s/', '%s/tags/#%s', '%s/templates/%s/', '%s/views/%s/', '(', ')', '.', '/', '<%s>', '<var>', '\\', '\\(', '\\(\\?P(<\\w+>)', '\\(\\?\\:', '\\n{2,}', '__qualname__', 'cmsreference', 'doctitle_xform', 'filter', 'fragment', 'html', 'initial_header_level', 'link_base', 'model', 'raw_enabled', 'tag', 'template', 'view', 'view_class']

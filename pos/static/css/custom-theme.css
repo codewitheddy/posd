@@ -36,17 +36,17 @@
     border-color: var(--brand-primary) !important;
 }
 
-/* Navbar/Header */
-.navbar {
+/* Navbar/Header — scoped to app pages only (not Django admin) */
+body:not(.django-admin) .navbar {
     background-color: var(--brand-dark) !important;
 }
 
-.navbar-brand,
-.navbar-nav .nav-link {
+body:not(.django-admin) .navbar-brand,
+body:not(.django-admin) .navbar-nav .nav-link {
     color: var(--brand-light) !important;
 }
 
-.navbar-nav .nav-link:hover {
+body:not(.django-admin) .navbar-nav .nav-link:hover {
     color: var(--brand-accent) !important;
 }
 

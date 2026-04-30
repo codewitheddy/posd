@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0059_add_day_closure_report.py
+# hypothesis_version: 6.151.10
+
+['-closed_at', '-report_date', 'Date of the closure', 'Day Closure Report', 'Day Closure Reports', 'DayClosureReport', 'Declared - Expected', 'ID', 'Opening + Cash sales', 'Opening cash/floats', 'activitylog', 'business', 'cash_sales', 'closed_at', 'closed_by', 'day_closures', 'dayclosurereport', 'declared_cash', 'expected_cash', 'floats_reconciled', 'id', 'idempotency_keys', 'idempotencykey', 'notes', 'opening_cash', 'ordering', 'pos', 'pos.business', 'pos_actlog_corr_idx', 'report_date', 'shifts_closed', 'total_discounts', 'total_revenue', 'total_transactions', 'variance', 'verbose_name', 'verbose_name_plural']

@@ -113,11 +113,9 @@
     <div class="empty-state">
       <i class="bi bi-file-earmark-bar-graph"></i>
       <p>No Z-Reports match your filter criteria.</p>
-      {% if not current_session %}
       <a href="{% url 'zreport_session_open' slug=business.slug %}" class="btn btn-primary btn-sm">
         <i class="bi bi-play-circle me-1"></i>Open New Session
       </a>
-      {% endif %}
     </div>
     {% endif %}
   </div>

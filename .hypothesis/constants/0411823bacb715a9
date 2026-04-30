@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0012_businesssettings_thermal_auto_cut_and_more.py
+# hypothesis_version: 6.151.10
+
+['58mm', '80mm', 'Large', 'Medium', 'Small', 'businesssettings', 'large', 'medium', 'pos', 'small', 'thermal_auto_cut', 'thermal_copies', 'thermal_font_size', 'thermal_print_logo']

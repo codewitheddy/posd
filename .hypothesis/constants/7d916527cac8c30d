@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0032_remove_customer_pos_customer_phone_idx_and_more.py
+# hypothesis_version: 6.151.10
+
+['customer', 'phone', 'pos', 'product', 'unit_price']

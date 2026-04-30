@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\tests_user_management.py
+# hypothesis_version: 6.151.10
+
+[10.0, '10', '100', '123', '1234', '1234567', '12ab', '30', '5678', 'Test Business', 'can_apply_discount', 'can_manage_users', 'can_refund_sale', 'can_void_sale', 'cashier', 'flat', 'manager', 'owner', 'pass', 'percentage', 'permissions', 'test-business', 'testpass123', 'testuser']

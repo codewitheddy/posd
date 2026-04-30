@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0017_fix_purchase_unique.py
+# hypothesis_version: 6.151.10
+
+['pos', 'purchase', 'purchase_number']

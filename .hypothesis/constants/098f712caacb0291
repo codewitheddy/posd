@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\hr\migrations\0003_rename_deductions_payroll_nhif_and_more.py
+# hypothesis_version: 6.151.10
+
+['0.00', 'absence_deduction', 'deductions', 'employee', 'house_allowance', 'hr', 'medical_allowance', 'nhif', 'nssf', 'other_allowance', 'other_deductions', 'paye', 'payroll', 'transport_allowance']

@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\cash_float_views.py
+# hypothesis_version: 6.151.10
+
+['-created_at', 'CASH', 'Cashier not found', 'POST', 'active', 'all', 'amount', 'amount__sum', 'cash_float', 'cash_float_detail', 'cash_float_give', 'cash_float_list', 'cash_received', 'cashier', 'cashier_filter', 'cashiers', 'change_given', 'change_given__sum', 'date', 'date_filter', 'expected_return', 'float_type', 'floats', 'given_by', 'month', 'notes', 'opening', 'returned', 'returned_amount', 'returned_amount__sum', 'sales', 'sales_count', 'status', 'status_filter', 'today', 'total_active', 'total_change', 'total_returned', 'week']

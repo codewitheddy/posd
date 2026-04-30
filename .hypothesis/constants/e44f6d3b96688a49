@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\logger.py
+# hypothesis_version: 6.151.10
+
+['Any', 'Attributes', 'attributes', 'body', 'debug', 'default', 'dict[Any, int]', 'error', 'fatal', 'info', 'severity_number', 'severity_text', 'span_id', 'time_unix_nano', 'trace', 'trace_id', 'tuple[int, str]', 'warn', '{', '}']

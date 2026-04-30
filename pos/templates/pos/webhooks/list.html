@@ -1,0 +1,146 @@
+{% extends 'pos/base.html' %}
+{% block title %}Webhooks — {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hook-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:12px; padding:20px 22px; margin-bottom:14px; }
+  .hook-url  { font-size:13px; color:#6b7280; word-break:break-all; }
+  .event-chip { display:inline-block; background:#eef1fb; color:#224195; border-radius:20px;
+                padding:2px 10px; font-size:11px; font-weight:600; margin:2px; }
+  .stat-pill  { display:inline-flex; align-items:center; gap:5px; font-size:12px;
+                border-radius:20px; padding:3px 10px; font-weight:600; }
+  .pill-ok   { background:#dcfce7; color:#16a34a; }
+  .pill-fail { background:#fee2e2; color:#dc2626; }
+  .pill-off  { background:#f3f4f6; color:#9ca3af; }
+  .btn-sm-flat { border:1.5px solid #e5e7eb; border-radius:7px; padding:5px 12px;
+                 font-size:12px; font-weight:600; background:#fff; cursor:pointer;
+                 text-decoration:none; color:#374151; transition:border-color .15s; }
+  .btn-sm-flat:hover { border-color:#9ca3af; color:#111; }
+  .btn-primary-sm { background:#224195; color:#fff; border:none; border-radius:7px;
+                    padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer;
+                    text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary-sm:hover { background:#1a3278; color:#fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:960px">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">Webhooks</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">
+        Get notified when events happen in your POS — send data to any URL.
+      </p>
+    </div>
+    <a href="{% url 'webhook_create' slug=business.slug %}" class="btn-primary-sm">
+      <i class="bi bi-plus-lg"></i> New Webhook
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:8px;font-size:14px">
+        {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if not hooks %}
+    <div style="text-align:center;padding:60px 20px;background:#fff;border:1.5px dashed #e5e7eb;border-radius:14px">
+      <i class="bi bi-broadcast" style="font-size:3rem;color:#d1d5db"></i>
+      <p style="font-size:15px;font-weight:600;margin:12px 0 4px">No webhooks yet</p>
+      <p style="font-size:13px;color:#6b7280">Create your first webhook to start receiving real-time event notifications.</p>
+      <a href="{% url 'webhook_create' slug=business.slug %}" class="btn-primary-sm mt-2">
+        <i class="bi bi-plus-lg"></i> Create Webhook
+      </a>
+    </div>
+  {% else %}
+    {% for hook in hooks %}
+    <div class="hook-card">
+      <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span style="font-size:15px;font-weight:700">{{ hook.name }}</span>
+            {% if hook.is_active %}
+              <span class="stat-pill pill-ok"><i class="bi bi-circle-fill" style="font-size:7px"></i> Active</span>
+            {% else %}
+              <span class="stat-pill pill-off"><i class="bi bi-circle" style="font-size:7px"></i> Inactive</span>
+            {% endif %}
+          </div>
+          <div class="hook-url mb-2"><i class="bi bi-link-45deg me-1"></i>{{ hook.url }}</div>
+          <div>
+            {% for ev in hook.events %}
+              <span class="event-chip">{{ ev }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          {% if hook.success_count %}
+            <span class="stat-pill pill-ok"><i class="bi bi-check-lg"></i> {{ hook.success_count }}</span>
+          {% endif %}
+          {% if hook.fail_count %}
+            <span class="stat-pill pill-fail"><i class="bi bi-x-lg"></i> {{ hook.fail_count }}</span>
+          {% endif %}
+          <a href="{% url 'webhook_deliveries' slug=business.slug pk=hook.pk %}" class="btn-sm-flat">
+            <i class="bi bi-clock-history"></i> Log
+          </a>
+          <button class="btn-sm-flat" onclick="testHook({{ hook.pk }}, this)">
+            <i class="bi bi-send"></i> Test
+          </button>
+          <a href="{% url 'webhook_edit' slug=business.slug pk=hook.pk %}" class="btn-sm-flat">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="post" action="{% url 'webhook_delete' slug=business.slug pk=hook.pk %}"
+                onsubmit="return confirm('Delete this webhook?')" style="display:inline">
+            {% csrf_token %}
+            <button type="submit" class="btn-sm-flat" style="color:#dc2626;border-color:#fecaca">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+      {% if hook.last_delivery %}
+      <div style="font-size:11px;color:#9ca3af;margin-top:10px;border-top:1px solid #f3f4f6;padding-top:8px">
+        Last delivery: {{ hook.last_delivery.delivered_at|date:"M d, Y H:i" }} —
+        {% if hook.last_delivery.success %}
+          <span style="color:#16a34a">HTTP {{ hook.last_delivery.response_status }}</span>
+        {% else %}
+          <span style="color:#dc2626">Failed{% if hook.last_delivery.response_status %} ({{ hook.last_delivery.response_status }}){% endif %}</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="mt-4" style="background:#f8f9fc;border:1.5px solid #e5e7eb;border-radius:12px;padding:18px 22px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px"><i class="bi bi-info-circle me-2" style="color:#224195"></i>Available Events</div>
+    <div>
+      {% for code, label in event_choices %}
+        <span class="event-chip">{{ code }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+function testHook(pk, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending…';
+  fetch(`{% url 'webhook_test' slug=business.slug pk=0 %}`.replace('/0/', `/${pk}/`), {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'},
+  })
+  .then(r => r.json())
+  .then(d => {
+    btn.innerHTML = d.success
+      ? '<i class="bi bi-check-lg" style="color:#16a34a"></i> Sent'
+      : '<i class="bi bi-x-lg" style="color:#dc2626"></i> Failed';
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-send"></i> Test'; }, 3000);
+  })
+  .catch(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-send"></i> Test'; });
+}
+</script>
+{% endblock %}

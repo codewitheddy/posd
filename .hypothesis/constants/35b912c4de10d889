@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\response.py
+# hypothesis_version: 6.151.10
+
+['Content-Type', '_closable_objects', 'accepted_media_type', 'accepted_renderer', 'client', 'json', 'renderer_context', 'request', 'resolver_match', 'response', 'wsgi_request', '{}; charset={}']

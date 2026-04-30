@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos_system\celery.py
+# hypothesis_version: 6.151.10
+
+['CELERY', 'django.conf:settings', 'pos_system', 'pos_system.settings']

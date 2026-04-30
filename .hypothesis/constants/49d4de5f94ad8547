@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework_simplejwt\settings.py
+# hypothesis_version: 6.151.10
+
+['ALGORITHM', 'AUDIENCE', 'AUTH_HEADER_NAME', 'AUTH_HEADER_TYPE', 'AUTH_HEADER_TYPES', 'AUTH_TOKEN_CLASS', 'AUTH_TOKEN_CLASSES', 'Bearer', 'CHECK_REVOKE_TOKEN', 'HS256', 'HTTP_AUTHORIZATION', 'ISSUER', 'JSON_ENCODER', 'JTI_CLAIM', 'JWK_URL', 'LEEWAY', 'REVOKE_TOKEN_CLAIM', 'SECRET_KEY', 'SIGNING_KEY', 'SIMPLE_JWT', 'TOKEN_BACKEND_CLASS', 'TOKEN_TYPE_CLAIM', 'TOKEN_USER_CLASS', 'UPDATE_LAST_LOGIN', 'USER_ID_CLAIM', 'USER_ID_FIELD', 'VERIFYING_KEY', 'hash_password', 'id', 'jti', 'refresh_exp', 'setting', 'token_type', 'user_id', 'value']

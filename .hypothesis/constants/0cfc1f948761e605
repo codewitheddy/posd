@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\sentry_sdk\_werkzeug.py
+# hypothesis_version: 6.151.10
+
+['-', '443', '80', ':', ':443', ':80', 'CONTENT_LENGTH', 'CONTENT_TYPE', 'Dict[str, str]', 'HTTP_', 'HTTP_CONTENT_LENGTH', 'HTTP_CONTENT_TYPE', 'HTTP_HOST', 'SERVER_NAME', 'SERVER_PORT', '_', 'http', 'https', 'unknown', 'wsgi.url_scheme']

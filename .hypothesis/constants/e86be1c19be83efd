@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0070_financial_suite.py
+# hypothesis_version: 6.151.10
+
+['-created_at', '-expense_date', '0.01', 'Bank Transfer', 'Card', 'Cash', 'M-Pesa', 'Other', 'amount', 'attachment', 'bank', 'business', 'card', 'cash', 'expense', 'expense_categories', 'expense_number', 'expensecategory', 'expenses', 'is_predefined', 'mpesa', 'name', 'ordering', 'other', 'payment_method_str', 'pos', 'pos.business', 'recorded_by', 'recorded_expenses', 'updated_at']

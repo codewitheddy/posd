@@ -1,216 +1,155 @@
 """
-Cache utility functions for POS system
-Provides easy-to-use caching decorators and functions
+Caching utilities for frequently accessed data.
+
+Cache keys follow the pattern: pos:{business_id}:{resource}
+TTLs are defined in settings.CACHE_TTL.
 """
 
 from django.core.cache import cache
 from django.conf import settings
-from functools import wraps
-import hashlib
-import json
+
+# Default TTLs (seconds) — overridden by settings.CACHE_TTL
+_TTL = {
+    'products': 1800,       # 30 min — product catalog
+    'categories': 3600,     # 1 hr  — rarely changes
+    'business_settings': 3600,
+    'payment_methods': 3600,
+    'dashboard': 300,       # 5 min — dashboard stats
+    'reports': 600,         # 10 min
+    'customers': 900,       # 15 min
+    'loyalty_rewards': 3600,
+}
 
 
-def get_cache_key(prefix, *args, **kwargs):
-    """
-    Generate a unique cache key from prefix and arguments
-    
-    Args:
-        prefix: String prefix for the cache key
-        *args: Positional arguments to include in key
-        **kwargs: Keyword arguments to include in key
-    
-    Returns:
-        String cache key
-    """
-    # Create a string from all arguments
-    key_parts = [str(prefix)]
-    key_parts.extend([str(arg) for arg in args])
-    key_parts.extend([f"{k}={v}" for k, v in sorted(kwargs.items())])
-    
-    # Join and hash if too long
-    key_string = ":".join(key_parts)
-    if len(key_string) > 200:
-        key_hash = hashlib.md5(key_string.encode()).hexdigest()
-        return f"{prefix}:{key_hash}"
-    
-    return key_string
+def _ttl(key):
+    return getattr(settings, 'CACHE_TTL', {}).get(key, _TTL.get(key, 300))
 
 
-def cache_view(timeout=None, key_prefix=None):
-    """
-    Decorator to cache view results
-    
-    Usage:
-        @cache_view(timeout=300, key_prefix='dashboard')
-        def my_view(request):
-            ...
-    """
-    def decorator(view_func):
-        @wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            # Generate cache key
-            if key_prefix:
-                cache_key = get_cache_key(
-                    key_prefix,
-                    request.user.id if request.user.is_authenticated else 'anon',
-                    getattr(request, 'business', None).id if hasattr(request, 'business') and request.business else 'no_business',
-                    *args,
-                    **kwargs
-                )
-            else:
-                cache_key = get_cache_key(
-                    view_func.__name__,
-                    request.user.id if request.user.is_authenticated else 'anon',
-                    *args,
-                    **kwargs
-                )
-            
-            # Try to get from cache
-            result = cache.get(cache_key)
-            if result is not None:
-                return result
-            
-            # Call view and cache result
-            result = view_func(request, *args, **kwargs)
-            
-            # Determine timeout
-            cache_timeout = timeout
-            if cache_timeout is None:
-                cache_timeout = getattr(settings, 'CACHE_TTL', {}).get('default', 300)
-            
-            cache.set(cache_key, result, cache_timeout)
-            return result
-        
-        return wrapper
-    return decorator
+def _key(business_id, resource, suffix=''):
+    return f'pos:{business_id}:{resource}{":" + suffix if suffix else ""}'
 
 
-def cache_function(timeout=None, key_prefix=None):
-    """
-    Decorator to cache function results
-    
-    Usage:
-        @cache_function(timeout=600, key_prefix='product_stats')
-        def get_product_stats(business_id):
-            ...
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Generate cache key
-            if key_prefix:
-                cache_key = get_cache_key(key_prefix, *args, **kwargs)
-            else:
-                cache_key = get_cache_key(func.__name__, *args, **kwargs)
-            
-            # Try to get from cache
-            result = cache.get(cache_key)
-            if result is not None:
-                return result
-            
-            # Call function and cache result
-            result = func(*args, **kwargs)
-            
-            # Determine timeout
-            cache_timeout = timeout
-            if cache_timeout is None:
-                cache_timeout = getattr(settings, 'CACHE_TTL', {}).get('default', 300)
-            
-            cache.set(cache_key, result, cache_timeout)
-            return result
-        
-        return wrapper
-    return decorator
+def get_cache_key(resource, business_id, *args):
+    """Generic cache key builder. Extra args are joined as suffix."""
+    suffix = ':'.join(str(a) for a in args) if args else ''
+    return _key(business_id, resource, suffix)
 
 
-def invalidate_cache(pattern):
-    """
-    Invalidate cache keys matching a pattern
-    
-    Args:
-        pattern: String pattern to match (e.g., 'dashboard:*')
-    """
-    try:
-        # Try Redis-specific delete pattern
-        cache.delete_pattern(pattern)
-    except AttributeError:
-        # Fallback for non-Redis backends
-        pass
+# ── Product catalog ──────────────────────────────────────────────────────────
 
+def get_active_products(business_id):
+    """Return cached active product queryset (evaluated list)."""
+    from .models import Product
+    k = _key(business_id, 'products', 'active')
+    data = cache.get(k)
+    if data is None:
+        data = list(
+            Product.objects.filter(business_id=business_id, is_active=True)
+            .select_related('category')
+            .order_by('name')
+        )
+        cache.set(k, data, _ttl('products'))
+    return data
+
+
+def invalidate_products(business_id):
+    cache.delete_pattern(f'pos:{business_id}:products:*') if hasattr(cache, 'delete_pattern') \
+        else cache.delete(_key(business_id, 'products', 'active'))
+
+
+# ── Categories ───────────────────────────────────────────────────────────────
+
+def get_categories(business_id):
+    from .models import Category
+    k = _key(business_id, 'categories')
+    data = cache.get(k)
+    if data is None:
+        data = list(Category.objects.filter(business_id=business_id).order_by('name'))
+        cache.set(k, data, _ttl('categories'))
+    return data
+
+
+def invalidate_categories(business_id):
+    cache.delete(_key(business_id, 'categories'))
+
+
+# ── Business settings ────────────────────────────────────────────────────────
+
+def get_business_settings(business_id):
+    from .models import BusinessSettings
+    k = _key(business_id, 'business_settings')
+    data = cache.get(k)
+    if data is None:
+        try:
+            data = BusinessSettings.objects.get(business_id=business_id)
+        except BusinessSettings.DoesNotExist:
+            return None
+        cache.set(k, data, _ttl('business_settings'))
+    return data
+
+
+def invalidate_business_settings(business_id):
+    cache.delete(_key(business_id, 'business_settings'))
+
+
+# ── Payment methods ──────────────────────────────────────────────────────────
+
+def get_payment_methods(business_id):
+    from .models import PaymentMethod
+    k = _key(business_id, 'payment_methods')
+    data = cache.get(k)
+    if data is None:
+        data = list(PaymentMethod.objects.filter(business_id=business_id, is_active=True))
+        cache.set(k, data, _ttl('payment_methods'))
+    return data
+
+
+def invalidate_payment_methods(business_id):
+    cache.delete(_key(business_id, 'payment_methods'))
+
+
+# ── Loyalty rewards ──────────────────────────────────────────────────────────
+
+def get_loyalty_rewards(business_id):
+    from .models import LoyaltyReward
+    k = _key(business_id, 'loyalty_rewards')
+    data = cache.get(k)
+    if data is None:
+        data = list(LoyaltyReward.objects.filter(business_id=business_id, is_active=True))
+        cache.set(k, data, _ttl('loyalty_rewards'))
+    return data
+
+
+def invalidate_loyalty_rewards(business_id):
+    cache.delete(_key(business_id, 'loyalty_rewards'))
+
+
+# ── Dashboard stats ──────────────────────────────────────────────────────────
+
+def get_dashboard_stats(business_id, date_str):
+    """Cache dashboard aggregate stats per business per day."""
+    k = _key(business_id, 'dashboard', date_str)
+    return cache.get(k)
+
+
+def set_dashboard_stats(business_id, date_str, data):
+    cache.set(_key(business_id, 'dashboard', date_str), data, _ttl('dashboard'))
+
+
+def invalidate_dashboard(business_id):
+    """Call after any sale is created/voided."""
+    from django.utils import timezone
+    today = timezone.now().date().isoformat()
+    cache.delete(_key(business_id, 'dashboard', today))
+
+
+# ── Generic helpers ──────────────────────────────────────────────────────────
 
 def invalidate_business_cache(business_id):
-    """
-    Invalidate all cache for a specific business
-    
-    Args:
-        business_id: ID of the business
-    """
-    patterns = [
-        f'dashboard:*:{business_id}:*',
-        f'products:*:{business_id}:*',
-        f'reports:*:{business_id}:*',
-        f'customers:*:{business_id}:*',
-    ]
-    
-    for pattern in patterns:
-        invalidate_cache(pattern)
-
-
-def get_or_set_cache(key, callable_func, timeout=None):
-    """
-    Get value from cache or set it by calling a function
-    
-    Args:
-        key: Cache key
-        callable_func: Function to call if cache miss
-        timeout: Cache timeout in seconds
-    
-    Returns:
-        Cached or computed value
-    """
-    result = cache.get(key)
-    if result is not None:
-        return result
-    
-    result = callable_func()
-    
-    if timeout is None:
-        timeout = getattr(settings, 'CACHE_TTL', {}).get('default', 300)
-    
-    cache.set(key, result, timeout)
-    return result
-
-
-# Convenience functions for common cache operations
-
-def cache_dashboard_data(business_id, date, data, timeout=None):
-    """Cache dashboard data for a specific business and date"""
-    key = get_cache_key('dashboard', business_id, date)
-    if timeout is None:
-        timeout = getattr(settings, 'CACHE_TTL', {}).get('dashboard', 300)
-    cache.set(key, data, timeout)
-
-
-def get_cached_dashboard_data(business_id, date):
-    """Get cached dashboard data"""
-    key = get_cache_key('dashboard', business_id, date)
-    return cache.get(key)
-
-
-def cache_report_data(report_type, business_id, params, data, timeout=None):
-    """Cache report data"""
-    key = get_cache_key('report', report_type, business_id, **params)
-    if timeout is None:
-        timeout = getattr(settings, 'CACHE_TTL', {}).get('reports', 600)
-    cache.set(key, data, timeout)
-
-
-def get_cached_report_data(report_type, business_id, params):
-    """Get cached report data"""
-    key = get_cache_key('report', report_type, business_id, **params)
-    return cache.get(key)
-
-
-def clear_cache():
-    """Clear all cache (use with caution!)"""
-    cache.clear()
+    """Nuke all cached data for a business (e.g. after settings change)."""
+    invalidate_products(business_id)
+    invalidate_categories(business_id)
+    invalidate_business_settings(business_id)
+    invalidate_payment_methods(business_id)
+    invalidate_loyalty_rewards(business_id)
+    invalidate_dashboard(business_id)

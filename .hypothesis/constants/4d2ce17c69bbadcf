@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\rest_framework\throttling.py
+# hypothesis_version: 6.151.10
+
+[3600, 86400, ',', '/', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR', 'anon', 'd', 'h', 'ident', 'm', 'rate', 's', 'scope', 'throttle_scope', 'user']
