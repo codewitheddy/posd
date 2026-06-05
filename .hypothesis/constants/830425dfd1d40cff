@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\db\backends\postgresql\psycopg_any.py
+# hypothesis_version: 6.151.10
+
+['cidr', 'encoding', 'inet', 'jsonb', 'timestamptz', 'tsrange', 'tstzrange', 'utf8']

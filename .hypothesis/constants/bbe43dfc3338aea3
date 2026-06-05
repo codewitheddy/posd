@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\models.py
+# hypothesis_version: 6.151.10
+
+[200, 500, '-version', 'Automatic', 'Backup Snapshot', 'Backup Snapshots', 'Cloud Only', 'Corrupted', 'Deleted', 'Hybrid', 'Local Only', 'Manual', 'Pending', 'Scheduled', 'Uploaded', 'automatic', 'backup_settings', 'backup_snapshots', 'cloud_only', 'corrupted', 'deleted', 'hybrid', 'local_only', 'manual', 'pending', 'pos.Business', 'scheduled', 'tenant', 'uploaded', 'version']

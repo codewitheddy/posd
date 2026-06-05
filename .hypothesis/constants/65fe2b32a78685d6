@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\corsheaders\conf.py
+# hypothesis_version: 6.151.10
+
+[86400, 'CORS_ALLOWED_ORIGINS', 'CORS_ALLOW_HEADERS', 'CORS_ALLOW_METHODS', 'CORS_EXPOSE_HEADERS', 'CORS_URLS_REGEX', '^.*$']

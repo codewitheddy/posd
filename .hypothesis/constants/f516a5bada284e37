@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\sync\urls.py
+# hypothesis_version: 6.151.10
+
+['events/', 'status/', 'sync_events', 'sync_status']

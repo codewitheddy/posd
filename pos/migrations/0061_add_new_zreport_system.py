@@ -103,11 +103,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='possession',
-            constraint=models.CheckConstraint(condition=models.Q(('status', 'open'), models.Q(('status', 'closed'), ('closed_at__isnull', False)), _connector='OR'), name='pos_session_closed_requires_timestamp'),
+            constraint=models.CheckConstraint(check=models.Q(('status', 'open'), models.Q(('status', 'closed'), ('closed_at__isnull', False)), _connector='OR'), name='pos_session_closed_requires_timestamp'),
         ),
         migrations.AddConstraint(
             model_name='possession',
-            constraint=models.CheckConstraint(condition=models.Q(('opening_cash__gte', 0)), name='pos_session_opening_cash_non_negative'),
+            constraint=models.CheckConstraint(check=models.Q(('opening_cash__gte', 0)), name='pos_session_opening_cash_non_negative'),
         ),
         migrations.AlterUniqueTogether(
             name='possession',

@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\hscode_views.py
+# hypothesis_version: 6.151.10
+
+['0', '16', 'HS Code is required.', 'Invalid rate value.', 'POST', 'chapter', 'chapters', 'code', 'description', 'excise_rate', 'hscode', 'hscode_list', 'hscode_units', 'id', 'import_duty', 'is_active', 'is_excisable', 'limit', 'notes', 'on', 'page', 'page_obj', 'products', 'q', 'results', 'total', 'unit', 'vat_rate']

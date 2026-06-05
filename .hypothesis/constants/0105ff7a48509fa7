@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\events\models.py
+# hypothesis_version: 6.151.10
+
+[100, 'Event Log', 'Event Logs', 'Failed', 'Inventory Updated', 'Payment Recorded', 'Pending', 'Product Changed', 'Sale Created', 'Sale Refunded', 'Synced', 'event_logs', 'failed', 'inventory_updated', 'payment_recorded', 'pending', 'pos.Business', 'product_changed', 'sale_created', 'sale_refunded', 'sync_status', 'synced', 'tenant', 'timestamp']

@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\drf_spectacular\contrib\rest_polymorphic.py
+# hypothesis_version: 6.151.10
+
+['$ref', 'Request', 'TypedRequest', 'allOf', 'discriminator', 'mapping', 'oneOf', 'propertyName', 'virtual']

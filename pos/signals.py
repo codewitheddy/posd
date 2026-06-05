@@ -47,12 +47,14 @@ def on_sale_returned(sender, instance, created, **kwargs):
     """Fire sale.refunded when a SaleReturn record is created."""
     if not created:
         return
+    if not instance.original_sale:
+        return
     from .webhook_service import dispatch_event
     data = {
         'id': instance.id,
         'return_number': instance.return_number,
         'original_sale_id': instance.original_sale_id,
-        'original_invoice_number': instance.original_sale.invoice_number if instance.original_sale else None,
+        'original_invoice_number': instance.original_sale.invoice_number,
         'total_refund': str(instance.total_refund),
         'refund_method': instance.refund_method.name if instance.refund_method else None,
     }
@@ -94,10 +96,16 @@ def on_stock_adjusted(sender, instance, created, **kwargs):
 @receiver(post_save, sender='pos.Purchase')
 def on_purchase_saved(sender, instance, created, **kwargs):
     from .webhook_service import dispatch_event
-    event = 'purchase.created' if created else None
-    if not created and instance.status == 'received':
+    if created:
+        event = 'purchase.created'
+    elif instance.status == 'received':
+        # Only fire once — check if status just changed to 'received'
+        # We use update_fields hint if available; otherwise fire conservatively
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and 'status' not in update_fields:
+            return
         event = 'purchase.received'
-    if not event:
+    else:
         return
     data = {
         'id': instance.id,

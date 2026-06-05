@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos_system\urls.py
+# hypothesis_version: 6.151.10
+
+['/login/', 'admin/', 'api/v1/', 'api/v1/backup/', 'api/v1/restore/', 'api/v1/sync/', 'b/<slug:slug>/hr/', 'backup.urls', 'backup.web_urls', 'hr.urls', 'pos.api_urls', 'pos.urls_multitenant', 'restore.urls', 'settings/backup/', 'sync.urls']

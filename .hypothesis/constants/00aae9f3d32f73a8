@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\sync\views.py
+# hypothesis_version: 6.151.10
+
+['accepted', 'business', 'device_id', 'devices', 'duplicates', 'error', 'error_message', 'event_type', 'events', 'last_synced_at', 'payload', 'pending_events_count', 'status', 'storage', 'timestamp', 'uuid']

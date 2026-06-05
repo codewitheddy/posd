@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\admin.py
+# hypothesis_version: 6.151.10
+
+['Status', 'backup_mode', 'black', 'checksum_sha256', 'corrupted', 'created_at', 'deleted', 'encryption_key_id', 'event_count', 'file_size_bytes', 'green', 'grey', 'orange', 'pending', 'red', 'retention_days', 'status', 'status_badge', 'storage_key', 'storage_mode', 'tenant', 'tenant__name', 'uploaded', 'version']

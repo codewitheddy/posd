@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\urls.py
+# hypothesis_version: 6.151.10
+
+['backup_manual', 'backup_versions', 'manual/', 'versions/']

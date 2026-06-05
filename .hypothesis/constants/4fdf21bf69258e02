@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\corsheaders\checks.py
+# hypothesis_version: 6.151.10
+
+['CORS_ALLOWED_ORIGINS', 'CORS_MODEL', 'corsheaders.E001', 'corsheaders.E002', 'corsheaders.E003', 'corsheaders.E004', 'corsheaders.E005', 'corsheaders.E006', 'corsheaders.E007', 'corsheaders.E008', 'corsheaders.E009', 'corsheaders.E012', 'corsheaders.E013', 'corsheaders.E014', 'corsheaders.E015', 'example.com).', 'file://', 'fragment', 'null', 'or equal to zero.', 'path', 'query']

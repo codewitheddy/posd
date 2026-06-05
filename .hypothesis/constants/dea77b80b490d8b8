@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\web_views.py
+# hypothesis_version: 6.151.10
+
+['-version', 'Error', 'POST', 'Synced', 'Syncing', 'backup/settings.html', 'backup_mode', 'backup_modes', 'backup_settings', 'business', 'business_list', 'recent_snapshots', 'retention_days', 'settings', 'status_labels', 'storage_mode', 'storage_modes', 'sync_statuses', 'valid_intervals']

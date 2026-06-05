@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\signals.py
+# hypothesis_version: 6.151.10
+
+['adjustment_type', 'amount', 'cashier', 'customer', 'customer.created', 'date', 'email', 'id', 'invoice_number', 'low_stock_threshold', 'name', 'original_sale_id', 'payment.received', 'payment_method', 'phone', 'pos.Customer', 'pos.Purchase', 'pos.Sale', 'pos.SalePayment', 'pos.SaleReturn', 'pos.StockAdjustment', 'product', 'product.low_stock', 'product.out_of_stock', 'product_code', 'purchase.created', 'purchase.received', 'purchase_number', 'quantity', 'reason', 'received', 'reference', 'refund_method', 'return_number', 'sale.created', 'sale.refunded', 'sale_id', 'status', 'stock.adjusted', 'stock_quantity', 'supplier', 'total', 'total_amount', 'total_refund', 'update_fields']

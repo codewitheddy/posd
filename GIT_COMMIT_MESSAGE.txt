@@ -1,0 +1,44 @@
+feat: Add modern floating calculator widget for cashiers
+
+Add a full-featured, modern calculator widget designed for POS cashiers with:
+
+Features:
+- Basic operations: +, -, *, /, %
+- Advanced functions: √, x², x³, 1/x, sin, cos, tan, log
+- Memory functions: MC, MR, M+, M−
+- Calculation history: Last 50 calculations with timestamps
+- Unit conversions: Currency, length, weight, temperature
+- Presets: Quick access buttons for common values
+- Keyboard support: Full input via keyboard
+- Draggable: Move calculator anywhere on screen
+- Responsive: Works on desktop and mobile
+
+Implementation:
+- pos/static/js/calculator.js (22 KB) - Main calculator logic
+- pos/static/css/calculator.css (6.8 KB) - Modern styling with purple gradient
+- pos/templatetags/calculator_tags.py - Django template tag
+- pos/templates/calculator_widget.html - Widget template
+
+Documentation:
+- CALCULATOR_QUICK_START.md - 5-minute setup guide
+- docs/CALCULATOR_WIDGET.md - Complete feature documentation
+- docs/CALCULATOR_INTEGRATION_GUIDE.md - Developer integration guide
+- CALCULATOR_ADMIN_EXAMPLE.py - Django admin integration examples
+
+Usage:
+{% load calculator_tags %}
+{% calculator_widget %}
+
+Then run: python manage.py collectstatic
+
+The calculator appears as a floating widget in the bottom-right corner of any page.
+Cashiers can use it with mouse, touch, or keyboard.
+
+Features:
+- Persistent history in browser LocalStorage
+- No external dependencies (vanilla JavaScript)
+- Lightweight and performant
+- Privacy-focused (all calculations client-side)
+- Easy to customize (colors, position, presets)
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

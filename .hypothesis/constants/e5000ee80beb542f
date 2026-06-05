@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\django\core\management\commands\test.py
+# hypothesis_version: 6.151.10
+
+['*', '--failfast', '--no-input', '--noinput', '--testrunner', 'Total run', 'add_arguments', 'args', 'auto', 'interactive', 'parallel', 'store_false', 'store_true', 'test_label', 'testrunner', 'timing']

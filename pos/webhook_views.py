@@ -288,7 +288,7 @@ def export_sales_json(request, slug=None):
                     'product_code': i.product.product_code if i.product else None,
                     'quantity': str(i.quantity),
                     'unit_price': str(i.unit_price),
-                    'subtotal': str(i.subtotal),
+                    'subtotal': str(i.total_price),
                 }
                 for i in sale.items.all()
             ],

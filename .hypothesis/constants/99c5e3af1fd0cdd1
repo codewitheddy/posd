@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\signals.py
+# hypothesis_version: 6.151.10
+
+['backup_mode', 'pos.Business', 'retention_days', 'storage_mode']

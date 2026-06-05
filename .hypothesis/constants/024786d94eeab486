@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\events\signals.py
+# hypothesis_version: 6.151.10
+
+['HTTP_X_DEVICE_ID', 'REMOTE_ADDR', 'action', 'adjustment_type', 'amount', 'business', 'cost_price', 'created', 'customer_id', 'delta', 'inventory_updated', 'invoice', 'is_active', 'items', 'method', 'name', 'new_quantity', 'payment_recorded', 'pos.Product', 'pos.Sale', 'pos.SalePayment', 'pos.SaleReturn', 'pos.StockAdjustment', 'product_changed', 'product_id', 'quantity', 'reason', 'reference', 'return_id', 'sale_created', 'sale_id', 'sale_refunded', 'server', 'total', 'total_refund', 'unit_price', 'unknown', 'updated']

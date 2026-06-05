@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\sync\admin.py
+# hypothesis_version: 6.151.10
+
+['Status', 'black', 'device_id', 'error', 'error_message', 'green', 'last_synced_at', 'orange', 'pending', 'pending_events_count', 'red', 'status', 'status_badge', 'synced', 'tenant', 'tenant__name', 'updated_at']

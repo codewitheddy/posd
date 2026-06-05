@@ -1,0 +1,4 @@
+# file: C:\Users\Edwin254\AppData\Roaming\Python\Python314\site-packages\msgpack\ext.py
+# hypothesis_version: 6.151.10
+
+[1000000000.0, 127, 1000, 17179869183, 18446744069414584320, '!Iq', '!L', '!Q', 'ExtType', 'code data', 'code must be 0~127', 'code must be int', 'data must be bytes', 'nanoseconds', 'seconds']

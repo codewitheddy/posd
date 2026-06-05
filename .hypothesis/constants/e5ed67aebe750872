@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\promotion_views.py
+# hypothesis_version: 6.151.10
+
+[400, 405, '%H:%M', '%Y-%m-%d', '%Y-%m-%d %H:%M', '%Y-%m-%dT%H:%M', '-created_at', '0', 'Invalid JSON', 'Invalid cart total', 'Name is required.', 'POST', 'POST required', 'Promotion', 'active_count', 'applicable_products', 'applies_to', 'applies_to_choices', 'buy_quantity', 'cart', 'cart_total', 'categories', 'category_id', 'code', 'create', 'delete', 'description', 'disabled', 'discount_amount', 'discount_value', 'enabled', 'end_date', 'error', 'free_items', 'get_quantity', 'happy_hour_end', 'happy_hour_start', 'id', 'is_active', 'items', 'max_uses', 'min_purchase_amount', 'name', 'now', 'ok', 'on', 'percentage', 'product_id', 'product_name', 'products', 'promo', 'promo_id', 'promo_type', 'promo_types', 'promos', 'promotion_list', 'quantity', 'selected_categories', 'selected_products', 'start_date', 'total_price', 'unit_price', 'update']
