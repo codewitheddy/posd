@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from django.core.cache import cache
 from .models import Business, BusinessMembership, ActivityLog, RegistrationSettings
 from .services.registration_service import RegistrationService
+from .security_utils import verify_admin_password_and_reason
 
 logger = logging.getLogger(__name__)
 
@@ -605,11 +606,35 @@ def remove_member(request, slug=None, member_id=None):
     if member.role == 'owner':
         messages.error(request, 'Cannot remove the business owner.')
         return redirect('business_members', slug=business.slug)
-    
-    # Remove member
-    member.delete()
-    messages.success(request, f'{member.user.get_full_name() or member.user.username} has been removed from your business.')
-    
+
+    if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="member removal"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            return redirect('business_members', slug=business.slug)
+
+        member_name = member.user.get_full_name() or member.user.username
+        member_user_id = member.user_id
+        member.delete()
+
+        ActivityLog.log_activity(
+            user=request.user,
+            action_type='delete',
+            model_name='BusinessMembership',
+            object_id=member_user_id,
+            description=f'Removed member {member_name} from business {business.name} | Reason: {clean_reason}',
+            request=request,
+            business=business
+        )
+
+        messages.success(request, f'{member_name} has been removed from your business.')
+        return redirect('business_members', slug=business.slug)
+
+    # For GET, render confirm template or redirect back
     return redirect('business_members', slug=business.slug)
 
 

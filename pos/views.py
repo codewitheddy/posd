@@ -13,7 +13,7 @@ from .models import (
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
     SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
     GoodsReturnedNote, GoodsReturnedNoteItem, GoodsReceivedNote, GoodsReceivedNoteItem, DayClosureReport,
-    Branch, BranchStock, StockMovement, VATCode
+    Branch, BranchStock, StockMovement, VATCode, Brand, UnitOfMeasurement
 )
 from .decorators import business_required, business_permission_required, feature_required
 from reportlab.lib.pagesizes import letter, A4
@@ -29,6 +29,7 @@ from django.views.decorators.http import require_POST
 import io
 from collections import defaultdict
 from django_ratelimit.decorators import ratelimit
+from .security_utils import verify_admin_password_and_reason
 
 
 # ==================== PLATFORM ADMIN DASHBOARD ====================
@@ -805,9 +806,11 @@ def dashboard(request, slug=None):
 @login_required
 @business_required
 def product_list(request, slug=None):
-    """List all products with filtering"""
+    """List all products with filtering and pagination (30 products per page)"""
     from .models import Brand
-    products = Product.objects.filter(business=request.business).select_related('category', 'brand')
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    products_qs = Product.objects.filter(business=request.business).select_related('category', 'brand')
 
     # Filters
     category_filter = request.GET.get('category', '')
@@ -817,19 +820,19 @@ def product_list(request, slug=None):
     search = request.GET.get('q', '').strip()
 
     if category_filter:
-        products = products.filter(category_id=category_filter)
+        products_qs = products_qs.filter(category_id=category_filter)
     if brand_filter:
-        products = products.filter(brand_id=brand_filter)
+        products_qs = products_qs.filter(brand_id=brand_filter)
     if status_filter == 'active':
-        products = products.filter(is_active=True)
+        products_qs = products_qs.filter(is_active=True)
     elif status_filter == 'inactive':
-        products = products.filter(is_active=False)
+        products_qs = products_qs.filter(is_active=False)
     elif status_filter == 'low_stock':
-        products = products.filter(stock_quantity__lte=models.F('low_stock_threshold'), stock_quantity__gt=0)
+        products_qs = products_qs.filter(stock_quantity__lte=models.F('low_stock_threshold'), stock_quantity__gt=0)
     elif status_filter == 'out_of_stock':
-        products = products.filter(stock_quantity=0)
+        products_qs = products_qs.filter(stock_quantity=0)
     if search:
-        products = products.filter(
+        products_qs = products_qs.filter(
             models.Q(name__icontains=search) |
             models.Q(product_code__icontains=search) |
             models.Q(barcode__icontains=search)
@@ -840,12 +843,27 @@ def product_list(request, slug=None):
         'oldest': 'created_at',
         'name_asc': 'name',
     }
-    products = products.order_by(sort_map.get(sort_by, '-created_at'))
+    products_qs = products_qs.order_by(sort_map.get(sort_by, '-created_at'))
+
+    # Pagination: 30 products per page
+    paginator = Paginator(products_qs, 30)
+    page_number = request.GET.get('page', 1)
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    vat_codes = VATCode.objects.filter(business=request.business, is_active=True).order_by('code')
 
     context = {
-        'products': products,
+        'products': page_obj,
+        'page_obj': page_obj,
+        'paginator': paginator,
         'categories': Category.objects.filter(business=request.business).order_by('name'),
         'brands': Brand.objects.filter(business=request.business).order_by('name'),
+        'vat_codes': vat_codes,
         'category_filter': category_filter,
         'brand_filter': brand_filter,
         'status_filter': status_filter,
@@ -853,6 +871,470 @@ def product_list(request, slug=None):
         'search': search,
     }
     return render(request, 'pos/product_list.html', context)
+
+
+def _product_has_transaction_history(product):
+    """Check if product has any related records across transaction, sales, and supply chain tables."""
+    rel_names = [
+        'saleitem_set',
+        'purchaseitem_set',
+        'salereturnitem_set',
+        'goodsreceivednoteitem_set',
+        'goodsreturnednoteitem_set',
+        'transfer_items',
+        'stocktransfer_set',
+        'dispatch_items',
+        'requisition_items',
+    ]
+    for rel in rel_names:
+        if hasattr(product, rel):
+            try:
+                if getattr(product, rel).exists():
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+@login_required
+@business_required
+@require_POST
+def product_bulk_action(request, slug=None):
+    """
+    Execute bulk actions on selected products for the active business.
+    Supported actions:
+      - activate: Mark selected products as active
+      - deactivate: Mark selected products as inactive
+      - change_category: Move selected products to a category (or none)
+      - change_brand: Move selected products to a brand/department (or none)
+      - change_tax: Update tax_class and/or vat_code
+      - adjust_price: Batch price adjustment (percent / fixed / set exact, with rounding)
+      - delete: Safe delete (or discontinue items with sales/purchases history)
+      - export_csv: Download CSV of selected products
+    """
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == 'application/json'
+
+    # Extract selected product IDs from list or comma-separated string
+    raw_list = request.POST.getlist('selected_products')
+    raw_str = request.POST.get('selected_products_str', '')
+
+    all_raw = []
+    for item in raw_list:
+        if isinstance(item, str) and ',' in item:
+            all_raw.extend(item.split(','))
+        else:
+            all_raw.append(item)
+    if raw_str:
+        all_raw.extend(str(raw_str).split(','))
+
+    product_ids = []
+    for pid in all_raw:
+        pid_clean = str(pid).strip()
+        if pid_clean.isdigit():
+            product_ids.append(int(pid_clean))
+
+    # Deduplicate IDs while preserving order
+    product_ids = list(dict.fromkeys(product_ids))
+
+    if not product_ids:
+        msg = "No products were selected for bulk action."
+        if is_ajax:
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+        messages.warning(request, msg)
+        return redirect('product_list', slug=request.business.slug)
+
+    # Filter strictly to products belonging to request.business
+    products_qs = Product.objects.filter(business=request.business, pk__in=product_ids)
+    count = products_qs.count()
+
+    if count == 0:
+        msg = "No valid products found for the selected items."
+        if is_ajax:
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+        messages.warning(request, msg)
+        return redirect('product_list', slug=request.business.slug)
+
+    action = request.POST.get('bulk_action', '').strip().lower()
+
+    # Enforce admin password confirmation and audit reason for all modifying bulk operations
+    clean_reason = ""
+    if action != 'export_csv':
+        from .security_utils import verify_admin_password_and_reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name=f"bulk {action}"
+        )
+        if not is_valid:
+            if is_ajax:
+                return JsonResponse({'success': False, 'message': err_msg}, status=400)
+            messages.error(request, err_msg)
+            return redirect('product_list', slug=request.business.slug)
+    else:
+        clean_reason = "Bulk CSV Export"
+
+    try:
+        with transaction.atomic():
+            if action == 'activate':
+                products_qs.update(is_active=True)
+                for p in products_qs:
+                    if hasattr(p, 'invalidate_cache'):
+                        p.invalidate_cache()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='bulk_update',
+                    description=f'Bulk activated {count} product(s) | Reason: {clean_reason}',
+                    model_name='Product',
+                    request=request,
+                    business=request.business
+                )
+                msg = f'Successfully activated {count} product(s).'
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'count': count})
+                messages.success(request, msg)
+
+            elif action == 'deactivate':
+                products_qs.update(is_active=False)
+                for p in products_qs:
+                    if hasattr(p, 'invalidate_cache'):
+                        p.invalidate_cache()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='bulk_update',
+                    description=f'Bulk deactivated {count} product(s) | Reason: {clean_reason}',
+                    model_name='Product',
+                    request=request,
+                    business=request.business
+                )
+                msg = f'Successfully deactivated {count} product(s).'
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'count': count})
+                messages.success(request, msg)
+
+            elif action == 'change_category':
+                category_id = request.POST.get('target_category', '').strip()
+                category = None
+                category_name = "Uncategorized"
+                if category_id:
+                    category = get_object_or_404(Category, business=request.business, pk=category_id)
+                    category_name = category.name
+                    products_qs.update(category=category)
+                else:
+                    products_qs.update(category=None)
+
+                for p in products_qs:
+                    if hasattr(p, 'invalidate_cache'):
+                        p.invalidate_cache()
+
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='bulk_update',
+                    description=f'Bulk changed category for {count} product(s) to "{category_name}" | Reason: {clean_reason}',
+                    model_name='Product',
+                    request=request,
+                    business=request.business
+                )
+                msg = f'Successfully moved {count} product(s) to category "{category_name}".'
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'count': count})
+                messages.success(request, msg)
+
+            elif action == 'change_brand':
+                brand_id = request.POST.get('target_brand', '').strip()
+                brand = None
+                brand_name = "None"
+                if brand_id:
+                    brand = get_object_or_404(Brand, business=request.business, pk=brand_id)
+                    brand_name = brand.name
+                    products_qs.update(brand=brand)
+                else:
+                    products_qs.update(brand=None)
+
+                for p in products_qs:
+                    if hasattr(p, 'invalidate_cache'):
+                        p.invalidate_cache()
+
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='bulk_update',
+                    description=f'Bulk changed department/brand for {count} product(s) to "{brand_name}" | Reason: {clean_reason}',
+                    model_name='Product',
+                    request=request,
+                    business=request.business
+                )
+                msg = f'Successfully updated department/brand for {count} product(s) to "{brand_name}".'
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'count': count})
+                messages.success(request, msg)
+
+            elif action == 'change_tax':
+                tax_class = request.POST.get('target_tax_class', '').strip()
+                vat_code_id = request.POST.get('target_vat_code', '').strip()
+
+                update_fields = {}
+                if tax_class in ['standard', 'zero_rated', 'exempt']:
+                    update_fields['tax_class'] = tax_class
+
+                vat_desc = ""
+                if vat_code_id == '__none__':
+                    update_fields['vat_code'] = None
+                    vat_desc = ", VAT Code cleared"
+                elif vat_code_id:
+                    vat_code = get_object_or_404(VATCode, business=request.business, pk=vat_code_id)
+                    update_fields['vat_code'] = vat_code
+                    vat_desc = f", VAT Code: {vat_code.code} ({vat_code.vat_rate}%)"
+
+                if update_fields:
+                    products_qs.update(**update_fields)
+                    for p in products_qs:
+                        if hasattr(p, 'invalidate_cache'):
+                            p.invalidate_cache()
+                    ActivityLog.log_activity(
+                        user=request.user,
+                        action_type='bulk_update',
+                        description=f'Bulk updated tax settings for {count} product(s) ({tax_class}{vat_desc}) | Reason: {clean_reason}',
+                        model_name='Product',
+                        request=request,
+                        business=request.business
+                    )
+                    msg = f'Successfully updated tax settings for {count} product(s).'
+                    if is_ajax:
+                        return JsonResponse({'success': True, 'message': msg, 'count': count})
+                    messages.success(request, msg)
+                else:
+                    msg = "No tax class or VAT code specified."
+                    if is_ajax:
+                        return JsonResponse({'success': False, 'message': msg}, status=400)
+                    messages.warning(request, msg)
+
+            elif action == 'adjust_price':
+                target_field = request.POST.get('price_target_field', 'unit_price')
+                adj_type = request.POST.get('price_adj_type', 'percent_increase')
+                adj_val_str = request.POST.get('price_adj_value', '').strip()
+                round_mode = request.POST.get('price_round_mode', 'none')
+
+                if target_field not in ['unit_price', 'cost_price', 'wholesale_price', 'minimum_price']:
+                    target_field = 'unit_price'
+
+                if not adj_val_str:
+                    raise ValueError("Adjustment value is required.")
+
+                adj_val = Decimal(adj_val_str)
+                if adj_val < 0:
+                    raise ValueError("Adjustment value must be a positive number.")
+
+                updated_items = 0
+                for product in products_qs:
+                    current_val = getattr(product, target_field) or Decimal('0.00')
+
+                    if adj_type == 'percent_increase':
+                        new_val = current_val * (Decimal('1') + (adj_val / Decimal('100')))
+                    elif adj_type == 'percent_decrease':
+                        new_val = current_val * (Decimal('1') - (adj_val / Decimal('100')))
+                    elif adj_type == 'fixed_increase':
+                        new_val = current_val + adj_val
+                    elif adj_type == 'fixed_decrease':
+                        new_val = current_val - adj_val
+                    elif adj_type == 'set_exact':
+                        new_val = adj_val
+                    else:
+                        continue
+
+                    # Ensure non-negative and valid constraints
+                    if target_field == 'cost_price':
+                        new_val = max(Decimal('0.01'), new_val)
+                    else:
+                        new_val = max(Decimal('0.00'), new_val)
+
+                    # Rounding
+                    if round_mode == 'integer':
+                        new_val = new_val.quantize(Decimal('1'))
+                    elif round_mode == 'two_decimals':
+                        new_val = new_val.quantize(Decimal('0.01'))
+                    elif round_mode == 'half_unit':
+                        new_val = (new_val * 2).quantize(Decimal('1')) / 2
+                    else:
+                        new_val = new_val.quantize(Decimal('0.01'))
+
+                    setattr(product, target_field, new_val)
+                    product.save(update_fields=[target_field, 'updated_at'])
+                    if hasattr(product, 'invalidate_cache'):
+                        product.invalidate_cache()
+                    updated_items += 1
+
+                field_name_map = {
+                    'unit_price': 'Selling Price',
+                    'cost_price': 'Cost Price',
+                    'wholesale_price': 'Wholesale Price',
+                    'minimum_price': 'Minimum Price'
+                }
+                display_field = field_name_map.get(target_field, target_field)
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='bulk_update',
+                    description=f'Bulk adjusted {display_field} for {updated_items} product(s) ({adj_type}: {adj_val}) | Reason: {clean_reason}',
+                    model_name='Product',
+                    request=request,
+                    business=request.business
+                )
+                msg = f'Successfully updated {display_field} for {updated_items} product(s).'
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'count': updated_items})
+                messages.success(request, msg)
+
+            elif action == 'delete':
+                delete_mode = request.POST.get('delete_mode', 'safe_delete')
+                deleted_count = 0
+                discontinued_count = 0
+                skipped_count = 0
+                errors = []
+
+                for product in list(products_qs):
+                    has_history = _product_has_transaction_history(product)
+
+                    if delete_mode == 'discontinue_all':
+                        product.stock_quantity = Decimal('0.00')
+                        product.is_active = False
+                        product.save(update_fields=['stock_quantity', 'is_active', 'updated_at'])
+                        if hasattr(product, 'invalidate_cache'):
+                            product.invalidate_cache()
+                        discontinued_count += 1
+
+                    elif delete_mode == 'delete_unused_only':
+                        if has_history:
+                            skipped_count += 1
+                            continue
+                        try:
+                            with transaction.atomic():
+                                product.stock_movements.all().delete()
+                                product.stock_adjustments.all().delete()
+                                product.delete()
+                            deleted_count += 1
+                        except Exception as e:
+                            skipped_count += 1
+                            errors.append(f"{product.name}: {str(e)}")
+
+                    else: # safe_delete
+                        if has_history:
+                            product.stock_quantity = Decimal('0.00')
+                            product.is_active = False
+                            product.save(update_fields=['stock_quantity', 'is_active', 'updated_at'])
+                            if hasattr(product, 'invalidate_cache'):
+                                product.invalidate_cache()
+                            discontinued_count += 1
+                        else:
+                            try:
+                                with transaction.atomic():
+                                    product.stock_movements.all().delete()
+                                    product.stock_adjustments.all().delete()
+                                    product.delete()
+                                deleted_count += 1
+                            except Exception:
+                                # If deletion fails due to any protected reference, safely discontinue
+                                product.stock_quantity = Decimal('0.00')
+                                product.is_active = False
+                                product.save(update_fields=['stock_quantity', 'is_active', 'updated_at'])
+                                if hasattr(product, 'invalidate_cache'):
+                                    product.invalidate_cache()
+                                discontinued_count += 1
+
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='bulk_delete',
+                    description=f'Bulk delete action ({delete_mode}): {deleted_count} deleted, {discontinued_count} discontinued, {skipped_count} skipped | Reason: {clean_reason}',
+                    model_name='Product',
+                    request=request,
+                    business=request.business
+                )
+
+                parts = []
+                if deleted_count > 0:
+                    parts.append(f"Permanently deleted {deleted_count} unused product(s)")
+                if discontinued_count > 0:
+                    parts.append(f"Safely discontinued {discontinued_count} product(s) with sales/history (stock set to 0 and deactivated)")
+                if skipped_count > 0:
+                    parts.append(f"{skipped_count} product(s) skipped because they have transaction history")
+                if not parts:
+                    parts.append("No products were modified")
+
+                msg = ". ".join(parts) + "."
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'deleted': deleted_count, 'discontinued': discontinued_count, 'skipped': skipped_count})
+                messages.success(request, msg)
+
+            elif action == 'export_csv':
+                import csv
+                response = HttpResponse(content_type='text/csv')
+                response['Content-Disposition'] = f'attachment; filename="products_export_selected_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+                writer = csv.writer(response)
+                writer.writerow([
+                    'name', 'product_code', 'barcode', 'category', 'brand', 'tax_class',
+                    'cost_price', 'unit_price', 'wholesale_price', 'stock_quantity', 'low_stock_threshold', 'is_active'
+                ])
+                for product in products_qs.select_related('category', 'brand'):
+                    writer.writerow([
+                        product.name,
+                        product.product_code or '',
+                        product.barcode or '',
+                        product.category.name if product.category else '',
+                        product.brand.name if product.brand else '',
+                        product.tax_class,
+                        product.cost_price,
+                        product.unit_price,
+                        product.wholesale_price or '',
+                        product.stock_quantity,
+                        product.low_stock_threshold,
+                        'Yes' if product.is_active else 'No'
+                    ])
+                return response
+
+            else:
+                msg = f"Unknown bulk action '{action}'."
+                if is_ajax:
+                    return JsonResponse({'success': False, 'message': msg}, status=400)
+                messages.error(request, msg)
+
+    except Exception as e:
+        err_msg = f"Bulk action failed: {str(e)}"
+        if is_ajax:
+            return JsonResponse({'success': False, 'message': err_msg}, status=400)
+        messages.error(request, err_msg)
+
+    return redirect('product_list', slug=request.business.slug)
+
+
+@login_required
+@business_required
+def product_bulk_barcode_print(request, slug=None):
+    """Render a printable grid of barcode labels for selected products."""
+    product_ids = request.GET.get('ids', '').split(',')
+    product_ids = [pid.strip() for pid in product_ids if pid.strip()]
+
+    if not product_ids:
+        messages.warning(request, "No products selected for barcode printing.")
+        return redirect('product_list', slug=request.business.slug)
+
+    products = list(Product.objects.filter(
+        business=request.business,
+        pk__in=product_ids
+    ).select_related('category', 'brand'))
+
+    copies = int(request.GET.get('copies', 1))
+    copies = max(1, min(100, copies))
+
+    items = []
+    for product in products:
+        for _ in range(copies):
+            items.append(product)
+
+    context = {
+        'products': items,
+        'unique_products_count': len(products),
+        'total_labels_count': len(items),
+        'copies': copies,
+        'business': request.business,
+    }
+    return render(request, 'pos/product_barcode_labels.html', context)
+
 
 
 @login_required
@@ -1744,17 +2226,52 @@ def product_delete(request, slug=None, pk=None):
     if request.method == 'POST':
         action = request.POST.get('action', 'delete')
         
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="product deletion / discontinuation"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            context = {
+                'product': product,
+                'sale_items_count': sale_items_count,
+                'purchase_items_count': purchase_items_count,
+                'has_related_records': has_related_records,
+            }
+            return render(request, 'pos/product_confirm_delete.html', context)
+        
         if action == 'discontinue':
             # Mark as out of stock and set quantity to 0
             product.stock_quantity = 0
+            product.is_active = False
             product.save()
-            messages.success(request, f'Product "{product.name}" has been discontinued (stock set to 0).')
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='update',
+                model_name='Product',
+                object_id=product.pk,
+                description=f'Discontinued product: {product.name} | Reason: {clean_reason}',
+                request=request,
+                business=request.business
+            )
+            messages.success(request, f'Product "{product.name}" has been discontinued (stock set to 0, deactivated).')
             return redirect('product_list', slug=request.business.slug)
         
         elif action == 'delete':
             try:
                 name = product.name
+                prod_pk = product.pk
                 product.delete()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='delete',
+                    model_name='Product',
+                    object_id=prod_pk,
+                    description=f'Deleted product: {name} | Reason: {clean_reason}',
+                    request=request,
+                    business=request.business
+                )
                 messages.success(request, f'Product "{name}" deleted successfully!')
                 return redirect('product_list', slug=request.business.slug)
             except models.ProtectedError as e:
@@ -1822,9 +2339,25 @@ def category_delete(request, slug=None, pk=None):
     # Check if category has products
     product_count = category.products.count()
     has_products = product_count > 0
+    other_categories = Category.objects.filter(business=request.business).exclude(pk=pk)
     
     if request.method == 'POST':
         action = request.POST.get('action', 'delete')
+        
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="category deletion"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            context = {
+                'category': category,
+                'product_count': product_count,
+                'has_products': has_products,
+                'other_categories': other_categories,
+            }
+            return render(request, 'pos/category_confirm_delete.html', context)
         
         if action == 'reassign':
             # Reassign products to another category or uncategorized
@@ -1840,14 +2373,34 @@ def category_delete(request, slug=None, pk=None):
             
             # Now delete the category
             name = category.name
+            cat_pk = category.pk
             category.delete()
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='delete',
+                model_name='Category',
+                object_id=cat_pk,
+                description=f'Deleted category: {name} (reassigned {product_count} products) | Reason: {clean_reason}',
+                request=request,
+                business=request.business
+            )
             messages.success(request, f'Category "{name}" deleted successfully!')
             return redirect('category_list', slug=request.business.slug)
         
         elif action == 'delete':
             try:
                 name = category.name
+                cat_pk = category.pk
                 category.delete()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='delete',
+                    model_name='Category',
+                    object_id=cat_pk,
+                    description=f'Deleted category: {name} | Reason: {clean_reason}',
+                    request=request,
+                    business=request.business
+                )
                 messages.success(request, f'Category "{name}" deleted successfully!')
                 return redirect('category_list', slug=request.business.slug)
             except models.ProtectedError:
@@ -1857,9 +2410,6 @@ def category_delete(request, slug=None, pk=None):
                     f'Please reassign the products first.'
                 )
                 return redirect('category_list', slug=request.business.slug)
-    
-    # Get other categories for reassignment option
-    other_categories = Category.objects.filter(business=request.business).exclude(pk=pk)
     
     context = {
         'category': category,
@@ -1961,9 +2511,25 @@ def unit_delete(request, slug=None, pk=None):
     # Check if unit has products
     product_count = unit.products.count()
     has_products = product_count > 0
+    other_units = UnitOfMeasurement.objects.filter(business=request.business).exclude(pk=pk)
     
     if request.method == 'POST':
         action = request.POST.get('action', 'delete')
+        
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="unit deletion"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            context = {
+                'unit': unit,
+                'product_count': product_count,
+                'has_products': has_products,
+                'other_units': other_units,
+            }
+            return render(request, 'pos/unit_confirm_delete.html', context)
         
         if action == 'reassign':
             # Reassign products to another unit or no unit
@@ -1979,14 +2545,34 @@ def unit_delete(request, slug=None, pk=None):
             
             # Now delete the unit
             name = unit.name
+            unit_pk = unit.pk
             unit.delete()
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='delete',
+                model_name='UnitOfMeasurement',
+                object_id=unit_pk,
+                description=f'Deleted unit: {name} (reassigned {product_count} products) | Reason: {clean_reason}',
+                request=request,
+                business=request.business
+            )
             messages.success(request, f'Unit "{name}" deleted successfully!')
             return redirect('unit_list', slug=request.business.slug)
         
         elif action == 'delete':
             try:
                 name = unit.name
+                unit_pk = unit.pk
                 unit.delete()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='delete',
+                    model_name='UnitOfMeasurement',
+                    object_id=unit_pk,
+                    description=f'Deleted unit: {name} | Reason: {clean_reason}',
+                    request=request,
+                    business=request.business
+                )
                 messages.success(request, f'Unit "{name}" deleted successfully!')
                 return redirect('unit_list', slug=request.business.slug)
             except models.ProtectedError:
@@ -1996,9 +2582,6 @@ def unit_delete(request, slug=None, pk=None):
                     f'Please reassign the products first.'
                 )
                 return redirect('unit_list', slug=request.business.slug)
-    
-    # Get other units for reassignment option
-    other_units = UnitOfMeasurement.objects.filter(business=request.business).exclude(pk=pk)
     
     context = {
         'unit': unit,
@@ -2612,13 +3195,13 @@ def complete_sale(request, slug=None):
 
 
 @login_required
-def invoice_view(request, slug, pk):
+def invoice_view(request, slug=None, pk=None):
     """View invoice details"""
     sale = get_object_or_404(Sale, pk=pk)
     shop_name = getattr(settings, 'SHOP_NAME', 'My Retail Shop')
     return render(request, 'pos/invoice.html', {'sale': sale, 'shop_name': shop_name})
 @login_required
-def thermal_receipt(request, slug, pk):
+def thermal_receipt(request, slug=None, pk=None):
     """View thermal printer receipt - Optimized for fast loading"""
     from .models import BusinessSettings
     
@@ -2675,7 +3258,7 @@ def thermal_receipt(request, slug, pk):
 
 
 @login_required
-def invoice_pdf(request, slug, pk):
+def invoice_pdf(request, slug=None, pk=None):
     """Generate PDF invoice"""
     # Check permission to print receipts
     membership = getattr(request, 'business_membership', None)
@@ -3482,17 +4065,51 @@ def supplier_delete(request, slug=None, pk=None):
     if request.method == 'POST':
         action = request.POST.get('action', 'delete')
         
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="supplier deletion / deactivation"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            context = {
+                'supplier': supplier,
+                'purchase_count': purchase_count,
+                'payment_count': payment_count,
+                'has_related_records': has_related_records,
+            }
+            return render(request, 'pos/supplier_confirm_delete.html', context)
+        
         if action == 'deactivate':
             # Deactivate instead of delete
             supplier.is_active = False
             supplier.save()
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='update',
+                model_name='Supplier',
+                object_id=supplier.pk,
+                description=f'Deactivated supplier: {supplier.name} | Reason: {clean_reason}',
+                request=request,
+                business=request.business
+            )
             messages.success(request, f'Supplier "{supplier.name}" has been deactivated.')
             return redirect('supplier_list', slug=request.business.slug)
         
         elif action == 'delete':
             try:
                 name = supplier.name
+                supp_pk = supplier.pk
                 supplier.delete()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='delete',
+                    model_name='Supplier',
+                    object_id=supp_pk,
+                    description=f'Deleted supplier: {name} | Reason: {clean_reason}',
+                    request=request,
+                    business=request.business
+                )
                 messages.success(request, f'Supplier "{name}" deleted successfully!')
                 return redirect('supplier_list', slug=request.business.slug)
             except models.ProtectedError as e:
@@ -4618,7 +5235,7 @@ from .models import UserProfile, ActivityLog
 @login_required
 @business_required
 @manager_required
-def user_list(request, slug):
+def user_list(request, slug=None):
     """List all users in this business"""
     # Get users who are members of this business
     memberships = request.business.memberships.filter(is_active=True).select_related('user')
@@ -4653,7 +5270,7 @@ def hr_hub(request, slug=None):
 
 @business_required
 @manager_required
-def roles_permissions(request, slug):
+def roles_permissions(request, slug=None):
     """Display roles and permissions matrix"""
     from collections import defaultdict
     
@@ -4773,7 +5390,7 @@ def roles_permissions(request, slug):
 
 @login_required
 @manager_required
-def user_create(request, slug):
+def user_create(request, slug=None):
     """Create a new user"""
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -4862,7 +5479,7 @@ def user_create(request, slug):
 
 @login_required
 @manager_required
-def user_edit(request, slug, pk):
+def user_edit(request, slug=None, pk=None):
     """Edit existing user"""
     user = get_object_or_404(User, pk=pk)
     
@@ -4941,7 +5558,7 @@ def user_edit(request, slug, pk):
 
 @login_required
 @manager_required
-def user_delete(request, slug, pk):
+def user_delete(request, slug=None, pk=None):
     """Delete user"""
     user = get_object_or_404(User, pk=pk)
     
@@ -4956,6 +5573,15 @@ def user_delete(request, slug, pk):
         return redirect('user_list')
     
     if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="user deletion"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            return render(request, 'pos/user_confirm_delete.html', {'delete_user': user})
+        
         username = user.username
         user_id = user.id
         user.delete()
@@ -4966,7 +5592,7 @@ def user_delete(request, slug, pk):
             action_type='delete',
             model_name='User',
             object_id=user_id,
-            description=f'Deleted user: {username}',
+            description=f'Deleted user: {username} | Reason: {clean_reason}',
             request=request
         )
         
@@ -5337,6 +5963,16 @@ def user_activity(request, slug=None, user_id=None):
 def clear_old_logs(request, slug=None):
     """Clear old activity logs"""
     if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="audit log purge"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            days = int(request.POST.get('days', 90))
+            return redirect(f"{request.path}?days={days}")
+
         days = int(request.POST.get('days', 90))
 
         logs_qs = ActivityLog.objects.filter(business=request.business)
@@ -5346,6 +5982,16 @@ def clear_old_logs(request, slug=None):
             logs_qs = logs_qs.filter(timestamp__lt=cutoff_date)
 
         deleted_count, _ = logs_qs.delete()
+
+        # Log this purge action as a new activity log
+        ActivityLog.log_activity(
+            user=request.user,
+            action_type='delete',
+            model_name='ActivityLog',
+            description=f'Purged {deleted_count} log entries (older than {days} days) | Reason: {clean_reason}',
+            request=request,
+            business=request.business
+        )
 
         if days > 0:
             messages.success(request, f'Successfully deleted {deleted_count} log entries older than {days} days')
@@ -5697,17 +6343,51 @@ def customer_delete(request, slug=None, pk=None):
     if request.method == 'POST':
         action = request.POST.get('action', 'delete')
         
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="customer deletion / deactivation"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            context = {
+                'customer': customer,
+                'sales_count': sales_count,
+                'loyalty_transactions_count': loyalty_transactions_count,
+                'has_related_records': has_related_records,
+            }
+            return render(request, 'pos/customer_confirm_delete.html', context)
+        
         if action == 'deactivate':
             # Deactivate instead of delete
             customer.is_active = False
             customer.save()
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='update',
+                model_name='Customer',
+                object_id=customer.pk,
+                description=f'Deactivated customer: {customer.name} | Reason: {clean_reason}',
+                request=request,
+                business=request.business
+            )
             messages.success(request, f'Customer "{customer.name}" has been deactivated.')
             return redirect('customer_list', slug=request.business.slug)
         
         elif action == 'delete':
             try:
                 name = customer.name
+                cust_pk = customer.pk
                 customer.delete()
+                ActivityLog.log_activity(
+                    user=request.user,
+                    action_type='delete',
+                    model_name='Customer',
+                    object_id=cust_pk,
+                    description=f'Deleted customer: {name} | Reason: {clean_reason}',
+                    request=request,
+                    business=request.business
+                )
                 messages.success(request, f'Customer "{name}" deleted successfully!')
                 return redirect('customer_list', slug=request.business.slug)
             except models.ProtectedError as e:
@@ -6085,7 +6765,7 @@ def writeoff_report(request, slug=None):
 
 @login_required
 @can_manage_purchases
-def supplier_payments(request, slug, supplier_id):
+def supplier_payments(request, slug=None, supplier_id=None):
     """List all payments for a supplier"""
     supplier = get_object_or_404(Supplier, pk=supplier_id, business=request.business)
     
@@ -6114,7 +6794,7 @@ def supplier_payments(request, slug, supplier_id):
 
 @login_required
 @can_manage_purchases
-def create_payment(request, slug, supplier_id):
+def create_payment(request, slug=None, supplier_id=None):
     """Create a new supplier payment"""
     from .supplier_services import SupplierPaymentService
     from .models import PaymentMethod
@@ -6278,7 +6958,7 @@ def create_payment(request, slug, supplier_id):
 
 @login_required
 @can_manage_purchases
-def payment_detail(request, slug, payment_id):
+def payment_detail(request, slug=None, payment_id=None):
     """View payment details"""
     from .models import SupplierPayment
     
@@ -6308,7 +6988,7 @@ def payment_detail(request, slug, payment_id):
 
 @login_required
 @can_manage_purchases
-def delete_payment(request, slug, payment_id):
+def delete_payment(request, slug=None, payment_id=None):
     """Delete a supplier payment"""
     from .models import SupplierPayment
     
@@ -6316,15 +6996,28 @@ def delete_payment(request, slug, payment_id):
     supplier_id = payment.supplier.id
     
     if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="supplier payment deletion"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            return render(request, 'pos/payment_confirm_delete.html', {'payment': payment})
+
         payment_number = payment.payment_number
+        pay_pk = payment.pk
         payment.delete()
         
         # Log deletion
         ActivityLog.log_activity(
             user=request.user,
             action_type='delete',
-            description=f'Deleted supplier payment {payment_number}',
-            model_name='SupplierPayment'
+            description=f'Deleted supplier payment {payment_number} | Reason: {clean_reason}',
+            model_name='SupplierPayment',
+            object_id=pay_pk,
+            request=request,
+            business=request.business
         )
         
         messages.success(request, 'Payment deleted successfully!')
@@ -6335,7 +7028,7 @@ def delete_payment(request, slug, payment_id):
 
 @login_required
 @can_manage_purchases
-def supplier_statement(request, slug, supplier_id):
+def supplier_statement(request, slug=None, supplier_id=None):
     """Generate supplier statement - Always fresh, no caching"""
     from django.views.decorators.cache import never_cache
     from .supplier_services import SupplierStatementService
@@ -7126,7 +7819,7 @@ def payment_transactions_csv(request, slug=None):
 
 @login_required
 @business_required
-def payment_method_list(request, slug):
+def payment_method_list(request, slug=None):
     """List all payment methods for the business"""
     payment_methods = request.business.payment_methods.all().order_by('name')
     
@@ -7138,7 +7831,7 @@ def payment_method_list(request, slug):
 
 @login_required
 @business_required
-def payment_method_create(request, slug):
+def payment_method_create(request, slug=None):
     """Create a new payment method"""
     from .models import PaymentMethod
     
@@ -7170,12 +7863,14 @@ def payment_method_create(request, slug):
         )
         
         # Log activity
-        ActivityLog.objects.create(
+        ActivityLog.log_activity(
             user=request.user,
             action_type='create',
             model_name='PaymentMethod',
             object_id=payment_method.id,
-            description=f'Created payment method: {payment_method.name}'
+            description=f'Created payment method: {payment_method.name}',
+            request=request,
+            business=request.business
         )
         
         messages.success(request, f'Payment method "{payment_method.name}" created successfully.')
@@ -7198,7 +7893,7 @@ def payment_method_create(request, slug):
 
 @login_required
 @business_required
-def payment_method_edit(request, slug, pk):
+def payment_method_edit(request, slug=None, pk=None):
     """Edit an existing payment method"""
     from .models import PaymentMethod
     
@@ -7230,12 +7925,14 @@ def payment_method_edit(request, slug, pk):
         payment_method.save()
         
         # Log activity
-        ActivityLog.objects.create(
+        ActivityLog.log_activity(
             user=request.user,
             action_type='update',
             model_name='PaymentMethod',
             object_id=payment_method.id,
-            description=f'Updated payment method: {payment_method.name}'
+            description=f'Updated payment method: {payment_method.name}',
+            request=request,
+            business=request.business
         )
         
         messages.success(request, f'Payment method "{payment_method.name}" updated successfully.')
@@ -7259,7 +7956,7 @@ def payment_method_edit(request, slug, pk):
 
 @login_required
 @business_required
-def payment_method_delete(request, slug, pk):
+def payment_method_delete(request, slug=None, pk=None):
     """Delete a payment method"""
     from .models import PaymentMethod
     
@@ -7275,15 +7972,27 @@ def payment_method_delete(request, slug, pk):
         return redirect('payment_method_list', slug=request.business.slug)
     
     if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="payment method deletion"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            return render(request, 'pos/payment_method_confirm_delete.html', {'payment_method': payment_method})
+
         name = payment_method.name
+        pm_pk = payment_method.pk
         
         # Log activity before deletion
-        ActivityLog.objects.create(
+        ActivityLog.log_activity(
             user=request.user,
             action_type='delete',
             model_name='PaymentMethod',
-            object_id=payment_method.id,
-            description=f'Deleted payment method: {name}'
+            object_id=pm_pk,
+            description=f'Deleted payment method: {name} | Reason: {clean_reason}',
+            request=request,
+            business=request.business
         )
         
         payment_method.delete()
@@ -8241,3 +8950,88 @@ def held_order_delete(request, slug=None, pk=None):
     held = get_object_or_404(HeldOrder, pk=pk, business=request.business)
     held.delete()
     return JsonResponse({'success': True})
+
+
+@login_required
+@business_required
+@require_POST
+def supervisor_authorize(request, slug=None):
+    """
+    Supervisor / Manager override authorization endpoint for POS register.
+    Allows cashiers to request authorization for restricted actions:
+    - Removing cart line items or decreasing quantity
+    - Clearing cart
+    - Applying discounts (custom discount, promo, points)
+    - Restoring or deleting held carts
+    """
+    import json
+    from .security_utils import verify_supervisor_credentials
+    from .models import ActivityLog
+
+    raw_credential = ""
+    action_type = ""
+    action_details = ""
+    reason = ""
+
+    if request.content_type == 'application/json' and request.body:
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            raw_credential = body.get('credential') or body.get('password') or body.get('pin', '')
+            action_type = body.get('action_type', '')
+            action_details = body.get('action_details', '')
+            reason = body.get('reason', '')
+        except Exception:
+            pass
+
+    if not raw_credential:
+        raw_credential = request.POST.get('credential') or request.POST.get('password') or request.POST.get('pin', '')
+    if not action_type:
+        action_type = request.POST.get('action_type', '')
+    if not action_details:
+        action_details = request.POST.get('action_details', '')
+    if not reason:
+        reason = request.POST.get('reason', '')
+
+    is_valid, supervisor, error_msg = verify_supervisor_credentials(request, raw_credential)
+    if not is_valid:
+        return JsonResponse({'success': False, 'error': error_msg or 'Supervisor authorization failed.'}, status=400)
+
+    # Human readable action descriptions
+    action_labels = {
+        'remove_cart_item': 'Cart Item Removal',
+        'decrease_cart_qty': 'Cart Quantity Reduction',
+        'clear_cart': 'Clear Entire Cart',
+        'apply_discount': 'Discount Applied',
+        'apply_promo': 'Promo Code Applied',
+        'redeem_points': 'Loyalty Points Redeemed',
+        'retrieve_held_order': 'Held Order Retrieved',
+        'delete_held_order': 'Held Order Deleted',
+    }
+    label = action_labels.get(action_type, action_type or 'POS Restricted Action')
+    supervisor_name = supervisor.get_full_name() or supervisor.username
+    cashier_name = request.user.get_full_name() or request.user.username
+
+    log_desc = f"Supervisor {supervisor_name} authorized {label} for cashier {cashier_name}"
+    if action_details:
+        log_desc += f" | Details: {action_details}"
+    if reason:
+        log_desc += f" | Reason: {reason}"
+
+    # Log to ActivityLog
+    ActivityLog.log_activity(
+        user=supervisor,
+        action_type='update',
+        operation_type='POS_SUPERVISOR_OVERRIDE',
+        model_name='POSSession',
+        description=log_desc,
+        request=request,
+        business=request.business
+    )
+
+    return JsonResponse({
+        'success': True,
+        'supervisor_id': supervisor.id,
+        'supervisor_name': supervisor_name,
+        'message': f"Authorized by {supervisor_name}"
+    })
+

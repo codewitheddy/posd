@@ -29,6 +29,14 @@
             <form method="post">
               {% csrf_token %}
               <input type="hidden" name="action" value="deactivate">
+              <div class="mb-2">
+                <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small text-muted mb-1">Reason for Action <span class="text-danger">*</span></label>
+                <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Supplier deactivated, vendor switched" required minlength="3">
+              </div>
               <button type="submit" class="btn btn-warning btn-sm w-100"><i class="bi bi-pause-circle me-1"></i>Deactivate Supplier</button>
             </form>
           </div>
@@ -38,16 +46,15 @@
         <div class="ui-card h-100">
           <div class="ui-card-header"><span class="ui-card-title" style="color:#2563eb;"><i class="bi bi-list-check me-1"></i>Option 2: View Records</span></div>
           <div class="ui-card-body" style="font-size:13px;">
-            <p>Review and delete all related records first, then delete the supplier.</p>
-            <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.pk %}" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-eye me-1"></i>View Supplier Statement</a>
+            <p>Review and audit all related purchase and payment records.</p>
+            <a href="{% url 'supplier_statement' slug=request.business.slug supplier_id=supplier.pk %}" class="btn btn-outline-secondary btn-sm w-100 mb-2"><i class="bi bi-eye me-1"></i>View Supplier Statement</a>
+            <a href="{% url 'supplier_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm w-100">
+              <i class="bi bi-arrow-left me-1"></i>Back to Suppliers
+            </a>
           </div>
         </div>
       </div>
     </div>
-
-    <a href="{% url 'supplier_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i>Back to Suppliers
-    </a>
 
     {% else %}
     <div class="alert alert-info mb-3" style="font-size:13px;">
@@ -56,6 +63,21 @@
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="delete">
+
+      <div class="border rounded-3 p-3 bg-light mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+          <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+          <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+        </div>
+        <div>
+          <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+          <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Duplicate supplier cleanup" required minlength="3">
+        </div>
+      </div>
+
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Yes, Delete Permanently</button>
         <a href="{% url 'supplier_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>

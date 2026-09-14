@@ -17,7 +17,7 @@ from .decorators import business_required, back_office_required, back_office_mod
 @login_required
 @business_required
 @back_office_required
-def terminal_list(request):
+def terminal_list(request, slug=None):
     """
     Back Office list of all registered POS terminals in the store.
     """
@@ -40,7 +40,7 @@ def terminal_list(request):
 @login_required
 @business_required
 @back_office_module_required('system_admin')
-def terminal_create(request):
+def terminal_create(request, slug=None):
     """Create a new POS terminal definition in the store."""
     business = request.business
     branches = Branch.objects.filter(business=business, is_active=True).order_by('name')
@@ -82,7 +82,7 @@ def terminal_create(request):
 @login_required
 @business_required
 @back_office_module_required('system_admin')
-def terminal_edit(request, pk):
+def terminal_edit(request, pk=None, slug=None):
     """Edit terminal details, assigned branch, and status."""
     business = request.business
     terminal = get_object_or_404(POSTerminal, pk=pk, business=business)
@@ -111,7 +111,7 @@ def terminal_edit(request, pk):
 @login_required
 @business_required
 @back_office_required
-def pin_audit_log_list(request):
+def pin_audit_log_list(request, slug=None):
     """
     Back Office Audit Trail — View and filter all Cashier PIN login attempts,
     shift drawer opens, lockouts, and closures.

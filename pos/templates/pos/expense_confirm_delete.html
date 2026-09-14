@@ -11,10 +11,26 @@
       </div>
       <h5 class="fw-bold mb-1">Delete Expense?</h5>
       <p class="text-muted small mb-3">This will permanently delete <strong>{{ expense.expense_number }}</strong> — {{ expense.description }} (KES {{ expense.amount|floatformat:0 }})</p>
-      <form method="post" class="d-flex gap-2 justify-content-center">
+      <form method="post" class="text-start mt-3">
         {% csrf_token %}
-        <a href="{% url 'expense_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
-        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        <div class="border rounded-3 p-3 bg-light mb-3">
+          <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+            <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+            <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+          </div>
+          <div>
+            <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Cancelled/invalid expense entry" required minlength="3">
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-center">
+          <a href="{% url 'expense_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Expense</button>
+        </div>
       </form>
     </div>
   </div>

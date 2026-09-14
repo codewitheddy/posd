@@ -71,6 +71,22 @@
                         {% csrf_token %}
                         <input type="hidden" name="days" value="{{ days }}">
                         
+                        <div class="border rounded-3 p-3 bg-light mb-3">
+                            <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+                                <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                                    <input type="password" name="admin_password" class="form-control" placeholder="Enter your login password" required autocomplete="current-password">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small text-muted mb-1">Reason for Purging Logs <span class="text-danger">*</span></label>
+                                    <input type="text" name="reason" class="form-control" placeholder="e.g. Periodic maintenance / storage optimization" required minlength="3">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-danger btn-lg">
                                 {% if days > 0 %}

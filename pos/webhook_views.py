@@ -18,7 +18,9 @@ from .decorators import business_required
 from .models import (
     Business, BusinessMembership, Customer, Product, Purchase,
     Sale, SaleItem, Webhook, WebhookDelivery, APIKey, WEBHOOK_EVENTS,
+    ActivityLog,
 )
+from .security_utils import verify_admin_password_and_reason
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -124,7 +126,30 @@ def webhook_delete(request, slug=None, pk=None):
     if not _require_owner_or_admin(request, business):
         messages.error(request, 'Permission denied.')
         return redirect('webhook_list', slug=business.slug)
+
+    # Enforce Admin Password & Reason
+    is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+        request,
+        action_name="webhook deletion"
+    )
+    if not is_valid:
+        messages.error(request, err_msg)
+        return redirect('webhook_list', slug=business.slug)
+
+    url = hook.url
+    hook_pk = hook.pk
     hook.delete()
+
+    ActivityLog.log_activity(
+        user=request.user,
+        action_type='delete',
+        model_name='Webhook',
+        object_id=hook_pk,
+        description=f'Deleted webhook endpoint {url} | Reason: {clean_reason}',
+        request=request,
+        business=business
+    )
+
     messages.success(request, 'Webhook deleted.')
     return redirect('webhook_list', slug=business.slug)
 

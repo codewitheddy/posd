@@ -62,9 +62,13 @@ def branch_list(request, *args, **kwargs):
                     messages.error(request, f'Error creating branch: {e}')
         return redirect('branch_list')
 
-    branches = Branch.objects.filter(business=request.business).order_by('name')
+    branches = list(Branch.objects.filter(business=request.business).prefetch_related('memberships', 'terminals').order_by('name'))
+    active_branches_count = sum(1 for b in branches if b.is_active)
+    hq_branch = next((b for b in branches if b.is_hq), None)
     return render(request, 'pos/branches/branch_list.html', {
         'branches': branches,
+        'active_branches_count': active_branches_count,
+        'hq_branch': hq_branch,
     })
 
 

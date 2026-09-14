@@ -249,9 +249,10 @@ business_urlpatterns = [
     path('pos/', views.pos_screen, name='pos_screen'),
     path('pos/customer-display/', views.customer_display, name='customer_display'),
     path('pos/complete/', views.complete_sale, name='complete_sale'),
-        path('pos/held-orders/', views.held_orders_list, name='held_orders_list'),
-        path('pos/held-orders/save/', views.held_order_save, name='held_order_save'),
-        path('pos/held-orders/<int:pk>/delete/', views.held_order_delete, name='held_order_delete'),
+    path('pos/supervisor-authorize/', views.supervisor_authorize, name='pos_supervisor_authorize'),
+    path('pos/held-orders/', views.held_orders_list, name='held_orders_list'),
+    path('pos/held-orders/save/', views.held_order_save, name='held_order_save'),
+    path('pos/held-orders/<int:pk>/delete/', views.held_order_delete, name='held_order_delete'),
     path('api/product/search/', views.search_product_by_code, name='search_product_by_code'),
     path('api/customer/search/', views.search_customer_by_phone, name='search_customer_by_phone'),
     

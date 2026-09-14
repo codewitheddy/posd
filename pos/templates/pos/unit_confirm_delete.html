@@ -30,6 +30,21 @@
           {% endfor %}
         </select>
       </div>
+
+      <div class="border rounded-3 p-3 bg-light mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+          <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+          <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+        </div>
+        <div>
+          <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+          <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Unit standardization" required minlength="3">
+        </div>
+      </div>
+
       <button type="submit" class="btn btn-warning w-100"><i class="bi bi-arrow-repeat me-1"></i>Reassign Products &amp; Delete Unit</button>
     </form>
 
@@ -41,6 +56,21 @@
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="delete">
+
+      <div class="border rounded-3 p-3 bg-light mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+          <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+          <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+        </div>
+        <div>
+          <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+          <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Obsolete unit removal" required minlength="3">
+        </div>
+      </div>
+
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Unit</button>
         <a href="{% url 'unit_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>

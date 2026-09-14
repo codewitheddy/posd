@@ -34,6 +34,14 @@
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="deactivate">
+            <div class="mb-2">
+              <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+              <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-muted mb-1">Reason for Action <span class="text-danger">*</span></label>
+              <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Inactive customer deactivation" required minlength="3">
+            </div>
             <button type="submit" class="btn btn-warning btn-sm w-100">Deactivate Customer</button>
           </form>
         </div>
@@ -42,18 +50,32 @@
         <div style="border:1.5px solid #dbeafe;border-radius:10px;padding:14px">
           <div style="font-weight:700;color:#2563eb;margin-bottom:6px"><i class="bi bi-eye me-1"></i>View History</div>
           <p style="font-size:12px;color:#374151;margin-bottom:10px">Review purchases and loyalty transactions before deciding.</p>
-          <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn btn-outline-primary btn-sm w-100">View Details</a>
+          <a href="{% url 'customer_detail' slug=request.business.slug pk=customer.pk %}" class="btn btn-outline-primary btn-sm w-100 mb-2">View Details</a>
+          <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn btn-secondary btn-sm w-100"><i class="bi bi-arrow-left me-1"></i>Back</a>
         </div>
       </div>
     </div>
-
-    <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
 
     {% else %}
     <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>This action cannot be undone. The customer and their {{ customer.loyalty_points }} loyalty points will be permanently removed.</div>
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="delete">
+
+      <div class="border rounded-3 p-3 bg-light mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+          <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+          <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+        </div>
+        <div>
+          <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+          <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Duplicate customer profile removal" required minlength="3">
+        </div>
+      </div>
+
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete Permanently</button>
         <a href="{% url 'customer_list' slug=request.business.slug %}" class="btn btn-secondary btn-sm">Cancel</a>

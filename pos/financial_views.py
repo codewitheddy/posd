@@ -16,9 +16,10 @@ import json
 import os
 
 from .models import (
-    Expense, ExpenseCategory, Sale, SaleItem, Product, Business
+    Expense, ExpenseCategory, Sale, SaleItem, Product, Business, ActivityLog
 )
 from .decorators import business_required, business_permission_required
+from .security_utils import verify_admin_password_and_reason
 import datetime as _dt
 
 MAX_CUSTOM_FINANCE_RANGE_DAYS = 366
@@ -409,7 +410,30 @@ def expense_delete(request, pk, slug=None):
 
     expense = get_object_or_404(Expense, pk=pk, business=request.business)
     if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="expense deletion"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            return render(request, 'pos/expense_confirm_delete.html', {'expense': expense})
+
+        title = expense.title or f"Expense #{expense.pk}"
+        amount = expense.amount
+        exp_pk = expense.pk
         expense.delete()
+
+        ActivityLog.log_activity(
+            user=request.user,
+            action_type='delete',
+            model_name='Expense',
+            object_id=exp_pk,
+            description=f'Deleted expense: {title} (KES {amount}) | Reason: {clean_reason}',
+            request=request,
+            business=request.business
+        )
+
         messages.success(request, 'Expense deleted.')
         return redirect('expense_list', slug=request.business.slug)
     return render(request, 'pos/expense_confirm_delete.html', {'expense': expense})

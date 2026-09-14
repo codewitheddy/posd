@@ -21,32 +21,39 @@
     </div>
 
     <div class="row g-3 mb-3">
-      <div class="col-md-6">
+      <div class="col-md-7">
         <div class="ui-card h-100">
           <div class="ui-card-header"><span class="ui-card-title" style="color:#ca8a04;"><i class="bi bi-pause-circle me-1"></i>Recommended: Discontinue</span></div>
           <div class="ui-card-body" style="font-size:13px;">
-            <p>Set stock to 0 to stop selling while preserving all historical data. Can be restocked later.</p>
+            <p>Set stock to 0 and deactivate to stop selling while preserving all historical accounting data.</p>
             <form method="post">
               {% csrf_token %}
               <input type="hidden" name="action" value="discontinue">
+              <div class="mb-2">
+                <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small text-muted mb-1">Reason for Action <span class="text-danger">*</span></label>
+                <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Product end-of-life, discontinued" required minlength="3">
+              </div>
               <button type="submit" class="btn btn-warning btn-sm w-100"><i class="bi bi-pause-circle me-1"></i>Discontinue Product</button>
             </form>
           </div>
         </div>
       </div>
-      <div class="col-md-6">
+      <div class="col-md-5">
         <div class="ui-card h-100">
-          <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-info-circle me-1"></i>Why Can't I Delete?</span></div>
+          <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-shield-lock me-1"></i>Audit & Compliance</span></div>
           <div class="ui-card-body" style="font-size:13px;">
-            <p>Products with transaction history cannot be deleted to maintain data integrity for sales reports, inventory tracking, and financial audits.</p>
+            <p class="text-muted">Products with transaction history cannot be hard deleted to protect fiscal and inventory audit trails.</p>
+            <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm w-100 mt-2">
+              <i class="bi bi-arrow-left me-1"></i>Back to Products
+            </a>
           </div>
         </div>
       </div>
     </div>
-
-    <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i>Back to Products
-    </a>
 
     {% else %}
     <div class="alert alert-info mb-3" style="font-size:13px;">
@@ -55,6 +62,19 @@
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="delete">
+      <div class="border rounded-3 p-3 bg-light mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+          <i class="bi bi-shield-lock-fill text-danger"></i> Admin Authorization & Reason Required
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+          <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Enter your login password" required autocomplete="current-password">
+        </div>
+        <div>
+          <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+          <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Erroneous product entry, obsolete item" required minlength="3">
+        </div>
+      </div>
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Yes, Delete Permanently</button>
         <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary">Cancel</a>

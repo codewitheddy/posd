@@ -27,6 +27,151 @@
     .badge-type { font-size: 0.7rem; }
     .toggle-btn { cursor: pointer; border: none; background: none; padding: 2px 4px; }
     .toggle-btn i { font-size: 2.2rem; line-height: 1; }
+    
+    /* Bulk Selection & Action Bar Styles */
+    tr.product-row-selected {
+        background-color: #f0f7ff !important;
+    }
+    /* Checkbox Column Spacing */
+    .col-checkbox {
+        width: 52px;
+        padding-left: 1.25rem !important;
+        padding-right: 0.5rem !important;
+        text-align: center;
+        vertical-align: middle;
+    }
+    .product-checkbox, #selectAllCheckbox {
+        cursor: pointer;
+        width: 1.15rem;
+        height: 1.15rem;
+        margin: 0 auto;
+        display: block;
+    }
+    
+    .floating-bulk-bar {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(120%);
+        z-index: 1050;
+        background: rgba(15, 23, 42, 0.94);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        color: #ffffff;
+        border-radius: 50px;
+        padding: 8px 16px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        opacity: 0;
+        pointer-events: none;
+        max-width: 95vw;
+        flex-wrap: wrap;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .floating-bulk-bar.active {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .floating-bulk-bar .btn-group-bulk .btn {
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        padding: 6px 14px;
+    }
+    .bulk-selection-count {
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding-left: 8px;
+        white-space: nowrap;
+    }
+
+    /* Enhanced Delete Modal Option Cards & Fully Rounded Checkboxes/Radios */
+    .delete-strategy-card {
+        border: 2px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 16px 20px;
+        margin-bottom: 14px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        background: #ffffff;
+        user-select: none;
+        position: relative;
+    }
+    .delete-strategy-card:hover {
+        border-color: #cbd5e1;
+        background-color: #f8fafc;
+        transform: translateY(-1px);
+    }
+    .delete-strategy-card.selected {
+        border-color: #ef4444;
+        background-color: #fff8f8;
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.12);
+    }
+    .delete-strategy-card .form-check-input {
+        float: none !important;
+        margin: 0 !important;
+        width: 22px !important;
+        height: 22px !important;
+        min-width: 22px !important;
+        min-height: 22px !important;
+        border-radius: 50% !important;
+        border: 2px solid #cbd5e1 !important;
+        cursor: pointer;
+        flex-shrink: 0;
+        align-self: center;
+        appearance: none;
+        -webkit-appearance: none;
+        display: inline-grid;
+        place-content: center;
+        background-color: #ffffff;
+        transition: all 0.2s ease;
+    }
+    .delete-strategy-card .form-check-input::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        transform: scale(0);
+        transition: 120ms transform ease-in-out;
+        background-color: #ef4444;
+    }
+    .delete-strategy-card .form-check-input:checked::before {
+        transform: scale(1);
+    }
+    .delete-strategy-card.selected .form-check-input,
+    .delete-strategy-card .form-check-input:checked {
+        border-color: #ef4444 !important;
+        background-color: #ffffff !important;
+    }
+    .strategy-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+    .strategy-icon-safe {
+        background: #ecfdf5;
+        color: #059669;
+    }
+    .strategy-icon-discontinue {
+        background: #eff6ff;
+        color: #2563eb;
+    }
+    .strategy-icon-hard {
+        background: #fef2f2;
+        color: #dc2626;
+    }
 </style>
 {% endblock %}
 
@@ -41,7 +186,7 @@
                     <i class="bi bi-upload"></i> Bulk Upload
                 </a>
                 <a href="{% url 'product_export_csv' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-download"></i> Export CSV
+                    <i class="bi bi-download"></i> Export All CSV
                 </a>
                 <a href="{% url 'product_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle"></i> Add Product
@@ -88,20 +233,23 @@
                     </select>
                 </div>
                 <div class="col-md-1 d-flex gap-1">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
-                    <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x"></i></a>
+                    <button type="submit" class="btn btn-primary btn-sm" title="Search"><i class="bi bi-search"></i></button>
+                    <a href="{% url 'product_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm" title="Clear Filters"><i class="bi bi-x"></i></a>
                 </div>
             </form>
         </div>
 
-        <!-- Table -->
-        <div class="card">
+        <!-- Table Card -->
+        <div class="card shadow-sm border-0">
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0">
+                    <table class="table table-hover table-sm mb-0 align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th style="width:50px"></th>
+                                <th class="col-checkbox">
+                                    <input type="checkbox" id="selectAllCheckbox" class="form-check-input" title="Select / Deselect all products">
+                                </th>
+                                <th style="width: 50px"></th>
                                 <th>Name</th>
                                 <th>SKU</th>
                                 <th>Category</th>
@@ -112,12 +260,15 @@
                                 <th class="text-end">Profit</th>
                                 <th class="text-center">Stock</th>
                                 <th class="text-center">Active</th>
-                                <th class="text-center">Actions</th>
+                                <th class="text-center" style="width: 120px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for product in products %}
-                            <tr id="row-{{ product.pk }}">
+                            <tr id="row-{{ product.pk }}" class="product-row" data-pk="{{ product.pk }}">
+                                <td class="col-checkbox">
+                                    <input type="checkbox" name="selected_products" value="{{ product.pk }}" class="form-check-input product-checkbox" data-pk="{{ product.pk }}" data-name="{{ product.name }}">
+                                </td>
                                 <td>
                                     {% if product.image %}
                                         <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-thumbnail" loading="lazy">
@@ -127,7 +278,7 @@
                                 </td>
                                 <td>
                                     <strong>{{ product.name }}</strong>
-                                    {% if product.barcode %}<br><small class="text-muted">{{ product.barcode }}</small>{% endif %}
+                                    {% if product.barcode %}<br><small class="text-muted"><i class="bi bi-upc me-1"></i>{{ product.barcode }}</small>{% endif %}
                                 </td>
                                 <td>
                                     {% if product.product_code %}
@@ -137,7 +288,9 @@
                                 <td><small>{{ product.category.name|default:"—" }}</small></td>
                                 <td><small>{{ product.brand.name|default:"—" }}</small></td>
                                 <td>
-                                    {% if product.tax_class == 'standard' %}
+                                    {% if product.vat_code %}
+                                        <span class="badge bg-primary text-white" title="{{ product.vat_code.name }}">{{ product.vat_code.code }} ({{ product.vat_code.vat_rate }}%)</span>
+                                    {% elif product.tax_class == 'standard' %}
                                         <span class="badge bg-primary">16%</span>
                                     {% elif product.tax_class == 'zero_rated' %}
                                         <span class="badge bg-info text-white">0%</span>
@@ -177,7 +330,7 @@
                                         </button>
                                     </form>
                                 </td>
-                                <td class="text-center">
+                                <td class="text-center text-nowrap">
                                     {% if product.is_out_of_stock %}
                                     <a href="{% url 'purchase_create' slug=request.business.slug %}?product={{ product.pk }}" class="btn btn-sm btn-success" title="Order Now">
                                         <i class="bi bi-cart-plus"></i>
@@ -193,7 +346,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="12" class="text-center py-5">
+                                <td colspan="13" class="text-center py-5">
                                     <i class="bi bi-box-seam" style="font-size: 3rem; color: #ccc;"></i>
                                     <p class="mt-3 mb-2"><strong>No products found</strong></p>
                                     {% if search or category_filter or brand_filter or status_filter or sort_by != 'newest' %}
@@ -210,11 +363,544 @@
                     </table>
                 </div>
             </div>
-            {% if products %}
-            <div class="card-footer text-muted small">
-                {{ products|length }} product{{ products|length|pluralize }} found
+            {% if page_obj.paginator.count > 0 %}
+            <div class="card-footer bg-white border-top py-3 px-3">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="text-muted small">
+                            Showing <strong>{{ page_obj.start_index }}</strong>–<strong>{{ page_obj.end_index }}</strong> of <strong>{{ page_obj.paginator.count }}</strong> product{{ page_obj.paginator.count|pluralize }}
+                        </span>
+                        <span id="tableSelectionSummary" class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1 fw-semibold small" style="display: none;">0 selected</span>
+                    </div>
+
+                    {% if page_obj.has_other_pages %}
+                    <nav aria-label="Product list pagination">
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- First & Previous -->
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if search %}&q={{ search }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if brand_filter %}&brand={{ brand_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" title="First Page">
+                                    <i class="bi bi-chevron-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if brand_filter %}&brand={{ brand_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">
+                                    ‹ Previous
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+                            <li class="page-item disabled"><span class="page-link">‹ Previous</span></li>
+                            {% endif %}
+
+                            <!-- Page Numbers with Smart Windowing -->
+                            {% for p in page_obj.paginator.page_range %}
+                                {% if p == page_obj.number %}
+                                <li class="page-item active" aria-current="page">
+                                    <span class="page-link fw-bold">{{ p }}</span>
+                                </li>
+                                {% elif p >= page_obj.number|add:'-2' and p <= page_obj.number|add:'2' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ p }}{% if search %}&q={{ search }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if brand_filter %}&brand={{ brand_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ p }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <!-- Next & Last -->
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if brand_filter %}&brand={{ brand_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">
+                                    Next ›
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if brand_filter %}&brand={{ brand_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" title="Last Page">
+                                    <i class="bi bi-chevron-double-right"></i>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">Next ›</span></li>
+                            <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
             </div>
             {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Floating Bulk Action Toolbar -->
+<div id="floatingBulkBar" class="floating-bulk-bar shadow-lg">
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-primary rounded-pill px-3 py-2">
+            <span id="selectedCountDisplay">0</span> Selected
+        </span>
+        <button type="button" class="btn btn-sm btn-link text-white text-decoration-none p-0" onclick="deselectAll()" title="Clear Selection">
+            <i class="bi bi-x-circle fs-6"></i>
+        </button>
+    </div>
+    
+    <div class="vr bg-secondary opacity-50 my-1"></div>
+
+    <div class="btn-group-bulk d-flex flex-wrap gap-1 align-items-center">
+        <!-- Quick Status Actions -->
+        <button type="button" class="btn btn-outline-light btn-sm" onclick="promptQuickBulkAction('activate')" title="Mark selected products as active">
+            <i class="bi bi-check-circle text-success me-1"></i> Activate
+        </button>
+        <button type="button" class="btn btn-outline-light btn-sm" onclick="promptQuickBulkAction('deactivate')" title="Mark selected products as inactive">
+            <i class="bi bi-slash-circle text-warning me-1"></i> Deactivate
+        </button>
+
+        <!-- Modals Dropdown / Triggers -->
+        <div class="dropdown d-inline-block">
+            <button class="btn btn-light btn-sm dropdown-toggle fw-semibold" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-gear-wide-connected me-1"></i> Bulk Edit
+            </button>
+            <ul class="dropdown-menu shadow">
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#bulkCategoryModal">
+                        <i class="bi bi-folder me-2 text-primary"></i> Change Category
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#bulkBrandModal">
+                        <i class="bi bi-building me-2 text-info"></i> Change Department / Brand
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#bulkTaxModal">
+                        <i class="bi bi-percent me-2 text-warning"></i> Update Tax & VAT Code
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#bulkPriceModal">
+                        <i class="bi bi-cash-stack me-2 text-success"></i> Adjust Prices
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Export & Barcodes -->
+        <button type="button" class="btn btn-outline-light btn-sm" onclick="exportSelectedCSV()" title="Export selected products to CSV">
+            <i class="bi bi-download me-1"></i> Export CSV
+        </button>
+        <button type="button" class="btn btn-outline-light btn-sm" onclick="printSelectedBarcodes()" title="Print barcode label sheet">
+            <i class="bi bi-upc-scan me-1"></i> Barcodes
+        </button>
+
+        <!-- Delete Action -->
+        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#bulkDeleteModal" title="Delete or Discontinue selected products">
+            <i class="bi bi-trash me-1"></i> Delete
+        </button>
+    </div>
+</div>
+
+<!-- Base Bulk Action Form (Hidden for direct POST actions) -->
+<form id="genericBulkActionForm" method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}" style="display:none;">
+    {% csrf_token %}
+    <input type="hidden" name="bulk_action" id="genericBulkActionInput">
+    <input type="hidden" name="selected_products_str" id="genericSelectedProductsInput">
+</form>
+
+<!-- Modal 0: Quick Action Modal (Activate / Deactivate) -->
+<div class="modal fade" id="bulkQuickActionModal" tabindex="-1" aria-labelledby="bulkQuickActionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" id="quickActionModalActionInput">
+                <input type="hidden" name="selected_products_str" class="modal-selected-products-input">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="bulkQuickActionModalLabel">
+                        <i class="bi bi-shield-check text-primary me-2"></i> Confirm Bulk Action
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small" id="quickActionModalDescription">
+                        You are about to update <strong class="modal-selected-count">0</strong> selected product(s).
+                    </p>
+
+                    <!-- Admin Authorization & Reason -->
+                    <div class="border rounded-3 p-3 bg-light mt-3">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+                            <i class="bi bi-shield-lock-fill text-primary"></i> Admin Authorization & Audit
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                            <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Your login password" required autocomplete="current-password">
+                        </div>
+                        <div>
+                            <label class="form-label small text-muted mb-1">Reason for Action <span class="text-danger">*</span></label>
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Seasonal product activation / deactivation" required minlength="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold" id="quickActionSubmitBtn">Confirm & Apply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 1: Bulk Category -->
+<div class="modal fade" id="bulkCategoryModal" tabindex="-1" aria-labelledby="bulkCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" value="change_category">
+                <input type="hidden" name="selected_products_str" class="modal-selected-products-input">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="bulkCategoryModalLabel">
+                        <i class="bi bi-folder text-primary me-2"></i> Move to Category
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Update the category for all <strong class="modal-selected-count">0</strong> selected products:</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Destination Category</label>
+                        <select name="target_category" class="form-select" required>
+                            <option value="">-- Remove Category (Uncategorized) --</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}">{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Admin Authorization & Reason -->
+                    <div class="border rounded-3 p-3 bg-light mt-3">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+                            <i class="bi bi-shield-lock-fill text-primary"></i> Admin Authorization & Audit
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                            <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Your login password" required autocomplete="current-password">
+                        </div>
+                        <div>
+                            <label class="form-label small text-muted mb-1">Reason for Change <span class="text-danger">*</span></label>
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Catalog reorganization" required minlength="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-3">Update Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 2: Bulk Department / Brand -->
+<div class="modal fade" id="bulkBrandModal" tabindex="-1" aria-labelledby="bulkBrandModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" value="change_brand">
+                <input type="hidden" name="selected_products_str" class="modal-selected-products-input">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="bulkBrandModalLabel">
+                        <i class="bi bi-building text-info me-2"></i> Update Department / Brand
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Update the department/brand for all <strong class="modal-selected-count">0</strong> selected products:</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Destination Department</label>
+                        <select name="target_brand" class="form-select" required>
+                            <option value="">-- Remove Department (None) --</option>
+                            {% for b in brands %}
+                            <option value="{{ b.id }}">{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Admin Authorization & Reason -->
+                    <div class="border rounded-3 p-3 bg-light mt-3">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+                            <i class="bi bi-shield-lock-fill text-info"></i> Admin Authorization & Audit
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                            <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Your login password" required autocomplete="current-password">
+                        </div>
+                        <div>
+                            <label class="form-label small text-muted mb-1">Reason for Change <span class="text-danger">*</span></label>
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Department assignment update" required minlength="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info text-white btn-sm px-3">Update Department</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 3: Bulk Tax & VAT Code -->
+<div class="modal fade" id="bulkTaxModal" tabindex="-1" aria-labelledby="bulkTaxModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" value="change_tax">
+                <input type="hidden" name="selected_products_str" class="modal-selected-products-input">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="bulkTaxModalLabel">
+                        <i class="bi bi-percent text-warning me-2"></i> Update Tax & VAT Settings
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Apply tax configuration to <strong class="modal-selected-count">0</strong> selected products:</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tax Classification</label>
+                        <select name="target_tax_class" class="form-select mb-2">
+                            <option value="standard" selected>Standard (16% VAT)</option>
+                            <option value="zero_rated">Zero Rated (0% VAT)</option>
+                            <option value="exempt">Exempt (No VAT)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">VAT Code (Optional Override)</label>
+                        <select name="target_vat_code" class="form-select">
+                            <option value="">-- Keep Current / Default --</option>
+                            <option value="__none__">-- Clear VAT Code (Use Tax Class Default) --</option>
+                            {% for vc in vat_codes %}
+                            <option value="{{ vc.id }}">{{ vc.code }} - {{ vc.name }} ({{ vc.vat_rate }}%)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Admin Authorization & Reason -->
+                    <div class="border rounded-3 p-3 bg-light mt-3">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+                            <i class="bi bi-shield-lock-fill text-warning"></i> Admin Authorization & Audit
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                            <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Your login password" required autocomplete="current-password">
+                        </div>
+                        <div>
+                            <label class="form-label small text-muted mb-1">Reason for Tax Change <span class="text-danger">*</span></label>
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Annual fiscal compliance alignment" required minlength="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark btn-sm px-3 fw-semibold">Apply Tax Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 4: Bulk Price Adjustment -->
+<div class="modal fade" id="bulkPriceModal" tabindex="-1" aria-labelledby="bulkPriceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" value="adjust_price">
+                <input type="hidden" name="selected_products_str" class="modal-selected-products-input">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="bulkPriceModalLabel">
+                        <i class="bi bi-cash-stack text-success me-2"></i> Batch Price Adjustment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Adjust prices for <strong class="modal-selected-count">0</strong> selected items:</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Target Price Field</label>
+                        <select name="price_target_field" class="form-select">
+                            <option value="unit_price" selected>Selling Price (Unit Price)</option>
+                            <option value="cost_price">Cost Price</option>
+                            <option value="wholesale_price">Wholesale Price</option>
+                            <option value="minimum_price">Minimum Price</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-7">
+                            <label class="form-label fw-semibold">Adjustment Type</label>
+                            <select name="price_adj_type" id="priceAdjType" class="form-select">
+                                <option value="percent_increase">Increase by % (+%)</option>
+                                <option value="percent_decrease">Decrease by % (-%)</option>
+                                <option value="fixed_increase">Increase by Amount (+KES)</option>
+                                <option value="fixed_decrease">Decrease by Amount (-KES)</option>
+                                <option value="set_exact">Set Exact Value (=KES)</option>
+                            </select>
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label fw-semibold">Value</label>
+                            <input type="number" step="0.01" min="0" name="price_adj_value" class="form-control" placeholder="e.g. 10" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Rounding Rule</label>
+                        <select name="price_round_mode" class="form-select">
+                            <option value="two_decimals" selected>Exact (2 Decimal Places)</option>
+                            <option value="integer">Round to Nearest Whole Shilling / Integer</option>
+                            <option value="half_unit">Round to Nearest 0.50</option>
+                        </select>
+                    </div>
+
+                    <!-- Admin Authorization & Reason -->
+                    <div class="border rounded-3 p-3 bg-light mt-3">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-dark fw-semibold small">
+                            <i class="bi bi-shield-lock-fill text-success"></i> Admin Authorization & Audit
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                            <input type="password" name="admin_password" class="form-control form-control-sm" placeholder="Your login password" required autocomplete="current-password">
+                        </div>
+                        <div>
+                            <label class="form-label small text-muted mb-1">Reason for Price Adjustment <span class="text-danger">*</span></label>
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Supplier price revision, inflation adjustment" required minlength="3">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm px-3">Apply Price Adjustments</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 5: Bulk Delete & Discontinue (Enlarged & Fully Rounded) -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1" aria-labelledby="bulkDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <form method="post" action="{% url 'product_bulk_action' slug=request.business.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" value="delete">
+                <input type="hidden" name="selected_products_str" class="modal-selected-products-input">
+                
+                <div class="modal-header bg-danger text-white px-4 py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-white bg-opacity-25 rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                            <i class="bi bi-trash3-fill fs-4 text-white"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" id="bulkDeleteModalLabel">
+                                Delete / Discontinue Products
+                            </h5>
+                            <small class="text-white-50">Bulk inventory cleanup & audit trail preservation</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Summary Pill Banner -->
+                    <div class="d-flex align-items-center justify-content-between p-3 bg-light rounded-4 mb-3 border">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-layers-fill text-danger fs-5"></i>
+                            <span class="fw-semibold text-secondary">Target Items for Cleanup:</span>
+                        </div>
+                        <span class="badge bg-danger rounded-pill px-3 py-2 fs-6">
+                            <span class="modal-selected-count">0</span> product(s) selected
+                        </span>
+                    </div>
+
+                    <!-- Accounting & Safe Guard Note -->
+                    <div class="alert alert-warning border-0 bg-warning-subtle d-flex align-items-start gap-3 p-3 mb-4 rounded-4 text-dark">
+                        <i class="bi bi-shield-exclamation fs-4 text-warning flex-shrink-0"></i>
+                        <div class="small">
+                            <strong>Audit & Accounting Safe Guard:</strong> To maintain strict regulatory and inventory audit compliance, products linked to past sales or purchase receipts cannot be hard deleted. Safe Delete automatically discontinues them instead.
+                        </div>
+                    </div>
+
+                    <label class="form-label fw-bold text-dark mb-2 fs-6">Choose Cleanup Strategy:</label>
+
+                    <!-- Option 1: Safe Delete -->
+                    <label class="delete-strategy-card selected" for="modeSafeDelete">
+                        <input class="form-check-input" type="radio" name="delete_mode" id="modeSafeDelete" value="safe_delete" checked>
+                        <div class="strategy-icon strategy-icon-safe">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-bold text-dark fs-6">Safe Delete</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1 small">Recommended</span>
+                            </div>
+                            <div class="text-muted small mt-1">
+                                Permanently deletes products with zero transaction history. If any product has past sales or purchase records, it is safely <strong>discontinued</strong> (stock set to 0 and deactivated) to preserve accounting trails.
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Option 2: Discontinue All -->
+                    <label class="delete-strategy-card" for="modeDiscontinue">
+                        <input class="form-check-input" type="radio" name="delete_mode" id="modeDiscontinue" value="discontinue_all">
+                        <div class="strategy-icon strategy-icon-discontinue">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-dark fs-6">Discontinue All Selected</div>
+                            <div class="text-muted small mt-1">
+                                Retains all historical records while setting stock quantity to 0 and deactivating all selected items. They will no longer appear in POS sales or low stock alerts.
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Option 3: Delete Unused Only -->
+                    <label class="delete-strategy-card" for="modeDeleteUnused">
+                        <input class="form-check-input" type="radio" name="delete_mode" id="modeDeleteUnused" value="delete_unused_only">
+                        <div class="strategy-icon strategy-icon-hard">
+                            <i class="bi bi-trash3"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-dark fs-6">Delete Unused Products Only</div>
+                            <div class="text-muted small mt-1">
+                                Permanently removes only items that have zero sales/purchase history. Any products that have past transactions will be skipped and remain untouched.
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Admin Authorization & Reason -->
+                    <div class="border rounded-3 p-3 bg-light mt-4">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-danger fw-semibold small">
+                            <i class="bi bi-shield-lock-fill"></i> Admin Authorization & Reason Required
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted mb-1">Admin Password <span class="text-danger">*</span></label>
+                                <input type="password" name="admin_password" class="form-control" placeholder="Enter your login password" required autocomplete="current-password">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted mb-1">Reason for Deletion <span class="text-danger">*</span></label>
+                                <input type="text" name="reason" class="form-control" placeholder="e.g. Catalog cleanup of duplicate items" required minlength="3">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light px-4 py-3 d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-semibold shadow-sm">
+                        <i class="bi bi-trash3-fill me-1"></i> Confirm & Proceed
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -222,7 +908,237 @@
 
 {% block extra_js %}
 <script>
-// AJAX toggle for active status
+// Selection State Management
+let selectedProductIds = new Set();
+let lastCheckedIndex = null;
+
+const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+const productCheckboxes = document.querySelectorAll('.product-checkbox');
+const floatingBulkBar = document.getElementById('floatingBulkBar');
+const selectedCountDisplay = document.getElementById('selectedCountDisplay');
+const tableSelectionSummary = document.getElementById('tableSelectionSummary');
+
+function syncSelectedFromDOM() {
+    selectedProductIds.clear();
+    productCheckboxes.forEach(cb => {
+        const pk = cb.dataset.pk;
+        const row = document.getElementById(`row-${pk}`);
+        if (cb.checked) {
+            selectedProductIds.add(pk);
+            if (row) row.classList.add('product-row-selected');
+        } else {
+            if (row) row.classList.remove('product-row-selected');
+        }
+    });
+    updateSelectionUI();
+}
+
+function updateSelectionUI() {
+    const total = productCheckboxes.length;
+    const selectedCount = selectedProductIds.size;
+
+    // Update count displays
+    if (selectedCountDisplay) selectedCountDisplay.textContent = selectedCount;
+    if (tableSelectionSummary) {
+        if (selectedCount > 0) {
+            tableSelectionSummary.textContent = `${selectedCount} item${selectedCount === 1 ? '' : 's'} selected`;
+            tableSelectionSummary.style.display = 'inline';
+        } else {
+            tableSelectionSummary.style.display = 'none';
+        }
+    }
+
+    // Update Master Checkbox state
+    if (selectAllCheckbox) {
+        if (selectedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (selectedCount === total && total > 0) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    // Show/hide floating bar
+    if (floatingBulkBar) {
+        if (selectedCount > 0) {
+            floatingBulkBar.classList.add('active');
+        } else {
+            floatingBulkBar.classList.remove('active');
+        }
+    }
+
+    // Sync selected IDs to modal hidden inputs
+    const idsString = Array.from(selectedProductIds).join(',');
+    document.querySelectorAll('.modal-selected-products-input').forEach(input => {
+        input.value = idsString;
+    });
+    document.querySelectorAll('.modal-selected-count').forEach(span => {
+        span.textContent = selectedCount;
+    });
+}
+
+// Master Checkbox Toggle
+if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', function() {
+        const isChecked = this.checked;
+        productCheckboxes.forEach(cb => {
+            cb.checked = isChecked;
+            const pk = cb.dataset.pk;
+            const row = document.getElementById(`row-${pk}`);
+            if (isChecked) {
+                selectedProductIds.add(pk);
+                if (row) row.classList.add('product-row-selected');
+            } else {
+                selectedProductIds.delete(pk);
+                if (row) row.classList.remove('product-row-selected');
+            }
+        });
+        updateSelectionUI();
+    });
+}
+
+// Individual Checkbox Click & Shift+Click Range Selection
+productCheckboxes.forEach((cb, index) => {
+    const handleCheckboxToggle = function(e) {
+        const pk = cb.dataset.pk;
+        const row = document.getElementById(`row-${pk}`);
+
+        // Shift + Click range selection
+        if (e.shiftKey && lastCheckedIndex !== null && lastCheckedIndex !== index) {
+            const start = Math.min(lastCheckedIndex, index);
+            const end = Math.max(lastCheckedIndex, index);
+            const targetState = cb.checked;
+
+            for (let i = start; i <= end; i++) {
+                const targetCb = productCheckboxes[i];
+                targetCb.checked = targetState;
+                const targetPk = targetCb.dataset.pk;
+                const targetRow = document.getElementById(`row-${targetPk}`);
+                if (targetState) {
+                    selectedProductIds.add(targetPk);
+                    if (targetRow) targetRow.classList.add('product-row-selected');
+                } else {
+                    selectedProductIds.delete(targetPk);
+                    if (targetRow) targetRow.classList.remove('product-row-selected');
+                }
+            }
+        } else {
+            if (cb.checked) {
+                selectedProductIds.add(pk);
+                if (row) row.classList.add('product-row-selected');
+            } else {
+                selectedProductIds.delete(pk);
+                if (row) row.classList.remove('product-row-selected');
+            }
+        }
+
+        lastCheckedIndex = index;
+        updateSelectionUI();
+    };
+
+    cb.addEventListener('click', handleCheckboxToggle);
+    cb.addEventListener('change', function() {
+        const pk = this.dataset.pk;
+        if (this.checked) {
+            selectedProductIds.add(pk);
+        } else {
+            selectedProductIds.delete(pk);
+        }
+        updateSelectionUI();
+    });
+});
+
+// Deselect All function
+function deselectAll() {
+    selectedProductIds.clear();
+    productCheckboxes.forEach(cb => {
+        cb.checked = false;
+        const pk = cb.dataset.pk;
+        const row = document.getElementById(`row-${pk}`);
+        if (row) row.classList.remove('product-row-selected');
+    });
+    updateSelectionUI();
+}
+
+// Prompt quick bulk action (Activate, Deactivate) with Admin Auth Modal
+function promptQuickBulkAction(actionName) {
+    syncSelectedFromDOM();
+    if (selectedProductIds.size === 0) {
+        alert('Please select at least one product.');
+        return;
+    }
+    const modalEl = document.getElementById('bulkQuickActionModal');
+    const actionInput = document.getElementById('quickActionModalActionInput');
+    const modalTitle = document.getElementById('bulkQuickActionModalLabel');
+    const modalDesc = document.getElementById('quickActionModalDescription');
+    const submitBtn = document.getElementById('quickActionSubmitBtn');
+    
+    actionInput.value = actionName;
+    if (actionName === 'activate') {
+        modalTitle.innerHTML = '<i class="bi bi-check-circle text-success me-2"></i> Confirm Bulk Activation';
+        modalDesc.innerHTML = `You are about to <strong>activate</strong> <strong class="modal-selected-count">${selectedProductIds.size}</strong> selected product(s). They will become active in POS and catalog search.`;
+        submitBtn.className = 'btn btn-success btn-sm px-3 fw-semibold';
+        submitBtn.textContent = 'Activate Products';
+    } else if (actionName === 'deactivate') {
+        modalTitle.innerHTML = '<i class="bi bi-slash-circle text-warning me-2"></i> Confirm Bulk Deactivation';
+        modalDesc.innerHTML = `You are about to <strong>deactivate</strong> <strong class="modal-selected-count">${selectedProductIds.size}</strong> selected product(s). They will be hidden from POS sales.`;
+        submitBtn.className = 'btn btn-warning text-dark btn-sm px-3 fw-semibold';
+        submitBtn.textContent = 'Deactivate Products';
+    } else {
+        modalTitle.innerHTML = '<i class="bi bi-shield-check text-primary me-2"></i> Confirm Bulk Action';
+        modalDesc.innerHTML = `You are about to apply <strong>${actionName}</strong> to <strong class="modal-selected-count">${selectedProductIds.size}</strong> selected product(s).`;
+        submitBtn.className = 'btn btn-primary btn-sm px-3 fw-semibold';
+        submitBtn.textContent = 'Confirm & Apply';
+    }
+    
+    // Sync hidden IDs into modal
+    const idsString = Array.from(selectedProductIds).join(',');
+    modalEl.querySelectorAll('.modal-selected-products-input').forEach(input => {
+        input.value = idsString;
+    });
+    modalEl.querySelectorAll('.modal-selected-count').forEach(span => {
+        span.textContent = selectedProductIds.size;
+    });
+
+    const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    bsModal.show();
+}
+
+// Execute direct bulk action (e.g. Export CSV which is read-only)
+function executeQuickBulkAction(actionName) {
+    syncSelectedFromDOM();
+    if (selectedProductIds.size === 0) {
+        alert('Please select at least one product.');
+        return;
+    }
+    const form = document.getElementById('genericBulkActionForm');
+    document.getElementById('genericBulkActionInput').value = actionName;
+    document.getElementById('genericSelectedProductsInput').value = Array.from(selectedProductIds).join(',');
+    form.submit();
+}
+
+// Export Selected to CSV
+function exportSelectedCSV() {
+    executeQuickBulkAction('export_csv');
+}
+
+// Print Barcode Labels for Selected Products
+function printSelectedBarcodes() {
+    syncSelectedFromDOM();
+    if (selectedProductIds.size === 0) {
+        alert('Please select at least one product.');
+        return;
+    }
+    const idsString = Array.from(selectedProductIds).join(',');
+    const url = "{% url 'product_bulk_barcode_print' slug=request.business.slug %}?ids=" + encodeURIComponent(idsString);
+    window.open(url, '_blank');
+}
+
+// AJAX toggle for active status on individual rows
 document.querySelectorAll('.toggle-form').forEach(form => {
     form.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -246,8 +1162,45 @@ document.querySelectorAll('.toggle-form').forEach(form => {
                 }
             }
         })
-        .catch(() => this.submit()); // fallback to normal submit on error
+        .catch(() => this.submit());
     });
+});
+
+// Interactive Strategy Cards for Delete Modal
+document.querySelectorAll('.delete-strategy-card input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.querySelectorAll('.delete-strategy-card').forEach(c => c.classList.remove('selected'));
+        const parentCard = this.closest('.delete-strategy-card');
+        if (parentCard) parentCard.classList.add('selected');
+    });
+});
+
+// Sync selection when any modal opens
+document.querySelectorAll('.modal').forEach(modalEl => {
+    modalEl.addEventListener('show.bs.modal', function() {
+        syncSelectedFromDOM();
+    });
+});
+
+// Ensure all modal forms submit with selected IDs
+document.querySelectorAll('.modal form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        syncSelectedFromDOM();
+        if (selectedProductIds.size === 0) {
+            e.preventDefault();
+            alert('Please select at least one product.');
+            return false;
+        }
+        const input = this.querySelector('.modal-selected-products-input');
+        if (input) {
+            input.value = Array.from(selectedProductIds).join(',');
+        }
+    });
+});
+
+// Initialize on load in case of browser form caching
+document.addEventListener('DOMContentLoaded', function() {
+    syncSelectedFromDOM();
 });
 </script>
 {% endblock %}

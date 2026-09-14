@@ -11,8 +11,9 @@ from django.db.models import Q, Count
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
 
-from .models import VATCode
+from .models import VATCode, ActivityLog
 from .decorators import business_required
+from .security_utils import verify_admin_password_and_reason
 
 
 def _check_vat_permission(request):
@@ -213,8 +214,29 @@ def vatcode_delete(request, slug=None, pk=None):
         )
         return redirect('vatcode_list', slug=request.business.slug)
 
+    # Enforce Admin Password & Reason
+    is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+        request,
+        action_name="VAT code deletion"
+    )
+    if not is_valid:
+        messages.error(request, err_msg)
+        return redirect('vatcode_list', slug=request.business.slug)
+
     code_name = f"{vatcode.code} ({vatcode.name})"
+    vat_pk = vatcode.pk
     vatcode.delete()
+
+    ActivityLog.log_activity(
+        user=request.user,
+        action_type='delete',
+        model_name='VATCode',
+        object_id=vat_pk,
+        description=f'Deleted VAT Code: {code_name} | Reason: {clean_reason}',
+        request=request,
+        business=request.business
+    )
+
     messages.success(request, f'VAT Code "{code_name}" was deleted successfully.')
     return redirect('vatcode_list', slug=request.business.slug)
 

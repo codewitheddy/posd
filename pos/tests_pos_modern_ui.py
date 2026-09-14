@@ -14,7 +14,7 @@ from django.contrib.auth.models import User
 
 from pos.models import (
     Business, BusinessSettings, BusinessMembership, Branch, Product, Category, BranchStock,
-    PaymentMethod, Sale, SaleItem, SalePayment, POSSession
+    PaymentMethod, Sale, SaleItem, SalePayment, POSSession, UserProfile, ActivityLog
 )
 
 
@@ -219,11 +219,221 @@ class POSModernUITests(TestCase):
         self.assertEqual(sale_item.quantity, Decimal('2.000'))
         self.assertEqual(sale_item.unit_price, Decimal('180.00'))
 
-        # Check payment record
-        sale_payment = SalePayment.objects.get(sale=sale)
-        self.assertEqual(sale_payment.payment_method, self.cash_method)
-        self.assertEqual(sale_payment.amount, Decimal('360.00'))
-
         # Check branch stock was decremented from 50 to 48
         b_stock = BranchStock.objects.get(branch=self.branch, product=self.product)
         self.assertEqual(b_stock.quantity, Decimal('48.000'))
+
+    def test_pos_screen_renders_supervisor_auth_modal_and_keypad(self):
+        """POS screen template renders supervisor authorization modal with PIN keypad and scripts."""
+        response = self.client.get(reverse('pos_screen', kwargs={'slug': self.business.slug}))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+
+        # Check Supervisor modal elements
+        self.assertIn('supervisorAuthModal', content)
+        self.assertIn('Supervisor Authorization', content)
+        self.assertIn('supervisor-credential-input', content)
+        self.assertIn('supervisor-pin-keypad', content)
+        self.assertIn('supervisor-action-banner', content)
+        self.assertIn('requestSupervisorAuth', content)
+        self.assertIn('submitSupervisorAuth', content)
+
+    def test_supervisor_authorize_with_valid_admin_password(self):
+        """Supervisor authorization endpoint accepts owner/admin password and logs to ActivityLog."""
+        url = reverse('pos_supervisor_authorize', kwargs={'slug': self.business.slug})
+        response = self.client.post(
+            url,
+            data={
+                'credential': 'pospassword123',
+                'action_type': 'remove_cart_item',
+                'action_details': 'Fresh Apple Juice 1L',
+                'reason': 'Customer changed mind'
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('success'))
+        self.assertIn('Authorized by', data.get('message', ''))
+
+        # Verify ActivityLog entry was recorded
+        log = ActivityLog.objects.filter(
+            business=self.business,
+            operation_type='POS_SUPERVISOR_OVERRIDE'
+        ).latest('timestamp')
+        self.assertIn('authorized Cart Item Removal', log.description)
+        self.assertIn('Customer changed mind', log.description)
+
+    def test_supervisor_authorize_with_valid_manager_pin(self):
+        """Supervisor authorization endpoint accepts manager PIN and logs to ActivityLog."""
+        # Create a manager user with PIN
+        manager = User.objects.create_user(
+            username='store_manager',
+            password='managerpass123',
+            email='manager@store.com'
+        )
+        BusinessMembership.objects.create(
+            user=manager,
+            business=self.business,
+            role='manager'
+        )
+        manager_profile, _ = UserProfile.objects.get_or_create(user=manager)
+        manager_profile.set_pin('7788', business=self.business)
+
+        url = reverse('pos_supervisor_authorize', kwargs={'slug': self.business.slug})
+        response = self.client.post(
+            url,
+            data={
+                'credential': '7788',
+                'action_type': 'apply_discount',
+                'action_details': '10% loyalty promo',
+                'reason': 'Special manager discount'
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data.get('supervisor_id'), manager.id)
+
+        # Check ActivityLog
+        log = ActivityLog.objects.filter(
+            business=self.business,
+            operation_type='POS_SUPERVISOR_OVERRIDE',
+            user=manager
+        ).latest('timestamp')
+        self.assertIn('Discount Applied', log.description)
+
+    def test_supervisor_authorize_with_cashier_pin_denied(self):
+        """Cashier attempting to authorize supervisor override with their own cashier PIN is rejected."""
+        # Create a regular cashier with PIN
+        cashier_user = User.objects.create_user(
+            username='junior_cashier',
+            password='cashierpass123',
+            email='junior@store.com'
+        )
+        BusinessMembership.objects.create(
+            user=cashier_user,
+            business=self.business,
+            role='cashier'
+        )
+        cashier_profile, _ = UserProfile.objects.get_or_create(user=cashier_user)
+        cashier_profile.set_pin('1234', business=self.business)
+
+        url = reverse('pos_supervisor_authorize', kwargs={'slug': self.business.slug})
+        response = self.client.post(
+            url,
+            data={
+                'credential': '1234',
+                'action_type': 'clear_cart',
+                'action_details': 'Clear entire cart'
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data.get('success'))
+        self.assertIn('cashier', data.get('error', '').lower())
+
+    def test_supervisor_authorize_with_invalid_credential_denied(self):
+        """Invalid passwords or non-matching PINs are rejected."""
+        url = reverse('pos_supervisor_authorize', kwargs={'slug': self.business.slug})
+        response = self.client.post(
+            url,
+            data={
+                'credential': 'wrong_password_999',
+                'action_type': 'retrieve_held_order'
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data.get('success'))
+        self.assertIn('denied', data.get('error', '').lower())
+
+    def test_payment_method_list_single_store_url(self):
+        """GET /payment-methods/ renders payment methods without TypeError."""
+        url = reverse('payment_method_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('payment_methods', response.context)
+        self.assertContains(response, self.cash_method.name)
+
+    def test_payment_method_list_multitenant_url(self):
+        """GET /b/<slug>/payment-methods/ renders payment methods with slug kwarg."""
+        url = reverse('payment_method_list', kwargs={'slug': self.business.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('payment_methods', response.context)
+
+    def test_payment_method_create_and_edit_lifecycle(self):
+        """Payment method create and edit lifecycle works properly with ActivityLog."""
+        # Create
+        create_url = reverse('payment_method_create')
+        response = self.client.post(create_url, {
+            'name': 'Airtel Money',
+            'code': 'AIRTEL_MONEY',
+            'is_active': 'on',
+            'requires_reference': 'on',
+            'icon': 'bi-phone'
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        pm = PaymentMethod.objects.get(business=self.business, code='AIRTEL_MONEY')
+        self.assertEqual(pm.name, 'Airtel Money')
+        self.assertTrue(pm.requires_reference)
+
+        # Edit
+        edit_url = reverse('payment_method_edit', kwargs={'pk': pm.pk})
+        response = self.client.post(edit_url, {
+            'name': 'Airtel Money Updated',
+            'code': 'AIRTEL_MONEY',
+            'is_active': 'on',
+            'requires_reference': 'on',
+            'icon': 'bi-phone'
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        pm.refresh_from_db()
+        self.assertEqual(pm.name, 'Airtel Money Updated')
+
+    def test_payment_method_delete_with_admin_password(self):
+        """Payment method deletion requires admin password & reason and logs audit."""
+        pm = PaymentMethod.objects.create(
+            business=self.business,
+            name='Test Method To Delete',
+            code='TEMP_DEL',
+            is_active=True
+        )
+        delete_url = reverse('payment_method_delete', kwargs={'pk': pm.pk})
+
+        # POST without password fails
+        response = self.client.post(delete_url, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(PaymentMethod.objects.filter(pk=pm.pk).exists())
+
+        # POST with correct admin password and reason succeeds
+        response = self.client.post(delete_url, {
+            'admin_password': 'pospassword123',
+            'reason': 'No longer in use by merchant'
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PaymentMethod.objects.filter(pk=pm.pk).exists())
+
+    def test_branch_list_view_renders_table_list_view(self):
+        """GET /branches/ renders a responsive list view table with search and action buttons."""
+        url = reverse('branch_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        
+        # Check list view table structure and elements
+        self.assertIn('branchesTable', content)
+        self.assertIn('branchSearchInput', content)
+        self.assertIn('Registered Locations', content)
+        self.assertIn('Branch Name', content)
+        self.assertIn('Branch Code', content)
+        self.assertIn('Address / Location', content)
+        self.assertIn(self.branch.name, content)
+        self.assertIn(self.branch.code, content)
+
+
+

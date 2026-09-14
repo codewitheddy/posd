@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 
 from .models import Promotion, Product, Category, ActivityLog
 from .decorators import business_required, business_admin_required
+from .security_utils import verify_admin_password_and_reason
 
 
 # Use business_admin_required as the manager-level gate for promotions
@@ -221,12 +222,23 @@ def promotion_toggle(request, slug=None, pk=None):
 def promotion_delete(request, slug=None, pk=None):
     """Delete a promotion."""
     promo = get_object_or_404(Promotion, pk=pk, business=request.business)
+    
+    # Enforce Admin Password & Reason
+    is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+        request,
+        action_name="promotion deletion"
+    )
+    if not is_valid:
+        messages.error(request, err_msg)
+        return redirect('promotion_list', slug=request.business.slug)
+
     name = promo.name
+    promo_pk = promo.pk
     promo.delete()
     ActivityLog.log_activity(
         user=request.user, action_type='delete',
-        model_name='Promotion', object_id=pk,
-        description=f'Deleted promotion: {name}',
+        model_name='Promotion', object_id=promo_pk,
+        description=f'Deleted promotion: {name} | Reason: {clean_reason}',
         request=request, business=request.business,
     )
     messages.success(request, f'Promotion "{name}" deleted.')

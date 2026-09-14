@@ -613,7 +613,7 @@
 
                 <div class="mb-3">
                     <label id="discount-label">Discount Value:</label>
-                    <input type="number" id="discount-value" class="form-control" value="0" min="0" step="0.01" onchange="calculateTotal()">
+                    <input type="number" id="discount-value" class="form-control" value="0" min="0" step="0.01" onchange="onDiscountInputChange(this)">
                     <small class="text-muted" id="discount-hint"></small>
                 </div>
                 
@@ -950,6 +950,76 @@
         </div>
     </div>
 </div>
+
+<!-- Supervisor Authorization Modal -->
+<div class="modal fade" id="supervisorAuthModal" tabindex="-1" aria-labelledby="supervisorAuthModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white py-3">
+                <h5 class="modal-title d-flex align-items-center" id="supervisorAuthModalLabel">
+                    <i class="bi bi-shield-lock-fill text-warning fs-4 me-2"></i>
+                    <span>Supervisor Authorization</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning d-flex align-items-start mb-3" id="supervisor-action-banner">
+                    <i class="bi bi-exclamation-triangle-fill fs-4 me-2 mt-1 flex-shrink-0 text-warning"></i>
+                    <div>
+                        <strong class="d-block text-dark">Restricted Cashier Action</strong>
+                        <div id="supervisor-action-text" class="small text-muted">Supervisor approval is required to perform this action.</div>
+                    </div>
+                </div>
+
+                <div class="card bg-light border-0 mb-3 p-2 small" id="supervisor-action-details-box" style="display:none;">
+                    <strong class="text-secondary">Target:</strong> <span id="supervisor-action-details-text" class="text-dark fw-semibold"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Admin Password or Supervisor PIN</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-key-fill text-muted"></i></span>
+                        <input type="password" class="form-control text-center fw-bold fs-4 border-start-0 border-end-0" id="supervisor-credential-input" placeholder="••••" autocomplete="new-password" maxlength="64">
+                        <button class="btn btn-outline-secondary border-start-0" type="button" onclick="toggleSupervisorCredentialVisibility()">
+                            <i class="bi bi-eye" id="supervisor-cred-toggle-icon"></i>
+                        </button>
+                    </div>
+                    <div class="form-text text-muted">Enter store owner/manager login password or 4-6 digit supervisor PIN.</div>
+                </div>
+
+                <!-- On-Screen Numeric Keypad for Touch Terminals -->
+                <div class="touch-keypad mb-3" id="supervisor-pin-keypad">
+                    <div class="row g-2">
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('1')">1</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('2')">2</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('3')">3</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('4')">4</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('5')">5</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('6')">6</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('7')">7</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('8')">8</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('9')">9</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-secondary w-100 py-2 fw-semibold" onclick="clearSupervisorKey()">Clear</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-dark w-100 py-2 fs-5 fw-bold" onclick="appendSupervisorKey('0')">0</button></div>
+                        <div class="col-4"><button type="button" class="btn btn-outline-secondary w-100 py-2" onclick="backspaceSupervisorKey()"><i class="bi bi-backspace"></i></button></div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <input type="text" class="form-control form-control-sm" id="supervisor-reason-input" placeholder="Override Note / Reason (Optional)">
+                </div>
+
+                <div class="alert alert-danger p-2 small mt-2" id="supervisor-auth-error" style="display:none;"></div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary fw-bold px-4" id="supervisor-authorize-submit-btn" onclick="submitSupervisorAuth()">
+                    <i class="bi bi-check-circle-fill me-1"></i> Authorize
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -975,6 +1045,197 @@ window.currentCategoryFilter = '';
 window.productStock = productStock;
 window.productData = productData;
 window.cart = cart;
+
+// ==================== SUPERVISOR / ADMIN OVERRIDE SECURITY SYSTEM ====================
+var isSupervisorUser = {% if user_permissions.is_manager or user_permissions.is_admin or user_permissions.is_owner or request.user.is_superuser %}true{% else %}false{% endif %};
+var supervisorAuthEndpoint = "{% url 'pos_supervisor_authorize' slug=request.business.slug %}";
+
+let currentSupervisorCallback = null;
+let currentSupervisorCancelCallback = null;
+let currentSupervisorActionType = null;
+let currentSupervisorActionDetails = null;
+
+function requestSupervisorAuth(actionType, actionTitle, actionDetails, onApproved, onCancelled) {
+    if (isSupervisorUser) {
+        if (typeof onApproved === 'function') {
+            onApproved();
+        }
+        return;
+    }
+
+    currentSupervisorCallback = onApproved;
+    currentSupervisorCancelCallback = onCancelled || null;
+    currentSupervisorActionType = actionType;
+    currentSupervisorActionDetails = actionDetails;
+
+    const modalEl = document.getElementById('supervisorAuthModal');
+    const credInput = document.getElementById('supervisor-credential-input');
+    const reasonInput = document.getElementById('supervisor-reason-input');
+    const actionTextEl = document.getElementById('supervisor-action-text');
+    const detailsBox = document.getElementById('supervisor-action-details-box');
+    const detailsText = document.getElementById('supervisor-action-details-text');
+    const errorBox = document.getElementById('supervisor-auth-error');
+
+    if (actionTextEl) actionTextEl.textContent = actionTitle || 'Supervisor authorization required to proceed.';
+    if (detailsBox && detailsText) {
+        if (actionDetails) {
+            detailsText.textContent = actionDetails;
+            detailsBox.style.display = 'block';
+        } else {
+            detailsBox.style.display = 'none';
+        }
+    }
+    if (credInput) credInput.value = '';
+    if (reasonInput) reasonInput.value = '';
+    if (errorBox) {
+        errorBox.textContent = '';
+        errorBox.style.display = 'none';
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    setTimeout(() => {
+        if (credInput) credInput.focus();
+    }, 400);
+}
+
+function submitSupervisorAuth() {
+    const credInput = document.getElementById('supervisor-credential-input');
+    const reasonInput = document.getElementById('supervisor-reason-input');
+    const errorBox = document.getElementById('supervisor-auth-error');
+    const submitBtn = document.getElementById('supervisor-authorize-submit-btn');
+
+    const credential = credInput ? credInput.value.trim() : '';
+    const reason = reasonInput ? reasonInput.value.trim() : '';
+
+    if (!credential) {
+        if (errorBox) {
+            errorBox.textContent = 'Please enter an Admin Password or Supervisor PIN.';
+            errorBox.style.display = 'block';
+        }
+        if (credInput) credInput.focus();
+        return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+
+    fetch(supervisorAuthEndpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            credential: credential,
+            action_type: currentSupervisorActionType,
+            action_details: currentSupervisorActionDetails,
+            reason: reason
+        })
+    })
+    .then(r => r.json().then(data => ({ status: r.status, ok: r.ok, data })))
+    .then(({ status, ok, data }) => {
+        if (submitBtn) submitBtn.disabled = false;
+        if (!ok || !data.success) {
+            if (errorBox) {
+                errorBox.textContent = data.error || 'Authorization failed. Invalid password or PIN.';
+                errorBox.style.display = 'block';
+            }
+            if (credInput) {
+                credInput.value = '';
+                credInput.focus();
+            }
+            playErrorBeep();
+            return;
+        }
+
+        // Successfully authorized
+        playSuccessChime();
+        showNotification(data.message || `Authorized by supervisor`, 'success');
+
+        // Prevent onCancelled callback from firing on modal hide
+        currentSupervisorCancelCallback = null;
+
+        const modalEl = document.getElementById('supervisorAuthModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) modalInstance.hide();
+
+        if (typeof currentSupervisorCallback === 'function') {
+            const cb = currentSupervisorCallback;
+            currentSupervisorCallback = null;
+            cb(data);
+        }
+    })
+    .catch(err => {
+        if (submitBtn) submitBtn.disabled = false;
+        if (errorBox) {
+            errorBox.textContent = 'Network error or server unavailable. Please try again.';
+            errorBox.style.display = 'block';
+        }
+        playErrorBeep();
+    });
+}
+
+function appendSupervisorKey(digit) {
+    const input = document.getElementById('supervisor-credential-input');
+    if (input) {
+        input.value += digit;
+        input.focus();
+    }
+}
+function clearSupervisorKey() {
+    const input = document.getElementById('supervisor-credential-input');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+}
+function backspaceSupervisorKey() {
+    const input = document.getElementById('supervisor-credential-input');
+    if (input) {
+        input.value = input.value.slice(0, -1);
+        input.focus();
+    }
+}
+function toggleSupervisorCredentialVisibility() {
+    const input = document.getElementById('supervisor-credential-input');
+    const icon = document.getElementById('supervisor-cred-toggle-icon');
+    if (input) {
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) icon.className = 'bi bi-eye-slash';
+        } else {
+            input.type = 'password';
+            if (icon) icon.className = 'bi bi-eye';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const credInput = document.getElementById('supervisor-credential-input');
+    if (credInput) {
+        credInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitSupervisorAuth();
+            }
+        });
+    }
+    const modalEl = document.getElementById('supervisorAuthModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', function() {
+            if (typeof currentSupervisorCancelCallback === 'function') {
+                const cancelCb = currentSupervisorCancelCallback;
+                currentSupervisorCancelCallback = null;
+                currentSupervisorCallback = null;
+                cancelCb();
+            } else {
+                currentSupervisorCallback = null;
+            }
+        });
+    }
+});
+
 
 // ==================== ZERO-ASSET WEB AUDIO SYNTHESIZER ====================
 let audioCtx = null;
@@ -1264,9 +1525,29 @@ function closeMultiCart(cartId) {
     
     const targetCart = multiCarts[cartId];
     if (targetCart && targetCart.items && targetCart.items.length > 0) {
-        if (!confirm(`Cart "${targetCart.name}" has ${targetCart.items.length} item(s). Close and discard?`)) {
-            return;
-        }
+        requestSupervisorAuth(
+            'clear_cart',
+            `Supervisor approval required to close and discard "${targetCart.name}".`,
+            `Tab "${targetCart.name}" has ${targetCart.items.length} item(s)`,
+            function() {
+                delete multiCarts[cartId];
+                const remainingKeys = Object.keys(multiCarts);
+                if (activeCartId === cartId) {
+                    activeCartId = remainingKeys[0];
+                    const next = multiCarts[activeCartId];
+                    cart = next.items || [];
+                    selectedCustomer = next.customer || null;
+                    syncCustomerUI();
+                }
+                
+                renderMultiCartTabs();
+                updateCart();
+                saveMultiCartsToStorage();
+                broadcastToCfd('CART_UPDATE');
+                showNotification(`Closed tab "${targetCart.name}"`, 'info');
+            }
+        );
+        return;
     }
     
     delete multiCarts[cartId];
@@ -2366,6 +2647,28 @@ function payOnCredit() {
     document.getElementById('sale-form').submit();
 }
 
+// Intercept direct discount value input changes
+function onDiscountInputChange(inputEl) {
+    const val = parseFloat(inputEl.value) || 0;
+    const type = document.getElementById('discount-type').value;
+    if (val > 0 && !isSupervisorUser) {
+        requestSupervisorAuth(
+            'apply_discount',
+            `Supervisor approval required to apply discount (${type === 'percentage' ? val + '%' : 'KES ' + val.toFixed(2)}).`,
+            `Discount Type: ${type} | Value: ${val}`,
+            function() {
+                calculateTotal();
+            },
+            function() {
+                inputEl.value = '0';
+                calculateTotal();
+            }
+        );
+    } else {
+        calculateTotal();
+    }
+}
+
 // Handle discount type change
 function handleDiscountTypeChange() {
     const discountType = document.getElementById('discount-type').value;
@@ -2436,13 +2739,20 @@ function redeemPoints(points) {
         return;
     }
     
-    const discountValue = document.getElementById('discount-value');
-    const discountType = document.getElementById('discount-type');
-    
-    discountType.value = 'points';
-    discountValue.value = points;
-    
-    handleDiscountTypeChange();
+    requestSupervisorAuth(
+        'redeem_points',
+        `Supervisor approval required to redeem ${points} loyalty points for ${selectedCustomer.name}.`,
+        `Customer: ${selectedCustomer.name} | Points: ${points} (KES ${points})`,
+        function() {
+            const discountValue = document.getElementById('discount-value');
+            const discountType = document.getElementById('discount-type');
+            
+            discountType.value = 'points';
+            discountValue.value = points;
+            
+            handleDiscountTypeChange();
+        }
+    );
 }
 
 // Redeem all available points
@@ -2765,9 +3075,19 @@ function addToCart(id, name, price, availableStock, taxClass = 'standard') {
 }
 
 function removeFromCart(id) {
-    cart = cart.filter(item => item.id !== id);
-    updateCart();
-    saveMultiCartsToStorage();
+    const item = cart.find(i => i.id === id);
+    const itemName = item ? item.name : 'Cart Item';
+    requestSupervisorAuth(
+        'remove_cart_item',
+        `Supervisor approval required to remove "${itemName}" from cart.`,
+        `Product: ${itemName} | Item ID: ${id}`,
+        function() {
+            cart = cart.filter(item => item.id !== id);
+            updateCart();
+            saveMultiCartsToStorage();
+            showNotification(`Removed "${itemName}" from cart`, 'info');
+        }
+    );
 }
 
 function addToCartWithQty(id, name, price, availableStock, taxClass, qty, productData) {
@@ -2809,7 +3129,26 @@ function adjustQty(id, delta) {
     if (!item) return;
     const step = item.isBulk ? item.bulkQty : 1;
     const newQty = item.quantity + (delta * step);
-    if (newQty < (item.isBulk ? item.bulkQty : 1)) { removeFromCart(id); return; }
+    if (newQty < (item.isBulk ? item.bulkQty : 1)) {
+        removeFromCart(id);
+        return;
+    }
+    if (delta < 0) {
+        requestSupervisorAuth(
+            'decrease_cart_qty',
+            `Supervisor approval required to reduce quantity of "${item.name}".`,
+            `Product: ${item.name} | From ${item.quantity} to ${newQty}`,
+            function() {
+                item.quantity = newQty;
+                if (item.bulk_discount_price && item.bulk_unit_quantity) {
+                    item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
+                }
+                updateCart();
+                saveMultiCartsToStorage();
+            }
+        );
+        return;
+    }
     if (newQty > item.availableStock) {
         playErrorBeep();
         showNotification(`Only ${item.availableStock} in stock`, 'error');
@@ -2827,6 +3166,25 @@ function setItemDiscount(id, value) {
     const item = cart.find(i => i.id === id);
     if (!item) return;
     const disc = parseFloat(value) || 0;
+    if (disc > 0 && !isSupervisorUser) {
+        requestSupervisorAuth(
+            'apply_discount',
+            `Supervisor approval required to apply ${disc}% discount on "${item.name}".`,
+            `Product: ${item.name} | Item Discount: ${disc}%`,
+            function() {
+                item.discount = Math.min(100, Math.max(0, disc));
+                calculateTotal();
+                saveMultiCartsToStorage();
+                updateCart();
+            },
+            function() {
+                item.discount = 0;
+                calculateTotal();
+                updateCart();
+            }
+        );
+        return;
+    }
     item.discount = Math.min(100, Math.max(0, disc));
     calculateTotal();
     saveMultiCartsToStorage();
@@ -2924,27 +3282,49 @@ function updateCashChange() {
 
 function updateQuantity(id, quantity) {
     const item = cart.find(item => item.id === id);
-    if (item) {
-        const newQty = Math.max(1, parseInt(quantity));
-        
-        // Check stock availability
-        if (newQty > item.availableStock) {
-            playErrorBeep();
-            showNotification(`Cannot set quantity to ${newQty}. Only ${item.availableStock} available in stock!`, 'error');
-            const inputField = document.querySelector(`input[onchange*="updateQuantity(${id}"]`);
-            if (inputField) {
-                inputField.value = item.quantity;
+    if (!item) return;
+    const oldQty = item.quantity;
+    const newQty = Math.max(1, parseInt(quantity) || 1);
+    if (newQty === oldQty) return;
+
+    if (newQty < oldQty) {
+        requestSupervisorAuth(
+            'decrease_cart_qty',
+            `Supervisor approval required to reduce quantity of "${item.name}".`,
+            `Product: ${item.name} | From ${oldQty} to ${newQty}`,
+            function() {
+                item.quantity = newQty;
+                if (item.bulk_discount_price && item.bulk_unit_quantity) {
+                    item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
+                }
+                updateCart();
+                saveMultiCartsToStorage();
+            },
+            function() {
+                const inputs = document.querySelectorAll(`input[onchange*="updateQuantity(${id}"]`);
+                inputs.forEach(inp => { inp.value = oldQty; });
             }
-            return;
-        }
-        
-        item.quantity = newQty;
-        if (item.bulk_discount_price && item.bulk_unit_quantity) {
-            item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
-        }
-        updateCart();
-        saveMultiCartsToStorage();
+        );
+        return;
     }
+
+    // Check stock availability
+    if (newQty > item.availableStock) {
+        playErrorBeep();
+        showNotification(`Cannot set quantity to ${newQty}. Only ${item.availableStock} available in stock!`, 'error');
+        const inputField = document.querySelector(`input[onchange*="updateQuantity(${id}"]`);
+        if (inputField) {
+            inputField.value = item.quantity;
+        }
+        return;
+    }
+    
+    item.quantity = newQty;
+    if (item.bulk_discount_price && item.bulk_unit_quantity) {
+        item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
+    }
+    updateCart();
+    saveMultiCartsToStorage();
 }
 
 function updateCart() {
@@ -3216,11 +3596,18 @@ function completeSale() {
 }
 
 function clearCart() {
-    if (confirm('Clear all items from cart?')) {
-        cart = [];
-        updateCart();
-        clearCartStorage(); // Clear storage when cart is cleared
-    }
+    if (cart.length === 0) return;
+    requestSupervisorAuth(
+        'clear_cart',
+        'Supervisor approval required to clear the entire cart.',
+        `Cart has ${cart.length} item(s)`,
+        function() {
+            cart = [];
+            updateCart();
+            clearCartStorage();
+            showNotification('Cart cleared with supervisor approval', 'info');
+        }
+    );
 }
 
 // Hold current order
@@ -3448,95 +3835,108 @@ function showHeldOrders() {
 
 // Retrieve a held order
 function retrieveHeldOrder(index) {
-
-    // Check if current cart has items
-    if (cart.length > 0) {
-        if (!confirm('Current cart has items. Do you want to replace it with the held order?')) {
-            return;
-        }
-    }
-
-    fetch(`/pos/held-orders/`)
-        .then(response => response.json())
-        .then(data => {
-            const orders = (data.success && data.orders) ? data.orders : [];
-            const order = orders.find(o => o.id === index);
-            if (!order) {
-                throw new Error('Order not found');
-            }
-
-            cart = [...(order.cart || [])];
-            selectedCustomer = order.customer || null;
-
-            if (selectedCustomer) {
-                const customerInfo = document.getElementById('customer-info');
-                if (customerInfo) customerInfo.style.display = 'block';
-                const nameEl = document.getElementById('customer-name');
-                const tierEl = document.getElementById('customer-tier');
-                const pointsEl = document.getElementById('customer-points');
-                if (nameEl) nameEl.textContent = selectedCustomer.name || '';
-                if (tierEl) tierEl.textContent = (selectedCustomer.tier || 'bronze').toUpperCase();
-                if (pointsEl) pointsEl.textContent = `${selectedCustomer.points || 0} points`;
-                const clearBtn = document.getElementById('clear-customer-btn');
-                if (clearBtn) clearBtn.style.display = 'inline-block';
-            }
-
-            document.getElementById('discount-type').value = order.discount_type || 'percentage';
-            document.getElementById('discount-value').value = order.discount_value || 0;
-
-            const mobileDiscountType = document.getElementById('mobile-discount-type');
-            const mobileDiscountValue = document.getElementById('mobile-discount-value');
-            if (mobileDiscountType) mobileDiscountType.value = order.discount_type || 'percentage';
-            if (mobileDiscountValue) mobileDiscountValue.value = order.discount_value || 0;
-
-            updateCart();
-            updateMobileCart();
-            saveCartToStorage();
-
-            return fetch(`/pos/held-orders/${order.id}/delete/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
+    requestSupervisorAuth(
+        'retrieve_held_order',
+        `Supervisor approval required to retrieve held order #${index}.`,
+        `Held Order ID: ${index}`,
+        function() {
+            // Check if current cart has items
+            if (cart.length > 0) {
+                if (!confirm('Current cart has items. Do you want to replace it with the held order?')) {
+                    return;
                 }
-            }).then(r => r.json()).then(() => order.name);
-        })
-        .then(orderName => {
-            updateHeldOrdersCount();
-            const modal = bootstrap.Modal.getInstance(document.getElementById('heldOrdersModal'));
-            if (modal) modal.hide();
-            showNotification(`Order "${orderName}" retrieved successfully`, 'success');
-        })
-        .catch(error => {
-            console.error('Retrieve held order failed:', error);
-            showNotification(error.message || 'Failed to retrieve held order', 'error');
-        });
+            }
+
+            fetch(`/pos/held-orders/`)
+                .then(response => response.json())
+                .then(data => {
+                    const orders = (data.success && data.orders) ? data.orders : [];
+                    const order = orders.find(o => o.id === index);
+                    if (!order) {
+                        throw new Error('Order not found');
+                    }
+
+                    cart = [...(order.cart || [])];
+                    selectedCustomer = order.customer || null;
+
+                    if (selectedCustomer) {
+                        const customerInfo = document.getElementById('customer-info');
+                        if (customerInfo) customerInfo.style.display = 'block';
+                        const nameEl = document.getElementById('customer-name');
+                        const tierEl = document.getElementById('customer-tier');
+                        const pointsEl = document.getElementById('customer-points');
+                        if (nameEl) nameEl.textContent = selectedCustomer.name || '';
+                        if (tierEl) tierEl.textContent = (selectedCustomer.tier || 'bronze').toUpperCase();
+                        if (pointsEl) pointsEl.textContent = `${selectedCustomer.points || 0} points`;
+                        const clearBtn = document.getElementById('clear-customer-btn');
+                        if (clearBtn) clearBtn.style.display = 'inline-block';
+                    }
+
+                    document.getElementById('discount-type').value = order.discount_type || 'percentage';
+                    document.getElementById('discount-value').value = order.discount_value || 0;
+
+                    const mobileDiscountType = document.getElementById('mobile-discount-type');
+                    const mobileDiscountValue = document.getElementById('mobile-discount-value');
+                    if (mobileDiscountType) mobileDiscountType.value = order.discount_type || 'percentage';
+                    if (mobileDiscountValue) mobileDiscountValue.value = order.discount_value || 0;
+
+                    updateCart();
+                    updateMobileCart();
+                    saveCartToStorage();
+
+                    return fetch(`/pos/held-orders/${order.id}/delete/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        }
+                    }).then(r => r.json()).then(() => order.name);
+                })
+                .then(orderName => {
+                    updateHeldOrdersCount();
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('heldOrdersModal'));
+                    if (modal) modal.hide();
+                    showNotification(`Order "${orderName}" retrieved successfully`, 'success');
+                })
+                .catch(error => {
+                    console.error('Retrieve held order failed:', error);
+                    showNotification(error.message || 'Failed to retrieve held order', 'error');
+                });
+        }
+    );
 }
 
 // Delete a held order
 function deleteHeldOrder(orderId, orderName) {
-    if (!confirm(`Delete held order "${orderName}"?\n\nThis action cannot be undone.`)) {
-        return;
-    }
+    requestSupervisorAuth(
+        'delete_held_order',
+        `Supervisor approval required to delete held order "${orderName}".`,
+        `Order: ${orderName} (ID: ${orderId})`,
+        function() {
+            if (!confirm(`Delete held order "${orderName}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
 
-    fetch(`/pos/held-orders/${orderId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}'
+            fetch(`/pos/held-orders/${orderId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to delete held order');
+                }
+                updateHeldOrdersCount();
+                showHeldOrders();
+                showNotification(`Order "${orderName}" deleted`, 'success');
+            })
+            .catch(error => {
+                console.error('Delete held order failed:', error);
+                showNotification(error.message || 'Failed to delete held order', 'error');
+            });
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to delete held order');
-        }
-        updateHeldOrdersCount();
-        showHeldOrders();
-        showNotification(`Order "${orderName}" deleted`, 'success');
-    })
-    .catch(error => {
-        console.error('Delete held order failed:', error);
-        showNotification(error.message || 'Failed to delete held order', 'error');
-    });
+    );
 }
 
 
@@ -4199,12 +4599,15 @@ function syncDiscount(type) {
     if (type === 'type') {
         const mobileValue = document.getElementById('mobile-discount-type').value;
         document.getElementById('discount-type').value = mobileValue;
+        calculateTotal();
+        updateMobileCart();
     } else {
         const mobileValue = document.getElementById('mobile-discount-value').value;
-        document.getElementById('discount-value').value = mobileValue;
+        const desktopInput = document.getElementById('discount-value');
+        desktopInput.value = mobileValue;
+        onDiscountInputChange(desktopInput);
+        updateMobileCart();
     }
-    calculateTotal();
-    updateMobileCart();
 }
 
 // Override the original updateCart to also update mobile cart
@@ -4286,15 +4689,25 @@ function applyPromoCode() {
     .then(data => {
         const fb = document.getElementById('promo-feedback');
         if (data.ok) {
-            appliedPromo = data;
-            // Override discount fields
-            document.getElementById('discount-type').value = 'fixed';
-            document.getElementById('discount-value').value = data.discount_amount;
-            document.getElementById('form-promo-code').value = code;
-            document.getElementById('form-promo-id').value = data.promo_id;
-            document.getElementById('clear-promo-btn').style.display = '';
-            fb.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${data.description}</span>`;
-            calculateTotal();
+            requestSupervisorAuth(
+                'apply_promo',
+                `Supervisor approval required to apply promo "${code}" (${data.description}).`,
+                `Promo Code: ${code} | Discount: KES ${data.discount_amount}`,
+                function() {
+                    appliedPromo = data;
+                    // Override discount fields
+                    document.getElementById('discount-type').value = 'fixed';
+                    document.getElementById('discount-value').value = data.discount_amount;
+                    document.getElementById('form-promo-code').value = code;
+                    document.getElementById('form-promo-id').value = data.promo_id;
+                    document.getElementById('clear-promo-btn').style.display = '';
+                    fb.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${data.description} (Approved)</span>`;
+                    calculateTotal();
+                },
+                function() {
+                    clearPromo();
+                }
+            );
         } else {
             fb.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
         }

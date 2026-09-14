@@ -80,6 +80,86 @@ class ProductAdmin(admin.ModelAdmin):
             return '🟢 In Stock'
     stock_status.short_description = 'Status'
     
+    actions = ['make_active', 'make_inactive', 'set_tax_standard', 'set_tax_zero_rated', 'set_tax_exempt', 'safe_delete_products']
+
+    @admin.action(description="Mark selected products as active")
+    def make_active(self, request, queryset):
+        count = queryset.update(is_active=True)
+        for p in queryset:
+            if hasattr(p, 'invalidate_cache'):
+                p.invalidate_cache()
+        if request:
+            self.message_user(request, f"Successfully activated {count} product(s).")
+
+    @admin.action(description="Mark selected products as inactive")
+    def make_inactive(self, request, queryset):
+        count = queryset.update(is_active=False)
+        for p in queryset:
+            if hasattr(p, 'invalidate_cache'):
+                p.invalidate_cache()
+        if request:
+            self.message_user(request, f"Successfully deactivated {count} product(s).")
+
+    @admin.action(description="Set Tax Class to Standard (16% VAT)")
+    def set_tax_standard(self, request, queryset):
+        count = queryset.update(tax_class='standard')
+        for p in queryset:
+            if hasattr(p, 'invalidate_cache'):
+                p.invalidate_cache()
+        if request:
+            self.message_user(request, f"Set Tax Class to Standard for {count} product(s).")
+
+    @admin.action(description="Set Tax Class to Zero-Rated (0% VAT)")
+    def set_tax_zero_rated(self, request, queryset):
+        count = queryset.update(tax_class='zero_rated')
+        for p in queryset:
+            if hasattr(p, 'invalidate_cache'):
+                p.invalidate_cache()
+        if request:
+            self.message_user(request, f"Set Tax Class to Zero-Rated for {count} product(s).")
+
+    @admin.action(description="Set Tax Class to Exempt (No VAT)")
+    def set_tax_exempt(self, request, queryset):
+        count = queryset.update(tax_class='exempt')
+        for p in queryset:
+            if hasattr(p, 'invalidate_cache'):
+                p.invalidate_cache()
+        if request:
+            self.message_user(request, f"Set Tax Class to Exempt for {count} product(s).")
+
+    @admin.action(description="Safely delete unused / discontinue products with history")
+    def safe_delete_products(self, request, queryset):
+        from django.db import transaction
+        from decimal import Decimal
+        from .views import _product_has_transaction_history
+
+        deleted_count = 0
+        discontinued_count = 0
+        for product in queryset:
+            if _product_has_transaction_history(product):
+                product.stock_quantity = Decimal('0.00')
+                product.is_active = False
+                product.save(update_fields=['stock_quantity', 'is_active', 'updated_at'])
+                if hasattr(product, 'invalidate_cache'):
+                    product.invalidate_cache()
+                discontinued_count += 1
+            else:
+                try:
+                    with transaction.atomic():
+                        product.stock_movements.all().delete()
+                        product.stock_adjustments.all().delete()
+                        product.delete()
+                    deleted_count += 1
+                except Exception:
+                    product.stock_quantity = Decimal('0.00')
+                    product.is_active = False
+                    product.save(update_fields=['stock_quantity', 'is_active', 'updated_at'])
+                    if hasattr(product, 'invalidate_cache'):
+                        product.invalidate_cache()
+                    discontinued_count += 1
+        if request:
+            self.message_user(request, f"Deleted {deleted_count} unused product(s) and discontinued {discontinued_count} product(s) with history.")
+
     def get_queryset(self, request):
         """Optimize queryset with select_related"""
         qs = super().get_queryset(request)

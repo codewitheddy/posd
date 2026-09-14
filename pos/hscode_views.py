@@ -10,8 +10,9 @@ from django.db.models import Q, Count
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
 
-from .models import HSCode
+from .models import HSCode, ActivityLog
 from .decorators import business_required
+from .security_utils import verify_admin_password_and_reason
 
 
 @login_required
@@ -93,9 +94,29 @@ def hscode_delete(request, slug=None, pk=None):
         messages.error(request, 'Only platform administrators can delete HS codes.')
         return redirect('hscode_list', slug=slug)
 
+    # Enforce Admin Password & Reason
+    is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+        request,
+        action_name="HS code deletion"
+    )
+    if not is_valid:
+        messages.error(request, err_msg)
+        return redirect('hscode_list', slug=slug)
+
     hscode = get_object_or_404(HSCode, pk=pk)
     code = hscode.code
+    hscode_pk = hscode.pk
     hscode.delete()
+
+    ActivityLog.log_activity(
+        user=request.user,
+        action_type='delete',
+        model_name='HSCode',
+        object_id=hscode_pk,
+        description=f'Deleted HS Code: {code} | Reason: {clean_reason}',
+        request=request
+    )
+
     messages.success(request, f'HS Code {code} deleted.')
     return redirect('hscode_list', slug=slug)
 

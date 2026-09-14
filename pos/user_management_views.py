@@ -15,6 +15,7 @@ from .models import (
     PERMISSION_CODES, DEFAULT_PERMISSIONS, PERMISSION_LABELS
 )
 from .decorators import business_required
+from .security_utils import verify_admin_password_and_reason
 
 
 # Manager required decorator (inline)
@@ -414,6 +415,15 @@ def user_delete_view(request, slug=None, pk=None):
         return redirect('user_management_list', slug=request.business.slug)
     
     if request.method == 'POST':
+        # Enforce Admin Password & Reason
+        is_valid, err_msg, clean_reason = verify_admin_password_and_reason(
+            request,
+            action_name="user removal from business"
+        )
+        if not is_valid:
+            messages.error(request, err_msg)
+            return render(request, 'pos/user_management_delete.html', {'user': user, 'membership': membership})
+
         try:
             username = user.username
             membership.is_active = False
@@ -424,7 +434,7 @@ def user_delete_view(request, slug=None, pk=None):
                 action_type='delete',
                 model_name='User',
                 object_id=user.id,
-                description=f'Removed user: {username} from business',
+                description=f'Removed user: {username} from business | Reason: {clean_reason}',
                 request=request
             )
             
