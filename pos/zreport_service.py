@@ -39,31 +39,42 @@ class ZReportService:
     @staticmethod
     @transaction.atomic
     def open_session(business: Business, user: User, opening_cash: Decimal = Decimal('0.00'), 
-                     notes: str = '') -> POSSession:
+                     notes: str = '', branch=None, terminal=None) -> POSSession:
         """
-        Open a new POS session.
+        Open a new POS session for a cashier and terminal.
         
         Args:
             business: Business entity
-            user: User opening the session
+            user: User opening the session (cashier)
             opening_cash: Starting cash in drawer
             notes: Optional notes
+            branch: Optional Branch entity
+            terminal: Optional POSTerminal entity
             
         Returns:
             POSSession instance
             
         Raises:
-            ValidationError: If there's already an open session
+            ValidationError: If user or terminal already has an active open session
         """
-        # Check for existing open session
-        existing_open = POSSession.objects.filter(
+        from django.db.models import Q
+        
+        # Check for existing open session specifically for this cashier or terminal
+        existing_query = POSSession.objects.filter(
             business=business,
             status='open'
-        ).exists()
+        ).filter(
+            Q(cashier=user) | Q(opened_by=user)
+        )
+        if terminal:
+            existing_query = existing_query | POSSession.objects.filter(
+                business=business, terminal=terminal, status='open'
+            )
         
+        existing_open = existing_query.first()
         if existing_open:
             raise ValidationError(
-                "Cannot open new session. There is already an open session for this business."
+                f"You already have an active shift session (#Session {existing_open.session_number})."
             )
         
         # Validate opening cash
@@ -73,7 +84,11 @@ class ZReportService:
         # Create session
         session = POSSession.objects.create(
             business=business,
+            branch=branch,
+            terminal=terminal,
+            terminal_identifier=terminal.terminal_code if terminal else '',
             opened_by=user,
+            cashier=user,
             opening_cash=opening_cash,
             notes=notes,
             status='open'
@@ -82,24 +97,52 @@ class ZReportService:
         return session
     
     @staticmethod
-    def get_current_session(business: Business) -> Optional[POSSession]:
+    def get_current_session(business: Business, user: Optional[User] = None, 
+                            terminal=None, session_id: Optional[int] = None) -> Optional[POSSession]:
         """
-        Get the currently open session for a business.
+        Get the currently open session for a business/user/terminal.
         
         Args:
             business: Business entity
+            user: Optional User (cashier)
+            terminal: Optional POSTerminal
+            session_id: Optional specific session ID
             
         Returns:
             POSSession if open, None otherwise
         """
+        from django.db.models import Q
+        
+        if session_id:
+            session = POSSession.objects.filter(pk=session_id, business=business, status='open').first()
+            if session:
+                return session
+                
+        if user:
+            session = POSSession.objects.filter(
+                business=business, status='open'
+            ).filter(
+                Q(cashier=user) | Q(opened_by=user)
+            ).order_by('-opened_at').first()
+            if session:
+                return session
+                
+        if terminal:
+            session = POSSession.objects.filter(
+                business=business, terminal=terminal, status='open'
+            ).order_by('-opened_at').first()
+            if session:
+                return session
+                
         return POSSession.objects.filter(
             business=business,
             status='open'
-        ).first()
+        ).order_by('-opened_at').first()
     
     @staticmethod
     def get_or_create_session(business: Business, user: User, 
-                             opening_cash: Decimal = Decimal('0.00')) -> POSSession:
+                             opening_cash: Decimal = Decimal('0.00'),
+                             branch=None, terminal=None) -> POSSession:
         """
         Get current session or create new one if none exists.
         
@@ -107,13 +150,18 @@ class ZReportService:
             business: Business entity
             user: User for session creation
             opening_cash: Starting cash if creating new session
+            branch: Optional Branch entity
+            terminal: Optional POSTerminal entity
             
         Returns:
             POSSession instance
         """
-        session = ZReportService.get_current_session(business)
+        session = ZReportService.get_current_session(business, user=user, terminal=terminal)
         if not session:
-            session = ZReportService.open_session(business, user, opening_cash)
+            session = ZReportService.open_session(
+                business=business, user=user, opening_cash=opening_cash,
+                branch=branch, terminal=terminal
+            )
         return session
     
     # ========================================================================
@@ -214,7 +262,13 @@ class ZReportService:
         session.status = 'closed'
         session.closed_by = user
         session.closed_at = now
-        session.save(update_fields=['status', 'closed_by', 'closed_at'])
+        session.closing_cash = closing_cash
+        try:
+            expected_cash = Decimal(str(report_data.get('expected_cash', session.opening_cash)))
+            session.cash_difference = closing_cash - expected_cash
+        except Exception:
+            session.cash_difference = Decimal('0.00')
+        session.save(update_fields=['status', 'closed_by', 'closed_at', 'closing_cash', 'cash_difference'])
         
         # Create audit log
         ZReportAuditLog.objects.create(
@@ -288,7 +342,7 @@ class ZReportService:
         
         # Cash management
         cash_payments = payments.filter(
-            payment_method__name__iexact='CASH'
+            Q(payment_method__name__iexact='CASH') | Q(payment_method__code__iexact='CASH')
         ).aggregate(total=Sum('amount'))
         
         cash_sales = cash_payments['total'] or Decimal('0.00')

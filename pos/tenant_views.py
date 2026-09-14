@@ -147,23 +147,34 @@ def business_list(request):
     return render(request, 'pos/business_list.html', context)
 
 
+def _resolve_business(request, slug=None):
+    """Resolve business from slug or active request context / user membership."""
+    from .permissions import get_request_business
+    if slug:
+        return get_object_or_404(Business, slug=slug)
+    business = getattr(request, 'business', None) or get_request_business(request)
+    if not business and hasattr(request, 'user') and request.user.is_authenticated:
+        business = Business.objects.filter(owner=request.user).first() or Business.objects.filter(memberships__user=request.user, memberships__is_active=True).first()
+    if not business:
+        business = Business.objects.filter(is_active=True).first()
+    return business
+
+
 @login_required
-@login_required
-def business_setup(request, slug):
+def business_setup(request, slug=None):
     """
     Initial business setup wizard
     """
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     
     # Verify user has access
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
             messages.error(request, 'You do not have permission to setup this business.')
             return redirect('business_list')
     
@@ -216,7 +227,7 @@ def business_setup(request, slug):
 
 
 @login_required
-def business_settings(request, slug):
+def business_settings(request, slug=None):
     """
     Unified business settings — single view, single template.
     Handles all form_type submissions: all-in-one (main form), working_hours,
@@ -225,17 +236,16 @@ def business_settings(request, slug):
     from decimal import Decimal
     from .models import BusinessSettings, ActivityLog
 
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
 
     # Permission check
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
             messages.error(request, 'You do not have permission to manage business settings.')
             return redirect('dashboard', slug=business.slug)
 
@@ -247,18 +257,55 @@ def business_settings(request, slug):
         # ── Main all-in-one form (no form_type) ──────────────────────────
         if not form_type:
             try:
-                # Business info (stored on BusinessSettings for receipts)
-                settings.business_name = request.POST.get('business_name', '').strip() or business.name
-                settings.business_address = request.POST.get('business_address', '')
-                settings.business_phone = request.POST.get('business_phone', '')
-                settings.business_email = request.POST.get('business_email', '')
-                settings.business_website = request.POST.get('business_website', '')
-                settings.tax_id = request.POST.get('tax_id', '')
+                # Business info (stored on BusinessSettings for receipts and synced with Business model)
+                raw_name = request.POST.get('business_name', '').strip()
+                settings.business_name = raw_name or business.name
+                settings.business_address = request.POST.get('business_address', '').strip()
+                settings.business_phone = request.POST.get('business_phone', '').strip()
+                settings.business_email = request.POST.get('business_email', '').strip()
+                settings.business_website = request.POST.get('business_website', '').strip()
+                settings.tax_id = request.POST.get('tax_id', '').strip()
+
+                # Bi-directional sync with main Business model
+                biz_updated = False
+                if raw_name and business.name != raw_name:
+                    business.name = raw_name
+                    biz_updated = True
+                if business.address != settings.business_address:
+                    business.address = settings.business_address
+                    biz_updated = True
+                if business.phone != settings.business_phone:
+                    business.phone = settings.business_phone
+                    biz_updated = True
+                if business.email != settings.business_email:
+                    business.email = settings.business_email
+                    biz_updated = True
+                if business.website != settings.business_website:
+                    business.website = settings.business_website
+                    biz_updated = True
+                if business.tax_id != settings.tax_id:
+                    business.tax_id = settings.tax_id
+                    if not business.kra_pin:
+                        business.kra_pin = settings.tax_id
+                    biz_updated = True
+                if biz_updated:
+                    business.save()
 
                 # Logo
                 if 'logo' in request.FILES:
-                    settings.logo = request.FILES['logo']
+                    uploaded = request.FILES['logo']
+                    from .image_utils import ImageOptimizer
+                    is_valid, error = ImageOptimizer.validate_image(uploaded)
+                    if is_valid:
+                        settings.logo = uploaded
+                    else:
+                        messages.error(request, f'Logo not saved: {error}')
                 if request.POST.get('remove_logo') == 'true':
+                    if settings.logo:
+                        try:
+                            settings.logo.delete(save=False)
+                        except Exception:
+                            pass
                     settings.logo = None
 
                 # Tax
@@ -310,6 +357,35 @@ def business_settings(request, slug):
 
                 settings.updated_by = request.user
                 settings.save()
+
+                # Emit real-time synchronization event
+                try:
+                    from .sync_views import emit_sync_event
+                    logo_url = settings.logo.url if settings.logo else None
+                    emit_sync_event('settings_updated', {
+                        'business_name': settings.get_business_name(),
+                        'business_address': settings.business_address,
+                        'business_phone': settings.business_phone,
+                        'business_email': settings.business_email,
+                        'business_website': settings.business_website,
+                        'tax_id': settings.tax_id,
+                        'logo_url': logo_url,
+                        'vat_rate': float(settings.vat_rate),
+                        'vat_enabled': settings.vat_enabled,
+                        'currency_symbol': settings.currency_symbol,
+                        'currency_position': settings.currency_position,
+                        'receipt_header': settings.receipt_header,
+                        'receipt_footer': settings.receipt_footer,
+                        'mpesa_enabled': settings.mpesa_enabled,
+                        'mpesa_type': settings.mpesa_type,
+                        'mpesa_shortcode': settings.mpesa_shortcode,
+                        'mpesa_phone': settings.mpesa_phone,
+                        'mpesa_account_name': settings.mpesa_account_name,
+                        'mpesa_account_reference': settings.mpesa_account_reference,
+                        'theme_primary': settings.theme_primary,
+                    }, business_id=business.id)
+                except Exception:
+                    pass
 
                 ActivityLog.log_activity(
                     user=request.user, action_type='settings',
@@ -412,21 +488,20 @@ def business_settings(request, slug):
 
 
 @login_required
-def business_members(request, slug):
+def business_members(request, slug=None):
     """
     Manage business members
     """
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     
     # Verify user has access
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin', 'manager']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin', 'manager']:
             messages.error(request, 'You do not have permission to manage members.')
             return redirect('dashboard', slug=business.slug)
     
@@ -443,21 +518,20 @@ def business_members(request, slug):
 
 
 @login_required
-def invite_member(request, slug):
+def invite_member(request, slug=None):
     """
     Invite a new member to the business
     """
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     
     # Verify user has access
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin', 'manager']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin', 'manager']:
             messages.error(request, 'You do not have permission to invite members.')
             return redirect('business_members', slug=business.slug)
     
@@ -489,6 +563,12 @@ def invite_member(request, slug):
                 role=role,
                 is_active=True
             )
+
+            # Optional initial PIN
+            initial_pin = request.POST.get('pin', '').strip()
+            if initial_pin:
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                profile.set_pin(initial_pin, business=business)
             
             messages.success(request, f'{user.get_full_name() or user.username} has been added to your business.')
             return redirect('business_members', slug=business.slug)
@@ -501,21 +581,20 @@ def invite_member(request, slug):
 
 
 @login_required
-def remove_member(request, slug, member_id):
+def remove_member(request, slug=None, member_id=None):
     """
     Remove a member from the business
     """
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     
     # Verify user has access
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
             messages.error(request, 'You do not have permission to remove members.')
             return redirect('business_members', slug=business.slug)
     
@@ -535,38 +614,27 @@ def remove_member(request, slug, member_id):
 
 
 @login_required
-def edit_member(request, slug, member_id):
+def edit_member(request, slug=None, member_id=None):
     """Edit a team member's role, permissions, discount ceiling, and PIN."""
-    from .models import PERMISSION_CODES, UserProfile
+    from .models import PERMISSION_CODES, PERMISSION_LABELS, UserProfile
     from decimal import Decimal
     from django.core.exceptions import ValidationError
     from django.db import transaction as db_transaction
 
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
 
     # Only owner/admin can edit members
     if not request.user.is_superuser:
-        requester_membership = get_object_or_404(
-            BusinessMembership, user=request.user, business=business, is_active=True
-        )
-        if requester_membership.role not in ('owner', 'admin'):
+        requester_membership = BusinessMembership.objects.filter(
+            user=request.user, business=business, is_active=True
+        ).first()
+        if not requester_membership or requester_membership.role not in ('owner', 'admin'):
             messages.error(request, 'You do not have permission to edit members.')
-            return redirect('business_members', slug=slug)
+            return redirect('business_members', slug=business.slug)
 
     member = get_object_or_404(BusinessMembership, id=member_id, business=business)
     profile, _ = UserProfile.objects.get_or_create(user=member.user)
 
-    PERMISSION_LABELS = {
-        'can_refund_sale': 'Process Refunds',
-        'can_void_sale': 'Void Sales',
-        'can_edit_price': 'Override Item Price',
-        'can_view_cost_price': 'View Cost Price',
-        'can_apply_discount': 'Apply Discounts',
-        'can_exceed_max_discount': 'Exceed Discount Limit',
-        'can_manage_users': 'Manage Team Members',
-        'can_view_reports': 'View Reports',
-        'can_manage_stock': 'Manage Stock & Purchases',
-    }
     # Build list of (code, label) tuples for template
     permission_list = [(code, PERMISSION_LABELS.get(code, code)) for code in PERMISSION_CODES]
 
@@ -660,7 +728,7 @@ def edit_member(request, slug, member_id):
                         entity_id=str(profile.pk),
                     )
                 elif new_pin:
-                    profile.set_pin(new_pin)
+                    profile.set_pin(new_pin, business=business)
                     ActivityLog.log_activity(
                         user=request.user,
                         action_type='update',
@@ -677,7 +745,7 @@ def edit_member(request, slug, member_id):
             return redirect('business_members', slug=slug)
 
         except ValidationError as ve:
-            errors['pin'] = str(ve.message)
+            errors['pin'] = ve.messages[0] if hasattr(ve, 'messages') and ve.messages else str(ve.message)
         except Exception as e:
             errors['general'] = f'Error saving changes: {str(e)}'
 
@@ -702,11 +770,11 @@ def edit_member(request, slug, member_id):
 
 
 @require_POST
-def pos_pin_login(request, slug):
+def pos_pin_login(request, slug=None):
     """PIN-based quick login for POS terminals."""
     from .models import UserProfile
 
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     employee_id = request.POST.get('employee_id', '').strip()
     pin = request.POST.get('pin', '').strip()
 
@@ -758,7 +826,7 @@ def pos_pin_login(request, slug):
             entity_type='UserProfile',
             entity_id=str(profile.pk),
         )
-        return redirect('dashboard', slug=slug)
+        return redirect('dashboard', slug=business.slug)
     else:
         # Failure — increment counter
         attempts = cache.get(attempts_key, 0) + 1
@@ -790,22 +858,21 @@ def pos_pin_login(request, slug):
 # ==================== DATA BACKUP VIEWS ====================
 
 @login_required
-def backup_data(request, slug):
+def backup_data(request, slug=None):
     """
     Data backup page — shows backup mode settings, sync status, snapshot history,
     and the legacy download/restore options.
     """
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
 
     # Permission check
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
             messages.error(request, 'You do not have permission to access backup data.')
             return redirect('dashboard', slug=business.slug)
 
@@ -837,7 +904,7 @@ def backup_data(request, slug):
                 messages.success(request, 'Backup settings saved.')
             except Exception as exc:
                 messages.error(request, f'Error saving settings: {exc}')
-            return redirect('backup_data', slug=slug)
+            return redirect('backup_data', slug=business.slug)
 
         elif action == 'manual_snapshot':
             try:
@@ -850,7 +917,7 @@ def backup_data(request, slug):
                 )
             except Exception as exc:
                 messages.error(request, f'Backup failed: {exc}')
-            return redirect('backup_data', slug=slug)
+            return redirect('backup_data', slug=business.slug)
 
     # ── Build context ─────────────────────────────────────────────────────────
 
@@ -911,7 +978,7 @@ def backup_data(request, slug):
 
 
 @login_required
-def download_backup(request, slug):
+def download_backup(request, slug=None):
     """
     Generate and download business data backup
     """
@@ -923,17 +990,16 @@ def download_backup(request, slug):
     
     logger = logging.getLogger(__name__)
     
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     
     # Verify user has access
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
             messages.error(request, 'You do not have permission to download backup.')
             return redirect('dashboard', slug=business.slug)
     
@@ -974,16 +1040,16 @@ def download_backup(request, slug):
             return response
         else:
             messages.error(request, 'Backup file generation failed. Please try again.')
-            return redirect('backup_data', slug=slug)
+            return redirect('backup_data', slug=business.slug)
     
     except Exception as e:
         logger.error(f'Backup download failed for {business.name}: {e}')
         messages.error(request, f'Backup failed: {str(e)}. Please contact support if this persists.')
-        return redirect('backup_data', slug=slug)
+        return redirect('backup_data', slug=business.slug)
 
 
 @login_required
-def restore_backup(request, slug):
+def restore_backup(request, slug=None):
     """
     Restore business data from an uploaded JSON backup file.
     """
@@ -992,30 +1058,29 @@ def restore_backup(request, slug):
     import os
     from django.core.management import call_command
 
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
 
     if not request.user.is_superuser:
-        membership = get_object_or_404(
-            BusinessMembership,
+        membership = BusinessMembership.objects.filter(
             user=request.user,
             business=business,
             is_active=True
-        )
-        if membership.role not in ['owner', 'admin']:
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
             messages.error(request, 'You do not have permission to restore data.')
             return redirect('dashboard', slug=business.slug)
 
     if request.method != 'POST':
-        return redirect('backup_data', slug=slug)
+        return redirect('backup_data', slug=business.slug)
 
     backup_file = request.FILES.get('backup_file')
     if not backup_file:
         messages.error(request, 'Please select a backup file to restore.')
-        return redirect('backup_data', slug=slug)
+        return redirect('backup_data', slug=business.slug)
 
     if not backup_file.name.endswith('.json'):
         messages.error(request, 'Invalid file type. Please upload a .json backup file.')
-        return redirect('backup_data', slug=slug)
+        return redirect('backup_data', slug=business.slug)
 
     temp_path = None
     temp_dir = None
@@ -1024,7 +1089,7 @@ def restore_backup(request, slug):
         data = json.loads(content)
         if 'metadata' not in data or 'business' not in data:
             messages.error(request, 'Invalid backup file format.')
-            return redirect('backup_data', slug=slug)
+            return redirect('backup_data', slug=business.slug)
 
         temp_dir = tempfile.mkdtemp()
         temp_path = os.path.join(temp_dir, backup_file.name)
@@ -1058,13 +1123,13 @@ def restore_backup(request, slug):
         except Exception:
             pass
 
-    return redirect('backup_data', slug=slug)
+    return redirect('backup_data', slug=business.slug)
 
 
 @login_required
-def skip_setup(request, slug):
+def skip_setup(request, slug=None):
     """Mark setup as completed (skipped) so the redirect never fires again."""
-    business = get_object_or_404(Business, slug=slug)
+    business = _resolve_business(request, slug)
     if request.user.is_superuser or BusinessMembership.objects.filter(
         user=request.user, business=business, is_active=True, role__in=['owner', 'admin']
     ).exists():

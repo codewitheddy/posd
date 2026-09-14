@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\tests.py
+# hypothesis_version: 6.167.1
+
+[b'not-a-real-exe', 200, 302, 2026, '-5', '100', '100.00', '1000.00', '200', '2024-01-01', '2026-04-01', '2026-04-30', '500.00', '700.00', '900.00', 'Biz One', 'Biz Two', 'Fuel', 'In range', 'Internet', 'Office', 'Office rent', 'Other Biz Cat', 'Out of range', 'Snacks', 'Total Expenses,100', 'Total Expenses,1000', 'Transport', 'amount', 'attachment', 'biz-one', 'biz-two', 'cash', 'cashier', 'category', 'csv', 'custom', 'dashboard', 'date_from', 'date_to', 'description', 'expense_create', 'expense_date', 'expense_edit', 'expense_export_csv', 'expense_list', 'export', 'form', 'malware.exe', 'manager', 'month', 'mpesa', 'other_owner', 'owner', 'pass123', 'payment_method', 'period', 'pk', 'pl_statement', 'profit_dashboard', 'slug', 'utf-8', 'viewer']

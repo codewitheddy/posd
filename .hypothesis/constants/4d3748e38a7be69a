@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0099_add_vat_code_system.py
+# hypothesis_version: 6.167.1
+
+[100, '0.00', '0098_hscode_module', '16.00', 'ID', 'VAT Code', 'VAT Codes', 'VATCode', 'business', 'code', 'created_at', 'description', 'excise_rate', 'hs_code_chapter', 'id', 'import_duty', 'is_active', 'is_excisable', 'name', 'ordering', 'pos', 'pos.business', 'pos.vatcode', 'product', 'products', 'updated_at', 'vat_code', 'vat_codes', 'vat_rate', 'vatcode', 'verbose_name', 'verbose_name_plural']

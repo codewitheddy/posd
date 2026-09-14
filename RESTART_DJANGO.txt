@@ -1,0 +1,141 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                    HOW TO SEE VAT CODE IN ADMIN SIDEBAR                      ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+🔧 THE ISSUE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Django admin caches model registrations when the server starts.
+Since we added VATCode after the server was started, you need to restart.
+
+
+✅ SOLUTION: RESTART THE DJANGO DEVELOPMENT SERVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1: Stop the current server
+   • If running in terminal, press: CTRL + C
+   • Wait for "KeyboardInterrupt" message
+
+Step 2: Start the server again
+   cd d:\V2POS\posd
+   python manage.py runserver
+
+Step 3: Go to admin
+   http://localhost:8000/admin/
+
+Expected Result:
+   ✓ You will see "VAT CODES" in the left sidebar under "POS"
+   ✓ Click on it to manage VAT codes
+
+
+🚀 QUICK START COMMAND
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Copy and paste this in your terminal (PowerShell):
+
+cd d:\V2POS\posd; python manage.py runserver
+
+
+📍 WHERE YOU'LL FIND VAT CODE IN ADMIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After restarting, the admin sidebar will show:
+
+POS
+├── Categories
+├── Customers
+├── Orders
+├── Products
+├── Promotions
+├── Purchases
+├── Sales
+├── Stock Adjustments
+├── User Profiles
+├── VAT CODES              ← HERE! Click this
+├── [other items...]
+
+
+🎯 WHAT YOU CAN DO WITH VAT CODES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. View all VAT codes
+   Click "VAT CODES" in sidebar
+   See all 32 default VAT codes (4 per business)
+
+2. Create new VAT code
+   Click "Add VAT Code" button
+   Fill form and save
+
+3. Edit existing VAT code
+   Click on any VAT code to edit
+   Update values and save
+
+4. Filter and search
+   Use the search box to find by code name or description
+   Use filters on the right for active/inactive, rate, etc.
+
+5. Assign to products
+   Go to Products admin
+   Click on a product
+   In "Tax Settings" section, select a VAT code
+   Save
+
+
+🔍 VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After restart, verify by:
+
+1. Go to: http://localhost:8000/admin/pos/vatcode/
+   You should see list of VAT codes
+
+2. Look at left sidebar
+   You should see "VAT CODES" listed
+
+3. Try creating a new one
+   Click "Add VAT Code"
+   Fill in details
+   Click Save
+
+
+❓ STILL NOT SHOWING?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Try these troubleshooting steps:
+
+1. Hard refresh browser
+   Press: CTRL + SHIFT + R (or CTRL + F5)
+
+2. Clear browser cache
+   Chrome: Settings → Privacy → Clear browsing data
+   Firefox: Settings → Privacy & Security → Clear Data
+
+3. Check migrations were applied
+   Run: python manage.py showmigrations pos
+   Look for 0099_add_vat_code_system with [X]
+
+4. Verify model is registered
+   Run: python manage.py shell
+   Then: from pos.models import VATCode; print("OK")
+   Should print: OK
+
+5. Check for errors in terminal
+   Look for any red error messages when server started
+
+
+📚 REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Admin URL: http://localhost:8000/admin/pos/vatcode/
+API URL: http://localhost:8000/api/vat-codes/
+Documentation: /docs/VAT_CODE_MANAGEMENT_GUIDE.md
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+              Once you restart the server, VAT Code will appear!
+                    Try the command above and refresh admin.
+
+═══════════════════════════════════════════════════════════════════════════════

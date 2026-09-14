@@ -1,0 +1,112 @@
+{% extends 'pos/base.html' %}
+{% block title %}Low Stock Alerts — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px}
+.int-card-header{padding:16px 20px;background:#fafbfc;border-bottom:1.5px solid #e5e7eb;font-weight:700;font-size:14px}
+.int-card-body{padding:20px}
+.t-table{width:100%;border-collapse:collapse;font-size:13px}
+.t-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:12px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.t-table tbody tr{border-bottom:1px solid #f3f4f6;transition:background .1s}
+.t-table tbody tr:hover{background:#f8f9fc}
+.t-table tbody td{padding:12px 16px;vertical-align:middle}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+.badge-danger-pill{background:#fee2e2;color:#991b1b;font-weight:700;padding:3px 8px;border-radius:12px;font-size:12px}
+.badge-warning-pill{background:#fef3c7;color:#92400e;font-weight:700;padding:3px 8px;border-radius:12px;font-size:12px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">Branch Low Stock Alerts</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Products where current branch quantity is below or equal to the designated reorder level.</p>
+    </div>
+    <!-- Branch Filter -->
+    <div class="d-flex align-items-center gap-2">
+      <label style="font-size:12px;font-weight:700;color:#6b7280">Branch:</label>
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" data-bs-toggle="dropdown" style="font-size:13px;font-weight:600">
+          <i class="bi bi-geo-alt me-1"></i> {{ branch.name|default:"Select Branch" }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          {% for b in all_branches %}
+          <li><a class="dropdown-item {% if b.id == branch.id %}active{% endif %}" href="{% url 'branch_low_stock_by_id' branch_id=b.id %}">{{ b.name }} {% if b.is_hq %}(HQ){% endif %}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <div class="int-card">
+    <div class="int-card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-exclamation-octagon text-danger me-2"></i>Understocked Inventory at {{ branch.name }}</span>
+      <span class="badge bg-danger">{{ low_stocks|length }} Item{{ low_stocks|length|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th>SKU</th>
+            <th class="text-center">Current Stock</th>
+            <th class="text-center">Reorder Threshold</th>
+            <th class="text-end">Average Cost</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bs in low_stocks %}
+          <tr>
+            <td style="font-weight:600;color:#111827">{{ bs.product.name }}</td>
+            <td style="color:#6b7280">{{ bs.product.category.name|default:"Uncategorized" }}</td>
+            <td style="font-family:monospace;color:#6b7280">{{ bs.product.sku|default:"-" }}</td>
+            <td class="text-center">
+              {% if bs.quantity <= 0 %}
+                <span class="badge-danger-pill"><i class="bi bi-x-circle me-1"></i>{{ bs.quantity }}</span>
+              {% else %}
+                <span class="badge-warning-pill"><i class="bi bi-exclamation-triangle me-1"></i>{{ bs.quantity }}</span>
+              {% endif %}
+            </td>
+            <td class="text-center" style="font-weight:700;color:#4b5563">
+              {{ bs.reorder_level }}
+            </td>
+            <td class="text-end" style="font-family:monospace;color:#4b5563">
+              {{ bs.average_cost }}
+            </td>
+            <td class="text-end">
+              <div class="d-inline-flex gap-1">
+                <a href="{% url 'requisition_create' %}" class="btn-outline-sm" title="Request replenishment from HQ">
+                  <i class="bi bi-plus-circle"></i> HQ Req
+                </a>
+                <a href="{% url 'transfer_request_create' %}" class="btn-outline-sm" title="Request transfer from another branch">
+                  <i class="bi bi-arrow-left-right"></i> Transfer
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" style="text-align:center;padding:48px;color:#166534">
+              <i class="bi bi-check-circle-fill text-success" style="font-size:2.5rem;display:block;margin-bottom:8px"></i>
+              <strong style="font-size:15px">All inventory healthy!</strong>
+              <div style="font-size:13px;color:#6b7280;margin-top:4px">No products at {{ branch.name }} are currently below their reorder level threshold.</div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

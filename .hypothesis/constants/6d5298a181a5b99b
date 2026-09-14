@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\services.py
+# hypothesis_version: 6.167.1
+
+[100, 500, 1024, 'backup_business', 'backup_settings', 'event_count', 'failed', 'limit_mb', 'percent', 'pos_backups', 'status', 'success', 'timestamp', 'used_mb', 'utf-8', 'uuid', 'version', 'wb']

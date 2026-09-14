@@ -4,11 +4,14 @@ RESTful endpoints for offline-first architecture
 """
 
 from rest_framework import viewsets, status, filters
+from rest_framework.views import APIView
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import ValidationError
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Q, F
@@ -18,16 +21,24 @@ from .models import (
     Product, Category, Sale, SaleItem, Customer, Supplier,
     Purchase, PurchaseItem, StockAdjustment, UserProfile,
     BusinessSettings, ActivityLog, LoyaltyTransaction,
-    LoyaltyReward, PaymentMethod, SalePayment
+    LoyaltyReward, PaymentMethod, SalePayment, VATCode,
+    Branch, BranchStock, StockMovement, StockRequisition, StockRequisitionItem,
+    StockTransferRequest, StockTransferItem, Dispatch, DispatchItem, POSTerminal
 )
 from .serializers import (
     ProductSerializer, CategorySerializer, SaleSerializer,
     CustomerSerializer, SupplierSerializer, PurchaseSerializer,
     StockAdjustmentSerializer, UserSerializer, BusinessSettingsSerializer,
     ActivityLogSerializer, LoyaltyTransactionSerializer, LoyaltyRewardSerializer,
-    PaymentMethodSerializer, SyncRequestSerializer, SyncResponseSerializer
+    PaymentMethodSerializer, SyncRequestSerializer, SyncResponseSerializer, VATCodeSerializer,
+    BranchStockSerializer, StockMovementSerializer, StockRequisitionSerializer,
+    StockTransferRequestSerializer, DispatchSerializer, POSTerminalSerializer
 )
+from .permissions import BranchScopeMixin, IsHQAdminOrOwner, IsBranchManagerOrHQ, get_request_business
+from .branch_services import DistributionService
 from .throttling import LoginThrottle, AuthThrottle
+from .api_authentication import POSTerminalAuthentication, APIKeyAuthentication
+from .terminal_sync_service import TerminalSyncService
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -59,20 +70,16 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def _get_request_business(self):
         """Resolve the business context for the current request."""
+        if self.request.user.is_authenticated and not self.request.user.is_superuser:
+            memberships = getattr(self.request.user, 'business_memberships', None)
+            if memberships is not None:
+                active_memberships = memberships.filter(is_active=True).select_related('business')
+                if active_memberships.count() == 1:
+                    return active_memberships.first().business
+
         business = getattr(self.request, 'business', None)
         if business is not None:
             return business
-
-        if self.request.user.is_superuser:
-            return None
-
-        memberships = getattr(self.request.user, 'business_memberships', None)
-        if memberships is None:
-            return None
-
-        active_memberships = memberships.filter(is_active=True).select_related('business')
-        if active_memberships.count() == 1:
-            return active_memberships.first().business
         return None
 
     def get_serializer_context(self):
@@ -84,17 +91,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
 
         # Scope products to the current business context.
-        business = getattr(self.request, 'business', None)
-        if business is not None:
-            queryset = queryset.filter(business=business)
-        elif self.request.user.is_superuser:
-            queryset = queryset
-        else:
+        if self.request.user.is_authenticated and not self.request.user.is_superuser:
             memberships = getattr(self.request.user, 'business_memberships', None)
-            if memberships is None:
-                return queryset.none()
-            business_ids = memberships.filter(is_active=True).values_list('business_id', flat=True)
-            queryset = queryset.filter(business_id__in=business_ids)
+            if memberships is not None:
+                business_ids = memberships.filter(is_active=True).values_list('business_id', flat=True)
+                if business_ids:
+                    queryset = queryset.filter(business_id__in=business_ids)
+                else:
+                    return queryset.none()
+        elif getattr(self.request, 'business', None) is not None:
+            queryset = queryset.filter(business=self.request.business)
         
         # Filter by category
         category_id = self.request.query_params.get('category', None)
@@ -163,6 +169,121 @@ class CategoryViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name']
     ordering = ['name']
+
+
+class VATCodeViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for VAT Codes
+    Allows businesses to manage their VAT codes for tax treatment
+    """
+    serializer_class = VATCodeSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['code', 'name', 'description']
+    ordering_fields = ['code', 'vat_rate', 'created_at']
+    ordering = ['code']
+
+    def _get_request_business(self):
+        """Resolve the business context for the current request."""
+        business = getattr(self.request, 'business', None)
+        if business is not None:
+            return business
+
+        if self.request.user.is_superuser:
+            return None
+
+        memberships = getattr(self.request.user, 'business_memberships', None)
+        if memberships is None:
+            return None
+
+        active_memberships = memberships.filter(is_active=True).select_related('business')
+        if active_memberships.count() == 1:
+            return active_memberships.first().business
+        return None
+
+    def get_serializer_context(self):
+        """Add business context to serializer"""
+        context = super().get_serializer_context()
+        context['business'] = self._get_request_business()
+        return context
+
+    def get_queryset(self):
+        """Filter VAT codes by business context"""
+        queryset = VATCode.objects.all().select_related('business')
+
+        business = self._get_request_business()
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        elif self.request.user.is_superuser:
+            queryset = queryset
+        else:
+            # Non-superuser without explicit business context
+            memberships = getattr(self.request.user, 'business_memberships', None)
+            if memberships is None:
+                return queryset.none()
+            business_ids = memberships.filter(is_active=True).values_list('business_id', flat=True)
+            queryset = queryset.filter(business_id__in=business_ids)
+        
+        # Filter by active status if requested
+        active = self.request.query_params.get('active', None)
+        if active is not None:
+            queryset = queryset.filter(is_active=active.lower() == 'true')
+        
+        return queryset
+
+    def perform_create(self, serializer):
+        """Auto-populate business when creating VAT code"""
+        business = self._get_request_business()
+        if business is None:
+            raise ValidationError(
+                'Unable to determine business for this VAT code creation. '
+                'Use a business-scoped request context.'
+            )
+        serializer.save(business=business)
+    
+    @action(detail=False, methods=['get'])
+    def by_rate(self, request):
+        """Filter VAT codes by VAT rate
+        
+        Query params:
+        - rate: VAT rate to filter by (e.g., 16.00)
+        """
+        rate = request.query_params.get('rate', None)
+        if rate is None:
+            return Response(
+                {'error': 'rate parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from decimal import Decimal
+            rate = Decimal(rate)
+        except Exception:
+            return Response(
+                {'error': 'Invalid rate value'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        queryset = self.get_queryset().filter(vat_rate=rate)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def excisable(self, request):
+        """Get only excisable VAT codes"""
+        queryset = self.get_queryset().filter(is_excisable=True)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def products(self, request, pk=None):
+        """Get products using this VAT code"""
+        vat_code = self.get_object()
+        products = vat_code.products.filter(is_active=True)
+        
+        from .serializers import ProductSerializer
+        serializer = ProductSerializer(products, many=True)
+        return Response(serializer.data)
 
 
 class CustomerViewSet(viewsets.ModelViewSet):
@@ -316,6 +437,18 @@ class SaleViewSet(viewsets.ModelViewSet):
                 pass
         
         return queryset
+    
+    def perform_create(self, serializer):
+        """Create a sale with permission checks"""
+        membership = getattr(self.request, 'business_membership', None)
+        if not membership:
+            raise PermissionDenied("No business membership found")
+        
+        if not membership.has_permission('can_create_sale'):
+            raise PermissionDenied("You do not have permission to create sales")
+        
+        # Automatically set cashier to the current user
+        serializer.save(cashier=self.request.user)
     
     @action(detail=False, methods=['get'])
     def today(self, request):
@@ -541,3 +674,315 @@ def sync_status(request):
         'version': '1.0.0',
         'status': 'online'
     })
+
+
+# ============================================================================
+# MULTI-BRANCH DISTRIBUTION & LEDGER VIEWSETS
+# ============================================================================
+
+class StockRequisitionViewSet(BranchScopeMixin, viewsets.ModelViewSet):
+    serializer_class = StockRequisitionSerializer
+    permission_classes = [IsAuthenticated]
+    branch_field = 'requesting_branch'
+
+    def get_queryset(self):
+        business = get_request_business(self.request)
+        qs = StockRequisition.objects.filter(business=business).select_related(
+            'requesting_branch', 'requested_by', 'approved_by'
+        ).prefetch_related('items__product')
+        return self.get_scoped_queryset(qs)
+
+    def perform_create(self, serializer):
+        business = get_request_business(self.request)
+        requesting_branch = serializer.validated_data.get('requesting_branch')
+        items_data = self.request.data.get('items', [])
+        notes = serializer.validated_data.get('notes', '')
+        req = DistributionService.create_requisition(
+            business=business,
+            requesting_branch=requesting_branch,
+            items_data=items_data,
+            user=self.request.user,
+            notes=notes,
+        )
+        serializer.instance = req
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsHQAdminOrOwner])
+    def approve(self, request, pk=None):
+        requisition = self.get_object()
+        approved_items = request.data.get('approved_items', {})
+        try:
+            req = DistributionService.approve_requisition(requisition, approved_items, request.user)
+            return Response(StockRequisitionSerializer(req).data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsHQAdminOrOwner])
+    def reject(self, request, pk=None):
+        requisition = self.get_object()
+        reason = request.data.get('reason', '')
+        try:
+            req = DistributionService.reject_requisition(requisition, request.user, reason)
+            return Response(StockRequisitionSerializer(req).data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='dispatch', permission_classes=[IsAuthenticated, IsHQAdminOrOwner])
+    def perform_dispatch(self, request, pk=None):
+        requisition = self.get_object()
+        items_data = request.data.get('items', [])
+        notes = request.data.get('notes', '')
+        if not items_data:
+            # Default to all approved quantities
+            items_data = [
+                {'item_id': item.id, 'quantity': item.approved_quantity or item.requested_quantity}
+                for item in requisition.items.all()
+            ]
+        try:
+            dispatch_rec = DistributionService.dispatch(requisition, items_data, request.user, notes)
+            return Response(DispatchSerializer(dispatch_rec).data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StockTransferRequestViewSet(BranchScopeMixin, viewsets.ModelViewSet):
+    serializer_class = StockTransferRequestSerializer
+    permission_classes = [IsAuthenticated]
+    branch_field = 'source_or_dest'
+
+    def get_queryset(self):
+        business = get_request_business(self.request)
+        qs = StockTransferRequest.objects.filter(business=business).select_related(
+            'source_branch', 'destination_branch', 'requested_by', 'approved_by'
+        ).prefetch_related('items__product')
+        return self.get_scoped_queryset(qs)
+
+    def perform_create(self, serializer):
+        business = get_request_business(self.request)
+        source_branch = serializer.validated_data.get('source_branch')
+        dest_branch = serializer.validated_data.get('destination_branch')
+        items_data = self.request.data.get('items', [])
+        reason = serializer.validated_data.get('reason', '')
+        trf = DistributionService.create_transfer_request(
+            business=business,
+            source_branch=source_branch,
+            dest_branch=dest_branch,
+            items_data=items_data,
+            user=self.request.user,
+            reason=reason,
+        )
+        serializer.instance = trf
+
+    @action(detail=True, methods=['post'], permission_classes=[IsBranchManagerOrHQ])
+    def approve(self, request, pk=None):
+        transfer_req = self.get_object()
+        approved_items = request.data.get('approved_items', {})
+        try:
+            trf = DistributionService.approve_transfer_request(transfer_req, approved_items, request.user)
+            return Response(StockTransferRequestSerializer(trf).data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsBranchManagerOrHQ])
+    def reject(self, request, pk=None):
+        transfer_req = self.get_object()
+        reason = request.data.get('reason', '')
+        try:
+            trf = DistributionService.reject_transfer_request(transfer_req, request.user, reason)
+            return Response(StockTransferRequestSerializer(trf).data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='dispatch', permission_classes=[IsBranchManagerOrHQ])
+    def perform_dispatch(self, request, pk=None):
+        transfer_req = self.get_object()
+        items_data = request.data.get('items', [])
+        notes = request.data.get('notes', '')
+        if not items_data:
+            items_data = [
+                {'item_id': item.id, 'quantity': item.approved_quantity or item.requested_quantity}
+                for item in transfer_req.items.all()
+            ]
+        try:
+            dispatch_rec = DistributionService.dispatch(transfer_req, items_data, request.user, notes)
+            return Response(DispatchSerializer(dispatch_rec).data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DispatchViewSet(BranchScopeMixin, viewsets.ReadOnlyModelViewSet):
+    serializer_class = DispatchSerializer
+    permission_classes = [IsAuthenticated]
+    branch_field = 'source_or_dest'
+
+    def get_queryset(self):
+        business = get_request_business(self.request)
+        qs = Dispatch.objects.filter(business=business).select_related(
+            'source_branch', 'destination_branch', 'dispatched_by', 'received_by'
+        ).prefetch_related('items__product')
+        return self.get_scoped_queryset(qs)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def confirm_receipt(self, request, pk=None):
+        dispatch_rec = self.get_object()
+        received_items_data = request.data.get('received_items', {})
+        try:
+            dispatch_rec = DistributionService.confirm_receipt(dispatch_rec, received_items_data, request.user)
+            return Response(DispatchSerializer(dispatch_rec).data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BranchStockViewSet(BranchScopeMixin, viewsets.ReadOnlyModelViewSet):
+    serializer_class = BranchStockSerializer
+    permission_classes = [IsAuthenticated]
+    branch_field = 'branch'
+
+    def get_queryset(self):
+        business = get_request_business(self.request)
+        qs = BranchStock.objects.filter(branch__business=business).select_related(
+            'branch', 'product', 'product__category'
+        )
+        qs = self.get_scoped_queryset(qs)
+
+        branch_id = self.request.query_params.get('branch_id')
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+
+        low_stock = self.request.query_params.get('low_stock')
+        if low_stock and low_stock.lower() in ('1', 'true', 'yes'):
+            qs = qs.filter(quantity__lte=F('reorder_level'))
+
+        return qs.order_by('product__name')
+
+
+class StockMovementViewSet(BranchScopeMixin, viewsets.ReadOnlyModelViewSet):
+    serializer_class = StockMovementSerializer
+    permission_classes = [IsAuthenticated]
+    branch_field = 'branch'
+
+    def get_queryset(self):
+        business = get_request_business(self.request)
+        qs = StockMovement.objects.filter(business=business).select_related(
+            'branch', 'product', 'performed_by'
+        )
+        qs = self.get_scoped_queryset(qs)
+
+        branch_id = self.request.query_params.get('branch_id')
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+
+        product_id = self.request.query_params.get('product_id')
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+
+        movement_type = self.request.query_params.get('movement_type')
+        if movement_type:
+            qs = qs.filter(movement_type=movement_type)
+
+        date_from = self.request.query_params.get('date_from')
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+
+        date_to = self.request.query_params.get('date_to')
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        return qs.order_by('-created_at')
+
+
+class POSTerminalViewSet(BranchScopeMixin, viewsets.ModelViewSet):
+    serializer_class = POSTerminalSerializer
+    permission_classes = [IsAuthenticated]
+    branch_field = 'branch'
+
+    def get_queryset(self):
+        business = get_request_business(self.request)
+        qs = POSTerminal.objects.filter(business=business).select_related('branch')
+        return self.get_scoped_queryset(qs)
+
+    def perform_create(self, serializer):
+        business = get_request_business(self.request)
+        serializer.save(business=business)
+
+    @action(detail=True, methods=['post'], authentication_classes=[POSTerminalAuthentication, APIKeyAuthentication, SessionAuthentication, JWTAuthentication], permission_classes=[AllowAny])
+    def sync(self, request, pk=None):
+        terminal = self.get_object()
+        auth_terminal = getattr(request, 'terminal', None)
+        if auth_terminal and auth_terminal.pk != terminal.pk:
+            return Response(
+                {'error': 'Terminal token does not match the requested terminal ID.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        response_data = TerminalSyncService.process_sync(
+            terminal=terminal,
+            payload=request.data,
+            performed_by=request.user if getattr(request.user, 'is_authenticated', False) else None
+        )
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class POSTerminalSyncView(APIView):
+    """
+    Dedicated endpoint for POS Terminal bidirectional synchronization.
+    Accepts:
+      - POST /api/terminals/{id}/sync/
+      - POST /api/terminals/sync/
+    """
+    authentication_classes = [POSTerminalAuthentication, APIKeyAuthentication, SessionAuthentication, JWTAuthentication]
+    permission_classes = [AllowAny]
+
+    def post(self, request, pk=None):
+        terminal = getattr(request, 'terminal', None)
+
+        # 1. If not authenticated via POSTerminalAuthentication header, check request data / headers explicitly
+        if not terminal:
+            device_token = request.data.get('device_token') or request.headers.get('X-Terminal-Token') or request.META.get('HTTP_X_TERMINAL_TOKEN')
+            if device_token:
+                try:
+                    terminal = POSTerminal.objects.select_related('business', 'branch').get(device_token=device_token)
+                except POSTerminal.DoesNotExist:
+                    return Response({'error': 'Invalid device token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 2. If pk is in URL
+        if pk is not None:
+            try:
+                target_terminal = POSTerminal.objects.select_related('business', 'branch').get(pk=pk)
+            except POSTerminal.DoesNotExist:
+                return Response({'error': f'Terminal with ID {pk} not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            if terminal and terminal.pk != target_terminal.pk:
+                return Response({'error': 'Terminal token does not match requested terminal ID.'}, status=status.HTTP_403_FORBIDDEN)
+
+            # If user is authenticated via session/JWT/APIKey (staff/admin), allow them to sync on behalf of terminal
+            if not terminal and getattr(request.user, 'is_authenticated', False):
+                terminal = target_terminal
+            elif not terminal:
+                # No token and not logged in as staff
+                return Response({'error': 'Authentication required. Provide X-Terminal-Token header.'}, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                terminal = target_terminal
+
+        if not terminal:
+            return Response(
+                {'error': 'Authentication required. Provide X-Terminal-Token header or device_token in payload.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not terminal.is_active:
+            return Response({'error': 'Terminal is deactivated.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if terminal.branch and not terminal.branch.is_active:
+            return Response({'error': 'Terminal branch is inactive.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not terminal.business.is_active:
+            return Response({'error': 'Business is inactive.'}, status=status.HTTP_403_FORBIDDEN)
+
+        performed_by = request.user if getattr(request.user, 'is_authenticated', False) else None
+        response_data = TerminalSyncService.process_sync(
+            terminal=terminal,
+            payload=request.data,
+            performed_by=performed_by
+        )
+        return Response(response_data, status=status.HTTP_200_OK)
+
+

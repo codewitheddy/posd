@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\sync\tasks.py
+# hypothesis_version: 6.167.1
+
+[500, 'error_message', 'last_synced_at', 'pending_events_count', 'server', 'status', 'timestamp', 'updated_at', 'uuid']

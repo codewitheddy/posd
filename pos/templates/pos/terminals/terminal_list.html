@@ -1,0 +1,147 @@
+{% extends 'pos/base.html' %}
+{% block title %}POS Terminals & Devices — {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 fw-bold mb-1"><i class="bi bi-pc-display me-2 text-primary"></i>POS Terminals &amp; Devices</h1>
+      <p class="text-muted small mb-0">Manage hardware registers, touch terminals, and device authorization for Front Office POS.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'terminal_create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>New Terminal
+      </a>
+      <a href="{% url 'terminal_register' %}" class="btn btn-outline-info btn-sm">
+        <i class="bi bi-shield-lock me-1"></i>Register This Device
+      </a>
+      <a href="{% url 'pin_audit_log_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-shield-check me-1"></i>PIN Audit Trail
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show mb-3" role="alert">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Terminals Grid / Table -->
+  <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px; overflow: hidden;">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center py-2 px-3">
+      <span class="fw-bold text-muted small"><i class="bi bi-hdd-network me-1"></i>Registered POS Terminals ({{ terminals.count }})</span>
+      <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Front Office Hardware</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="font-size: 13.5px;">
+        <thead class="table-light">
+          <tr>
+            <th>Terminal Name</th>
+            <th>Terminal Code</th>
+            <th>Branch Location</th>
+            <th>Cashier Access</th>
+            <th>Device Token</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in terminals %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="rounded-circle bg-primary-subtle text-primary p-2 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                  <i class="bi bi-pc-display"></i>
+                </div>
+                <div>
+                  <div class="fw-bold text-dark">{{ t.name }}</div>
+                  <small class="text-muted">Created {{ t.created_at|date:"M d, Y" }}</small>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="badge bg-dark font-monospace px-2 py-1">{{ t.terminal_code }}</span>
+            </td>
+            <td>
+              <span class="badge bg-light text-dark border">{{ t.branch.name }}</span>
+            </td>
+            <td>
+              {% if t.can_cashier_login %}
+                {% if t.allowed_cashiers.all %}
+                  <span class="badge bg-info-subtle text-info-emphasis border border-info" title="Restricted to specific cashiers">
+                    <i class="bi bi-people-fill me-1"></i>{{ t.allowed_cashiers.count }} Cashiers
+                  </span>
+                {% else %}
+                  <span class="badge bg-success-subtle text-success border border-success" title="Any branch cashier can log in">
+                    <i class="bi bi-check-all me-1"></i>All Cashiers
+                  </span>
+                {% endif %}
+              {% else %}
+                <span class="badge bg-danger-subtle text-danger border border-danger">
+                  <i class="bi bi-slash-circle me-1"></i>Disabled
+                </span>
+              {% endif %}
+            </td>
+            <td>
+              <code class="small text-muted" title="{{ t.device_token }}">{{ t.device_token|slice:":12" }}...</code>
+            </td>
+            <td>
+              {% if t.is_active %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'terminal_edit' t.pk %}" class="btn btn-outline-secondary" title="Edit Terminal">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'pin_audit_log_list' %}?terminal={{ t.pk }}" class="btn btn-outline-secondary" title="View Audit Logs">
+                  <i class="bi bi-clock-history"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">
+              <i class="bi bi-pc-display fs-1 d-block mb-2 opacity-50"></i>
+              <p class="mb-2 fw-semibold">No POS terminals registered yet.</p>
+              <p class="small text-muted mb-3">Add terminal hardware definitions to allow cashiers to log in via PIN on designated checkout registers.</p>
+              <a href="{% url 'terminal_create' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i>Create First Terminal
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Setup Info Banner -->
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card border-0 bg-primary-subtle text-primary-emphasis p-3" style="border-radius: 12px;">
+        <h6 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>How Terminal Binding Works</h6>
+        <p class="small mb-0 opacity-85">
+          Each physical register (counter computer or tablet) is bound by a unique device token. Cashiers enter their unique PIN on the terminal to unlock their front office shift session without accessing back office business management tools.
+        </p>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-0 bg-info-subtle text-info-emphasis p-3" style="border-radius: 12px;">
+        <h6 class="fw-bold mb-1"><i class="bi bi-speedometer2 me-2"></i>Quick Switch to Front Office</h6>
+        <p class="small mb-0 opacity-85">
+          Managers and Admins can launch the POS Front Office at any time using the "POS Terminal" launcher in the top navigation bar. Cashiers can log in directly at <a href="{% url 'terminal_pin_login' %}" class="fw-bold text-decoration-underline text-info-emphasis">/pos/login/</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

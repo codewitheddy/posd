@@ -1,0 +1,56 @@
+{% extends 'pos/base.html' %}
+{% block title %}Register Terminal Device — Front Office POS{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 600px;">
+  <div class="card shadow-sm border-0" style="border-radius: 16px; overflow: hidden;">
+    <div class="card-header bg-dark text-white py-3 px-4">
+      <h5 class="mb-0 fw-bold"><i class="bi bi-pc-display me-2 text-info"></i>Register POS Terminal Device</h5>
+      <small class="opacity-75">Authorize this computer / tablet / browser as a registered POS terminal</small>
+    </div>
+    <div class="card-body p-4">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="alert alert-{{ msg.tags|default:'info' }} mb-3">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+
+      <div class="alert alert-info py-2 px-3 small mb-4">
+        <i class="bi bi-info-circle-fill me-1"></i>
+        Registering this device will store a secure terminal identifier token in this browser. Cashier PIN logins on this device will be bound to this terminal.
+      </div>
+
+      <form method="POST" action="{% url 'terminal_register' %}">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label fw-bold" for="name">Terminal Display Name *</label>
+          <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Counter 1 - Front Till" required autofocus>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-bold" for="terminal_code">Terminal Code *</label>
+          <input type="text" class="form-control" id="terminal_code" name="terminal_code" placeholder="e.g. TERM-NBI-01" style="text-transform: uppercase;" required>
+          <small class="text-muted">Unique code used in audit logs and reports.</small>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-bold" for="branch_id">Assigned Branch Location *</label>
+          <select class="form-select" id="branch_id" name="branch_id" required>
+            <option value="">— Select branch —</option>
+            {% for b in branches %}
+              <option value="{{ b.pk }}">{{ b.name }} ({{ b.code }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-primary btn-lg fw-bold py-3">
+            <i class="bi bi-check-circle-fill me-2"></i>Authorize &amp; Register This Device
+          </button>
+          <a href="{% url 'pos_screen' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

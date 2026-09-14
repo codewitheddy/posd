@@ -3,6 +3,8 @@ Django signals that fire webhook events on model changes.
 """
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
+
 
 
 def _sale_data(sale):
@@ -26,12 +28,52 @@ def _product_data(product):
     }
 
 
+@receiver(post_save, sender='pos.Product')
+def on_product_saved(sender, instance, created, **kwargs):
+    """Broadcast real-time price, stock, or catalog changes to POS registers."""
+    from .sync_views import emit_sync_event
+    biz_id = instance.business_id if instance.business_id else None
+    
+    tax_rate = 0.0
+    if getattr(instance, 'vat_code', None) and hasattr(instance.vat_code, 'rate'):
+        tax_rate = float(instance.vat_code.rate)
+    elif getattr(instance, 'tax_class', '') == 'standard':
+        tax_rate = 16.0
+
+    emit_sync_event('product_updated', {
+        'product_id': instance.id,
+        'name': instance.name,
+        'barcode': instance.barcode or '',
+        'product_code': instance.product_code or '',
+        'unit_price': float(instance.unit_price or 0),
+        'cost_price': float(instance.cost_price or 0),
+        'stock_quantity': float(instance.stock_quantity or 0),
+        'tax_rate': tax_rate,
+        'category_id': instance.category_id,
+        'is_active': instance.is_active,
+    }, business_id=biz_id)
+
+
+
 @receiver(post_save, sender='pos.Sale')
 def on_sale_saved(sender, instance, created, **kwargs):
     if not created:
         return
     from .webhook_service import dispatch_event
+    from .sync_views import emit_sync_event
+    
     dispatch_event('sale.created', _sale_data(instance), instance.business)
+
+    # Broadcast real-time sale completed event
+    biz_id = instance.business_id if instance.business_id else None
+    emit_sync_event('sale_completed', {
+        'sale_id': instance.id,
+        'invoice_number': instance.invoice_number,
+        'total': str(instance.total),
+        'cashier': instance.cashier.get_full_name() or instance.cashier.username if instance.cashier else 'Cashier',
+        'items_count': instance.items.count() if instance.pk else 1,
+        'timestamp': instance.date.isoformat() if hasattr(instance, 'date') and instance.date else '',
+    }, business_id=biz_id)
 
     # Check stock levels for each item sold
     for item in instance.items.select_related('product'):
@@ -129,3 +171,20 @@ def on_customer_created(sender, instance, created, **kwargs):
         'phone': instance.phone,
     }
     dispatch_event('customer.created', data, instance.business)
+
+
+@receiver(post_save, sender='pos.POSSession')
+def on_pos_session_saved(sender, instance, created, **kwargs):
+    """Broadcast drawer / shift open and close events."""
+    from .sync_views import emit_sync_event
+    biz_id = instance.business_id if instance.business_id else None
+    emit_sync_event('shift_event', {
+        'session_id': instance.id,
+        'session_number': instance.session_number,
+        'cashier': instance.cashier.get_full_name() or instance.cashier.username if instance.cashier else 'Cashier',
+        'status': instance.status,
+        'opening_cash': str(instance.opening_cash),
+        'closing_cash': str(instance.closing_cash) if instance.closing_cash is not None else None,
+        'timestamp': timezone.now().isoformat() if hasattr(instance, 'opened_at') else '',
+    }, business_id=biz_id)
+

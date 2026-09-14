@@ -145,14 +145,17 @@ ADMINS = [
     ('Admin', os.environ.get('ADMIN_EMAIL', 'admin@example.com')),
 ]
 
-# Email Configuration (for error notifications)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'in-v3.mailjet.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
+# Email Configuration
+EMAIL_BACKEND = 'pos_system.email_backend.CpanelEmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'mail.marid.co.ke')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 465))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False') == 'True'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@marid.co.ke')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+EMAIL_HELO_NAME = os.environ.get('EMAIL_HELO_NAME', 'marid.co.ke')
 
 # Cache Configuration (optional - requires Redis/Memcached)
 if os.environ.get('REDIS_URL'):

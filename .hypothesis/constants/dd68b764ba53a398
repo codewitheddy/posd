@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\events\migrations\0001_initial.py
+# hypothesis_version: 6.167.1
+
+[100, '0098_hscode_module', 'Event Log', 'Event Logs', 'EventLog', 'Failed', 'Inventory Updated', 'Payment Recorded', 'Pending', 'Product Changed', 'Sale Created', 'Sale Refunded', 'Synced', 'created_at', 'device_id', 'event_logs', 'event_type', 'failed', 'indexes', 'inventory_updated', 'ordering', 'payload', 'payment_recorded', 'pending', 'pos', 'pos.business', 'product_changed', 'sale_created', 'sale_refunded', 'sync_status', 'synced', 'tenant', 'timestamp', 'uuid', 'verbose_name', 'verbose_name_plural']

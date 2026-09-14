@@ -1,0 +1,174 @@
+{% extends 'pos/base.html' %}
+{% block title %}Shift Z-Reports — Front Office POS{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 fw-bold mb-1"><i class="bi bi-file-earmark-ruled me-2 text-primary"></i>Shift Z-Reports</h1>
+      <p class="text-muted small mb-0">
+        {% if is_cashier_only %}
+          Viewing your cashier shift financial summaries.
+        {% else %}
+          Viewing recent shift Z-reports for {{ active_branch.name|default:"all branches" }}.
+        {% endif %}
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'pos_screen' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-cart-plus me-1"></i>Back to POS
+      </a>
+      {% if user_permissions.can_access_back_office %}
+      <a href="{% url 'zreport_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-archive me-1"></i>Back Office Z-Report Archive
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags|default:'info' }} mb-3" style="border-radius: 8px;">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-4">
+    <!-- List of Z-Reports -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0" style="border-radius: 14px; overflow: hidden;">
+        <div class="card-header bg-light py-3 px-3 fw-bold">
+          <i class="bi bi-list-check me-2 text-primary"></i>Recent Z-Reports
+        </div>
+        <div class="list-group list-group-flush">
+          {% for r in zreports %}
+          <div class="list-group-item list-group-item-action p-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="badge bg-dark fw-bold">Z-Report #{{ r.z_number }}</span>
+              <small class="text-muted">{{ r.created_at|date:"d M Y, H:i" }}</small>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <div>
+                <div class="small fw-semibold text-dark">
+                  <i class="bi bi-person me-1"></i>{{ r.created_by.get_full_name|default:r.created_by.username }}
+                </div>
+                <div class="small text-muted">
+                  Session #{{ r.session.session_number }} {% if r.session.branch %}· {{ r.session.branch.name }}{% endif %}
+                </div>
+              </div>
+              <div class="text-end">
+                <a href="{% url 'zreport_print' z_number=r.z_number %}" target="_blank" class="btn btn-sm btn-outline-primary py-1 px-2" title="Print Thermal">
+                  <i class="bi bi-printer"></i> Print
+                </a>
+                <a href="{% url 'zreport_export_pdf' z_number=r.z_number %}" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Download PDF" download>
+                  <i class="bi bi-file-pdf"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="p-4 text-center text-muted">
+            <i class="bi bi-file-earmark-x fs-1 d-block mb-2"></i>
+            No shift Z-Reports found yet.
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Latest Z-Report Snapshot Preview -->
+    <div class="col-lg-7">
+      {% if latest_report %}
+      <div class="card shadow-sm border-0" style="border-radius: 14px; overflow: hidden;">
+        <div class="card-header bg-primary text-white py-3 px-4 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0 fw-bold"><i class="bi bi-receipt me-2"></i>Z-Report #{{ latest_report.z_number }} Preview</h5>
+          <span class="badge bg-white text-primary fw-bold">{{ latest_report.created_at|date:"d M Y" }}</span>
+        </div>
+        <div class="card-body p-4">
+          <div class="p-3 bg-light rounded border mb-4">
+            <div class="row g-2 small">
+              <div class="col-6"><strong>Business:</strong> {{ latest_report.business.name }}</div>
+              <div class="col-6"><strong>Cashier:</strong> {{ latest_report.created_by.get_full_name|default:latest_report.created_by.username }}</div>
+              <div class="col-6"><strong>Session ID:</strong> #{{ latest_report.session.session_number }}</div>
+              <div class="col-6"><strong>Generated:</strong> {{ latest_report.created_at|date:"d M Y H:i:s" }}</div>
+            </div>
+          </div>
+
+          <h6 class="fw-bold mb-3"><i class="bi bi-cash-stack me-2 text-success"></i>Financial Breakdown</h6>
+          <table class="table table-bordered table-sm mb-4">
+            <tbody>
+              <tr>
+                <td>Opening Cash Float</td>
+                <td class="text-end fw-bold">KES {{ latest_report.report_data.cash_management.opening_float|default:latest_report.session.opening_cash|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Gross Sales</td>
+                <td class="text-end fw-bold text-success">KES {{ latest_report.report_data.sales_summary.gross_sales|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Net Sales (excl. Tax)</td>
+                <td class="text-end">KES {{ latest_report.report_data.sales_summary.net_sales|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Discounts Given</td>
+                <td class="text-end text-danger">KES {{ latest_report.report_data.sales_summary.total_discounts|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr>
+                <td>Tax Collected (VAT)</td>
+                <td class="text-end">KES {{ latest_report.report_data.sales_summary.total_tax|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr class="table-primary">
+                <td><strong>Cash Sales in Till</strong></td>
+                <td class="text-end fw-bold">KES {{ latest_report.report_data.cash_management.cash_sales|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr class="table-light">
+                <td><strong>Expected Cash in Till</strong></td>
+                <td class="text-end fw-bold text-primary">KES {{ latest_report.report_data.cash_management.expected_cash|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr class="table-warning">
+                <td><strong>Counted Cash in Drawer</strong></td>
+                <td class="text-end fw-bold">KES {{ latest_report.report_data.cash_management.actual_cash_counted|default:latest_report.session.closing_cash|default:0|floatformat:2 }}</td>
+              </tr>
+              <tr class="{% if latest_report.report_data.cash_management.difference < 0 %}table-danger{% else %}table-success{% endif %}">
+                <td><strong>Cash Variance (Over / Short)</strong></td>
+                <td class="text-end fw-bold">{% if latest_report.report_data.cash_management.difference > 0 %}+{% endif %}KES {{ latest_report.report_data.cash_management.difference|default:latest_report.session.cash_difference|default:0|floatformat:2 }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {% if latest_report.report_data.payment_breakdown %}
+          <div class="card bg-light border-0 mb-4" style="border-radius: 10px;">
+            <div class="card-body p-3">
+              <h6 class="fw-bold mb-2 small text-uppercase text-muted"><i class="bi bi-wallet2 me-1"></i>Payment Methods</h6>
+              <div class="d-flex flex-column gap-1">
+                {% for pm in latest_report.report_data.payment_breakdown %}
+                <div class="d-flex justify-content-between small">
+                  <span>{{ pm.method }} ({{ pm.count }} txn{{ pm.count|pluralize }}):</span>
+                  <strong class="font-monospace">KES {{ pm.amount|floatformat:2 }}</strong>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <a href="{% url 'zreport_print' z_number=latest_report.z_number %}" target="_blank" class="btn btn-primary btn-sm flex-fill">
+              <i class="bi bi-printer me-1"></i>Print Thermal Slip
+            </a>
+            <a href="{% url 'zreport_export_pdf' z_number=latest_report.z_number %}" class="btn btn-outline-secondary btn-sm flex-fill" download>
+              <i class="bi bi-download me-1"></i>Download PDF
+            </a>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="card shadow-sm border-0 p-5 text-center text-muted" style="border-radius: 14px;">
+        <i class="bi bi-receipt-cutoff fs-1 d-block mb-3"></i>
+        <h5>No Z-Report selected</h5>
+        <p class="small">Close your active shift session to generate your next Z-Report.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -41,8 +41,8 @@ def create_default_business(apps, schema_editor):
         is_active=True
     )
     
-    print(f"✅ Created default business: {business.name} (slug: {business.slug})")
-    print(f"✅ Owner: {superuser.username}")
+    print(f"[OK] Created default business: {business.name} (slug: {business.slug})")
+    print(f"[OK] Owner: {superuser.username}")
     
     return business.id
 
@@ -54,7 +54,7 @@ def assign_business_to_existing_data(apps, schema_editor):
     # Get default business
     business = Business.objects.filter(slug='default').first()
     if not business:
-        print("⚠️  No default business found, skipping data assignment")
+        print("[WARN] No default business found, skipping data assignment")
         return
     
     # List of models to update
@@ -72,9 +72,9 @@ def assign_business_to_existing_data(apps, schema_editor):
             Model = apps.get_model('pos', model_name)
             count = Model.objects.filter(business__isnull=True).update(business=business)
             if count > 0:
-                print(f"✅ Assigned {count} {model_name} records to default business")
+                print(f"[OK] Assigned {count} {model_name} records to default business")
         except Exception as e:
-            print(f"⚠️  Could not update {model_name}: {e}")
+            print(f"[WARN] Could not update {model_name}: {e}")
 
 
 class Migration(migrations.Migration):

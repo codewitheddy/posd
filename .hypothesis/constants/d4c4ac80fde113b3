@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\migrations\0001_initial.py
+# hypothesis_version: 6.167.1
+
+[200, 500, '0098_hscode_module', 'Automatic', 'Backup Snapshot', 'Backup Snapshots', 'BackupSnapshot', 'Cloud Only', 'Corrupted', 'Deleted', 'Hybrid', 'ID', 'Local Only', 'Manual', 'Pending', 'Scheduled', 'TenantBackupSettings', 'Uploaded', 'automatic', 'backup_mode', 'backup_settings', 'backup_snapshots', 'checksum_sha256', 'cloud_only', 'corrupted', 'created_at', 'deleted', 'encryption_key_id', 'event_count', 'file_size_bytes', 'hybrid', 'id', 'local_only', 'manual', 'ordering', 'pending', 'pos', 'pos.business', 'retention_days', 'scheduled', 'status', 'storage_key', 'storage_mode', 'tenant', 'unique_together', 'updated_at', 'uploaded', 'verbose_name', 'verbose_name_plural', 'version']

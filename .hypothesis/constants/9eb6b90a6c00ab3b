@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\tests_bulk_advanced.py
+# hypothesis_version: 6.167.1
+
+[100, '10', '10.00', '100', '12', '120.00', '15.00', '24', '3', '5', '50', '60', '9.50', 'Carton', 'Test Business', 'Test Category', 'Test Product', 'UNIT-BAR-001', 'bulk_break', 'test-business', 'testpass123', 'testuser']

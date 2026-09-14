@@ -39,7 +39,7 @@
 
                 <div class="mb-4">
                     <h5>Step 2: CSV Format</h5>
-                    <p>Your CSV file must have these columns (in order):</p>
+                    <p>Your CSV file supports these column headers (case-insensitive, flexible naming):</p>
                     <div class="table-responsive">
                         <table class="ui-table">
                             <thead>
@@ -60,25 +60,37 @@
                                 <tr>
                                     <td><code>product_code</code></td>
                                     <td><span class="status-badge status-gray">No</span></td>
-                                    <td>Barcode or product code</td>
+                                    <td>Internal SKU / Product Code</td>
                                     <td>BEV001</td>
+                                </tr>
+                                <tr>
+                                    <td><code>barcode</code></td>
+                                    <td><span class="status-badge status-gray">No</span></td>
+                                    <td>Barcode / EAN / UPC for scanner</td>
+                                    <td>5449000000996</td>
                                 </tr>
                                 <tr>
                                     <td><code>category</code></td>
                                     <td><span class="status-badge status-gray">No</span></td>
-                                    <td>Category name (created if doesn't exist)</td>
+                                    <td>Category name (auto-created if new)</td>
                                     <td>Beverages</td>
+                                </tr>
+                                <tr>
+                                    <td><code>cost_price</code></td>
+                                    <td><span class="status-badge status-gray">Optional*</span></td>
+                                    <td>Buying / Cost Price (KES). *If omitted, defaults to selling price.</td>
+                                    <td>55.00</td>
                                 </tr>
                                 <tr>
                                     <td><code>unit_price</code></td>
                                     <td><span class="status-badge status-danger">Yes</span></td>
-                                    <td>Price in KES</td>
+                                    <td>Selling Price (KES)</td>
                                     <td>80.00</td>
                                 </tr>
                                 <tr>
                                     <td><code>stock_quantity</code></td>
                                     <td><span class="status-badge status-gray">No</span></td>
-                                    <td>Initial stock (default: 0)</td>
+                                    <td>Initial stock count (default: 0)</td>
                                     <td>50</td>
                                 </tr>
                                 <tr>
@@ -144,11 +156,11 @@
                     <span class="ui-card-title">Example CSV Content</span>
                 </div>
                 <div class="ui-card-body">
-                    <pre class="bg-light p-3 rounded"><code>name,product_code,category,unit_price,stock_quantity,low_stock_threshold
-Coca Cola 500ml,BEV001,Beverages,80.00,50,10
-Bread,GRO001,Groceries,55.00,25,15
-Soap Bar,PER001,Personal Care,45.00,30,10
-Tissue Paper,,Household,80.00,35,20</code></pre>
+                    <pre class="bg-light p-3 rounded"><code>name,product_code,barcode,category,cost_price,unit_price,stock_quantity,low_stock_threshold
+Coca Cola 500ml,BEV001,5449000000996,Beverages,60.00,80.00,50,10
+Bread 400g,GRO001,,Groceries,45.00,55.00,25,15
+Soap Bar,PER001,616110001234,Personal Care,35.00,45.00,30,10
+Tissue Paper,,616110005678,Household,60.00,80.00,35,20</code></pre>
                 </div>
             </div>
         </div>

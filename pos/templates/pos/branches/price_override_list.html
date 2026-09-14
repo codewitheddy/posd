@@ -19,7 +19,7 @@
 {% block content %}
 <div class="container-fluid py-4 px-3 px-md-5">
   <div class="d-flex align-items-center gap-3 mb-4">
-    <a href="{% url 'branch_detail' slug=business.slug branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
+    <a href="{% url 'branch_detail' branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
     <div>
       <h1 style="font-size:20px;font-weight:700;margin:0">Price Overrides — {{ branch.name }}</h1>
       <p style="font-size:13px;color:#6b7280;margin:2px 0 0">Override the business-level price for specific products at this branch.</p>

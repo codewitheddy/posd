@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0093_activity_log_new_action_types.py
+# hypothesis_version: 6.167.1
+
+['Create', 'Data Backup', 'Data Restore', 'Delete', 'Export', 'Login', 'Logout', 'Password Change', 'Purchase', 'Refund', 'Sale', 'Settings Change', 'Stock Adjustment', 'Update', 'action_type', 'activitylog', 'backup', 'backupauditlog', 'create', 'delete', 'export', 'login', 'logout', 'password_change', 'pos', 'purchase', 'refund', 'restore', 'sale', 'settings', 'stock_adjust', 'update']

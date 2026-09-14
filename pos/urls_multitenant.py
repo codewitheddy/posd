@@ -1,12 +1,16 @@
 """
-Multi-tenant URL configuration
+POSD Multi-tenant URL configuration
 Wraps existing URLs with business slug prefix
 """
 
 from django.urls import path, include
 from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from . import views, tenant_views, cash_float_views, user_management_views, support_access_views, zreport_views, sync_views, registration_admin_views, financial_views, crm_views, webhook_views, branch_views, promotion_views, hscode_views
+from . import (
+    views, tenant_views, cash_float_views, user_management_views,
+    support_access_views, zreport_views, sync_views, registration_admin_views,
+    financial_views, crm_views, webhook_views, branch_views, promotion_views,
+    hscode_views, terminal_views, vatcode_views
+)
 
 
 def ping(request):
@@ -167,6 +171,14 @@ business_urlpatterns = [
     path('hs-codes/<int:pk>/delete/', hscode_views.hscode_delete, name='hscode_delete'),
     path('api/hs-codes/search/', hscode_views.hscode_search, name='hscode_search'),
     path('api/hs-codes/<int:pk>/', hscode_views.hscode_detail, name='hscode_detail'),
+
+    # VAT Codes
+    path('vat-codes/', vatcode_views.vatcode_list, name='vatcode_list'),
+    path('vat-codes/create/', vatcode_views.vatcode_create, name='vatcode_create'),
+    path('vat-codes/<int:pk>/edit/', vatcode_views.vatcode_edit, name='vatcode_edit'),
+    path('vat-codes/<int:pk>/delete/', vatcode_views.vatcode_delete, name='vatcode_delete'),
+    path('vat-codes/<int:pk>/toggle-active/', vatcode_views.vatcode_toggle_active, name='vatcode_toggle_active'),
+    path('vat-codes/seed-defaults/', vatcode_views.vatcode_seed_defaults, name='vatcode_seed_defaults'),
     
     # Categories
     path('categories/', views.category_list, name='category_list'),
@@ -235,6 +247,7 @@ business_urlpatterns = [
     
     # POS
     path('pos/', views.pos_screen, name='pos_screen'),
+    path('pos/customer-display/', views.customer_display, name='customer_display'),
     path('pos/complete/', views.complete_sale, name='complete_sale'),
         path('pos/held-orders/', views.held_orders_list, name='held_orders_list'),
         path('pos/held-orders/save/', views.held_order_save, name='held_order_save'),
@@ -294,6 +307,7 @@ business_urlpatterns = [
         path('<int:z_number>/export/json/', zreport_views.zreport_export_json, name='zreport_export_json'),
         path('<int:z_number>/export/csv/', zreport_views.zreport_export_csv, name='zreport_export_csv'),
         path('<int:z_number>/export/pdf/', zreport_views.zreport_export_pdf, name='zreport_export_pdf'),
+        path('<int:z_number>/pdf/', zreport_views.zreport_export_pdf, name='zreport_pdf'),
         
         # API endpoints
         path('api/session/status/', zreport_views.api_session_status, name='api_session_status'),
@@ -334,6 +348,12 @@ business_urlpatterns = [
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     path('profile/', views.user_profile, name='user_profile'),
     
+    # POS Terminals & Device Management
+    path('terminals/', terminal_views.terminal_list, name='terminal_list'),
+    path('terminals/create/', terminal_views.terminal_create, name='terminal_create'),
+    path('terminals/<int:pk>/edit/', terminal_views.terminal_edit, name='terminal_edit'),
+    path('audit/pin-logins/', terminal_views.pin_audit_log_list, name='pin_audit_log_list'),
+
     # Business Settings — canonical URL points to tenant view
     path('business-settings/', tenant_views.business_settings, name='business_settings'),
     

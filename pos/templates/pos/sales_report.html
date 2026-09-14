@@ -1,101 +1,180 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Sales Report{% endblock %}
+{% block title %}Sales Report — {{ request.business.name }}{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-12">
-        <h2>Sales Report</h2>
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>Sales Report</h2>
+            <p class="text-muted">Track and analyze sales across Cashiers, Branches, and POS Terminals</p>
+        </div>
+    </div>
 
-        <div class="card mb-4">
-            <div class="card-body">
-                <form method="GET" class="row g-3">
-                    <div class="col-md-4">
-                        <label for="date" class="form-label">Select Date</label>
-                        <input type="date" class="form-control" id="date" name="date" 
-                               value="{{ filter_date|date:'Y-m-d' }}">
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-search"></i> Filter
-                        </button>
-                    </div>
-                </form>
+    <!-- Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-3 col-6">
+                    <label for="date" class="form-label small text-muted">Specific Date</label>
+                    <input type="date" class="form-control form-control-sm" id="date" name="date" 
+                           value="{{ filter_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-2 col-6">
+                    <label for="start_date" class="form-label small text-muted">From Date</label>
+                    <input type="date" class="form-control form-control-sm" id="start_date" name="start_date" 
+                           value="{{ start_date }}">
+                </div>
+                <div class="col-md-2 col-6">
+                    <label for="end_date" class="form-label small text-muted">To Date</label>
+                    <input type="date" class="form-control form-control-sm" id="end_date" name="end_date" 
+                           value="{{ end_date }}">
+                </div>
+                <div class="col-md-2 col-6">
+                    <label for="cashier" class="form-label small text-muted">Cashier</label>
+                    <select name="cashier" id="cashier" class="form-select form-select-sm">
+                        <option value="">All Cashiers</option>
+                        {% for c in cashiers %}
+                        <option value="{{ c.id }}" {% if cashier_id == c.id|stringformat:"s" %}selected{% endif %}>
+                            {{ c.get_full_name|default:c.username }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-6">
+                    <label for="branch" class="form-label small text-muted">Branch</label>
+                    <select name="branch" id="branch" class="form-select form-select-sm">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                            {{ b.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-6">
+                    <label for="terminal" class="form-label small text-muted">POS Terminal</label>
+                    <select name="terminal" id="terminal" class="form-select form-select-sm">
+                        <option value="">All Terminals</option>
+                        {% for t in terminals %}
+                        <option value="{{ t.id }}" {% if terminal_id == t.id|stringformat:"s" %}selected{% endif %}>
+                            {{ t.name }} ({{ t.terminal_code }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-6 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                        <i class="bi bi-funnel me-1"></i> Filter
+                    </button>
+                    <a href="{% url 'sales_report' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm" title="Clear">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+            <div class="card text-white bg-primary shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-1 opacity-75">Total Revenue</h6>
+                    <h3 class="card-title mb-0">KES {{ summary.total_sales|default:0|floatformat:2 }}</h3>
+                </div>
             </div>
         </div>
-
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card text-white bg-primary">
-                    <div class="card-body">
-                        <h6>Total Sales</h6>
-                        <h3>KES {{ summary.total_sales|default:0|floatformat:2 }}</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-success">
-                    <div class="card-body">
-                        <h6>Total VAT</h6>
-                        <h3>KES {{ summary.total_vat|default:0|floatformat:2 }}</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-warning">
-                    <div class="card-body">
-                        <h6>Total Discounts</h6>
-                        <h3>KES {{ summary.total_discounts|default:0|floatformat:2 }}</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-info">
-                    <div class="card-body">
-                        <h6>Transactions</h6>
-                        <h3>{{ summary.transaction_count|default:0 }}</h3>
-                    </div>
+        <div class="col-6 col-xl-3">
+            <div class="card text-white bg-success shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-1 opacity-75">Total VAT</h6>
+                    <h3 class="card-title mb-0">KES {{ summary.total_vat|default:0|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h5>Transactions for {{ filter_date|date:"d/m/Y" }}</h5>
+        <div class="col-6 col-xl-3">
+            <div class="card text-white bg-warning shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-1 opacity-75">Total Discounts</h6>
+                    <h3 class="card-title mb-0">KES {{ summary.total_discounts|default:0|floatformat:2 }}</h3>
+                </div>
             </div>
-            <div class="card-body">
-                <table class="table table-striped">
-                    <thead>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card text-white bg-info shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-1 opacity-75">Transactions</h6>
+                    <h3 class="card-title mb-0">{{ summary.transaction_count|default:0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 font-weight-bold">
+                <i class="bi bi-list-check me-2"></i>Transactions 
+                {% if start_date and end_date %}
+                ({{ start_date }} to {{ end_date }})
+                {% else %}
+                ({{ filter_date|date:"d M Y" }})
+                {% endif %}
+            </h5>
+            <span class="badge bg-secondary">{{ sales|length }} records</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
                         <tr>
                             <th>Invoice #</th>
                             <th>Time</th>
+                            <th>Branch / Terminal</th>
+                            <th>Cashier</th>
+                            <th>Customer</th>
                             <th>Items</th>
-                            <th>Subtotal</th>
-                            <th>VAT</th>
-                            <th>Discount</th>
-                            <th>Total</th>
-                            <th>Action</th>
+                            <th class="text-end">Subtotal</th>
+                            <th class="text-end">VAT</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for sale in sales %}
                         <tr>
-                            <td>{{ sale.invoice_number }}</td>
-                            <td>{{ sale.date|date:"H:i" }}</td>
-                            <td>{{ sale.items.count }}</td>
-                            <td>KES {{ sale.subtotal|floatformat:2 }}</td>
-                            <td>KES {{ sale.vat_amount|floatformat:2 }}</td>
-                            <td>KES {{ sale.discount_amount|floatformat:2 }}</td>
-                            <td><strong>KES {{ sale.total|floatformat:2 }}</strong></td>
+                            <td class="fw-bold text-primary">{{ sale.invoice_number }}</td>
+                            <td>{{ sale.date|date:"d M Y H:i" }}</td>
                             <td>
-                                <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-eye"></i> View
+                                <div>{% if sale.branch %}{{ sale.branch.name }}{% elif sale.session and sale.session.branch %}{{ sale.session.branch.name }}{% else %}<span class="text-muted">Main Branch</span>{% endif %}</div>
+                                {% if sale.session and sale.session.terminal %}
+                                <small class="text-muted"><i class="bi bi-display me-1"></i>{{ sale.session.terminal.terminal_code }}</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ sale.cashier.get_full_name|default:sale.cashier.username }}</td>
+                            <td>{% if sale.customer %}{{ sale.customer.name }}{% else %}<span class="text-muted">Walk-in</span>{% endif %}</td>
+                            <td><span class="badge bg-light text-dark border">{{ sale.items.count }}</span></td>
+                            <td class="text-end">KES {{ sale.subtotal|floatformat:2 }}</td>
+                            <td class="text-end">KES {{ sale.vat_amount|floatformat:2 }}</td>
+                            <td class="text-end">{% if sale.discount_amount > 0 %}<span class="text-warning">KES {{ sale.discount_amount|floatformat:2 }}</span>{% else %}—{% endif %}</td>
+                            <td class="text-end fw-bold text-success">KES {{ sale.total|floatformat:2 }}</td>
+                            <td class="text-center">
+                                <a href="{% url 'invoice_view' slug=request.business.slug pk=sale.pk %}" class="btn btn-xs btn-outline-primary me-1" title="View Invoice">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'thermal_receipt' slug=request.business.slug pk=sale.pk %}" class="btn btn-xs btn-outline-secondary" title="Receipt">
+                                    <i class="bi bi-receipt"></i>
                                 </a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center">No sales found for this date.</td>
+                            <td colspan="11" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                                No sales transactions found matching the selected criteria.
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

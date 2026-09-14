@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0098_hscode_module.py
+# hypothesis_version: 6.167.1
+
+[500, 'Cubic Metre (m³)', 'Dozen', 'Excise duty rate (%)', 'Gram (g)', 'HS Code', 'HS Codes', 'HSCode', 'ID', 'Import duty rate (%)', 'Kilogram (kg)', 'Litre (l)', 'Metre (m)', 'Millilitre (ml)', 'No unit', 'Pieces (pcs)', 'Square Metre (m²)', 'Tonne (t)', 'Unit', 'chapter', 'code', 'created_at', 'description', 'doz', 'excise_rate', 'g', 'heading', 'hs_code_ref', 'id', 'import_duty', 'indexes', 'is_active', 'is_excisable', 'kg', 'l', 'm', 'm2', 'm3', 'ml', 'notes', 'ordering', 'pcs', 'pos', 'pos.hscode', 'product', 'products', 't', 'u', 'unit', 'updated_at', 'vat_rate', 'verbose_name', 'verbose_name_plural']

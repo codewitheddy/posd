@@ -229,6 +229,7 @@ def user_permissions(request):
             'can_view_activity_log': user.is_superuser or is_owner or is_admin_role or is_manager_role or has_permission(user, 'pos.view_activitylog'),
             'can_manage_customers': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_cashier_role or has_permission(user, 'pos.change_customer'),
             'can_make_sales': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_cashier_role or has_permission(user, 'pos.add_sale'),
+            'can_print_receipt': user.is_superuser or is_owner or is_admin_role or is_manager_role or is_cashier_role or (hasattr(request, 'business_membership') and request.business_membership and request.business_membership.has_permission('can_print_receipt')),
             
             # User role display
             'user_role': user_role_display,
@@ -258,3 +259,134 @@ def user_can_access(user, feature):
         return has_permission(user, permission)
     
     return False
+
+
+# ============================================================================
+# MULTI-BRANCH SCOPING & DRF PERMISSIONS
+# ============================================================================
+
+from rest_framework import permissions
+
+
+def get_request_business(request):
+    """Resolve business from request or fallback to user membership/ownership."""
+    if not request:
+        return None
+    user = getattr(request, 'user', None)
+    business = getattr(request, 'business', None) or getattr(getattr(request, '_request', None), 'business', None)
+
+    # If user is authenticated, ensure the resolved business belongs to the user
+    if user and getattr(user, 'is_authenticated', False):
+        from .models import Business, BusinessMembership
+        if business:
+            has_access = (
+                user.is_superuser or
+                getattr(business, 'owner_id', None) == user.id or
+                BusinessMembership.objects.filter(user=user, business=business, is_active=True).exists()
+            )
+            if not has_access:
+                business = None
+
+        if not business:
+            bm = BusinessMembership.objects.filter(user=user, is_active=True).select_related('business').first()
+            if bm:
+                business = bm.business
+            else:
+                business = Business.objects.filter(owner=user).first() or Business.objects.filter(memberships__user=user).first()
+
+            if business:
+                try:
+                    request.business = business
+                    if hasattr(request, '_request') and request._request:
+                        request._request.business = business
+                except Exception:
+                    pass
+    return business
+
+
+class IsHQAdminOrOwner(permissions.BasePermission):
+    """DRF permission: True if user is superuser, owner, admin, or hq_admin."""
+    def has_permission(self, request, view):
+        if not request.user or not getattr(request.user, 'is_authenticated', False):
+            return False
+        if request.user.is_superuser:
+            return True
+        business = get_request_business(request)
+        if not business:
+            return True
+        from .branch_services import is_owner_or_admin
+        return is_owner_or_admin(request.user, business)
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not getattr(request.user, 'is_authenticated', False):
+            return False
+        if request.user.is_superuser:
+            return True
+        business = getattr(obj, 'business', None) or get_request_business(request)
+        from .branch_services import is_owner_or_admin
+        return is_owner_or_admin(request.user, business)
+
+
+class IsBranchManagerOrHQ(permissions.BasePermission):
+    """DRF object-level permission: checks if user is manager of source/target branch or HQ admin."""
+    def has_permission(self, request, view):
+        return bool(request.user and getattr(request.user, 'is_authenticated', False))
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not getattr(request.user, 'is_authenticated', False):
+            return False
+        if request.user.is_superuser:
+            return True
+        business = getattr(obj, 'business', None) or get_request_business(request)
+        from .branch_services import is_owner_or_admin, is_branch_manager
+        if business and is_owner_or_admin(request.user, business):
+            return True
+
+        branch = getattr(
+            obj, 'branch',
+            getattr(obj, 'source_branch', getattr(obj, 'requesting_branch', getattr(obj, 'destination_branch', None)))
+        )
+        if branch:
+            return is_branch_manager(request.user, branch)
+        return False
+
+
+class BranchScopeMixin:
+    """
+    Queryset-scoping mixin for DRF ViewSets and Class-based views.
+    Filters querysets by user's branch assignments unless user is HQ Admin / Owner.
+    """
+    branch_field = 'branch'
+
+    def get_scoped_queryset(self, queryset):
+        user = getattr(self.request, 'user', None)
+        if not user or not user.is_authenticated:
+            return queryset.none()
+        if user.is_superuser:
+            return queryset
+
+        business = get_request_business(self.request)
+        if not business:
+            return queryset
+
+        from .branch_services import is_owner_or_admin
+        if is_owner_or_admin(user, business):
+            return queryset
+
+        from .models import BranchMembership
+        user_branches = BranchMembership.objects.filter(
+            user=user, branch__business=business, is_active=True
+        ).values_list('branch_id', flat=True)
+
+        if not user_branches:
+            return queryset.none()
+
+        field = getattr(self, 'branch_field', 'branch')
+        if field == 'source_or_dest':
+            from django.db.models import Q
+            return queryset.filter(Q(source_branch_id__in=user_branches) | Q(destination_branch_id__in=user_branches))
+        if field == 'requesting_branch':
+            return queryset.filter(requesting_branch_id__in=user_branches)
+
+        filter_kwargs = {f"{field}_id__in": user_branches}
+        return queryset.filter(**filter_kwargs)

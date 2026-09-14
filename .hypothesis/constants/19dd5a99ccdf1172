@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\sync\migrations\0001_initial.py
+# hypothesis_version: 6.167.1
+
+[100, '0098_hscode_module', 'Error', 'ID', 'Pending', 'Sync Status', 'Sync Statuses', 'SyncStatus', 'Synced', 'device_id', 'error', 'error_message', 'id', 'last_synced_at', 'pending', 'pending_events_count', 'pos', 'pos.business', 'status', 'sync_statuses', 'synced', 'tenant', 'unique_together', 'updated_at', 'verbose_name', 'verbose_name_plural']

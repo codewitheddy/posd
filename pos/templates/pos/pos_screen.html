@@ -191,26 +191,62 @@
 {% endblock %}
 
 {% block content %}
-<!-- Session Indicator -->
-{% if current_session %}
-<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
-    <i class="bi bi-check-circle-fill"></i> 
-    <strong>Active Session:</strong> Session #{{ current_session.session_number }} 
-    | Opened: {{ current_session.opened_at|date:"M d, Y g:i A" }} 
-    | Opening Cash: KES {{ current_session.opening_cash|floatformat:2 }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-</div>
-{% endif %}
-
-<!-- POS Top Info Bar -->
-<div class="pos-info-bar d-flex justify-content-between align-items-center mb-3 px-2 py-2 bg-dark text-white rounded">
-    <div class="d-flex align-items-center gap-3">
-        <span class="fw-bold text-warning"><i class="bi bi-shop"></i> {{ request.business.name }}</span>
-        <span class="text-light small"><i class="bi bi-person-badge"></i> {{ request.user.get_full_name|default:request.user.username }}</span>
+<!-- POS Top Control & Info Bar -->
+<div class="pos-info-bar d-flex justify-content-between align-items-center mb-3 px-3 py-2 bg-dark text-white rounded shadow-sm flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap" id="posStoreHeaderInfo">
+        {% if business_settings and business_settings.logo %}
+            <img src="{{ business_settings.logo.url }}" alt="{{ business_settings.get_business_name }}" id="posStoreLogo" style="height: 26px; max-width: 80px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px 4px;">
+        {% endif %}
+        <span class="fw-bold text-warning" id="posStoreName"><i class="bi bi-shop"></i> {{ business_settings.get_business_name|default:request.business.name }}</span>
+        {% if active_branch %}
+            <span class="badge bg-secondary font-monospace"><i class="bi bi-geo-alt"></i> {{ active_branch.name }}</span>
+        {% endif %}
+        {% if active_terminal %}
+            <span class="badge bg-primary font-monospace" title="Registered Terminal"><i class="bi bi-pc-display"></i> {{ active_terminal.terminal_code }}</span>
+        {% else %}
+            <a href="{% url 'terminal_register' %}" class="badge bg-warning text-dark text-decoration-none" title="Click to register this device as a POS terminal">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Register Device
+            </a>
+        {% endif %}
+        {% if current_session %}
+            <span class="badge bg-success font-monospace" title="Active Session #{{ current_session.session_number }} (Opened: {{ current_session.opened_at|date:'M d, g:i A' }})">
+                <i class="bi bi-circle-fill text-light me-1" style="font-size: 0.5rem; vertical-align: middle;"></i>Session #{{ current_session.session_number }} Active
+            </span>
+        {% endif %}
+        <span class="text-light small"><i class="bi bi-person-badge"></i> {{ request.user.get_full_name|default:request.user.username }} ({{ user_permissions.user_role }})</span>
     </div>
-    <div class="d-flex align-items-center gap-3">
-        <span class="text-light small"><i class="bi bi-receipt"></i> Order #<span id="pos-order-number">---</span></span>
-        <span class="text-light small" id="pos-clock"><i class="bi bi-clock"></i> --:--</span>
+    
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="text-light small d-none d-lg-inline"><i class="bi bi-receipt"></i> Order #<span id="pos-order-number">---</span></span>
+        <span class="badge bg-dark border text-light font-monospace" id="pos-clock"><i class="bi bi-clock"></i> --:--</span>
+        <span id="posSyncStatusBadge" class="badge rounded-pill bg-success bg-opacity-15 text-success border border-success border-opacity-25 px-2 py-1"><i class="bi bi-broadcast me-1"></i>Live Sync</span>
+        
+        <!-- Front Office Actions -->
+        <a href="{% url 'customer_display' %}" target="_blank" class="btn btn-outline-info btn-sm py-1 px-2 fw-semibold" title="Launch Customer-Facing Display on second screen / window">
+            <i class="bi bi-display me-1"></i><span class="d-none d-md-inline">Customer Display</span>
+        </a>
+        <button type="button" class="btn btn-outline-light btn-sm py-1 px-2 fw-semibold" onclick="if(window.posKeyboard) window.posKeyboard.showShortcuts(); else { const sp = document.getElementById('shortcuts-panel'); if(sp) sp.style.display='block'; }" title="Keyboard Shortcuts (F12)">
+            <i class="bi bi-keyboard me-1"></i><span class="d-none d-lg-inline">Shortcuts</span>
+        </button>
+        <a href="{% url 'terminal_lock' %}" class="btn btn-warning btn-sm py-1 px-2 fw-semibold" title="Lock Screen (Requires PIN)">
+            <i class="bi bi-lock-fill"></i> <span class="d-none d-sm-inline">Lock</span>
+        </a>
+
+        {% if current_session %}
+            <a href="{% url 'terminal_session_close' %}" class="btn btn-outline-danger btn-sm py-1 px-2 fw-semibold" title="Close Current Cashier Shift &amp; Generate Z-Report">
+                <i class="bi bi-door-closed-fill"></i> <span class="d-none d-sm-inline">Close Shift</span>
+            </a>
+        {% else %}
+            <a href="{% url 'terminal_session_open' %}" class="btn btn-success btn-sm py-1 px-2 fw-semibold" title="Open Till Shift / Float">
+                <i class="bi bi-door-open-fill"></i> <span class="d-none d-sm-inline">Open Shift</span>
+            </a>
+        {% endif %}
+
+        {% if user_permissions.can_access_back_office or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-light btn-sm py-1 px-2 fw-semibold" title="Switch to Back Office Management">
+                <i class="bi bi-speedometer2 me-1"></i><span class="d-none d-md-inline">Back Office</span>
+            </a>
+        {% endif %}
     </div>
 </div>
 
@@ -304,15 +340,28 @@
 
 <div class="row mt-4">
     <div class="col-12 col-md-8 products-section">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="mb-0">Select Products</h3>
-            <button class="btn btn-warning position-relative" onclick="showHeldOrders()" id="held-orders-btn">
-                <i class="bi bi-pause-circle"></i> Held Orders
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
-                      id="held-orders-badge" style="display: none;">
-                    0
-                </span>
-            </button>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <h3 class="mb-0">Select Products</h3>
+                <!-- Dual View Switcher (Grid & List) -->
+                <div class="btn-group btn-group-sm view-switcher-wrap" role="group" aria-label="Product View">
+                    <button type="button" class="btn btn-outline-primary active" id="view-mode-grid-btn" onclick="setProductView('grid')" title="Touch Grid View (F6)">
+                        <i class="bi bi-grid-fill me-1"></i>Grid
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" id="view-mode-list-btn" onclick="setProductView('list')" title="High-Density List View (F7)">
+                        <i class="bi bi-list-ul me-1"></i>List
+                    </button>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-warning position-relative" onclick="showHeldOrders()" id="held-orders-btn" title="View Held Orders (F4)">
+                    <i class="bi bi-pause-circle"></i> Held Orders
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
+                          id="held-orders-badge" style="display: none;">
+                        0
+                    </span>
+                </button>
+            </div>
         </div>
         <div class="alert alert-info mb-3">
             <i class="bi bi-info-circle"></i> <strong>Note:</strong> All prices shown are tax-inclusive (VAT included). Tax breakdown will be shown in the cart.
@@ -411,8 +460,6 @@
             {% endfor %}
         </select>
 
-        <!-- View Toggle removed - list view only -->
-
         <!-- Products Loading Skeleton -->
         <div id="products-loading" class="py-3">
             <div class="row" id="products-skeleton">
@@ -471,7 +518,12 @@
             </div>
         </div>
         
-        <!-- Products List View -->
+        <!-- Touch Tile Grid View Container -->
+        <div id="products-grid" class="pos-touch-grid mb-3" style="display: none;">
+            <!-- Grid cards loaded via AJAX -->
+        </div>
+
+        <!-- Products List View Container -->
         <div id="products-list" style="display: none;">
             <div class="table-responsive">
                 <table class="table table-hover table-sm">
@@ -509,14 +561,27 @@
 
     <div class="col-md-4 d-none d-md-block desktop-cart">
         <div class="card sticky-top" style="top: 80px;">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">Cart</h4>
-                <button class="btn btn-sm btn-light" onclick="refreshCartPrices()" title="Refresh cart prices">
-                    <i class="bi bi-arrow-clockwise"></i>
-                </button>
+            <div class="card-header bg-primary text-white p-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold fs-6"><i class="bi bi-cart3 me-1"></i>Cart Tabs</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <button class="btn btn-xs btn-light py-1 px-2 fw-semibold" onclick="addNewMultiCart()" title="Open New Cart Tab (F3)">
+                            <i class="bi bi-plus-lg me-1"></i>New Tab
+                        </button>
+                        <button class="btn btn-xs btn-outline-light py-1 px-2" onclick="refreshCartPrices()" title="Refresh cart prices">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Multi-Cart Tabs Navigation Bar -->
+                <div class="cart-tabs-nav" id="cart-tabs-nav">
+                    <!-- Dynamic tabs rendered by JavaScript -->
+                </div>
             </div>
             <div class="card-body">
-                <div id="cart-items" style="max-height: 300px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
+                <div id="cart-items" style="max-height: 280px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
                     <p class="text-muted text-center">Cart is empty</p>
                 </div>
 
@@ -584,6 +649,27 @@
                     <h4 class="mb-0">Total (incl. VAT):</h4>
                     <h4 class="mb-0 text-primary" id="cart-total">KES 0.00</h4>
                 </div>
+
+                <!-- Fast-Tender 1-Tap Checkout Bar -->
+                <div class="fast-tender-panel mb-3" id="fast-tender-panel">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">⚡ Fast Tender</span>
+                        <span class="small text-muted" id="fast-tender-hint">Exact or smart cash</span>
+                    </div>
+                    <div class="quick-cash-row mb-2" id="fast-quick-cash-chips">
+                        <!-- Dynamic Quick Cash chips rendered by JS -->
+                    </div>
+                    <div class="tender-actions-grid">
+                        <button type="button" class="btn-tender-cash" id="btn-fast-cash" onclick="fastTenderCash()" title="Fast Cash Tender (F8)">
+                            <div><i class="bi bi-cash-stack me-1"></i>CASH</div>
+                            <span class="tender-sub-text" id="fast-cash-sub">Exact (F8)</span>
+                        </button>
+                        <button type="button" class="btn-tender-mpesa" id="btn-fast-mpesa" onclick="fastTenderMpesa()" title="Fast M-Pesa Tender (F9)">
+                            <div><i class="bi bi-phone-fill me-1"></i>M-PESA</div>
+                            <span class="tender-sub-text">Paybill/Till (F9)</span>
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Loyalty Points Info -->
                 <div id="loyalty-info" class="alert alert-success" style="display: none;">
@@ -608,7 +694,7 @@
                 <div class="d-grid gap-2">
                     <!-- Complete Sale - Full Width -->
                     <button class="btn btn-success btn-lg" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
-                        <i class="bi bi-check-circle"></i> Complete Sale
+                        <i class="bi bi-credit-card-2-front me-1"></i> Pay / Split / Credit
                     </button>
                     
                     <!-- Clear Cart and Hold Order - One Row -->
@@ -868,45 +954,671 @@
 
 {% block extra_js %}
 <script>
-let cart = [];
-let cartLoaded = false;
-const VAT_RATE = {{ vat_rate|default:16 }};
-const productStock = {};
-const productData = {}; // stores full product objects for unit picker
-let selectedCustomer = null;
-let paymentMethods = [];
-let totalDue = 0;
+var cart = [];
+var cartLoaded = false;
+var VAT_RATE = {{ vat_rate|default:16 }};
+var productStock = {};
+var productData = {}; // stores full product objects for unit picker
+var selectedCustomer = null;
+var paymentMethods = [];
+var totalDue = 0;
 
 // Lazy loading state
-let productsOffset = 0;
-const productsLimit = 50;
-let productsLoading = false;
-let productsHasMore = true;
-let currentSearchQuery = '';
-let currentCategoryFilter = '';
+var productsOffset = 0;
+var productsLimit = 50;
+var productsLoading = false;
+var productsHasMore = true;
+var currentSearchQuery = '';
+var currentCategoryFilter = '';
+window.currentSearchQuery = '';
+window.currentCategoryFilter = '';
+window.productStock = productStock;
+window.productData = productData;
+window.cart = cart;
 
-// ==================== VIEW (LIST ONLY) ====================
-// List view only
-const currentView = 'list';
+// ==================== ZERO-ASSET WEB AUDIO SYNTHESIZER ====================
+let audioCtx = null;
+function getAudioContext() {
+    if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+        }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
+}
+
+function playScanBeep() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+    } catch (e) {
+        console.warn('Audio scan beep warning:', e);
+    }
+}
+
+function playErrorBeep() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(280, ctx.currentTime);
+        osc.frequency.setValueAtTime(220, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.22);
+    } catch (e) {
+        console.warn('Audio error beep warning:', e);
+    }
+}
+
+function playSuccessChime() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const startTime = ctx.currentTime + (idx * 0.08);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0.18, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.28);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + 0.28);
+        });
+    } catch (e) {
+        console.warn('Audio success chime warning:', e);
+    }
+}
+
+// ==================== CUSTOMER FACING DISPLAY (CFD) BROADCASTER ====================
+let cfdChannel = null;
+try {
+    if (window.BroadcastChannel) {
+        cfdChannel = new BroadcastChannel('pos_customer_display_sync');
+    }
+} catch (e) {
+    console.warn('BroadcastChannel not supported:', e);
+}
+
+function broadcastToCfd(type = 'CART_UPDATE', extraData = {}) {
+    const totalEl = document.getElementById('cart-total');
+    const subtotalEl = document.getElementById('subtotal');
+    const vatEl = document.getElementById('vat');
+    const discountEl = document.getElementById('discount');
+    
+    const payload = {
+        type: type,
+        timestamp: Date.now(),
+        cart: cart.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            isVariable: Boolean(item.isVariable),
+            unitName: item.unitName || '',
+            isBulk: Boolean(item.isBulk),
+            discount: item.discount || 0,
+            total: (item.price * item.quantity) * (1 - (item.discount || 0)/100)
+        })),
+        totalFormatted: totalEl ? totalEl.textContent : 'KES 0.00',
+        subtotalFormatted: subtotalEl ? subtotalEl.textContent : 'KES 0.00',
+        vatFormatted: vatEl ? vatEl.textContent : 'KES 0.00',
+        discountFormatted: discountEl ? discountEl.textContent : 'KES 0.00',
+        customer: selectedCustomer ? {
+            name: selectedCustomer.name,
+            tier: selectedCustomer.tier,
+            points: selectedCustomer.points
+        } : null,
+        ...extraData
+    };
+    
+    // Broadcast via BroadcastChannel
+    if (cfdChannel) {
+        try {
+            cfdChannel.postMessage(payload);
+        } catch (e) {
+            console.warn('CFD broadcast failed:', e);
+        }
+    }
+    
+    // Mirror to localStorage for new window synchronization
+    try {
+        localStorage.setItem('pos_cfd_live_cart', JSON.stringify(payload));
+    } catch (e) {}
+}
+
+// ==================== MULTI-CART STATE SYSTEM ====================
+let multiCarts = {
+    'cart_1': {
+        id: 'cart_1',
+        name: 'Cart 1',
+        items: [],
+        customer: null,
+        discountType: 'percentage',
+        discountValue: 0,
+        notes: '',
+        promo: null
+    }
+};
+let activeCartId = 'cart_1';
+
+function initMultiCarts() {
+    try {
+        const savedMulti = localStorage.getItem('pos_multi_carts');
+        const savedActive = localStorage.getItem('pos_active_cart_id');
+        if (savedMulti) {
+            multiCarts = JSON.parse(savedMulti);
+        } else {
+            // Check legacy cart
+            const legacyCart = localStorage.getItem('pos_cart');
+            if (legacyCart) {
+                const items = JSON.parse(legacyCart) || [];
+                multiCarts['cart_1'].items = items;
+            }
+        }
+        if (savedActive && multiCarts[savedActive]) {
+            activeCartId = savedActive;
+        } else {
+            activeCartId = Object.keys(multiCarts)[0] || 'cart_1';
+        }
+    } catch (e) {
+        console.warn('Error initializing multi-carts:', e);
+        multiCarts = {
+            'cart_1': { id: 'cart_1', name: 'Cart 1', items: [], customer: null, discountType: 'percentage', discountValue: 0, notes: '', promo: null }
+        };
+        activeCartId = 'cart_1';
+    }
+    
+    // Load active cart into global cart
+    const currentActive = multiCarts[activeCartId] || Object.values(multiCarts)[0];
+    if (currentActive) {
+        cart = currentActive.items || [];
+        selectedCustomer = currentActive.customer || null;
+    }
+    renderMultiCartTabs();
+    syncCustomerUI();
+}
+
+function renderMultiCartTabs() {
+    const container = document.getElementById('cart-tabs-nav');
+    if (!container) return;
+    
+    const cartIds = Object.keys(multiCarts);
+    let html = '';
+    cartIds.forEach(id => {
+        const c = multiCarts[id];
+        const isActive = id === activeCartId;
+        const itemCount = (c.items || []).reduce((sum, item) => sum + (parseFloat(item.quantity) || 1), 0);
+        const canClose = cartIds.length > 1;
+        
+        html += `
+            <div class="cart-tab-btn ${isActive ? 'active' : ''}" onclick="switchMultiCart('${id}')">
+                <span class="tab-title">${c.name || 'Cart'}</span>
+                <span class="tab-badge">${itemCount}</span>
+                ${canClose ? `<span class="tab-close" onclick="event.stopPropagation(); closeMultiCart('${id}');" title="Close cart tab">&times;</span>` : ''}
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function switchMultiCart(targetCartId) {
+    if (!multiCarts[targetCartId]) return;
+    
+    // Save current active cart
+    saveActiveCartSnapshot();
+    
+    // Switch active id
+    activeCartId = targetCartId;
+    const target = multiCarts[targetCartId];
+    cart = target.items || [];
+    selectedCustomer = target.customer || null;
+    
+    // Sync customer UI
+    syncCustomerUI();
+    
+    // Sync discount UI
+    const dt = document.getElementById('discount-type');
+    const dv = document.getElementById('discount-value');
+    if (dt) dt.value = target.discountType || 'percentage';
+    if (dv) dv.value = target.discountValue || 0;
+    
+    // Sync order notes
+    const notesEl = document.getElementById('order-notes');
+    if (notesEl) notesEl.value = target.notes || '';
+    
+    // Sync promo UI
+    if (target.promo) {
+        appliedPromo = target.promo;
+        const fb = document.getElementById('promo-feedback');
+        if (fb) fb.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${target.promo.description}</span>`;
+        const codeInput = document.getElementById('promo-code-input');
+        if (codeInput && target.promo.code) codeInput.value = target.promo.code;
+        const clearBtn = document.getElementById('clear-promo-btn');
+        if (clearBtn) clearBtn.style.display = '';
+    } else {
+        clearPromo();
+    }
+    
+    renderMultiCartTabs();
+    updateCart();
+    saveMultiCartsToStorage();
+    broadcastToCfd('CART_UPDATE');
+}
+
+function addNewMultiCart() {
+    const currentKeys = Object.keys(multiCarts);
+    if (currentKeys.length >= 6) {
+        showNotification('Maximum 6 concurrent cart tabs reached', 'warning');
+        return;
+    }
+    
+    saveActiveCartSnapshot();
+    
+    const newNum = currentKeys.length + 1;
+    const newId = 'cart_' + Date.now();
+    multiCarts[newId] = {
+        id: newId,
+        name: `Cart ${newNum}`,
+        items: [],
+        customer: null,
+        discountType: 'percentage',
+        discountValue: 0,
+        notes: '',
+        promo: null
+    };
+    
+    switchMultiCart(newId);
+    showNotification(`Opened tab "Cart ${newNum}"`, 'info');
+}
+
+function closeMultiCart(cartId) {
+    const keys = Object.keys(multiCarts);
+    if (keys.length <= 1) {
+        clearCart();
+        return;
+    }
+    
+    const targetCart = multiCarts[cartId];
+    if (targetCart && targetCart.items && targetCart.items.length > 0) {
+        if (!confirm(`Cart "${targetCart.name}" has ${targetCart.items.length} item(s). Close and discard?`)) {
+            return;
+        }
+    }
+    
+    delete multiCarts[cartId];
+    const remainingKeys = Object.keys(multiCarts);
+    if (activeCartId === cartId) {
+        activeCartId = remainingKeys[0];
+        const next = multiCarts[activeCartId];
+        cart = next.items || [];
+        selectedCustomer = next.customer || null;
+        syncCustomerUI();
+    }
+    
+    renderMultiCartTabs();
+    updateCart();
+    saveMultiCartsToStorage();
+    broadcastToCfd('CART_UPDATE');
+}
+
+function saveActiveCartSnapshot() {
+    if (!multiCarts[activeCartId]) {
+        multiCarts[activeCartId] = { id: activeCartId, name: 'Cart 1', items: [] };
+    }
+    multiCarts[activeCartId].items = [...cart];
+    multiCarts[activeCartId].customer = selectedCustomer ? { ...selectedCustomer } : null;
+    const dt = document.getElementById('discount-type');
+    const dv = document.getElementById('discount-value');
+    if (dt) multiCarts[activeCartId].discountType = dt.value;
+    if (dv) multiCarts[activeCartId].discountValue = parseFloat(dv.value) || 0;
+    const notesEl = document.getElementById('order-notes');
+    if (notesEl) multiCarts[activeCartId].notes = notesEl.value;
+    multiCarts[activeCartId].promo = appliedPromo;
+}
+
+function saveMultiCartsToStorage() {
+    saveActiveCartSnapshot();
+    try {
+        localStorage.setItem('pos_multi_carts', JSON.stringify(multiCarts));
+        localStorage.setItem('pos_active_cart_id', activeCartId);
+        // Also keep pos_cart synced for backward compatibility
+        localStorage.setItem('pos_cart', JSON.stringify(cart));
+        if (selectedCustomer) {
+            localStorage.setItem('pos_customer', JSON.stringify(selectedCustomer));
+        } else {
+            localStorage.removeItem('pos_customer');
+        }
+    } catch (e) {
+        console.warn('Storage save failed:', e);
+    }
+}
+
+function syncCustomerUI() {
+    const phoneInput = document.getElementById('customer-phone-input');
+    const hiddenField = document.getElementById('selected-customer-id');
+    const formCustomerField = document.getElementById('form-customer-id');
+    const nameEl = document.getElementById('customer-name');
+    const tierEl = document.getElementById('customer-tier');
+    const pointsEl = document.getElementById('customer-points');
+    const creditEl = document.getElementById('customer-credit');
+    const infoEl = document.getElementById('customer-info');
+    const errorEl = document.getElementById('customer-error');
+    const clearBtn = document.getElementById('clear-customer-btn');
+    
+    if (selectedCustomer) {
+        if (phoneInput) {
+            phoneInput.value = selectedCustomer.phone || selectedCustomer.name;
+            phoneInput.disabled = true;
+        }
+        if (hiddenField) hiddenField.value = selectedCustomer.id;
+        if (formCustomerField) formCustomerField.value = selectedCustomer.id;
+        if (nameEl) nameEl.textContent = selectedCustomer.name;
+        if (tierEl) tierEl.textContent = (selectedCustomer.tier || 'bronze').toUpperCase();
+        if (pointsEl) pointsEl.textContent = (selectedCustomer.points || 0) + ' points';
+        if (creditEl) {
+            if (selectedCustomer.credit_limit > 0) {
+                creditEl.textContent = 'Credit: KES ' + (selectedCustomer.available_credit || 0).toFixed(2) + ' available';
+                creditEl.style.display = 'inline-block';
+            } else {
+                creditEl.style.display = 'none';
+            }
+        }
+        if (infoEl) infoEl.style.display = 'block';
+        if (errorEl) errorEl.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'inline-block';
+    } else {
+        if (phoneInput) {
+            phoneInput.value = '';
+            phoneInput.disabled = false;
+        }
+        if (hiddenField) hiddenField.value = '';
+        if (formCustomerField) formCustomerField.value = '';
+        if (infoEl) infoEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+    }
+}
+
+// ==================== DUAL VIEW (GRID & LIST) ====================
+let currentProductView = localStorage.getItem('pos_view_mode') || 'grid';
+
+function setProductView(mode) {
+    currentProductView = mode;
+    localStorage.setItem('pos_view_mode', mode);
+    
+    const gridBtn = document.getElementById('view-mode-grid-btn');
+    const listBtn = document.getElementById('view-mode-list-btn');
+    const gridContainer = document.getElementById('products-grid');
+    const listContainer = document.getElementById('products-list');
+    
+    if (mode === 'grid') {
+        if (gridBtn) gridBtn.classList.add('active');
+        if (listBtn) listBtn.classList.remove('active');
+        if (gridContainer) gridContainer.style.display = 'grid';
+        if (listContainer) listContainer.style.display = 'none';
+    } else {
+        if (gridBtn) gridBtn.classList.remove('active');
+        if (listBtn) listBtn.classList.add('active');
+        if (gridContainer) gridContainer.style.display = 'none';
+        if (listContainer) listContainer.style.display = 'block';
+    }
+}
+
+// String hash for consistent category colors
+function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
+
+// ==================== FAST-TENDER 1-TAP CHECKOUT ====================
+let selectedFastCashAmount = null;
+
+function updateFastTenderButtons(totalAmount) {
+    const container = document.getElementById('fast-quick-cash-chips');
+    const fastCashSub = document.getElementById('fast-cash-sub');
+    const fastCashBtn = document.getElementById('btn-fast-cash');
+    const fastMpesaBtn = document.getElementById('btn-fast-mpesa');
+    
+    if (cart.length === 0 || totalAmount <= 0) {
+        if (fastCashBtn) fastCashBtn.disabled = true;
+        if (fastMpesaBtn) fastMpesaBtn.disabled = true;
+        if (container) container.innerHTML = '<span class="text-muted small">Add items to enable 1-tap tender</span>';
+        if (fastCashSub) fastCashSub.textContent = 'Exact (F8)';
+        return;
+    }
+    
+    if (fastCashBtn) fastCashBtn.disabled = false;
+    if (fastMpesaBtn) fastMpesaBtn.disabled = false;
+    
+    // Generate dynamic smart cash chips based on totalAmount
+    const chips = [];
+    chips.push({ label: `Exact (KES ${Math.round(totalAmount).toLocaleString()})`, amount: totalAmount, isExact: true });
+    
+    const denominations = [50, 100, 200, 500, 1000, 2000, 5000];
+    const roundedUpValues = [];
+    
+    denominations.forEach(d => {
+        if (d > totalAmount && !roundedUpValues.includes(d)) {
+            roundedUpValues.push(d);
+        }
+    });
+    
+    const next100 = Math.ceil(totalAmount / 100) * 100;
+    if (next100 > totalAmount && !roundedUpValues.includes(next100)) {
+        roundedUpValues.push(next100);
+    }
+    const next500 = Math.ceil(totalAmount / 500) * 500;
+    if (next500 > totalAmount && !roundedUpValues.includes(next500)) {
+        roundedUpValues.push(next500);
+    }
+    const next1000 = Math.ceil(totalAmount / 1000) * 1000;
+    if (next1000 > totalAmount && !roundedUpValues.includes(next1000)) {
+        roundedUpValues.push(next1000);
+    }
+    
+    roundedUpValues.sort((a, b) => a - b);
+    const cleanChips = roundedUpValues.slice(0, 3);
+    cleanChips.forEach(amt => {
+        chips.push({ label: `KES ${amt.toLocaleString()}`, amount: amt, isExact: false });
+    });
+    
+    if (container) {
+        let html = '';
+        chips.forEach((c) => {
+            const isSelected = selectedFastCashAmount === c.amount || (selectedFastCashAmount === null && c.isExact);
+            html += `
+                <button type="button" class="quick-cash-chip ${c.isExact ? 'exact' : ''} ${isSelected ? 'active-chip' : ''}" 
+                        onclick="selectFastCashChip(${c.amount})">
+                    ${c.label}
+                </button>
+            `;
+        });
+        container.innerHTML = html;
+    }
+    
+    if (fastCashSub) {
+        const activeAmt = selectedFastCashAmount !== null ? selectedFastCashAmount : totalAmount;
+        const change = activeAmt - totalAmount;
+        if (change > 0) {
+            fastCashSub.textContent = `Pay KES ${activeAmt.toLocaleString()} (Change: ${change.toFixed(2)})`;
+        } else {
+            fastCashSub.textContent = `Exact KES ${totalAmount.toFixed(2)} (F8)`;
+        }
+    }
+}
+
+function selectFastCashChip(amount) {
+    selectedFastCashAmount = amount;
+    const currentTotal = calculateTotal();
+    updateFastTenderButtons(currentTotal);
+}
+
+function fastTenderCash() {
+    if (cart.length === 0) {
+        playErrorBeep();
+        showNotification('Cart is empty', 'warning');
+        return;
+    }
+    
+    const currentTotal = calculateTotal();
+    const tenderAmount = selectedFastCashAmount !== null ? selectedFastCashAmount : currentTotal;
+    
+    // Find CASH payment method id
+    const paymentSelect = document.getElementById('payment-method-select');
+    let cashMethodId = null;
+    if (paymentSelect) {
+        for (let i = 0; i < paymentSelect.options.length; i++) {
+            const opt = paymentSelect.options[i];
+            const code = (opt.getAttribute('data-code') || '').toUpperCase();
+            if (code === 'CASH' || opt.text.toLowerCase().includes('cash')) {
+                cashMethodId = opt.value;
+                break;
+            }
+        }
+        if (!cashMethodId && paymentSelect.options.length > 1) {
+            cashMethodId = paymentSelect.options[1].value;
+        }
+    }
+    
+    if (!cashMethodId) {
+        completeSale();
+        return;
+    }
+    
+    const change = Math.max(0, tenderAmount - currentTotal);
+    
+    // Populate form data and submit
+    const formItems = document.getElementById('form-items');
+    const formPayments = document.getElementById('form-payments');
+    formItems.innerHTML = '';
+    
+    cart.forEach(item => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'items';
+        input.value = `${item.id},${item.quantity},${item.price},${encodeURIComponent(item.note || '')}`;
+        formItems.appendChild(input);
+    });
+    
+    formPayments.innerHTML = '';
+    
+    const methodInput = document.createElement('input');
+    methodInput.type = 'hidden';
+    methodInput.name = 'payments';
+    methodInput.value = `${cashMethodId},${currentTotal.toFixed(2)},Cash Fast-Tender`;
+    formPayments.appendChild(methodInput);
+    
+    const amountPaidInput = document.createElement('input');
+    amountPaidInput.type = 'hidden';
+    amountPaidInput.name = 'amount_paid';
+    amountPaidInput.value = tenderAmount.toFixed(2);
+    formPayments.appendChild(amountPaidInput);
+    
+    const changeInput = document.createElement('input');
+    changeInput.type = 'hidden';
+    changeInput.name = 'change_given';
+    changeInput.value = change.toFixed(2);
+    formPayments.appendChild(changeInput);
+    
+    const customerIdInput = document.getElementById('form-customer-id');
+    const discountTypeInput = document.getElementById('form-discount-type');
+    const discountValueInput = document.getElementById('form-discount-value');
+    const notesInput = document.getElementById('form-order-notes');
+    
+    if (customerIdInput) customerIdInput.value = selectedCustomer ? selectedCustomer.id : '';
+    if (discountTypeInput) discountTypeInput.value = document.getElementById('discount-type').value;
+    if (discountValueInput) discountValueInput.value = document.getElementById('discount-value').value;
+    if (notesInput) notesInput.value = document.getElementById('order-notes') ? document.getElementById('order-notes').value : '';
+    
+    playSuccessChime();
+    broadcastToCfd('SALE_COMPLETED', {
+        paidFormatted: `KES ${tenderAmount.toFixed(2)}`,
+        changeFormatted: `KES ${change.toFixed(2)}`
+    });
+    
+    localStorage.setItem('pos_sale_completing', 'true');
+    // Clear storage for active tab
+    delete multiCarts[activeCartId];
+    if (Object.keys(multiCarts).length === 0) {
+        multiCarts = { 'cart_1': { id: 'cart_1', name: 'Cart 1', items: [] } };
+    }
+    localStorage.setItem('pos_multi_carts', JSON.stringify(multiCarts));
+    localStorage.removeItem('pos_cart');
+    
+    document.getElementById('sale-form').submit();
+}
+
+function fastTenderMpesa() {
+    if (cart.length === 0) {
+        playErrorBeep();
+        showNotification('Cart is empty', 'warning');
+        return;
+    }
+    
+    // Open payment modal with MPESA pre-selected
+    completeSale();
+    
+    setTimeout(() => {
+        const paymentSelect = document.getElementById('payment-method-select');
+        if (paymentSelect) {
+            for (let i = 0; i < paymentSelect.options.length; i++) {
+                const opt = paymentSelect.options[i];
+                const code = (opt.getAttribute('data-code') || '').toUpperCase();
+                if (code === 'MPESA' || opt.text.toLowerCase().includes('mpesa')) {
+                    paymentSelect.selectedIndex = i;
+                    onPaymentMethodChange();
+                    break;
+                }
+            }
+        }
+    }, 150);
+}
+
+// ==================== POS INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎬 POS Screen initializing...');
-    console.log('   Current URL:', window.location.href);
-    console.log('   Path:', window.location.pathname);
+    console.log('🎬 POS Screen initializing with Modern UI & Multi-Cart...');
     
-    // DON'T load cart here - it's handled in window.load event
-    // This prevents duplicate loading and race conditions
+    // Set initial product view
+    setProductView(currentProductView);
     
-    // Set initial view (list only)
-    document.getElementById('products-list').style.display = 'block';
+    // Initialize Multi-Carts
+    initMultiCarts();
     
     // Update filter info on page load
     updateFilterInfo();
     
-    // Load products immediately - don't wait for AJAX test
-    console.log('🚀 Starting product load...');
+    // Load products immediately
     loadProducts(true);
     
-    // Migrate legacy local held orders to server, then refresh count
+    // Migrate legacy local held orders to server
     migrateLegacyHeldOrders();
 
     // Live clock
@@ -939,9 +1651,10 @@ function loadProducts(reset = false) {
     if (reset) {
         productsOffset = 0;
         productsHasMore = true;
-        // Clear list view only
         const listBody = document.getElementById('products-list-body');
+        const gridBody = document.getElementById('products-grid');
         if (listBody) listBody.innerHTML = '';
+        if (gridBody) gridBody.innerHTML = '';
         console.log('Products cleared for reset');
     }
     
@@ -959,49 +1672,22 @@ function loadProducts(reset = false) {
     if (currentSearchQuery) url.searchParams.set('q', currentSearchQuery);
     if (currentCategoryFilter) url.searchParams.set('category', currentCategoryFilter);
     
-    console.log('🚀 Loading products:', {
-        reset: reset,
-        search: currentSearchQuery,
-        category: currentCategoryFilter,
-        offset: productsOffset,
-        url: url.toString()
-    });
-    
-    // Add timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
-        console.error('⏱️ Request timeout after 10 seconds');
-        console.error('   URL was:', url.toString());
-        console.error('   Check server logs for errors');
         if (loadingEl) {
             loadingEl.innerHTML = `
                 <div class="alert alert-warning m-3">
                     <h5>⏱️ Loading is taking longer than expected</h5>
-                    <p><strong>URL:</strong> <code>${url.toString()}</code></p>
-                    <p>This might be due to:</p>
-                    <ul>
-                        <li>Slow network connection</li>
-                        <li>Server is processing the request</li>
-                        <li>Large number of products</li>
-                        <li>Server error (check server console)</li>
-                    </ul>
                     <button class="btn btn-primary" onclick="location.reload()">
                         <i class="bi bi-arrow-clockwise"></i> Reload Page
                     </button>
                     <button class="btn btn-secondary ms-2" onclick="loadProducts(true)">
                         <i class="bi bi-arrow-repeat"></i> Try Again
                     </button>
-                    <hr>
-                    <small class="text-muted">
-                        <strong>Debug Info:</strong><br>
-                        Current URL: ${window.location.href}<br>
-                        Request URL: ${url.toString()}<br>
-                        Offset: ${productsOffset}, Limit: ${productsLimit}
-                    </small>
                 </div>
             `;
         }
         productsLoading = false;
-    }, 10000); // 10 second timeout
+    }, 10000);
     
     fetch(url, {
         headers: {
@@ -1010,63 +1696,56 @@ function loadProducts(reset = false) {
     })
     .then(response => {
         clearTimeout(timeoutId);
-        console.log('✅ Response received - Status:', response.status);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response.json();
     })
     .then(data => {
-        console.log('📦 Products loaded:', data.products ? data.products.length : 0, 'total:', data.total);
-        
         if (data.success) {
             if (data.products.length === 0 && productsOffset === 0) {
-                // No products at all
-                console.log('ℹ️ No products found');
                 if (loadingEl) {
-                    loadingEl.innerHTML = `
-                        <div class="alert alert-info m-3">
-                            <h5><i class="bi bi-info-circle"></i> No Products Found</h5>
-                            <p>You don't have any products yet. Add your first product to get started!</p>
-                            <a href="${window.location.origin}/${window.location.pathname.split('/')[1]}/products/add/" class="btn btn-primary">
-                                <i class="bi bi-plus-circle"></i> Add Product
-                            </a>
-                        </div>
-                    `;
+                    const isFiltered = Boolean(currentSearchQuery || currentCategoryFilter);
+                    if (isFiltered) {
+                        loadingEl.innerHTML = `
+                            <div class="text-center p-4 my-3 bg-light rounded border">
+                                <i class="bi bi-search text-muted" style="font-size: 2.2rem;"></i>
+                                <h6 class="mt-2 text-dark">No Products Found</h6>
+                                <p class="text-muted small mb-3">No products matched your search or category filter.</p>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('search-input').value=''; currentSearchQuery=''; currentCategoryFilter=''; const cf=document.getElementById('category-filter'); if(cf) cf.value=''; loadProducts(true);">
+                                    <i class="bi bi-x-circle me-1"></i> Clear Filters
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        loadingEl.innerHTML = `
+                            <div class="alert alert-info m-3 text-center">
+                                <h5><i class="bi bi-info-circle me-1"></i> Product Catalog Empty</h5>
+                                <p class="mb-2">You don't have any products yet in this store.</p>
+                                <a href="{% url 'product_create' %}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-plus-circle me-1"></i> Add Product in Back Office
+                                </a>
+                            </div>
+                        `;
+                    }
                 }
                 productsLoading = false;
                 return;
             }
             
             renderProducts(data.products);
-            if (cart.length > 0) {
-                let warnings = 0;
-                cart.forEach(item => {
-                    const available = productStock[item.id];
-                    if (available !== undefined && item.quantity > available) {
-                        warnings++;
-                    }
-                });
-                if (warnings > 0) {
-                    showNotification(`${warnings} cart item(s) exceed current stock. Please review quantities.`, 'warning');
-                }
-            }
             productsOffset += data.products.length;
             productsHasMore = data.has_more;
             
-            // Show list view
             if (loadingEl) loadingEl.style.display = 'none';
-            const listEl = document.getElementById('products-list');
-            if (listEl) listEl.style.display = 'block';
+            setProductView(currentProductView);
             
             const emptyEl = document.getElementById('products-empty');
             const loadMoreContainer = document.getElementById('load-more-container');
             
             if (emptyEl) emptyEl.style.display = 'none';
             if (loadMoreContainer) loadMoreContainer.style.display = productsHasMore ? 'block' : 'none';
-            console.log('✨ Products displayed successfully!', 'Has more:', productsHasMore);
         } else {
-            console.error('❌ Server returned success=false:', data);
             throw new Error(data.error || 'Failed to load products');
         }
         productsLoading = false;
@@ -1074,34 +1753,16 @@ function loadProducts(reset = false) {
     })
     .catch(error => {
         clearTimeout(timeoutId);
-        console.error('💥 Error loading products:', error);
-        console.error('   Error type:', error.name);
-        console.error('   Error message:', error.message);
-        console.error('   URL was:', url.toString());
+        console.error('Error loading products:', error);
         if (loadingEl) {
             loadingEl.innerHTML = `
                 <div class="alert alert-danger m-3">
                     <h5><i class="bi bi-exclamation-triangle"></i> Error Loading Products</h5>
                     <p><strong>Error:</strong> ${error.message}</p>
-                    <p><strong>Error Type:</strong> ${error.name}</p>
-                    <p><strong>URL:</strong> <code>${url.toString()}</code></p>
-                    <p>Please try one of the following:</p>
                     <div class="btn-group" role="group">
-                        <button class="btn btn-primary" onclick="location.reload()">
-                            <i class="bi bi-arrow-clockwise"></i> Reload Page
-                        </button>
-                        <button class="btn btn-secondary" onclick="loadProducts(true)">
-                            <i class="bi bi-arrow-repeat"></i> Try Again
-                        </button>
+                        <button class="btn btn-primary" onclick="location.reload()">Reload Page</button>
+                        <button class="btn btn-secondary" onclick="loadProducts(true)">Try Again</button>
                     </div>
-                    <hr>
-                    <small class="text-muted">
-                        If this persists, check your internet connection or contact support.
-                        <br><strong>Debug Info:</strong>
-                        <br>Current URL: ${window.location.href}
-                        <br>Request URL: ${url.toString()}
-                        <br>Error: ${error.stack || error.message}
-                    </small>
                 </div>
             `;
         }
@@ -1111,70 +1772,175 @@ function loadProducts(reset = false) {
 
 function renderProducts(products) {
     const listBody = document.getElementById('products-list-body');
+    const gridBody = document.getElementById('products-grid');
+    if (!listBody && !gridBody) return;
+    
+    const categoryPalettes = [
+        { color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' }, // Blue
+        { color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' }, // Emerald
+        { color: '#d97706', bg: '#fffbeb', border: '#fde68a' }, // Amber
+        { color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' }, // Purple
+        { color: '#db2777', bg: '#fdf2f8', border: '#fbcfe8' }, // Pink
+        { color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' }, // Cyan
+        { color: '#4f46e5', bg: '#eef2ff', border: '#c7d2fe' }, // Indigo
+        { color: '#475569', bg: '#f8fafc', border: '#e2e8f0' }, // Slate
+    ];
     
     products.forEach(product => {
-        // Store stock quantity and full product data
-        productStock[product.id] = product.stock_quantity;
-        productData[product.id] = product;
+        const prodId = Number(product.id);
+        const unitPrice = parseFloat(product.unit_price) || 0;
+        const stockQty = parseFloat(product.stock_quantity) || 0;
+        const catName = product.category_name || 'General';
+        const palette = categoryPalettes[Math.abs(hashString(catName)) % categoryPalettes.length];
+        const catColor = palette.color;
         
-        // Determine stock status
-        const isOutOfStock = product.stock_quantity <= 0;
-        const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= 10;
+        productStock[prodId] = stockQty;
+        productData[prodId] = {
+            ...product,
+            id: prodId,
+            unit_price: unitPrice,
+            stock_quantity: stockQty
+        };
         
-        // Render List View Row
-        const row = document.createElement('tr');
-        row.className = 'product-row';
-        row.style.cursor = isOutOfStock ? 'not-allowed' : 'pointer';
+        const isOutOfStock = stockQty <= 0;
+        const isLowStock = stockQty > 0 && stockQty <= 10;
         
-        if (!isOutOfStock) {
-            row.onclick = function() {
-                if (product.has_bulk) {
-                    showUnitPickerModal(product);
-                } else {
-                    addToCart(product.id, product.name, product.unit_price, product.stock_quantity, product.tax_class || 'standard');
-                }
-            };
+        // 1. RENDER TOUCH TILE (GRID VIEW)
+        if (gridBody) {
+            let tile = gridBody.querySelector(`[data-product-id="${prodId}"]`);
+            const isNewTile = !tile;
+            if (isNewTile) {
+                tile = document.createElement('div');
+                tile.className = `touch-tile ${isOutOfStock ? 'out-of-stock' : ''}`;
+                tile.setAttribute('data-product-id', String(prodId));
+            } else {
+                tile.className = `touch-tile ${isOutOfStock ? 'out-of-stock' : ''}`;
+            }
+            
+            // Clean border - no colored top border
+            tile.style.borderTop = '';
+            
+            let stockBadge = isOutOfStock 
+                ? '<span class="touch-tile-stock-tag out-stock">Out</span>' 
+                : (isLowStock ? `<span class="touch-tile-stock-tag low-stock">${stockQty} left</span>` : `<span class="touch-tile-stock-tag in-stock">${stockQty} in stock</span>`);
+            
+            if (!isOutOfStock) {
+                tile.onclick = function() {
+                    playScanBeep();
+                    if (product.has_bulk) {
+                        showUnitPickerModal(product);
+                    } else {
+                        addToCart(prodId, product.name, unitPrice, stockQty, product.tax_class || 'standard');
+                    }
+                };
+            } else {
+                tile.onclick = function() {
+                    playErrorBeep();
+                    showNotification(`${product.name} is currently out of stock`, 'error');
+                };
+            }
+            
+            const safeName = (product.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeCode = (product.product_code || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeCat = (catName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            tile.innerHTML = `
+                <div class="touch-tile-header">
+                    <span class="touch-tile-category-tag" style="background-color: ${palette.bg}; color: ${palette.color}; border: 1px solid ${palette.border};" title="${safeCat}">
+                        ${safeCat}
+                    </span>
+                    ${stockBadge}
+                </div>
+                <div class="touch-tile-body">
+                    <h5 class="touch-tile-title" title="${safeName}">${safeName}</h5>
+                    <div class="touch-tile-meta">
+                        ${safeCode ? `<span class="touch-tile-sku"><i class="bi bi-upc-scan me-1"></i>${safeCode}</span>` : ''}
+                        ${product.has_bulk ? `<span class="touch-tile-bulk"><i class="bi bi-box-seam me-1"></i>Bulk</span>` : ''}
+                    </div>
+                </div>
+                <div class="touch-tile-footer">
+                    <div class="touch-tile-price-wrap">
+                        <span class="touch-tile-curr">KES</span>
+                        <span class="touch-tile-amount">${unitPrice.toFixed(2)}</span>
+                    </div>
+                    <span class="touch-tile-btn ${isOutOfStock ? 'disabled' : ''}">
+                        <i class="bi ${isOutOfStock ? 'bi-slash-circle' : 'bi-plus-lg'}"></i>
+                    </span>
+                </div>
+            `;
+            
+            if (isNewTile) {
+                gridBody.appendChild(tile);
+            }
         }
         
-        let stockBadgeList = '';
-        if (isOutOfStock) {
-            stockBadgeList = '<span class="badge bg-danger">Out</span>';
-        } else if (isLowStock) {
-            stockBadgeList = `<span class="badge bg-warning text-dark">${product.stock_quantity}</span>`;
-        } else {
-            stockBadgeList = `<span class="badge bg-success">${product.stock_quantity}</span>`;
+        // 2. RENDER LIST ROW (TABLE VIEW)
+        if (listBody) {
+            let stockBadgeList = isOutOfStock
+                ? '<span class="badge bg-danger stock-badge">Out</span>'
+                : (isLowStock ? `<span class="badge bg-warning text-dark stock-badge">${stockQty} in stock</span>` : `<span class="badge bg-success stock-badge">${stockQty} in stock</span>`);
+            
+            let row = listBody.querySelector(`[data-product-id="${prodId}"]`);
+            const isNewRow = !row;
+            if (isNewRow) {
+                row = document.createElement('tr');
+                row.className = 'product-row';
+                row.setAttribute('data-product-id', String(prodId));
+            }
+            
+            row.style.cursor = isOutOfStock ? 'not-allowed' : 'pointer';
+            if (!isOutOfStock) {
+                row.onclick = function() {
+                    playScanBeep();
+                    if (product.has_bulk) {
+                        showUnitPickerModal(product);
+                    } else {
+                        addToCart(prodId, product.name, unitPrice, stockQty, product.tax_class || 'standard');
+                    }
+                };
+            } else {
+                row.onclick = function() {
+                    playErrorBeep();
+                    showNotification(`${product.name} is currently out of stock`, 'error');
+                };
+            }
+            
+            const safeNameList = (product.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeCatList = (catName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            row.innerHTML = `
+                <td>
+                    <small class="text-muted">${product.product_code || '-'}</small>
+                </td>
+                <td>
+                    <strong class="product-name">${safeNameList}</strong>
+                    ${product.has_bulk ? '<br><small class="text-info"><i class="bi bi-box"></i> Bulk available</small>' : ''}
+                </td>
+                <td>
+                    <small class="badge" style="background-color:${palette.bg}; color:${palette.color}; border: 1px solid ${palette.border}; font-weight: 600;">${safeCatList}</small>
+                </td>
+                <td>
+                    ${stockBadgeList}
+                    <small class="text-muted">${product.unit_name || ''}</small>
+                </td>
+                <td>
+                    <strong class="text-primary product-price">KES ${unitPrice.toFixed(2)}</strong>
+                </td>
+                <td>
+                    ${isOutOfStock ? 
+                        '<button class="btn btn-sm btn-secondary" disabled><i class="bi bi-x-circle"></i> Out</button>' :
+                        (product.has_bulk ?
+                            `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); playScanBeep(); showUnitPickerModalById(${prodId});"><i class="bi bi-plus-circle"></i> Add</button>` :
+                            `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); playScanBeep(); addToCart(${prodId}, '${(product.name || '').replace(/'/g, "\\'")}', ${unitPrice}, ${stockQty}, '${product.tax_class || 'standard'}');"><i class="bi bi-plus-circle"></i> Add</button>`
+                        )
+                    }
+                </td>
+            `;
+            
+            if (isNewRow) {
+                listBody.appendChild(row);
+            }
         }
-        
-        row.innerHTML = `
-            <td>
-                <small class="text-muted">${product.product_code || '-'}</small>
-            </td>
-            <td>
-                <strong>${product.name}</strong>
-                ${product.has_bulk ? '<br><small class="text-info"><i class="bi bi-box"></i> Has bulk pricing</small>' : ''}
-            </td>
-            <td>
-                <small class="text-muted">${product.category_name || 'Uncategorized'}</small>
-            </td>
-            <td>
-                ${stockBadgeList}
-                <small class="text-muted">${product.unit_name}</small>
-            </td>
-            <td>
-                <strong class="text-primary">KES ${product.unit_price.toFixed(2)}</strong>
-            </td>
-            <td>
-                ${isOutOfStock ? 
-                    '<button class="btn btn-sm btn-secondary" disabled><i class="bi bi-x-circle"></i> Out</button>' :
-                    (product.has_bulk ?
-                        `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); showUnitPickerModalById(${product.id});"><i class="bi bi-plus-circle"></i> Add</button>` :
-                        `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.unit_price}, ${product.stock_quantity}, '${product.tax_class || 'standard'}');"><i class="bi bi-plus-circle"></i> Add</button>`
-                    )
-                }
-            </td>
-        `;
-        
-        listBody.appendChild(row);
     });
 }
 
@@ -1187,7 +1953,8 @@ let searchTimeout;
 
 function handleSearchInput() {
     const searchInput = document.getElementById('search-input');
-    currentSearchQuery = searchInput.value.trim();
+    currentSearchQuery = searchInput ? searchInput.value.trim() : '';
+    window.currentSearchQuery = currentSearchQuery;
     
     console.log('Search input changed:', {
         search: currentSearchQuery,
@@ -1206,34 +1973,37 @@ function handleSearchInput() {
 
 function handleCategoryChange() {
     const categorySelect = document.getElementById('category-filter');
-    currentCategoryFilter = categorySelect.value;
+    currentCategoryFilter = categorySelect ? categorySelect.value : '';
+    window.currentCategoryFilter = currentCategoryFilter;
     
-    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+    const selectedOption = categorySelect ? categorySelect.options[categorySelect.selectedIndex] : null;
     console.log('===== CATEGORY CHANGED =====');
     console.log('Selected value:', currentCategoryFilter);
-    console.log('Selected text:', selectedOption.text);
+    console.log('Selected text:', selectedOption ? selectedOption.text : '');
     console.log('Current search:', currentSearchQuery);
     console.log('============================');
     
-    // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
 
 function clearFilters() {
     // Clear search input
-    document.getElementById('search-input').value = '';
+    const si = document.getElementById('search-input');
+    if (si) si.value = '';
     currentSearchQuery = '';
+    window.currentSearchQuery = '';
     
     // Reset category filter
-    document.getElementById('category-filter').value = '';
+    const cf = document.getElementById('category-filter');
+    if (cf) cf.value = '';
     currentCategoryFilter = '';
+    window.currentCategoryFilter = '';
     
     // Reset pill buttons
     document.querySelectorAll('.cat-pill').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-cat') === '');
     });
     
-    // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
 
@@ -1243,7 +2013,6 @@ function updateFilterInfo() {
     
     // Check if elements exist
     if (!clearBtn || !infoText) {
-        console.warn('Filter info elements not found');
         return;
     }
     
@@ -1275,19 +2044,22 @@ function searchProducts() {
     const categorySelect = document.getElementById('category-filter');
     currentSearchQuery = searchInput ? searchInput.value.trim() : '';
     currentCategoryFilter = categorySelect ? categorySelect.value : '';
+    window.currentSearchQuery = currentSearchQuery;
+    window.currentCategoryFilter = currentCategoryFilter;
     
     console.log('===== MANUAL SEARCH =====');
     console.log('Search query:', currentSearchQuery);
     console.log('Category filter:', currentCategoryFilter);
     console.log('=========================');
     
-    // updateFilterInfo(); // Temporarily disabled to test
     loadProducts(true);
 }
 
 function filterByCategory(categoryId) {
     currentCategoryFilter = categoryId;
-    document.getElementById('category-filter').value = categoryId;
+    window.currentCategoryFilter = categoryId;
+    const cf = document.getElementById('category-filter');
+    if (cf) cf.value = categoryId;
     // Update pill active state
     document.querySelectorAll('.cat-pill').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-cat') === String(categoryId));
@@ -1447,7 +2219,7 @@ function searchCustomer() {
     const originalPlaceholder = input.placeholder;
     input.placeholder = 'Searching...';
     
-    fetch(`/b/{{ request.business.slug }}/api/customer/search/?query=${encodeURIComponent(query)}`)
+    fetch(`/api/customer/search/?query=${encodeURIComponent(query)}`)
         .then(response => response.json())
         .then(data => {
             input.placeholder = originalPlaceholder;
@@ -1976,6 +2748,7 @@ function addToCart(id, name, price, availableStock, taxClass = 'standard') {
     
     // Check stock availability
     if (currentQty >= availableStock) {
+        playErrorBeep();
         showNotification(`Cannot add more ${name}. Only ${availableStock} in stock!`, 'error');
         return;
     }
@@ -1986,21 +2759,20 @@ function addToCart(id, name, price, availableStock, taxClass = 'standard') {
         cart.push({ id, name, price, base_price: price, quantity: 1, availableStock, taxClass });
     }
     
-    console.log('Cart after adding:', cart);
-    console.log('Cart length:', cart.length);
-    
+    playScanBeep();
     updateCart();
-    saveCartToStorage(); // Save after adding to cart
+    saveMultiCartsToStorage();
 }
 
 function removeFromCart(id) {
     cart = cart.filter(item => item.id !== id);
     updateCart();
-    saveCartToStorage(); // Save after removing from cart
+    saveMultiCartsToStorage();
 }
 
 function addToCartWithQty(id, name, price, availableStock, taxClass, qty, productData) {
     if (qty > availableStock) {
+        playErrorBeep();
         showNotification(`Cannot add ${qty}x ${name}. Only ${availableStock} in stock!`, 'error');
         return;
     }
@@ -2008,11 +2780,11 @@ function addToCartWithQty(id, name, price, availableStock, taxClass, qty, produc
     if (existing) {
         const newQty = existing.quantity + qty;
         if (newQty > availableStock) {
+            playErrorBeep();
             showNotification(`Cannot add more ${name}. Only ${availableStock} in stock!`, 'error');
             return;
         }
         existing.quantity = newQty;
-        // Apply bulk discount
         if (existing.bulk_discount_price && existing.bulk_unit_quantity && newQty >= existing.bulk_unit_quantity) {
             existing.price = existing.bulk_discount_price;
         }
@@ -2027,8 +2799,9 @@ function addToCartWithQty(id, name, price, availableStock, taxClass, qty, produc
             bulk_unit_quantity: bulkUnitQty,
         });
     }
+    playScanBeep();
     updateCart();
-    saveCartToStorage();
+    saveMultiCartsToStorage();
 }
 
 function adjustQty(id, delta) {
@@ -2038,16 +2811,16 @@ function adjustQty(id, delta) {
     const newQty = item.quantity + (delta * step);
     if (newQty < (item.isBulk ? item.bulkQty : 1)) { removeFromCart(id); return; }
     if (newQty > item.availableStock) {
+        playErrorBeep();
         showNotification(`Only ${item.availableStock} in stock`, 'error');
         return;
     }
     item.quantity = newQty;
-    // Apply bulk discount if applicable
     if (item.bulk_discount_price && item.bulk_unit_quantity) {
         item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
     }
     updateCart();
-    saveCartToStorage();
+    saveMultiCartsToStorage();
 }
 
 function setItemDiscount(id, value) {
@@ -2056,14 +2829,14 @@ function setItemDiscount(id, value) {
     const disc = parseFloat(value) || 0;
     item.discount = Math.min(100, Math.max(0, disc));
     calculateTotal();
-    saveCartToStorage();
+    saveMultiCartsToStorage();
 }
 
 function setItemNote(id, value) {
     const item = cart.find(i => i.id === id);
     if (!item) return;
     item.note = value;
-    saveCartToStorage();
+    saveMultiCartsToStorage();
 }
 
 // Cash change calculator
@@ -2096,7 +2869,6 @@ function onPaymentMethodChange() {
             // Auto-fill remaining balance
             const remaining = totalDue - paymentMethods.reduce((s, m) => s + m.amount, 0);
             if (remaining > 0) document.getElementById('payment-amount-input').value = remaining.toFixed(2);
-            // Focus reference field so cashier can type the M-Pesa code
             setTimeout(() => document.getElementById('payment-reference-input').focus(), 100);
         }
     }
@@ -2157,23 +2929,21 @@ function updateQuantity(id, quantity) {
         
         // Check stock availability
         if (newQty > item.availableStock) {
+            playErrorBeep();
             showNotification(`Cannot set quantity to ${newQty}. Only ${item.availableStock} available in stock!`, 'error');
-            // Reset to previous quantity (don't auto-cap to available stock)
             const inputField = document.querySelector(`input[onchange*="updateQuantity(${id}"]`);
             if (inputField) {
                 inputField.value = item.quantity;
             }
-            // Don't update the cart quantity - keep it at the previous valid value
             return;
         }
         
         item.quantity = newQty;
-        // Apply bulk discount if applicable
         if (item.bulk_discount_price && item.bulk_unit_quantity) {
             item.price = newQty >= item.bulk_unit_quantity ? item.bulk_discount_price : item.base_price;
         }
         updateCart();
-        saveCartToStorage(); // Save after quantity update
+        saveMultiCartsToStorage();
     }
 }
 
@@ -2185,11 +2955,9 @@ function updateCart() {
     if (cart.length === 0) {
         cartItems.innerHTML = '<p class="text-muted text-center">Cart is empty</p>';
         document.getElementById('complete-btn').disabled = true;
-        console.log('Cart is empty, button disabled');
     } else {
         let html = '';
-        cart.forEach((item, idx) => {
-            // Ensure numeric types (guards against localStorage string coercion)
+        cart.forEach((item) => {
             item.price = parseFloat(item.price) || 0;
             item.quantity = parseFloat(item.quantity) || 0;
             const itemDiscount = item.discount || 0;
@@ -2231,15 +2999,15 @@ function updateCart() {
                     <!-- Per-item discount + note (collapsible) -->
                     <div class="d-flex gap-1 mt-1">
                         <input type="number" class="form-control form-control-sm" style="width:90px;" 
-                               placeholder="Disc %" min="0" max="100" step="0.1"
-                               value="${itemDiscount > 0 ? itemDiscount : ''}"
-                               oninput="setItemDiscount(${item.id}, this.value)"
-                               title="Item discount %">
+                                placeholder="Disc %" min="0" max="100" step="0.1"
+                                value="${itemDiscount > 0 ? itemDiscount : ''}"
+                                oninput="setItemDiscount(${item.id}, this.value)"
+                                title="Item discount %">
                         <input type="text" class="form-control form-control-sm"
-                               placeholder="Item note..."
-                               value="${item.note || ''}"
-                               oninput="setItemNote(${item.id}, this.value)"
-                               title="Note for this item">
+                                placeholder="Item note..."
+                                value="${item.note || ''}"
+                                oninput="setItemNote(${item.id}, this.value)"
+                                title="Note for this item">
                     </div>
                 </div>
             `;
@@ -2247,27 +3015,25 @@ function updateCart() {
         cartItems.innerHTML = html;
         document.getElementById('complete-btn').disabled = false;
         document.getElementById('hold-order-btn').disabled = false;
-        console.log('Cart has items, buttons enabled');
     }
     
+    renderMultiCartTabs();
     calculateTotal();
 }
 
 function calculateTotal() {
     try {
-        // Calculate totals separately for taxable and non-taxable items
         let taxableTotal = 0;
         let nonTaxableTotal = 0;
         
         cart.forEach(item => {
             const itemDiscount = item.discount || 0;
             const itemTotal = (item.price * item.quantity) * (1 - itemDiscount / 100);
-            const taxClass = item.taxClass || 'standard'; // Default to standard if not set
+            const taxClass = item.taxClass || 'standard';
             
             if (taxClass === 'standard') {
                 taxableTotal += itemTotal;
             } else {
-                // zero_rated or exempt - no tax
                 nonTaxableTotal += itemTotal;
             }
         });
@@ -2289,7 +3055,6 @@ function calculateTotal() {
         if (discountType === 'percentage') {
             discountAmount = (totalInclusive * discountValue) / 100;
         } else if (discountType === 'points') {
-            // Points redemption: 1 point = 1 KES, minimum 100 points
             if (!selectedCustomer) {
                 alert('Please select a customer to redeem points');
                 discountTypeEl.value = 'percentage';
@@ -2312,43 +3077,32 @@ function calculateTotal() {
                 discountValueEl.value = selectedCustomer.points;
                 return calculateTotal();
             }
-            discountAmount = discountValue; // 1 point = 1 KES
+            discountAmount = discountValue;
         } else {
-            // Fixed amount
             discountAmount = discountValue;
         }
         
-        const afterDiscount = totalInclusive - discountAmount;
+        const afterDiscount = Math.max(0, totalInclusive - discountAmount);
         
-        // Apply discount proportionally to taxable and non-taxable items
         const discountRatio = totalInclusive > 0 ? (afterDiscount / totalInclusive) : 1;
         const taxableAfterDiscount = taxableTotal * discountRatio;
         const nonTaxableAfterDiscount = nonTaxableTotal * discountRatio;
         
-        // Extract VAT only from taxable items
-        // Formula: VAT = (Price * VAT_RATE) / (100 + VAT_RATE)
         const vatAmount = (taxableAfterDiscount * VAT_RATE) / (100 + VAT_RATE);
         const taxableSubtotal = taxableAfterDiscount - vatAmount;
-        
-        // Non-taxable items have no VAT to extract
         const subtotalExclusive = taxableSubtotal + nonTaxableAfterDiscount;
         
-        // Update VAT label based on cart composition
         const vatLabelEl = document.getElementById('vat-label');
         if (vatLabelEl) {
             if (taxableTotal > 0 && nonTaxableTotal > 0) {
-                // Mixed cart
                 vatLabelEl.textContent = 'VAT (on taxable items):';
             } else if (taxableTotal > 0) {
-                // All taxable
                 vatLabelEl.textContent = `VAT (${VAT_RATE}%):`;
             } else {
-                // All non-taxable
                 vatLabelEl.textContent = 'VAT:';
             }
         }
         
-        // Update display elements with null checks
         const subtotalEl = document.getElementById('subtotal');
         const discountEl = document.getElementById('discount');
         const vatEl = document.getElementById('vat');
@@ -2365,7 +3119,12 @@ function calculateTotal() {
         if (vatEl) vatEl.textContent = `KES ${vatAmount.toFixed(2)}`;
         if (cartTotalEl) cartTotalEl.textContent = `KES ${afterDiscount.toFixed(2)}`;
         
-        // Calculate and show loyalty points
+        // Update Fast-Tender buttons
+        updateFastTenderButtons(afterDiscount);
+        
+        // Broadcast update to Customer-Facing Display
+        broadcastToCfd('CART_UPDATE');
+        
         const loyaltyInfoEl = document.getElementById('loyalty-info');
         const pointsToEarnEl = document.getElementById('points-to-earn');
         
@@ -2377,12 +3136,10 @@ function calculateTotal() {
             if (loyaltyInfoEl) loyaltyInfoEl.style.display = 'none';
         }
         
-        // Save discount changes
         if (cart.length > 0) {
-            saveCartToStorage();
+            saveMultiCartsToStorage();
         }
         
-        // Return the total for use in payment modal
         return afterDiscount;
         
     } catch (error) {
@@ -2508,7 +3265,7 @@ function migrateLegacyHeldOrders() {
             discount_value: parseFloat(legacyOrder.discountValue ?? legacyOrder.discount_value ?? 0) || 0
         };
 
-        return fetch(`/b/{{ request.business.slug }}/pos/held-orders/save/`, {
+        return fetch(`/pos/held-orders/save/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2559,7 +3316,7 @@ function holdOrder() {
         discount_value: parseFloat(document.getElementById('discount-value').value) || 0
     };
 
-    fetch(`/b/{{ request.business.slug }}/pos/held-orders/save/`, {
+    fetch(`/pos/held-orders/save/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -2602,7 +3359,7 @@ function holdOrder() {
 function updateHeldOrdersCount() {
     const badge = document.getElementById('held-orders-badge');
 
-    fetch(`/b/{{ request.business.slug }}/pos/held-orders/`)
+    fetch(`/pos/held-orders/`)
         .then(response => response.json())
         .then(data => {
             const count = (data.success && data.orders) ? data.orders.length : 0;
@@ -2623,7 +3380,7 @@ function updateHeldOrdersCount() {
 function showHeldOrders() {
     const listContainer = document.getElementById('held-orders-list');
 
-    fetch(`/b/{{ request.business.slug }}/pos/held-orders/`)
+    fetch(`/pos/held-orders/`)
         .then(response => response.json())
         .then(data => {
             const heldOrders = (data.success && data.orders) ? data.orders : [];
@@ -2699,7 +3456,7 @@ function retrieveHeldOrder(index) {
         }
     }
 
-    fetch(`/b/{{ request.business.slug }}/pos/held-orders/`)
+    fetch(`/pos/held-orders/`)
         .then(response => response.json())
         .then(data => {
             const orders = (data.success && data.orders) ? data.orders : [];
@@ -2736,7 +3493,7 @@ function retrieveHeldOrder(index) {
             updateMobileCart();
             saveCartToStorage();
 
-            return fetch(`/b/{{ request.business.slug }}/pos/held-orders/${order.id}/delete/`, {
+            return fetch(`/pos/held-orders/${order.id}/delete/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}'
@@ -2761,7 +3518,7 @@ function deleteHeldOrder(orderId, orderName) {
         return;
     }
 
-    fetch(`/b/{{ request.business.slug }}/pos/held-orders/${orderId}/delete/`, {
+    fetch(`/pos/held-orders/${orderId}/delete/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': '{{ csrf_token }}'
@@ -3568,6 +4325,165 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.key === 'Enter') { e.preventDefault(); applyPromoCode(); }
         });
     }
+});
+</script>
+
+<!-- Real-Time Sync & Product Cache Engine -->
+<script src="{% static 'js/pos-sync.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Real-Time Sync Engine
+    const syncEngine = window.initPOSSync();
+
+    // Instant Hydration from Synchronized Local Catalog
+    window.addEventListener('pos:catalog-loaded', function(e) {
+        const listBody = document.getElementById('products-list-body');
+        const count = e.detail ? e.detail.count : 0;
+        console.log('🔄 POS Catalog Loaded from Sync Engine:', count, 'items');
+        
+        // If the table is currently empty and no search filter is active, hydrate immediately from sync engine
+        const isFiltered = Boolean(window.currentSearchQuery || window.currentCategoryFilter);
+        if (listBody && listBody.children.length === 0 && !isFiltered && syncEngine && syncEngine.products && syncEngine.products.length > 0) {
+            console.log('⚡ Instant-hydrating POS table from local synchronized catalog cache...');
+            renderProducts(syncEngine.products);
+            const loadingEl = document.getElementById('products-loading');
+            const listEl = document.getElementById('products-list');
+            const emptyEl = document.getElementById('products-empty');
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (emptyEl) emptyEl.style.display = 'none';
+            if (listEl) listEl.style.display = 'block';
+        }
+    });
+
+    // Listen for real-time product updates (price / stock change / new product from Back Office)
+    window.addEventListener('pos:product-updated', function(e) {
+        const item = e.detail;
+        if (!item || !item.id) return;
+        const prodId = Number(item.id);
+        
+        console.log('⚡ Real-Time Product Update received on register:', item);
+        
+        // Live update price and stock in memory
+        const unitPrice = parseFloat(item.unit_price) || 0;
+        const stockQty = parseFloat(item.stock_quantity) || 0;
+        if (window.productStock) window.productStock[prodId] = stockQty;
+        
+        if (window.productData && window.productData[prodId]) {
+            Object.assign(window.productData[prodId], item, {
+                unit_price: unitPrice,
+                stock_quantity: stockQty
+            });
+        } else if (window.productData) {
+            window.productData[prodId] = {
+                ...item,
+                id: prodId,
+                unit_price: unitPrice,
+                stock_quantity: stockQty
+            };
+        }
+
+        // Check if cart has this item and update unit price or stock warnings
+        if (Array.isArray(window.cart)) {
+            let cartUpdated = false;
+            window.cart.forEach(cartItem => {
+                if (Number(cartItem.id) === prodId) {
+                    if (cartItem.price !== unitPrice) {
+                        cartItem.price = unitPrice;
+                        cartUpdated = true;
+                    }
+                }
+            });
+            if (cartUpdated && typeof renderCart === 'function') {
+                renderCart();
+                if (typeof showNotification === 'function') {
+                    showNotification(`Price for "${item.name}" was updated from Back Office to KES ${unitPrice.toFixed(2)}.`, 'info');
+                }
+            }
+        }
+
+        // Live update price and stock badge on screen if product row exists
+        const row = document.querySelector(`[data-product-id="${prodId}"]`);
+        if (row) {
+            const priceEl = row.querySelector('.product-price');
+            if (priceEl) {
+                priceEl.innerText = `KES ${unitPrice.toFixed(2)}`;
+            }
+            const nameEl = row.querySelector('.product-name');
+            if (nameEl && item.name) {
+                nameEl.innerText = item.name;
+            }
+            const stockBadge = row.querySelector('.stock-badge');
+            if (stockBadge) {
+                stockBadge.innerText = stockQty <= 0 ? 'Out' : `${stockQty} in stock`;
+                stockBadge.className = stockQty <= 0 ? 'badge bg-danger stock-badge' : (stockQty <= 10 ? 'badge bg-warning text-dark stock-badge' : 'badge bg-success stock-badge');
+            }
+            // Flash subtle emerald glow to indicate live sync
+            row.style.transition = 'background-color 0.4s ease, box-shadow 0.4s ease';
+            row.style.backgroundColor = 'rgba(25, 135, 84, 0.18)';
+            setTimeout(() => { row.style.backgroundColor = ''; }, 2200);
+        } else {
+            // New product added from Back Office: if no filters active, render into list
+            const listBody = document.getElementById('products-list-body');
+            const isCurrentlyFiltered = Boolean(window.currentSearchQuery || window.currentCategoryFilter);
+            if (listBody && !isCurrentlyFiltered && typeof renderProducts === 'function') {
+                renderProducts([item]);
+                const loadingEl = document.getElementById('products-loading');
+                const listEl = document.getElementById('products-list');
+                const emptyEl = document.getElementById('products-empty');
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (emptyEl) emptyEl.style.display = 'none';
+                if (listEl) listEl.style.display = 'block';
+            }
+        }
+    });
+
+    // Listen for real-time Store Settings updates from Back Office
+    window.addEventListener('pos:settings-updated', function(e) {
+        const s = e.detail;
+        if (!s) return;
+        console.log('⚡ Real-Time Store Settings Update received on register:', s);
+
+        // Update Store Name in top bar
+        const nameEl = document.getElementById('posStoreName');
+        if (nameEl && s.business_name) {
+            nameEl.innerHTML = `<i class="bi bi-shop"></i> ${escapeHtml(s.business_name)}`;
+        }
+
+        // Update Store Logo in top bar
+        const logoEl = document.getElementById('posStoreLogo');
+        if (s.logo_url) {
+            if (logoEl) {
+                logoEl.src = s.logo_url;
+                logoEl.style.display = 'inline-block';
+            } else {
+                const headerInfo = document.getElementById('posStoreHeaderInfo');
+                if (headerInfo) {
+                    const img = document.createElement('img');
+                    img.id = 'posStoreLogo';
+                    img.src = s.logo_url;
+                    img.alt = s.business_name || 'Logo';
+                    img.style.cssText = 'height: 26px; max-width: 80px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px 4px;';
+                    img.className = 'me-1';
+                    headerInfo.prepend(img);
+                }
+            }
+        } else if (logoEl) {
+            logoEl.style.display = 'none';
+        }
+
+        // Update M-Pesa modal payment instruction values if present
+        const mpesaShortcodeSpan = document.getElementById('mpesa-shortcode-display');
+        if (mpesaShortcodeSpan && s.mpesa_shortcode) {
+            mpesaShortcodeSpan.innerText = s.mpesa_shortcode;
+        }
+
+        // Notify Customer-Facing Display via BroadcastChannel
+        if (typeof cfdChannel !== 'undefined' && cfdChannel) {
+            try {
+                cfdChannel.postMessage({ type: 'STORE_SETTINGS_UPDATED', settings: s });
+            } catch (err) {}
+        }
+    });
 });
 </script>
 

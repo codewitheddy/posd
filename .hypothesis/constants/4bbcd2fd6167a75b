@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0091_businesssettings_working_hours.py
+# hypothesis_version: 6.167.1
+
+[180, 'businesssettings', 'late_grace_minutes', 'pos', 'workday_end_time', 'workday_start_time']

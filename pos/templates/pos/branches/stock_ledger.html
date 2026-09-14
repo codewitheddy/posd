@@ -1,0 +1,158 @@
+{% extends 'pos/base.html' %}
+{% block title %}Stock Movement Ledger — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px}
+.int-card-header{padding:16px 20px;background:#fafbfc;border-bottom:1.5px solid #e5e7eb;font-weight:700;font-size:14px}
+.int-card-body{padding:20px}
+.t-table{width:100%;border-collapse:collapse;font-size:13px}
+.t-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:12px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.t-table tbody tr{border-bottom:1px solid #f3f4f6;transition:background .1s}
+.t-table tbody tr:hover{background:#f8f9fc}
+.t-table tbody td{padding:12px 16px;vertical-align:middle}
+.badge-type{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-block}
+.type-sale{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.type-purchase{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.type-transfer_in,.type-requisition_in{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.type-transfer_out,.type-requisition_out{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+.type-adjustment{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb}
+.type-return{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+.type-waste_spoilage{background:#fdf2f8;color:#9d174d;border:1px solid #fbcfe8}
+.type-initial_backfill{background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe}
+.delta-pos{color:#166534;font-weight:700}
+.delta-neg{color:#dc2626;font-weight:700}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+.badge-neg-warn{background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;border:1px solid #fca5a5}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">Unified Stock Movement Ledger</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Immutable audit log of all inventory movements, transactions, receipts, and dispatches.</p>
+    </div>
+  </div>
+
+  <!-- Filter Form -->
+  <div class="int-card mb-4">
+    <div class="int-card-body">
+      <form method="GET" class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:12px;font-weight:700;color:#4b5563">Branch</label>
+          <select name="branch_id" class="form-select form-select-sm">
+            <option value="">-- All Branches --</option>
+            {% for b in all_branches %}
+            <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"i" %}selected{% endif %}>
+              {{ b.name }} {% if b.is_hq %}(HQ){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:12px;font-weight:700;color:#4b5563">Product</label>
+          <select name="product_id" class="form-select form-select-sm">
+            <option value="">-- All Products --</option>
+            {% for p in all_products %}
+            <option value="{{ p.id }}" {% if selected_product == p.id|stringformat:"i" %}selected{% endif %}>
+              {{ p.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" style="font-size:12px;font-weight:700;color:#4b5563">Movement Type</label>
+          <select name="movement_type" class="form-select form-select-sm">
+            <option value="">-- All Types --</option>
+            {% for code, label in movement_types %}
+            <option value="{{ code }}" {% if selected_movement_type == code %}selected{% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" style="font-size:12px;font-weight:700;color:#4b5563">Date From</label>
+          <input type="date" name="date_from" value="{{ date_from|default:'' }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button type="submit" class="btn-primary-sm w-100 justify-content-center">
+            <i class="bi bi-filter"></i> Filter
+          </button>
+          <a href="{% url 'stock_ledger' %}" class="btn-outline-sm" title="Clear Filters">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Ledger Table -->
+  <div class="int-card">
+    <div class="table-responsive">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Branch</th>
+            <th>Product</th>
+            <th>Type</th>
+            <th class="text-end">Quantity Delta</th>
+            <th class="text-end">Unit Cost</th>
+            <th class="text-end">Balance After</th>
+            <th>By</th>
+            <th>Notes / Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in movements %}
+          <tr>
+            <td style="font-size:12px;color:#6b7280;white-space:nowrap">{{ m.created_at|date:"d M Y H:i:s" }}</td>
+            <td style="font-weight:600">{{ m.branch.name }}</td>
+            <td>
+              <div style="font-weight:600">{{ m.product.name }}</div>
+              <small style="font-family:monospace;color:#6b7280">{{ m.product.sku|default:"-" }}</small>
+            </td>
+            <td>
+              <span class="badge-type type-{{ m.movement_type }}">{{ m.get_movement_type_display }}</span>
+            </td>
+            <td class="text-end">
+              {% if m.delta_quantity > 0 %}
+                <span class="delta-pos">+{{ m.delta_quantity }}</span>
+              {% elif m.delta_quantity < 0 %}
+                <span class="delta-neg">{{ m.delta_quantity }}</span>
+              {% else %}
+                <span style="color:#6b7280">0</span>
+              {% endif %}
+              {% if m.resulted_in_negative_stock %}
+                <div class="mt-1"><span class="badge-neg-warn"><i class="bi bi-exclamation-triangle-fill me-1"></i>Neg Stock</span></div>
+              {% endif %}
+            </td>
+            <td class="text-end" style="font-family:monospace;color:#4b5563">
+              {{ m.unit_cost }}
+            </td>
+            <td class="text-end" style="font-weight:700;font-family:monospace;color:#111827">
+              {{ m.balance_after }}
+            </td>
+            <td style="color:#6b7280;font-size:12px">{{ m.performed_by.username|default:"System" }}</td>
+            <td style="font-size:12px;color:#4b5563;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ m.notes }}">
+              {{ m.notes|default:"-" }}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" style="text-align:center;padding:48px;color:#9ca3af">
+              <i class="bi bi-journal-text" style="font-size:2rem;display:block;margin-bottom:8px"></i>
+              No stock movements match the selected filters.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

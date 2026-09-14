@@ -1,0 +1,165 @@
+{% extends 'pos/base.html' %}
+{% block title %}Request Inter-Branch Transfer — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px}
+.int-card-header{padding:16px 20px;background:#fafbfc;border-bottom:1.5px solid #e5e7eb;font-weight:700;font-size:14px}
+.int-card-body{padding:20px}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+.form-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4b5563;margin-bottom:4px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:960px">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="{% url 'transfer_request_list' %}" class="btn-outline-sm" style="padding:4px 8px"><i class="bi bi-arrow-left"></i> Back</a>
+        <h1 style="font-size:22px;font-weight:700;margin:0">Request Inter-Branch Stock Transfer</h1>
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin:0">Move inventory from a source branch to a receiving destination branch.</p>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <form method="POST" id="transferForm">
+    {% csrf_token %}
+
+    <div class="int-card">
+      <div class="int-card-header"><i class="bi bi-geo-alt me-2"></i>Branch Routing Details</div>
+      <div class="int-card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Source Branch (Sending From)</label>
+            <select name="source_branch" id="sourceBranch" class="form-select" required>
+              <option value="">-- Select Source Branch --</option>
+              {% for b in all_branches %}
+              <option value="{{ b.id }}">{{ b.name }} {% if b.is_hq %}(HQ){% endif %}</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted" style="font-size:11px">The branch that currently holds the stock.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Destination Branch (Receiving At)</label>
+            <select name="destination_branch" id="destBranch" class="form-select" required>
+              <option value="">-- Select Destination Branch --</option>
+              {% for b in all_branches %}
+              <option value="{{ b.id }}" {% if user_branches|length == 1 and b in user_branches %}selected{% endif %}>
+                {{ b.name }} {% if b.is_hq %}(HQ){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="text-muted" style="font-size:11px">The branch requesting/receiving the goods.</small>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Reason / Transfer Purpose</label>
+            <input type="text" name="reason" class="form-control" placeholder="e.g., Low stock replenishment, Product X slow-moving rebalance...">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="int-card">
+      <div class="int-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-boxes me-2"></i>Requested Products & Quantities</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="addRowBtn">
+          <i class="bi bi-plus-lg"></i> Add Product
+        </button>
+      </div>
+      <div class="int-card-body p-0">
+        <div class="table-responsive">
+          <table class="table mb-0" id="itemsTable">
+            <thead class="bg-light">
+              <tr style="font-size:12px;color:#6b7280">
+                <th style="padding:12px 16px;width:65%">Product</th>
+                <th style="padding:12px 16px;width:25%">Transfer Qty</th>
+                <th style="padding:12px 16px;width:10%" class="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTableBody">
+              <tr class="item-row">
+                <td style="padding:10px 16px">
+                  <select name="product_id[]" class="form-select form-select-sm product-select" required>
+                    <option value="">-- Select Product --</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}">{{ p.name }} (SKU: {{ p.sku|default:"N/A" }})</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td style="padding:10px 16px">
+                  <input type="number" name="quantity[]" min="1" step="1" class="form-control form-control-sm text-center" value="1" required>
+                </td>
+                <td style="padding:10px 16px" class="text-center">
+                  <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" disabled>
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="int-card-body bg-light border-top d-flex justify-content-between align-items-center">
+        <a href="{% url 'transfer_request_list' %}" class="btn-outline-sm">Cancel</a>
+        <button type="submit" class="btn-primary-sm">
+          <i class="bi bi-send"></i> Submit Transfer Request
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const tbody = document.getElementById('itemsTableBody');
+  const addBtn = document.getElementById('addRowBtn');
+  const sourceSel = document.getElementById('sourceBranch');
+  const destSel = document.getElementById('destBranch');
+  const form = document.getElementById('transferForm');
+
+  function updateRemoveButtons() {
+    const rows = tbody.querySelectorAll('.item-row');
+    rows.forEach(r => {
+      const btn = r.querySelector('.remove-row-btn');
+      if (btn) btn.disabled = (rows.length === 1);
+    });
+  }
+
+  addBtn.addEventListener('click', function() {
+    const firstRow = tbody.querySelector('.item-row');
+    const newRow = firstRow.cloneNode(true);
+    newRow.querySelector('select').value = '';
+    newRow.querySelector('input').value = '1';
+    tbody.appendChild(newRow);
+    updateRemoveButtons();
+  });
+
+  tbody.addEventListener('click', function(e) {
+    if (e.target.closest('.remove-row-btn')) {
+      const row = e.target.closest('.item-row');
+      if (tbody.querySelectorAll('.item-row').length > 1) {
+        row.remove();
+        updateRemoveButtons();
+      }
+    }
+  });
+
+  form.addEventListener('submit', function(e) {
+    if (sourceSel.value && destSel.value && sourceSel.value === destSel.value) {
+      e.preventDefault();
+      alert('Source branch and Destination branch cannot be the same location.');
+    }
+  });
+
+  updateRemoveButtons();
+});
+</script>
+{% endblock %}

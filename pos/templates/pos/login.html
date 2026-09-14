@@ -232,30 +232,19 @@
 
     <!-- PIN login form -->
     <div id="form-pin" style="display:none;">
-      {% if request.resolver_match.kwargs.slug %}
-      <form method="POST" action="{% url 'pos_pin_login' slug=request.resolver_match.kwargs.slug %}" novalidate>
-      {% else %}
-      <form method="POST" novalidate>
-      {% endif %}
+      <form method="POST" action="{% url 'login' %}" novalidate>
         {% csrf_token %}
-        <div class="mb-3">
-          <label class="form-label" for="employee_id">Employee ID</label>
-          <div class="input-wrap">
-            <i class="bi bi-person-badge input-icon"></i>
-            <input type="text" class="form-control" id="employee_id" name="employee_id"
-                   placeholder="Your employee ID" autocomplete="off">
-          </div>
-        </div>
+        <input type="hidden" name="login_type" value="pin">
         <div class="mb-4">
-          <label class="form-label" for="pin">PIN</label>
+          <label class="form-label" for="pin">Enter Cashier PIN</label>
           <div class="input-wrap">
             <i class="bi bi-grid-3x3-gap input-icon"></i>
             <input type="password" class="form-control" id="pin" name="pin"
                    placeholder="4–6 digit PIN" maxlength="6" inputmode="numeric"
-                   autocomplete="off" style="letter-spacing:0.3em">
+                   autocomplete="off" style="letter-spacing:0.3em; font-size:1.15rem; text-align:center; font-weight:600;">
           </div>
-          <div class="mt-1" style="font-size:12px;color:var(--text-muted)">
-            PIN login requires your Employee ID to be set by your manager.
+          <div class="mt-2 text-center" style="font-size:12px;color:var(--text-muted)">
+            Enter your unique 4–6 digit cashier security PIN to sign in.
           </div>
         </div>
         <button type="submit" class="btn-primary-solid">
@@ -263,12 +252,6 @@
         </button>
       </form>
     </div><!-- /form-pin -->
-
-    <div class="divider">or</div>
-
-    <a href="{% url 'register_business' %}" class="btn-outline-solid">
-      <i class="bi bi-person-plus me-2"></i>Create a new account
-    </a>
 
     <div class="trust-row">
       <i class="bi bi-shield-lock-fill" style="color:var(--primary)"></i>
@@ -304,9 +287,18 @@
       tabPin.style.background = isPin ? 'var(--primary)' : '#fff';
       tabPin.style.color = isPin ? '#fff' : 'var(--text-muted)';
       tabPin.style.borderColor = isPin ? 'var(--primary)' : 'var(--border)';
-      if (isPin) document.getElementById('employee_id').focus();
-      else document.getElementById('username').focus();
+      if (isPin) {
+        document.getElementById('pin').focus();
+      } else {
+        document.getElementById('username').focus();
+      }
     }
+
+    {% if active_tab == 'pin' %}
+    document.addEventListener('DOMContentLoaded', function() {
+      switchTab('pin');
+    });
+    {% endif %}
   </script>
 </body>
 </html>

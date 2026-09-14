@@ -1,13 +1,5 @@
 <!-- Mobile Bottom Navigation (Visible only on mobile devices) -->
 <nav class="mobile-bottom-nav d-md-none">
-    {% if has_business and user_permissions.can_make_sales %}
-    <a href="{% url 'pos_screen' slug=business_slug %}" 
-       class="nav-item no-select {% if request.resolver_match.url_name == 'pos_screen' %}active{% endif %}">
-        <i class="bi bi-cart-plus"></i>
-        <span>POS</span>
-    </a>
-    {% endif %}
-    
     <a href="{% if has_business %}{% url 'dashboard' slug=business_slug %}{% else %}{% url 'business_list' %}{% endif %}" 
        class="nav-item no-select {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
         <i class="bi bi-speedometer2"></i>

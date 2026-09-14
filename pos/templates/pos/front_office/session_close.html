@@ -1,0 +1,54 @@
+{% extends 'pos/base.html' %}
+{% block title %}Close Shift &amp; Z-Report — Front Office POS{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 640px;">
+  <div class="card shadow-sm border-0" style="border-radius: 16px; overflow: hidden;">
+    <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
+      <div>
+        <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-lock-fill me-2 text-warning"></i>Close Shift &amp; Generate Z-Report</h5>
+        <small class="opacity-75">Session #{{ session.session_number }} · {{ session.opened_at|date:"d M Y, H:i" }}</small>
+      </div>
+      <span class="badge bg-warning text-dark fw-bold px-3 py-2">Shift #{{ session.session_number }}</span>
+    </div>
+
+    <div class="card-body p-4">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="alert alert-{{ msg.tags|default:'info' }} mb-3" style="border-radius: 8px;">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="POST" action="{% url 'terminal_session_close' %}">
+        {% csrf_token %}
+        <div class="mb-4">
+          <label class="form-label fw-bold" for="closing_cash" style="font-size: 15px;">Counted Physical Cash in Drawer (KES) <span class="text-danger">*</span></label>
+          <div class="input-group input-group-lg">
+            <span class="input-group-text bg-light fw-bold" style="border-radius: 10px 0 0 10px;">KES</span>
+            <input type="number" step="0.01" min="0" class="form-control fw-bold form-control-lg" id="closing_cash" name="closing_cash"
+                   placeholder="0.00" required autofocus style="border-radius: 0 10px 10px 0; font-size: 22px;">
+          </div>
+          <small class="text-muted mt-1 d-block">Count and enter the actual physical currency and coins in the till drawer.</small>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-bold small text-muted" for="notes">Closing Notes / Comments (Optional)</label>
+          <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Enter any handover notes, float notes or comments for supervisor review..."></textarea>
+        </div>
+
+        <div class="alert alert-warning py-2 px-3 small mb-4">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Closing this shift session will finalize drawer totals and produce an immutable Z-Report. This action cannot be undone.
+        </div>
+
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-danger btn-lg fw-bold py-3 shadow-sm" onclick="return confirm('Are you sure you want to close this shift and generate the Z-Report?');">
+            <i class="bi bi-lock-fill me-2"></i>Close Shift &amp; Generate Z-Report
+          </button>
+          <a href="{% url 'pos_screen' %}" class="btn btn-outline-secondary">Return to POS</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

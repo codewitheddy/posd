@@ -131,6 +131,44 @@
         </div>
         {% endif %}
 
+        <!-- Front Office Cashier POS Security PIN -->
+        <div class="card border border-primary border-opacity-25 rounded-3 mb-4" style="background: #f8faff;">
+          <div class="card-header bg-transparent border-0 pb-0 d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0 text-primary"><i class="bi bi-key-fill me-2"></i>Front Office POS Security PIN</h6>
+            {% if is_edit %}
+              <span class="badge {% if profile.has_pin_set %}bg-success{% else %}bg-secondary{% endif %} font-monospace">
+                {% if profile.has_pin_set %}<i class="bi bi-check-circle-fill me-1"></i>PIN Configured{% else %}No PIN Set{% endif %}
+              </span>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            <div class="row align-items-center">
+              <div class="col-md-6 mb-2">
+                <label for="pos_pin" class="form-label fw-semibold small">
+                  {% if is_edit %}Set / Change Security PIN{% else %}Initial POS Security PIN (Optional){% endif %}
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-shield-lock"></i></span>
+                  <input type="password" name="{% if is_edit %}new_pin{% else %}pin{% endif %}" id="pos_pin"
+                         class="form-control font-monospace" placeholder="4–6 digits" maxlength="6" inputmode="numeric"
+                         autocomplete="new-password">
+                </div>
+                <small class="text-muted d-block mt-1">Unique 4–6 digit numeric code used by this cashier to log into Front Office POS.</small>
+              </div>
+              {% if is_edit and profile.has_pin_set %}
+              <div class="col-md-6 mb-2">
+                <div class="form-check form-switch pt-md-3">
+                  <input class="form-check-input" type="checkbox" name="clear_pin" id="clear_pin" value="1">
+                  <label class="form-check-label text-danger fw-semibold small" for="clear_pin">
+                    <i class="bi bi-x-circle me-1"></i>Clear PIN (Disable POS PIN login)
+                  </label>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
         <div class="alert alert-info mb-3" style="font-size:13px;">
           <i class="bi bi-info-circle me-1"></i><strong>Role Permissions</strong>
           <div id="roleDescription" class="mt-1">Select a role to see its permissions</div>

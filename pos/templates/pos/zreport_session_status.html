@@ -17,10 +17,10 @@
 </div>
 
 {% if current_session %}
-<div class="ui-card mb-3" style="border-left:4px solid #16a34a;">
+<div class="ui-card mb-3">
   <div class="ui-card-header">
     <div class="d-flex align-items-center gap-2">
-      <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;animation:blink 2s infinite;display:inline-block;"></span>
+      <span class="session-dot session-dot-active"></span>
       <span class="ui-card-title">Session #{{ current_session.session_number }} — OPEN</span>
     </div>
     <span class="status-badge status-success">Active</span>
@@ -36,40 +36,37 @@
       <div class="col-6 col-md-3">
         <div class="stat-card">
           <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb;"><i class="bi bi-cash-stack"></i></div>
-          <div><div class="stat-label">Total Sales</div><div class="stat-value" style="font-size:16px;" id="totalSales">KES {{ session_stats.total_sales|floatformat:0 }}</div></div>
+          <div><div class="stat-label">Total Sales</div><div class="stat-value stat-value-md" id="totalSales">KES {{ session_stats.total_sales|floatformat:0 }}</div></div>
         </div>
       </div>
       <div class="col-6 col-md-3">
         <div class="stat-card">
           <div class="stat-icon-box" style="background:#fef9c3;color:#ca8a04;"><i class="bi bi-clock"></i></div>
-          <div><div class="stat-label">Duration</div><div class="stat-value" style="font-size:16px;" id="sessionDuration">{{ session_stats.duration }}</div></div>
+          <div><div class="stat-label">Duration</div><div class="stat-value stat-value-md" id="sessionDuration">{{ session_stats.duration }}</div></div>
         </div>
       </div>
       <div class="col-6 col-md-3">
         <div class="stat-card">
           <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed;"><i class="bi bi-wallet2"></i></div>
-          <div><div class="stat-label">Opening Cash</div><div class="stat-value" style="font-size:16px;">KES {{ current_session.opening_cash|floatformat:0 }}</div></div>
+          <div><div class="stat-label">Opening Cash</div><div class="stat-value stat-value-md">KES {{ current_session.opening_cash|floatformat:0 }}</div></div>
         </div>
       </div>
     </div>
 
-    <table class="table ui-table mb-4" style="max-width:480px;">
-      <tr><td style="color:#8a94a6;font-size:12px;">Opened By</td><td>{{ current_session.opened_by.get_full_name|default:current_session.opened_by.username }}</td></tr>
-      <tr><td style="color:#8a94a6;font-size:12px;">Opened At</td><td>{{ current_session.opened_at|date:"Y-m-d H:i:s" }}</td></tr>
+    <table class="table ui-table mb-4 session-detail-table">
+      <tr><td class="stat-label">Opened By</td><td>{{ current_session.opened_by.get_full_name|default:current_session.opened_by.username }}</td></tr>
+      <tr><td class="stat-label">Opened At</td><td>{{ current_session.opened_at|date:"Y-m-d H:i:s" }}</td></tr>
     </table>
 
     {% if current_session.notes %}
-    <div class="alert alert-info" style="font-size:13px;"><i class="bi bi-chat-text me-1"></i>{{ current_session.notes }}</div>
+    <div class="alert alert-info"><i class="bi bi-chat-text me-1"></i>{{ current_session.notes }}</div>
     {% endif %}
 
     <div class="d-flex gap-2 flex-wrap">
-      <a href="{% url 'zreport_session_close' slug=business.slug %}" class="btn btn-danger">
-        <i class="bi bi-stop-circle me-1"></i>Close Session & Generate Z-Report
+      <a href="{% url 'zreport_session_close' slug=business.slug %}" class="btn btn-danger btn-sm">
+        <i class="bi bi-stop-circle me-1"></i>Close Session &amp; Generate Z-Report
       </a>
-      <a href="{% url 'pos_screen' slug=business.slug %}" class="btn btn-primary">
-        <i class="bi bi-cart-plus me-1"></i>Go to POS
-      </a>
-      <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary">
+      <a href="{% url 'dashboard' slug=business.slug %}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-speedometer2 me-1"></i>Dashboard
       </a>
     </div>
@@ -77,20 +74,20 @@
 </div>
 
 {% else %}
-<div class="ui-card mb-3" style="border-left:4px solid #ca8a04;">
+<div class="ui-card mb-3">
   <div class="ui-card-header">
-    <span class="ui-card-title"><i class="bi bi-exclamation-triangle me-2"></i>No Active Session</span>
+    <span class="ui-card-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>No Active Session</span>
     <span class="status-badge status-warning">Closed</span>
   </div>
   <div class="ui-card-body text-center py-4">
-    <i class="bi bi-cash-register" style="font-size:3rem;color:#d0d5dd;display:block;margin-bottom:12px;"></i>
-    <p style="font-size:14px;color:#374151;font-weight:600;">No POS session is currently open</p>
-    <p style="font-size:13px;color:#8a94a6;">You need to open a session before making sales</p>
+    <i class="bi bi-cash-register empty-state-icon"></i>
+    <p class="fw-semibold" style="font-size:14px;color:#374151;">No POS session is currently open</p>
+    <p class="text-muted" style="font-size:13px;">You need to open a session before making sales</p>
     <div class="d-flex gap-2 justify-content-center mt-3">
-      <a href="{% url 'zreport_session_open' slug=business.slug %}" class="btn btn-success">
+      <a href="{% url 'zreport_session_open' slug=business.slug %}" class="btn btn-success btn-sm">
         <i class="bi bi-play-circle me-1"></i>Open New Session
       </a>
-      <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-secondary">
+      <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-list me-1"></i>View Z-Reports
       </a>
     </div>
@@ -102,6 +99,11 @@
 
 <style>
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.session-dot { width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0; }
+.session-dot-active { background:#16a34a; animation:blink 2s infinite; }
+.stat-value-md { font-size:16px; }
+.session-detail-table { max-width:480px; }
+.empty-state-icon { font-size:3rem; color:#d0d5dd; display:block; margin-bottom:12px; }
 </style>
 
 {% if current_session %}

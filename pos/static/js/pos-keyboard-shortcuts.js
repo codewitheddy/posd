@@ -7,28 +7,29 @@ class POSKeyboardShortcuts {
     constructor() {
         this.shortcuts = {
             // Navigation
-            'F1': { action: () => this.focusBarcode(), description: 'Focus barcode input' },
-            'F2': { action: () => this.focusSearch(), description: 'Focus product search' },
-            'F3': { action: () => this.focusCustomer(), description: 'Focus customer search' },
+            'f1': { action: () => this.focusBarcode(), description: 'Focus barcode scanner / search' },
+            'ctrl+k': { action: () => this.focusSearch(), description: 'Focus product search' },
+            'f2': { action: () => this.focusCustomer(), description: 'Focus customer lookup' },
             
-            // Cart Operations
-            'F5': { action: () => this.clearCart(), description: 'Clear cart' },
-            'F6': { action: () => this.holdOrder(), description: 'Hold order' },
-            'F7': { action: () => this.applyDiscount(), description: 'Apply discount' },
-            'F8': { action: () => this.completePayment(), description: 'Complete payment' },
+            // Cart & Multi-Cart Operations
+            'f3': { action: () => this.newCartTab(), description: 'New multi-cart tab' },
+            'f4': { action: () => this.showHeldOrders(), description: 'Held orders list' },
+            'f5': { action: () => this.clearCart(), description: 'Clear active cart' },
+            'f6': { action: () => this.setGridView(), description: 'Switch to touch grid view' },
+            'f7': { action: () => this.setListView(), description: 'Switch to list table view' },
             
-            // Quick Actions
-            'F9': { action: () => this.openCalculator(), description: 'Open calculator' },
-            'F10': { action: () => this.printLastReceipt(), description: 'Reprint last receipt' },
-            'F11': { action: () => this.openCashDrawer(), description: 'Open cash drawer' },
-            'F12': { action: () => this.showShortcuts(), description: 'Show shortcuts' },
+            // 1-Tap Fast Tender & Checkout
+            'f8': { action: () => this.fastCash(), description: '1-Tap Fast Cash tender' },
+            'f9': { action: () => this.fastMpesa(), description: '1-Tap Fast M-Pesa tender' },
+            'f10': { action: () => this.completePayment(), description: 'Open Pay / Split / Credit modal' },
+            'f11': { action: () => this.openCashDrawer(), description: 'Open cash drawer' },
+            'f12': { action: () => this.showShortcuts(), description: 'Show keyboard shortcuts' },
             
-            // Modifiers
+            // Modifiers & Quick Actions
             'ctrl+d': { action: () => this.removeLastItem(), description: 'Remove last cart item' },
             'ctrl+h': { action: () => this.showHeldOrders(), description: 'Show held orders' },
-            'ctrl+n': { action: () => this.newSale(), description: 'New sale' },
+            'ctrl+n': { action: () => this.newCartTab(), description: 'New cart tab' },
             'ctrl+p': { action: () => this.printReceipt(), description: 'Print receipt' },
-            'ctrl+s': { action: () => this.quickSave(), description: 'Quick save (hold)' },
             
             // Number pad quick add (Alt + 1-9)
             'alt+1': { action: () => this.quickAddProduct(1), description: 'Quick add product 1' },
@@ -36,13 +37,9 @@ class POSKeyboardShortcuts {
             'alt+3': { action: () => this.quickAddProduct(3), description: 'Quick add product 3' },
             'alt+4': { action: () => this.quickAddProduct(4), description: 'Quick add product 4' },
             'alt+5': { action: () => this.quickAddProduct(5), description: 'Quick add product 5' },
-            'alt+6': { action: () => this.quickAddProduct(6), description: 'Quick add product 6' },
-            'alt+7': { action: () => this.quickAddProduct(7), description: 'Quick add product 7' },
-            'alt+8': { action: () => this.quickAddProduct(8), description: 'Quick add product 8' },
-            'alt+9': { action: () => this.quickAddProduct(9), description: 'Quick add product 9' },
             
             // ESC to cancel/close
-            'escape': { action: () => this.handleEscape(), description: 'Cancel/Close' }
+            'escape': { action: () => this.handleEscape(), description: 'Cancel / Close modal' }
         };
         
         this.init();
@@ -136,6 +133,48 @@ class POSKeyboardShortcuts {
         }
     }
     
+    // Multi-Cart & View Switcher Actions
+    newCartTab() {
+        if (typeof addNewMultiCart === 'function') {
+            addNewMultiCart();
+        } else if (typeof window.addNewMultiCart === 'function') {
+            window.addNewMultiCart();
+        }
+    }
+
+    setGridView() {
+        if (typeof setProductView === 'function') {
+            setProductView('grid');
+        } else if (typeof window.setProductView === 'function') {
+            window.setProductView('grid');
+        }
+    }
+
+    setListView() {
+        if (typeof setProductView === 'function') {
+            setProductView('list');
+        } else if (typeof window.setProductView === 'function') {
+            window.setProductView('list');
+        }
+    }
+
+    // 1-Tap Fast Tender Actions
+    fastCash() {
+        if (typeof fastTenderCash === 'function') {
+            fastTenderCash();
+        } else if (typeof window.fastTenderCash === 'function') {
+            window.fastTenderCash();
+        }
+    }
+
+    fastMpesa() {
+        if (typeof fastTenderMpesa === 'function') {
+            fastTenderMpesa();
+        } else if (typeof window.fastTenderMpesa === 'function') {
+            window.fastTenderMpesa();
+        }
+    }
+
     openCalculator() {
         // Open system calculator or show on-screen calculator
         alert('Calculator: Use your system calculator (Windows: Calc, Mac: Calculator)');

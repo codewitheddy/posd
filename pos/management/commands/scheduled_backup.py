@@ -305,5 +305,4 @@ Backup Details:
                 f.write(f"{timezone.now().isoformat()} - {schedule} - {'SUCCESS' if results['success'] else 'FAILED'} - {results.get('duration', 'Unknown')}\n")
 
         except Exception as e:
-            logger.error(f'Backup logging failed: {e}')</content>
-<parameter name="filePath">d:\V2POS\posd\pos\management\commands\scheduled_backup.py
+            logger.error(f'Backup logging failed: {e}')

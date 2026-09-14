@@ -1,0 +1,196 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║           ✅ VAT CODE SIDEBAR LINK ADDED TO MAIN NAVIGATION! ✅             ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📍 CHANGE MADE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File Modified: pos/templates/pos/base.html
+Location: Line ~485 (in Inventory section)
+
+Added:
+   <li>
+       <a href="{% url 'admin:pos_vatcode_changelist' %}" 
+          class="{% if 'vatcode' in request.path %}active{% endif %}">
+           <i class="bi bi-percent"></i> VAT Codes
+       </a>
+   </li>
+
+
+📊 WHERE YOU'LL SEE IT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In the main Marid POS web interface, left sidebar under "Inventory":
+
+  Inventory
+  ├── Products
+  ├── HS Codes
+  ├── VAT Codes          ← NEW! Click here
+  ├── Categories
+  ├── Units
+  └── Stock Management
+
+
+🚀 HOW TO ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1: Restart the Django server
+   If running: Press CTRL + C
+   Then run: python manage.py runserver
+
+Step 2: Go to Marid POS main page
+   http://localhost:8000/b/default/
+
+Step 3: Look at left sidebar → Inventory section
+   You'll see "VAT Codes" link
+
+Step 4: Click "VAT Codes"
+   Opens admin interface to manage VAT codes
+
+
+✨ WHAT YOU CAN DO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+From the VAT Codes page:
+
+✓ View all VAT codes
+  See complete list with rates, descriptions, status
+
+✓ Create new VAT code
+  Click "Add VAT Code" button
+  Fill form and save
+
+✓ Edit existing VAT code
+  Click on any code to edit
+  Update fields and save
+
+✓ Delete VAT code
+  Click delete button
+  Confirm deletion
+
+✓ Search VAT codes
+  Use search box to find by code, name, or description
+
+✓ Filter VAT codes
+  Filter by:
+  • Active/Inactive status
+  • VAT rate
+  • Excisable products
+  • Business
+  • Creation date
+
+
+🔗 NAVIGATION STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After clicking "VAT Codes", you'll see the admin interface with:
+
+Left Sidebar:
+  ✓ Filter options
+  ✓ Search box
+  ✓ Search button
+
+Main Content:
+  ✓ List of all VAT codes
+  ✓ Columns: Code, Name, Rate, Chapter, Excisable, Active, Business
+  ✓ Action buttons: Edit, Delete
+
+Top Bar:
+  ✓ "Add VAT Code" button for creating new codes
+  ✓ Pagination controls
+
+
+📋 SIDEBAR LOCATION IN CODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: d:\V2POS\posd\pos\templates\pos\base.html
+Line: ~485 (in Inventory section)
+
+Code:
+  <li>
+      <a href="{% url 'admin:pos_vatcode_changelist' %}" 
+         class="{% if 'vatcode' in request.path %}active{% endif %}">
+          <i class="bi bi-percent"></i> VAT Codes
+      </a>
+  </li>
+
+Explanation:
+  • href points to Django admin VAT code list
+  • Icon: bi-percent (% symbol)
+  • Active class highlights when viewing VAT codes
+  • Works with existing permission system
+
+
+🎯 QUICK TEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After restart:
+
+1. Go to: http://localhost:8000/b/default/
+   
+2. Look at left sidebar under "Inventory"
+   You should see "VAT Codes" link
+
+3. Click "VAT Codes"
+   Should open admin page with list of 32 VAT codes
+
+4. Expected page:
+   Title: "VAT codes"
+   List of all 4 VAT codes per business
+   Filter and search options
+
+
+⚠️ IF NOT SHOWING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If still not visible after restart:
+
+1. Hard refresh browser
+   CTRL + SHIFT + R (Windows)
+   CTRL + F5
+
+2. Clear browser cache
+   Chrome: Settings → Privacy → Clear data
+   Firefox: Settings → Privacy → Clear
+
+3. Check server output
+   Look for any errors in terminal
+
+4. Verify permissions
+   Make sure logged-in user has manage_products permission
+
+5. Check navigation template
+   File still at: pos/templates/pos/base.html
+
+
+📞 SUPPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For issues:
+  📧 Email: support@marid.co.ke
+  💬 WhatsApp: +254 717 147 700
+
+For documentation:
+  📚 Guide: docs/VAT_CODE_MANAGEMENT_GUIDE.md
+  ⚡ Quick: docs/VAT_CODE_QUICK_REFERENCE.md
+
+
+✅ SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ VAT Codes link added to main navigation
+✓ Located in "Inventory" section
+✓ Links to admin interface
+✓ Uses percent icon (%)
+✓ Works with existing permission system
+✓ Ready to use after server restart
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                    VAT Code is now in the main sidebar!
+              After restarting Django, you'll see it under Inventory.
+
+═══════════════════════════════════════════════════════════════════════════════

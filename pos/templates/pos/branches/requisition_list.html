@@ -1,0 +1,89 @@
+{% extends 'pos/base.html' %}
+{% block title %}Stock Requisitions — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden}
+.t-table{width:100%;border-collapse:collapse;font-size:13px}
+.t-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:12px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.t-table tbody tr{border-bottom:1px solid #f3f4f6;transition:background .1s}
+.t-table tbody tr:hover{background:#f8f9fc}
+.t-table tbody td{padding:12px 16px;vertical-align:middle}
+.badge-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-approved{background:#dbeafe;color:#1e40af}
+.badge-dispatched{background:#e0e7ff;color:#4338ca}
+.badge-partially_fulfilled{background:#fed7aa;color:#9a3412}
+.badge-fulfilled{background:#dcfce7;color:#166534}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.badge-cancelled{background:#f3f4f6;color:#6b7280}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h1 style="font-size:22px;font-weight:700;margin:0">HQ Stock Requisitions</h1>
+      <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Branch requests for inventory replenishment from central HQ.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'requisition_create' %}" class="btn-primary-sm">
+        <i class="bi bi-plus-circle"></i> Request Stock
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <div class="int-card">
+    <div class="table-responsive">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Reference</th>
+            <th>Requesting Branch</th>
+            <th>Requested By</th>
+            <th>Items Count</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in requisitions %}
+          <tr>
+            <td style="font-family:monospace;font-weight:700;color:#224195">{{ r.reference_number }}</td>
+            <td style="font-weight:600">{{ r.requesting_branch.name }}</td>
+            <td style="color:#6b7280">{{ r.requested_by.username }}</td>
+            <td style="font-weight:600">{{ r.items.count }} item{{ r.items.count|pluralize }}</td>
+            <td>
+              <span class="badge-status badge-{{ r.status }}">{{ r.get_status_display }}</span>
+            </td>
+            <td style="color:#6b7280;font-size:12px">{{ r.created_at|date:"d M Y H:i" }}</td>
+            <td class="text-end">
+              <a href="{% url 'requisition_detail' pk=r.pk %}" class="btn-outline-sm" style="padding:5px 10px;font-size:12px">
+                View & Review <i class="bi bi-arrow-right ms-1"></i>
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" style="text-align:center;padding:48px;color:#9ca3af">
+              <i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:8px"></i>
+              No requisitions found. Click "Request Stock" to raise a new stock request to HQ.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

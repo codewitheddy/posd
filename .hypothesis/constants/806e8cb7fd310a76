@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\events\serializers.py
+# hypothesis_version: 6.167.1
+
+[100, 'business_memberships', 'device_id', 'event_type', 'payload', 'request', 'sync_status', 'tenant', 'tenant_id', 'timestamp', 'user', 'uuid']

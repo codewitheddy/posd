@@ -340,7 +340,7 @@ textarea:focus {
 }
 
 /* ==================== STOCK INDICATORS ==================== */
-.stock-badge {
+.product-card .stock-badge {
     position: absolute;
     top: 8px;
     right: 8px;
@@ -348,6 +348,19 @@ textarea:focus {
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 600;
+}
+
+.product-row .stock-badge,
+.table .stock-badge,
+td .stock-badge {
+    position: static !important;
+    display: inline-block;
+    vertical-align: middle;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 4px;
 }
 
 .stock-badge.low {
@@ -441,4 +454,432 @@ textarea:focus {
     font-size: 0.75rem;
     font-weight: 700;
     border: 2px solid white;
+}
+
+/* ==================== MODERN MULTI-CART QUICK TABS ==================== */
+.cart-tabs-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #f1f5f9;
+    padding: 6px;
+    border-radius: 12px 12px 0 0;
+    border-bottom: 1px solid #e2e8f0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.cart-tabs-nav::-webkit-scrollbar { display: none; }
+
+.cart-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+.cart-tab-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+.cart-tab-btn.active {
+    background: #ffffff;
+    color: #0d6efd;
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.cart-tab-badge {
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+.cart-tab-btn.active .cart-tab-badge {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+.cart-tab-close {
+    font-size: 0.9rem;
+    line-height: 1;
+    color: #94a3b8;
+    padding: 0 2px;
+    border-radius: 4px;
+}
+.cart-tab-close:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}
+.cart-tab-add {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px dashed #cbd5e1;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.cart-tab-add:hover {
+    background: #dbeafe;
+    color: #0d6efd;
+    border-color: #3b82f6;
+}
+
+/* ==================== MODERN TOUCH TILE GRID ==================== */
+.pos-touch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+    gap: 16px;
+    padding: 6px 0 24px 0;
+}
+@media (min-width: 1400px) {
+    .pos-touch-grid {
+        grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+        gap: 18px;
+    }
+}
+
+.touch-tile {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 14px;
+    min-height: 180px;
+    user-select: none;
+}
+.touch-tile:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08), 0 6px 8px -6px rgba(0, 0, 0, 0.04);
+    border-color: #cbd5e1;
+}
+.touch-tile:active {
+    transform: translateY(-1px) scale(0.99);
+}
+.touch-tile.out-of-stock {
+    opacity: 0.65;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+}
+.touch-tile.out-of-stock:hover {
+    transform: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border-color: #e2e8f0;
+}
+
+/* Header */
+.touch-tile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.touch-tile-category-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+}
+.touch-tile-stock-tag {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.touch-tile-stock-tag.in-stock {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+.touch-tile-stock-tag.low-stock {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+.touch-tile-stock-tag.out-stock {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* Body */
+.touch-tile-body {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    margin-bottom: 12px;
+}
+.touch-tile-title {
+    font-size: 0.93rem;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.35;
+    margin: 0 0 6px 0;
+    min-height: 2.7em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+.touch-tile-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+.touch-tile-sku {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace, sans-serif;
+    font-size: 0.72rem;
+    color: #64748b;
+}
+.touch-tile-bulk {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+/* Footer */
+.touch-tile-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px dashed #e2e8f0;
+    padding-top: 10px;
+    margin-top: auto;
+}
+.touch-tile-price-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+}
+.touch-tile-curr {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+}
+.touch-tile-amount {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+}
+.touch-tile-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #0d6efd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.88rem;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+.touch-tile:hover .touch-tile-btn:not(.disabled) {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #ffffff;
+    transform: scale(1.05);
+}
+.touch-tile-btn.disabled {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+/* ==================== VIEW SWITCHER PILL ==================== */
+.view-switcher-wrap {
+    display: inline-flex;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+.view-btn {
+    border: none;
+    background: transparent;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.view-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* ==================== 1-TAP FAST TENDER BAR ==================== */
+.fast-tender-panel {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    margin-top: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+.quick-cash-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: none;
+}
+.quick-cash-row::-webkit-scrollbar { display: none; }
+.quick-cash-chip {
+    flex: 1;
+    min-width: 65px;
+    padding: 6px 4px;
+    border-radius: 8px;
+    border: 1.5px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1e293b;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+.quick-cash-chip:hover {
+    border-color: #10b981;
+    background: #ecfdf5;
+    color: #059669;
+    transform: translateY(-2px);
+}
+.quick-cash-chip.exact {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #047857;
+}
+
+.tender-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+}
+.btn-tender-cash {
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.btn-tender-cash:hover:not(:disabled) {
+    background: #059669;
+    transform: translateY(-2px);
+    color: white;
+}
+.btn-tender-mpesa {
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 8px;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.btn-tender-mpesa:hover:not(:disabled) {
+    background: #0369a1;
+    transform: translateY(-2px);
+    color: white;
+}
+.tender-sub-text {
+    font-size: 0.72rem;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+/* ==================== TOUCH KEYPAD DRAWER ==================== */
+.numpad-drawer {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 10px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+.numpad-btn {
+    height: 48px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+.numpad-btn:hover {
+    background: #e2e8f0;
+}
+.numpad-btn:active {
+    background: #cbd5e1;
+    transform: scale(0.95);
+}
+.numpad-btn.action {
+    background: #f1f5f9;
+    color: #0d6efd;
+    font-size: 0.9rem;
 }

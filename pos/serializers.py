@@ -11,7 +11,9 @@ from .models import (
     Product, Category, Sale, SaleItem, Customer, Supplier,
     Purchase, PurchaseItem, StockAdjustment, UserProfile,
     BusinessSettings, ActivityLog, LoyaltyTransaction,
-    LoyaltyReward, LoyaltyRedemption, PaymentMethod, SalePayment
+    LoyaltyReward, LoyaltyRedemption, PaymentMethod, SalePayment, VATCode,
+    Branch, BranchStock, StockMovement, StockRequisition, StockRequisitionItem,
+    StockTransferRequest, StockTransferItem, Dispatch, DispatchItem, POSTerminal
 )
 
 
@@ -52,6 +54,85 @@ class CategorySerializer(serializers.ModelSerializer):
     
     def get_product_count(self, obj):
         return obj.product_set.count()
+
+
+class VATCodeSerializer(serializers.ModelSerializer):
+    """VAT Code serializer with tax calculations"""
+    total_tax_rate = serializers.SerializerMethodField()
+    product_count = serializers.SerializerMethodField()
+    business_name = serializers.CharField(source='business.name', read_only=True)
+    
+    class Meta:
+        model = VATCode
+        fields = [
+            'id', 'code', 'name', 'vat_rate', 'excise_rate', 'import_duty',
+            'total_tax_rate', 'is_excisable', 'hs_code_chapter', 'description',
+            'is_active', 'product_count', 'business_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'business_name']
+    
+    def get_total_tax_rate(self, obj):
+        """Calculate and return total tax rate"""
+        return float(obj.get_total_tax_rate())
+    
+    def get_product_count(self, obj):
+        """Get count of products using this VAT code"""
+        return obj.products.filter(is_active=True).count()
+    
+    def validate_code(self, value):
+        """Validate VAT code is unique within business"""
+        normalized = (value or '').strip().upper()
+        if not normalized:
+            raise serializers.ValidationError('VAT code is required.')
+        
+        business = self.context.get('business')
+        if business is None and self.instance is not None:
+            business = self.instance.business
+        
+        instance_pk = self.instance.pk if self.instance else None
+        existing = VATCode.objects.filter(
+            business=business,
+            code__iexact=normalized
+        )
+        if instance_pk:
+            existing = existing.exclude(pk=instance_pk)
+        
+        if existing.exists():
+            raise serializers.ValidationError(f'VAT code "{normalized}" already exists in this business.')
+        
+        return normalized
+    
+    def validate_name(self, value):
+        """Validate name is provided"""
+        normalized = (value or '').strip()
+        if not normalized:
+            raise serializers.ValidationError('VAT code name is required.')
+        return normalized
+    
+    def validate(self, attrs):
+        """Validate VAT rates are within acceptable range"""
+        # Validate VAT rate
+        vat_rate = attrs.get('vat_rate')
+        if vat_rate is not None:
+            from decimal import Decimal
+            if not (Decimal('0') <= vat_rate <= Decimal('100')):
+                raise serializers.ValidationError({'vat_rate': 'VAT rate must be between 0 and 100'})
+        
+        # Validate excise rate
+        excise_rate = attrs.get('excise_rate')
+        if excise_rate is not None:
+            from decimal import Decimal
+            if not (Decimal('0') <= excise_rate <= Decimal('100')):
+                raise serializers.ValidationError({'excise_rate': 'Excise rate must be between 0 and 100'})
+        
+        # Validate import duty
+        import_duty = attrs.get('import_duty')
+        if import_duty is not None:
+            from decimal import Decimal
+            if not (Decimal('0') <= import_duty <= Decimal('100')):
+                raise serializers.ValidationError({'import_duty': 'Import duty must be between 0 and 100'})
+        
+        return attrs
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -337,3 +418,157 @@ class SyncResponseSerializer(serializers.Serializer):
     purchases = PurchaseSerializer(many=True, required=False)
     payment_methods = PaymentMethodSerializer(many=True, required=False)
     has_more = serializers.BooleanField(default=False)
+
+
+# ============================================================================
+# MULTI-BRANCH DISTRIBUTION & STOCK LEDGER SERIALIZERS
+# ============================================================================
+
+class BranchStockSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.product_code', read_only=True)
+    is_low_stock = serializers.BooleanField(read_only=True)
+    stock_value = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = BranchStock
+        fields = [
+            'id', 'branch', 'branch_name', 'product', 'product_name', 'product_code',
+            'quantity', 'average_cost', 'reorder_level', 'is_low_stock', 'stock_value', 'updated_at'
+        ]
+        read_only_fields = ['id', 'quantity', 'average_cost', 'updated_at']
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.product_code', read_only=True)
+    performed_by_name = serializers.CharField(source='performed_by.username', read_only=True)
+    movement_type_display = serializers.CharField(source='get_movement_type_display', read_only=True)
+
+    class Meta:
+        model = StockMovement
+        fields = [
+            'id', 'branch', 'branch_name', 'product', 'product_name', 'product_code',
+            'quantity_delta', 'unit_cost', 'total_cost', 'movement_type', 'movement_type_display',
+            'reference_number', 'balance_after', 'resulted_in_negative_stock',
+            'performed_by', 'performed_by_name', 'note', 'created_at'
+        ]
+        read_only_fields = fields
+
+
+class StockRequisitionItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.product_code', read_only=True)
+
+    class Meta:
+        model = StockRequisitionItem
+        fields = [
+            'id', 'product', 'product_name', 'product_code',
+            'requested_quantity', 'approved_quantity',
+            'dispatched_quantity', 'received_quantity', 'notes'
+        ]
+        read_only_fields = ['id', 'dispatched_quantity', 'received_quantity']
+
+
+class StockRequisitionSerializer(serializers.ModelSerializer):
+    items = StockRequisitionItemSerializer(many=True, required=False)
+    requesting_branch_name = serializers.CharField(source='requesting_branch.name', read_only=True)
+    requested_by_name = serializers.CharField(source='requested_by.username', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = StockRequisition
+        fields = [
+            'id', 'reference_number', 'requesting_branch', 'requesting_branch_name',
+            'requested_by', 'requested_by_name', 'approved_by', 'approved_by_name',
+            'status', 'status_display', 'notes', 'rejection_reason',
+            'items', 'created_at', 'updated_at', 'approved_at'
+        ]
+        read_only_fields = ['id', 'reference_number', 'requested_by', 'approved_by', 'status', 'created_at', 'updated_at', 'approved_at']
+
+
+class StockTransferItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.product_code', read_only=True)
+
+    class Meta:
+        model = StockTransferItem
+        fields = [
+            'id', 'product', 'product_name', 'product_code',
+            'requested_quantity', 'approved_quantity',
+            'dispatched_quantity', 'received_quantity', 'notes'
+        ]
+        read_only_fields = ['id', 'dispatched_quantity', 'received_quantity']
+
+
+class StockTransferRequestSerializer(serializers.ModelSerializer):
+    items = StockTransferItemSerializer(many=True, required=False)
+    source_branch_name = serializers.CharField(source='source_branch.name', read_only=True)
+    destination_branch_name = serializers.CharField(source='destination_branch.name', read_only=True)
+    requested_by_name = serializers.CharField(source='requested_by.username', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = StockTransferRequest
+        fields = [
+            'id', 'reference_number', 'source_branch', 'source_branch_name',
+            'destination_branch', 'destination_branch_name',
+            'requested_by', 'requested_by_name', 'approved_by', 'approved_by_name',
+            'reason', 'rejection_reason', 'status', 'status_display',
+            'items', 'created_at', 'updated_at', 'approved_at'
+        ]
+        read_only_fields = ['id', 'reference_number', 'requested_by', 'approved_by', 'status', 'created_at', 'updated_at', 'approved_at']
+
+
+class DispatchItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.product_code', read_only=True)
+
+    class Meta:
+        model = DispatchItem
+        fields = [
+            'id', 'product', 'product_name', 'product_code',
+            'dispatched_quantity', 'unit_cost',
+            'received_quantity', 'discrepancy_quantity', 'discrepancy_reason'
+        ]
+        read_only_fields = ['id', 'unit_cost', 'discrepancy_quantity']
+
+
+class DispatchSerializer(serializers.ModelSerializer):
+    items = DispatchItemSerializer(many=True, read_only=True)
+    source_branch_name = serializers.CharField(source='source_branch.name', read_only=True)
+    destination_branch_name = serializers.CharField(source='destination_branch.name', read_only=True)
+    dispatched_by_name = serializers.CharField(source='dispatched_by.username', read_only=True)
+    received_by_name = serializers.CharField(source='received_by.username', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Dispatch
+        fields = [
+            'id', 'reference_number', 'source_branch', 'source_branch_name',
+            'destination_branch', 'destination_branch_name',
+            'requisition', 'transfer_request',
+            'dispatched_by', 'dispatched_by_name', 'dispatched_at',
+            'received_by', 'received_by_name', 'received_at',
+            'status', 'status_display', 'notes', 'items'
+        ]
+        read_only_fields = ['id', 'reference_number', 'dispatched_by', 'dispatched_at', 'received_by', 'received_at', 'status']
+
+
+class POSTerminalSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+
+    class Meta:
+        model = POSTerminal
+        fields = [
+            'id', 'name', 'terminal_code', 'device_token', 'branch', 'branch_name',
+            'ip_address', 'is_active', 'last_active_at', 'last_sync_at', 'sync_status',
+            'cu_number', 'cu_serial_number', 'tims_middleware_url', 'created_at'
+        ]
+        read_only_fields = ['id', 'device_token', 'last_active_at', 'last_sync_at', 'created_at']
+
+

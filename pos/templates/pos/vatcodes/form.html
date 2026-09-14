@@ -1,0 +1,216 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+{% block title %}{% if vatcode %}Edit VAT Code: {{ vatcode.code }}{% else %}Add New VAT Code{% endif %} — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+
+      <!-- Breadcrumb / Header -->
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb small mb-1">
+              <li class="breadcrumb-item"><a href="{% url 'vatcode_list' slug=request.business.slug %}" class="text-decoration-none">VAT Codes</a></li>
+              <li class="breadcrumb-item active">{% if vatcode %}Edit {{ vatcode.code }}{% else %}Add VAT Code{% endif %}</li>
+            </ol>
+          </nav>
+          <h1 class="h4 mb-0 fw-bold">
+            {% if vatcode %}
+              <i class="bi bi-pencil-square text-primary me-2"></i>Edit VAT Code: {{ vatcode.code }}
+            {% else %}
+              <i class="bi bi-plus-circle-fill text-primary me-2"></i>Add New VAT Code
+            {% endif %}
+          </h1>
+        </div>
+        <a href="{% url 'vatcode_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Back to List
+        </a>
+      </div>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm py-2" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <!-- Form Card -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <form method="post" id="vatcode-form">
+            {% csrf_token %}
+
+            <!-- Section 1: Basic Info -->
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+              <i class="bi bi-info-circle me-1 text-primary"></i>Basic Identification
+            </h6>
+
+            <div class="row g-3 mb-4">
+              <div class="col-12 col-md-5">
+                <label for="id_code" class="form-label fw-semibold" style="font-size:13px">
+                  VAT Code Identifier <span class="text-danger">*</span>
+                </label>
+                <input type="text" class="form-control font-monospace text-uppercase" id="id_code" name="code"
+                       value="{{ vatcode.code|default:'' }}" placeholder="e.g. VAT-STD, VAT-ZERO" required maxlength="20">
+                <div class="form-text" style="font-size:11px">Unique identifier used for invoicing and KRA receipts.</div>
+              </div>
+
+              <div class="col-12 col-md-7">
+                <label for="id_name" class="form-label fw-semibold" style="font-size:13px">
+                  Tax Name / Description <span class="text-danger">*</span>
+                </label>
+                <input type="text" class="form-control" id="id_name" name="name"
+                       value="{{ vatcode.name|default:'' }}" placeholder="e.g. Standard Rated (16%), Zero Rated (0%)" required maxlength="100">
+                <div class="form-text" style="font-size:11px">Human-readable label shown in menus and receipts.</div>
+              </div>
+            </div>
+
+            <!-- Section 2: Tax Rate & Presets -->
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+              <i class="bi bi-percent me-1 text-primary"></i>Tax Rates & Percentages
+            </h6>
+
+            <!-- Quick Rate Presets -->
+            <div class="mb-3">
+              <label class="form-label text-muted small mb-1 fw-semibold">Quick Rate Presets</label>
+              <div class="d-flex gap-2 flex-wrap" id="preset-buttons">
+                <button type="button" class="btn btn-outline-primary btn-sm preset-btn" data-rate="16.00" data-code="VAT-STD" data-name="Standard Rated (16%)">
+                  16% (Standard Rate)
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm preset-btn" data-rate="0.00" data-code="VAT-ZERO" data-name="Zero Rated (0%)">
+                  0% (Zero Rated)
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm preset-btn" data-rate="0.00" data-code="VAT-EXEMPT" data-name="Exempt (0%)">
+                  0% (Exempt)
+                </button>
+                <button type="button" class="btn btn-outline-info btn-sm preset-btn" data-rate="8.00" data-code="VAT-RED" data-name="Reduced Rate (8%)">
+                  8% (Reduced Rate)
+                </button>
+              </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+              <div class="col-12 col-md-4">
+                <label for="id_vat_rate" class="form-label fw-semibold" style="font-size:13px">
+                  VAT Rate (%) <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <input type="number" step="0.01" min="0" max="100" class="form-control" id="id_vat_rate" name="vat_rate"
+                         value="{{ vatcode.vat_rate|default:'16.00' }}" required>
+                  <span class="input-group-text bg-light">%</span>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="id_excise_rate" class="form-label fw-semibold" style="font-size:13px">
+                  Excise Duty Rate (%)
+                </label>
+                <div class="input-group">
+                  <input type="number" step="0.01" min="0" max="100" class="form-control" id="id_excise_rate" name="excise_rate"
+                         value="{{ vatcode.excise_rate|default:'0.00' }}">
+                  <span class="input-group-text bg-light">%</span>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label for="id_import_duty" class="form-label fw-semibold" style="font-size:13px">
+                  Import Duty (%)
+                </label>
+                <div class="input-group">
+                  <input type="number" step="0.01" min="0" max="100" class="form-control" id="id_import_duty" name="import_duty"
+                         value="{{ vatcode.import_duty|default:'0.00' }}">
+                  <span class="input-group-text bg-light">%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Additional Settings -->
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+              <i class="bi bi-sliders me-1 text-primary"></i>Compliance & Mappings
+            </h6>
+
+            <div class="row g-3 mb-4">
+              <div class="col-12 col-md-6">
+                <label for="id_hs_code_chapter" class="form-label fw-semibold" style="font-size:13px">
+                  HS Code Chapter (Optional)
+                </label>
+                <input type="text" class="form-control font-monospace" id="id_hs_code_chapter" name="hs_code_chapter"
+                       value="{{ vatcode.hs_code_chapter|default:'' }}" placeholder="e.g. 09 (2-digit chapter)" maxlength="2">
+                <div class="form-text" style="font-size:11px">Optional 2-digit chapter reference for KRA categorization.</div>
+              </div>
+
+              <div class="col-12 col-md-6 d-flex align-items-center">
+                <div class="form-check form-switch mt-3">
+                  <input class="form-check-input" type="checkbox" id="id_is_excisable" name="is_excisable"
+                         {% if vatcode.is_excisable %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="id_is_excisable" style="font-size:13px">
+                    Subject to Excise Duty
+                  </label>
+                  <div class="text-muted" style="font-size:11px">Check if goods in this category require excise duty stamps.</div>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <label for="id_description" class="form-label fw-semibold" style="font-size:13px">
+                  Detailed Description & Application Notes
+                </label>
+                <textarea class="form-control" id="id_description" name="description" rows="3"
+                          placeholder="e.g. Applicable to retail groceries, bottled beverages, packaged dry goods...">{{ vatcode.description|default:'' }}</textarea>
+              </div>
+
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="id_is_active" name="is_active"
+                         {% if vatcode is None or vatcode.is_active %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="id_is_active" style="font-size:13px">
+                    Active (Available for Product Assignment)
+                  </label>
+                  <div class="text-muted" style="font-size:11px">When unchecked, this tax code cannot be selected when creating or editing products.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="d-flex align-items-center justify-content-end gap-2 pt-3 border-top">
+              <a href="{% url 'vatcode_list' slug=request.business.slug %}" class="btn btn-outline-secondary px-3">
+                Cancel
+              </a>
+              <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                <i class="bi bi-check-lg me-1"></i>{% if vatcode %}Save Changes{% else %}Create VAT Code{% endif %}
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const presetButtons = document.querySelectorAll('.preset-btn');
+  const codeInput = document.getElementById('id_code');
+  const nameInput = document.getElementById('id_name');
+  const rateInput = document.getElementById('id_vat_rate');
+
+  presetButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const rate = this.getAttribute('data-rate');
+      const code = this.getAttribute('data-code');
+      const name = this.getAttribute('data-name');
+
+      if (rateInput) rateInput.value = rate;
+      // Only set code and name if empty or user hasn't edited an existing record
+      if (codeInput && !codeInput.value) codeInput.value = code;
+      if (nameInput && !nameInput.value) nameInput.value = name;
+    });
+  });
+});
+</script>
+{% endblock %}

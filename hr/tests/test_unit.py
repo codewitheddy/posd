@@ -467,7 +467,7 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('dashboard', kwargs={'slug': self.business.slug}))
+        self.assertEqual(response.url, reverse('pos_screen'))
         self.assertFalse(Employee.objects.filter(user_account=self.cashier_user, business=self.business).exists())
 
     def test_clock_out_denies_cashier_access(self):
@@ -477,7 +477,7 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
         response = self.client.post(reverse('hr_clock_out', kwargs={'slug': self.business.slug}))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('dashboard', kwargs={'slug': self.business.slug}))
+        self.assertEqual(response.url, reverse('pos_screen'))
         self.assertFalse(Employee.objects.filter(user_account=self.cashier_user, business=self.business).exists())
 
     def test_clock_in_ignores_safe_next_for_denied_cashier(self):
@@ -490,7 +490,7 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, dashboard_url)
+        self.assertEqual(response.url, reverse('pos_screen'))
 
     def test_clock_out_ignores_safe_next_for_denied_cashier(self):
         self.client.force_login(self.cashier_user)
@@ -503,7 +503,7 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, dashboard_url)
+        self.assertEqual(response.url, reverse('pos_screen'))
 
     def test_manager_can_clock_in_selected_employee(self):
         self.client.force_login(self.owner)

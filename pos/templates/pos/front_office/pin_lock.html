@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Front Office POS — Cashier PIN Login</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <style>
+    :root {
+      --primary: #224195;
+      --primary-dark: #172d69;
+      --accent: #10b981;
+      --bg-dark: #0f172a;
+      --card-bg: #1e293b;
+      --input-bg: #334155;
+      --text-light: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #475569;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top center, #1e293b 0%, #0f172a 100%);
+      color: var(--text-light);
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      user-select: none;
+    }
+
+    .pin-container {
+      width: 100%;
+      max-width: 440px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 32px 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .header-branding {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .brand-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), #3b82f6);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 16px rgba(34, 65, 149, 0.35);
+    }
+
+    .store-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      letter-spacing: -0.02em;
+    }
+
+    .terminal-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .form-group-custom {
+      margin-bottom: 16px;
+    }
+
+    .form-label-custom {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+
+    .form-control-custom {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 14px 12px 42px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .form-control-custom:focus {
+      border-color: #3b82f6;
+      background: #3a4b66;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .pin-display {
+      letter-spacing: 0.5em;
+      font-size: 20px;
+      text-align: center;
+      padding-left: 14px;
+    }
+
+    /* Keypad Grid */
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .key-btn {
+      background: #334155;
+      border: 1px solid var(--border-color);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 600;
+      padding: 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .key-btn:active, .key-btn:hover {
+      background: #475569;
+      transform: scale(0.98);
+      border-color: #64748b;
+    }
+
+    .key-btn.action-btn {
+      font-size: 14px;
+      font-weight: 700;
+      background: #243044;
+      color: var(--text-muted);
+    }
+
+    .key-btn.action-btn:hover {
+      color: #fff;
+      background: #334155;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, var(--primary), #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+      transition: all 0.2s;
+    }
+
+    .btn-submit:hover {
+      background: linear-gradient(135deg, var(--primary-dark), #1d4ed8);
+      transform: translateY(-1px);
+    }
+
+    .footer-links {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .footer-links a {
+      color: #60a5fa;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<div class="pin-container">
+  <div class="header-branding">
+    <div class="brand-icon">
+      <i class="bi bi-cart-check-fill"></i>
+    </div>
+    <h1 class="store-title">{{ business.name|default:"POS Terminal" }}</h1>
+    <div class="terminal-badge">
+      <i class="bi bi-pc-display"></i>
+      {% if terminal %}{{ terminal.name }} ({{ terminal.terminal_code }}){% else %}Front Office Register{% endif %}
+      {% if branch %}· {{ branch.name }}{% endif %}
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags|default:'danger' }} py-2 px-3 mb-3 text-center" style="font-size: 13px; border-radius: 10px;">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="POST" id="pinLoginForm" action="{% url 'terminal_pin_login' %}">
+    {% csrf_token %}
+    <input type="hidden" name="device_token" id="deviceTokenInput" value="">
+
+    <!-- Direct Unique PIN Input -->
+    <div class="form-group-custom text-center mb-3">
+      <label class="form-label-custom" for="pin"><i class="bi bi-key-fill me-1"></i>Enter Cashier PIN</label>
+      <div class="input-wrapper">
+        <input type="password" id="pin" name="pin" class="form-control-custom pin-display"
+               placeholder="••••" maxlength="6" inputmode="numeric" required autofocus autocomplete="off">
+      </div>
+      <small class="text-muted" style="font-size: 11px;">Type your unique 4–6 digit security PIN</small>
+    </div>
+
+    <!-- Optional Employee ID (Collapsible / Secondary) -->
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <a href="javascript:void(0)" onclick="toggleEmployeeField()" class="text-decoration-none small text-muted" style="font-size: 12px;" id="toggleEmployeeLink">
+          <i class="bi bi-person-badge me-1"></i><span id="toggleEmployeeText">Optional: Specify Cashier ID</span>
+        </a>
+      </div>
+      <div id="employeeIdWrapper" style="display: {% if employee_id %}block{% else %}none{% endif %}; margin-top: 8px;">
+        <div class="input-wrapper">
+          <i class="bi bi-person input-icon"></i>
+          <input type="text" id="employee_id" name="employee_id" class="form-control-custom"
+                 value="{{ employee_id|default:'' }}" placeholder="Cashier Username or Employee ID"
+                 autocomplete="off" style="font-size: 13px; padding-left: 38px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- On-Screen Numeric Keypad -->
+    <div class="keypad-grid">
+      <button type="button" class="key-btn" onclick="appendPin('1')">1</button>
+      <button type="button" class="key-btn" onclick="appendPin('2')">2</button>
+      <button type="button" class="key-btn" onclick="appendPin('3')">3</button>
+
+      <button type="button" class="key-btn" onclick="appendPin('4')">4</button>
+      <button type="button" class="key-btn" onclick="appendPin('5')">5</button>
+      <button type="button" class="key-btn" onclick="appendPin('6')">6</button>
+
+      <button type="button" class="key-btn" onclick="appendPin('7')">7</button>
+      <button type="button" class="key-btn" onclick="appendPin('8')">8</button>
+      <button type="button" class="key-btn" onclick="appendPin('9')">9</button>
+
+      <button type="button" class="key-btn action-btn" onclick="clearPin()">CLEAR</button>
+      <button type="button" class="key-btn" onclick="appendPin('0')">0</button>
+      <button type="button" class="key-btn action-btn" onclick="backspacePin()"><i class="bi bi-backspace"></i></button>
+    </div>
+
+    <button type="submit" class="btn-submit" id="submitPinBtn">
+      <i class="bi bi-box-arrow-in-right"></i> Sign In &amp; Start Selling
+    </button>
+  </form>
+
+  {% if available_cashiers %}
+  <div class="mt-3 pt-3 border-top border-secondary border-opacity-25">
+    <div class="small text-muted mb-2 text-center" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Registered Staff</div>
+    <div class="d-flex flex-wrap gap-1 justify-content-center">
+      {% for c in available_cashiers %}
+      <span class="badge bg-secondary bg-opacity-25 text-light border border-secondary border-opacity-25" style="font-size: 11px; cursor: default;">
+        <i class="bi bi-person-fill me-1"></i>{{ c.get_full_name|default:c.username }}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="footer-links">
+    <a href="{% url 'login' %}"><i class="bi bi-shield-lock me-1"></i>Back Office Login</a>
+    {% if not terminal %}
+    <a href="{% url 'terminal_register' %}"><i class="bi bi-gear me-1"></i>Register Device</a>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  // Attach device token from local storage or cookie
+  const cookieMatch = document.cookie.match(/pos_terminal_token=([^;]+)/);
+  if (cookieMatch) {
+    document.getElementById('deviceTokenInput').value = cookieMatch[1];
+  }
+
+  const pinInput = document.getElementById('pin');
+  const employeeInput = document.getElementById('employee_id');
+
+  function toggleEmployeeField() {
+    const wrap = document.getElementById('employeeIdWrapper');
+    const text = document.getElementById('toggleEmployeeText');
+    if (wrap.style.display === 'none') {
+      wrap.style.display = 'block';
+      text.innerText = 'Hide Cashier ID field';
+      employeeInput.focus();
+    } else {
+      wrap.style.display = 'none';
+      text.innerText = 'Optional: Specify Cashier ID';
+      employeeInput.value = '';
+      pinInput.focus();
+    }
+  }
+
+  function appendPin(digit) {
+    if (pinInput.value.length < 6) {
+      pinInput.value += digit;
+      pinInput.dispatchEvent(new Event('input'));
+    }
+  }
+
+  function clearPin() {
+    pinInput.value = '';
+    pinInput.focus();
+  }
+
+  function backspacePin() {
+    pinInput.value = pinInput.value.slice(0, -1);
+    pinInput.focus();
+  }
+
+  // Allow physical keyboard typing
+  document.addEventListener('keydown', function(e) {
+    if (e.target !== employeeInput) {
+      if (e.key >= '0' && e.key <= '9') {
+        if (document.activeElement !== pinInput) {
+          pinInput.focus();
+        }
+      }
+    }
+  });
+</script>
+
+</body>
+</html>

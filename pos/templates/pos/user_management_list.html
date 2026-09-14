@@ -33,6 +33,7 @@
             <th>User</th>
             <th>Contact</th>
             <th>Role</th>
+            <th>POS PIN</th>
             <th>Employee ID</th>
             <th>Status</th>
             <th>Performance</th>
@@ -64,6 +65,13 @@
                 {{ membership.get_role_display }}
               </span>
             </td>
+            <td>
+              {% if membership.user.profile.has_pin_set %}
+              <span class="badge bg-success font-monospace" style="font-size:11px;"><i class="bi bi-key-fill me-1"></i>PIN Set</span>
+              {% else %}
+              <span class="badge bg-secondary font-monospace" style="font-size:11px;"><i class="bi bi-key me-1"></i>No PIN</span>
+              {% endif %}
+            </td>
             <td>{{ membership.user.profile.employee_id|default:"—" }}</td>
             <td>
               {% if membership.is_active %}
@@ -80,7 +88,7 @@
             </td>
             <td>
               <div class="d-flex gap-1">
-                <a href="{% url 'user_management_edit' slug=request.business.slug pk=membership.user.pk %}" class="btn-action btn-action-primary" title="Edit">
+                <a href="{% url 'user_management_edit' slug=request.business.slug pk=membership.user.pk %}" class="btn-action btn-action-primary" title="Edit user & Set PIN">
                   <i class="bi bi-pencil"></i>
                 </a>
                 {% if membership.role != 'owner' and membership.user != request.user %}

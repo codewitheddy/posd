@@ -1,0 +1,288 @@
+{% extends 'pos/base.html' %}
+{% block title %}Requisition {{ requisition.reference_number }} — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px}
+.int-card-header{padding:16px 20px;background:#fafbfc;border-bottom:1.5px solid #e5e7eb;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.int-card-body{padding:20px}
+.t-table{width:100%;border-collapse:collapse;font-size:13px}
+.t-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:12px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
+.t-table tbody tr{border-bottom:1px solid #f3f4f6;transition:background .1s}
+.t-table tbody tr:hover{background:#f8f9fc}
+.t-table tbody td{padding:12px 16px;vertical-align:middle}
+.badge-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-approved{background:#dbeafe;color:#1e40af}
+.badge-dispatched{background:#e0e7ff;color:#4338ca}
+.badge-partially_fulfilled{background:#fed7aa;color:#9a3412}
+.badge-fulfilled{background:#dcfce7;color:#166534}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.badge-cancelled{background:#f3f4f6;color:#6b7280}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-success-sm{background:#166534;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-success-sm:hover{background:#14532d;color:#fff}
+.btn-danger-sm{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-danger-sm:hover{background:#b91c1c;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+.info-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:2px}
+.info-val{font-size:14px;font-weight:600;color:#111827}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="{% url 'requisition_list' %}" class="btn-outline-sm" style="padding:4px 8px"><i class="bi bi-arrow-left"></i> Back</a>
+        <h1 style="font-size:22px;font-weight:700;margin:0">Requisition {{ requisition.reference_number }}</h1>
+        <span class="badge-status badge-{{ requisition.status }}">{{ requisition.get_status_display }}</span>
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin:0">Requested on {{ requisition.created_at|date:"d M Y H:i" }} by {{ requisition.requested_by.username }}</p>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <!-- Overview Summary -->
+  <div class="int-card">
+    <div class="int-card-body">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="info-label">Requesting Branch</div>
+          <div class="info-val"><i class="bi bi-geo-alt text-primary me-1"></i>{{ requisition.requesting_branch.name }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="info-label">Requested By</div>
+          <div class="info-val">{{ requisition.requested_by.get_full_name|default:requisition.requested_by.username }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="info-label">Approved By</div>
+          <div class="info-val">
+            {% if requisition.approved_by %}
+              {{ requisition.approved_by.username }} <span style="font-size:11px;color:#6b7280">({{ requisition.approved_at|date:"d M Y" }})</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="info-label">Status</div>
+          <div class="info-val"><span class="badge-status badge-{{ requisition.status }}">{{ requisition.get_status_display }}</span></div>
+        </div>
+        {% if requisition.notes %}
+        <div class="col-12 mt-2">
+          <div class="info-label">Request Notes</div>
+          <div style="font-size:13px;background:#f9fafb;padding:10px 14px;border-radius:8px;border:1px solid #e5e7eb">{{ requisition.notes }}</div>
+        </div>
+        {% endif %}
+        {% if requisition.rejection_reason %}
+        <div class="col-12 mt-2">
+          <div class="info-label text-danger">Rejection Reason</div>
+          <div style="font-size:13px;background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:8px;border:1px solid #fecaca">{{ requisition.rejection_reason }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Items Table / Approval Form -->
+  {% if is_hq and requisition.status == 'pending' %}
+  <!-- HQ Admin Pending Review & Approval Form -->
+  <form method="POST" action="{% url 'requisition_approve' pk=requisition.pk %}">
+    {% csrf_token %}
+    <div class="int-card">
+      <div class="int-card-header">
+        <span><i class="bi bi-list-check me-2"></i>Review Requested Line Items & Quantities</span>
+        <span class="badge bg-warning text-dark">HQ Review Required</span>
+      </div>
+      <div class="table-responsive">
+        <table class="t-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>SKU</th>
+              <th class="text-center">Requested Qty</th>
+              <th class="text-center" style="width:160px">Approved Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in requisition.items.all %}
+            <tr>
+              <td style="font-weight:600">{{ item.product.name }}</td>
+              <td style="font-family:monospace;color:#6b7280">{{ item.product.sku|default:"-" }}</td>
+              <td class="text-center" style="font-weight:700">{{ item.requested_quantity }}</td>
+              <td class="text-center">
+                <input type="number" step="1" min="0" name="approved_qty_{{ item.id }}" value="{{ item.requested_quantity }}" class="form-control form-control-sm text-center" style="font-weight:700;border-color:#cbd5e1" required>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="int-card-body d-flex justify-content-between align-items-center bg-light border-top">
+        <button type="button" class="btn-danger-sm" data-bs-toggle="modal" data-bs-target="#rejectModal">
+          <i class="bi bi-x-circle"></i> Reject Requisition
+        </button>
+        <button type="submit" class="btn-success-sm">
+          <i class="bi bi-check-circle"></i> Approve Requisition
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Rejection Modal -->
+  <div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content" style="border-radius:12px;border:none">
+        <form method="POST" action="{% url 'requisition_reject' pk=requisition.pk %}">
+          {% csrf_token %}
+          <div class="modal-header">
+            <h5 class="modal-title font-weight-bold" style="font-size:16px">Reject Requisition</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p style="font-size:13px;color:#6b7280">Please provide a reason for rejecting this stock requisition.</p>
+            <div class="form-group">
+              <label class="form-label" style="font-size:12px;font-weight:600">Rejection Reason</label>
+              <textarea name="rejection_reason" class="form-control" rows="3" placeholder="e.g., Stock unavailable at central warehouse" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-outline-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn-danger-sm">Confirm Rejection</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+
+  <!-- Read-Only Items Table -->
+  <div class="int-card">
+    <div class="int-card-header">
+      <span><i class="bi bi-boxes me-2"></i>Requested Line Items</span>
+    </div>
+    <div class="table-responsive">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>SKU</th>
+            <th class="text-center">Requested Qty</th>
+            <th class="text-center">Approved Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in requisition.items.all %}
+          <tr>
+            <td style="font-weight:600">{{ item.product.name }}</td>
+            <td style="font-family:monospace;color:#6b7280">{{ item.product.sku|default:"-" }}</td>
+            <td class="text-center" style="font-weight:600">{{ item.requested_quantity }}</td>
+            <td class="text-center" style="font-weight:700;color:{% if item.approved_quantity %}#166534{% else %}#6b7280{% endif %}">
+              {{ item.approved_quantity|default:"Pending" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Dispatch Action for HQ Admin when Approved / Partially Fulfilled -->
+  {% if is_hq and requisition.status == 'approved' or is_hq and requisition.status == 'partially_fulfilled' %}
+  <div class="int-card">
+    <div class="int-card-header">
+      <span><i class="bi bi-truck me-2"></i>Dispatch Approved Stock from HQ Warehouse</span>
+      <span class="badge bg-primary">Ready to Dispatch</span>
+    </div>
+    <form method="POST" action="{% url 'requisition_dispatch' pk=requisition.pk %}">
+      {% csrf_token %}
+      <div class="table-responsive">
+        <table class="t-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th class="text-center">Approved Qty</th>
+              <th class="text-center" style="width:180px">Dispatch Quantity Now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in requisition.items.all %}
+            <tr>
+              <td style="font-weight:600">{{ item.product.name }}</td>
+              <td class="text-center" style="font-weight:700">{{ item.approved_quantity }}</td>
+              <td class="text-center">
+                <input type="number" step="1" min="0" max="{{ item.approved_quantity }}" name="dispatch_qty_{{ item.id }}" value="{{ item.approved_quantity }}" class="form-control form-control-sm text-center" style="font-weight:700" required>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="int-card-body border-top">
+        <div class="row g-3 align-items-center">
+          <div class="col-md-8">
+            <input type="text" name="dispatch_notes" class="form-control form-control-sm" placeholder="Optional notes for courier/driver or consignment tracking...">
+          </div>
+          <div class="col-md-4 text-end">
+            <button type="submit" class="btn-primary-sm w-100 justify-content-center">
+              <i class="bi bi-send-fill"></i> Confirm & Dispatch Stock
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Related Dispatches -->
+  {% if dispatches %}
+  <div class="int-card">
+    <div class="int-card-header">
+      <span><i class="bi bi-truck-flatbed me-2"></i>Shipment & Dispatch History</span>
+    </div>
+    <div class="table-responsive">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Dispatch Ref</th>
+            <th>Source</th>
+            <th>Destination</th>
+            <th>Dispatched By</th>
+            <th>Status</th>
+            <th>Dispatched At</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in dispatches %}
+          <tr>
+            <td style="font-family:monospace;font-weight:700;color:#224195">{{ d.reference_number }}</td>
+            <td>{{ d.source_branch.name }}</td>
+            <td>{{ d.destination_branch.name }}</td>
+            <td style="color:#6b7280">{{ d.dispatched_by.username }}</td>
+            <td><span class="badge-status badge-{{ d.status }}">{{ d.get_status_display }}</span></td>
+            <td style="color:#6b7280;font-size:12px">{{ d.dispatched_at|date:"d M Y H:i" }}</td>
+            <td class="text-end">
+              <a href="{% url 'dispatch_detail' pk=d.pk %}" class="btn-outline-sm" style="padding:4px 8px;font-size:12px">
+                View Shipment <i class="bi bi-arrow-right"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

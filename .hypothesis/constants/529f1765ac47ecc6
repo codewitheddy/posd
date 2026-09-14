@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0097_promotions_engine.py
+# hypothesis_version: 6.167.1
+
+['0 = unlimited', 'Bundle Deal', 'Buy X Get Y Free', 'Entire Cart', 'Fixed Amount Off', 'Happy Hour', 'Percentage Off', 'Specific Category', 'Specific Products', 'applicable_products', 'applies_to', 'bundle', 'business', 'buy_quantity', 'buy_x_get_y', 'cart', 'category', 'code', 'code__gt', 'created_by', 'created_promotions', 'discount_type', 'discount_value', 'fixed', 'get_quantity', 'happy_hour', 'happy_hour_end', 'happy_hour_start', 'max_uses', 'min_purchase_amount', 'percentage', 'pos', 'pos.business', 'pos.category', 'pos.product', 'price_cut', 'products', 'promo_type', 'promotion', 'promotions', 'updated_at', 'uses_count']

@@ -97,7 +97,7 @@
         <div class="ui-card-header"><span class="ui-card-title"><i class="bi bi-list-ul me-2"></i>Sections</span></div>
         <div class="ui-card-body" style="padding:8px">
           <a href="#business-info" class="nav-anchor"><i class="bi bi-building"></i> Business Info</a>
-          <a href="#logo" class="nav-anchor"><i class="bi bi-image"></i> Logo</a>
+          <a href="#logo-section" class="nav-anchor"><i class="bi bi-image"></i> Logo</a>
           <a href="#tax" class="nav-anchor"><i class="bi bi-percent"></i> Tax Settings</a>
           <a href="#currency" class="nav-anchor"><i class="bi bi-currency-exchange"></i> Currency</a>
           <a href="#mpesa" class="nav-anchor"><i class="bi bi-phone"></i> M-Pesa</a>
@@ -152,13 +152,13 @@
       </div>
 
       <!-- Logo -->
-      <div id="logo" class="settings-card settings-section">
+      <div id="logo-section" class="settings-card settings-section">
         <div class="settings-card-header" style="background:#dcfce7;color:#15803d"><i class="bi bi-image"></i> Business Logo</div>
         <div class="settings-card-body">
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Upload Logo</label>
-              <input type="file" class="form-control" id="logo" name="logo" accept="image/*">
+              <input type="file" class="form-control" id="logo-input" name="logo" accept="image/*">
               <div class="form-text">Square image, max 2MB (PNG, JPG)</div>
               {% if settings.logo %}
               <div class="form-check mt-2">
@@ -686,17 +686,30 @@
 </div>
 
 <script>
-document.getElementById('logo').addEventListener('change', function(e) {
+document.getElementById('logo-input').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
     const preview = document.getElementById('logo-preview');
-    if (preview) { preview.src = e.target.result; }
+    if (preview) { preview.src = e.target.result; preview.style.opacity = '1'; }
     else { document.querySelector('.logo-preview').innerHTML = '<img src="'+e.target.result+'" alt="Logo Preview" id="logo-preview">'; }
+    const removeCb = document.getElementById('remove_logo');
+    if (removeCb) removeCb.checked = false;
   };
   reader.readAsDataURL(file);
 });
+
+const removeLogoCb = document.getElementById('remove_logo');
+if (removeLogoCb) {
+  removeLogoCb.addEventListener('change', function() {
+    const preview = document.getElementById('logo-preview');
+    if (preview) {
+      preview.style.opacity = this.checked ? '0.2' : '1';
+      preview.style.filter = this.checked ? 'grayscale(100%)' : 'none';
+    }
+  });
+}
 
 document.querySelectorAll('.settings-nav a, .nav-anchor').forEach(a => {
   a.addEventListener('click', function(e) {

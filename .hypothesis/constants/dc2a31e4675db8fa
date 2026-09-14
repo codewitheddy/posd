@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\tests_grn_regression.py
+# hypothesis_version: 6.167.1
+
+[100, 200, '100.00', '2', '250.00', '50.00', '5000.00', '75.00', 'GRN Business', 'GRN Product', 'GRN Supplier', 'GRN-001', 'Partial prior return', 'Requesting too much', 'damaged', 'grn-business', 'grn-owner', 'grn_create', 'invalid', 'item_cost_1', 'item_product_1', 'item_quantity_1', 'ok', 'owner', 'pass123!', 'pk', 'pos.views.render', 'purchase_detail', 'reason_details', 'received', 'related_purchase', 'return_reason', 'slug', 'submitted', 'supplier']

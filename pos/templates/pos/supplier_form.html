@@ -26,20 +26,20 @@
                     <div class="mb-3">
                         <label class="form-label">Supplier Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="name"
-                               value="{{ form_data.name|default:supplier.name|default:'' }}" required autofocus>
+                               value="{{ form_data.name|default:''}}{% if not form_data.name and supplier %}{{ supplier.name }}{% endif %}" required autofocus>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Contact Person</label>
                         <input type="text" class="form-control" name="contact_person"
-                               value="{{ form_data.contact_person|default:supplier.contact_person|default:'' }}">
+                               value="{{ form_data.contact_person|default:'' }}{% if not form_data.contact_person and supplier %}{{ supplier.contact_person }}{% endif %}">
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Phone</label>
                             <input type="text" class="form-control" name="phone"
-                                   value="{{ form_data.phone|default:supplier.phone|default:'' }}"
+                                   value="{{ form_data.phone|default:'' }}{% if not form_data.phone and supplier %}{{ supplier.phone }}{% endif %}"
                                    placeholder="+254 7XX XXX XXX">
                         </div>
                         <div class="col-md-6 mb-3">
@@ -50,7 +50,7 @@
                                 </span>
                             </label>
                             <input type="email" class="form-control" name="email"
-                                value="{{ form_data.email|default:supplier.email|default:'' }}"
+                                value="{{ form_data.email|default:'' }}{% if not form_data.email and supplier %}{{ supplier.email }}{% endif %}"
                                    placeholder="supplier@example.com">
                             <div class="form-text">
                                 <i class="bi bi-info-circle"></i>
@@ -61,17 +61,17 @@
 
                     <div class="mb-3">
                         <label class="form-label">Address</label>
-                        <textarea class="form-control" name="address" rows="2">{{ form_data.address|default:supplier.address|default:'' }}</textarea>
+                        <textarea class="form-control" name="address" rows="2">{{ form_data.address|default:'' }}{% if not form_data.address and supplier %}{{ supplier.address }}{% endif %}</textarea>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Notes</label>
-                        <textarea class="form-control" name="notes" rows="2">{{ form_data.notes|default:supplier.notes|default:'' }}</textarea>
+                        <textarea class="form-control" name="notes" rows="2">{{ form_data.notes|default:'' }}{% if not form_data.notes and supplier %}{{ supplier.notes }}{% endif %}</textarea>
                     </div>
 
                     <div class="mb-4 form-check form-switch">
                         <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
-                               {% if form_data.is_active %}checked{% elif form_data and not form_data.is_active %}{% elif not supplier or supplier.is_active %}checked{% endif %}>
+                               {% if form_data.is_active %}checked{% elif supplier and supplier.is_active %}checked{% elif not form_data and not supplier %}checked{% endif %}>
                         <label class="form-check-label" for="is_active">Active Supplier</label>
                     </div>
 

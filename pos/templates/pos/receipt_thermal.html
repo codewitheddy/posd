@@ -1,796 +1,1151 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt {{ sale.invoice_number }}</title>
+    <title>Receipt {{ sale.invoice_number }} — {{ business_settings.get_business_name|default:shop_name }}</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- QR Code & Barcode Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
     <style>
+        :root {
+            --app-bg: #0f172a;
+            --app-surface: #1e293b;
+            --app-surface-hover: #334155;
+            --app-border: rgba(255, 255, 255, 0.1);
+            --app-text: #f8fafc;
+            --app-text-muted: #94a3b8;
+            --app-accent: #10b981;
+            --app-accent-glow: rgba(16, 185, 129, 0.35);
+            --paper-width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
+            --paper-font-size: {% if business_settings and business_settings.thermal_font_size == 'small' %}11px{% elif business_settings and business_settings.thermal_font_size == 'large' %}13.5px{% else %}12px{% endif %};
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--app-bg);
+            background-image: radial-gradient(circle at 50% 0%, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 1) 100%);
+            color: var(--app-text);
             min-height: 100vh;
-            padding: 40px 20px;
-        }
-        
-        .receipt-wrapper {
-            max-width: 400px;
-            margin: 0 auto 30px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            overflow: hidden;
-        }
-        
-        .page-footer {
-            max-width: 900px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        
-        .success-message {
-            color: white;
-            margin-bottom: 25px;
-            animation: fadeInUp 0.6s ease;
-        }
-        
-        .success-message i {
-            font-size: 48px;
-            margin-bottom: 15px;
-            display: block;
-            color: #4ade80;
-            text-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
-            font-style: normal;
-        }
-        
-        .success-message h2 {
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .success-message p {
-            font-size: 15px;
-            opacity: 0.9;
-        }
-        
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .action-bar {
             display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-bottom: 20px;
+            flex-direction: column;
+            user-select: none;
+            overflow-x: hidden;
         }
-        
-        .btn {
+
+        /* Ambient Glow Effect */
+        .ambient-glow {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 700px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Modern Top Navigation / Action Bar ── */
+        .thermal-navbar {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--app-border);
             padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: 500;
-            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .nav-center {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Pill / Buttons */
+        .btn-tool {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 13.5px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+            outline: none;
+            white-space: nowrap;
         }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-        
-        .btn:active {
-            transform: translateY(0);
-        }
-        
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #0056b3;
-        }
-        
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #218838;
-        }
-        
-        .btn-info {
-            background: #17a2b8;
-            color: white;
-        }
-        
-        .btn-info:hover {
-            background: #138496;
-        }
-        
-        .shortcuts-hint {
-            text-align: center;
-            color: white;
-            font-size: 13px;
-            opacity: 0.95;
-        }
-        
-        .shortcuts-hint kbd {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            padding: 3px 8px;
+
+        .btn-tool kbd {
+            background: rgba(0, 0, 0, 0.25);
             border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-            font-weight: 600;
-            margin: 0 2px;
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-        
-        .receipt-container {
-            padding: 30px 25px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.5;
-            color: #000;
-        }
-        
-        .receipt {
-            width: 100%;
-        }
-        
-        .center {
-            text-align: center;
-        }
-        
-        .bold {
-            font-weight: bold;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 2px dashed #333;
-        }
-        
-        .shop-name {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #1a1a1a;
-            letter-spacing: 1px;
-        }
-        
-        .shop-info {
-            font-size: 12px;
-            margin-bottom: 4px;
-            color: #555;
-        }
-        
-        .divider {
-            border-top: 1px dashed #999;
-            margin: 12px 0;
-        }
-        
-        .double-divider {
-            border-top: 2px solid #333;
-            margin: 12px 0;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 12px;
-        }
-        
-        .info-row span:first-child {
-            color: #666;
-        }
-        
-        .info-row span:last-child {
-            color: #000;
-            font-weight: 600;
-        }
-        
-        .items-header {
-            display: flex;
-            justify-content: space-between;
-            font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 12px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #ddd;
-            color: #333;
-        }
-        
-        .item {
-            margin-bottom: 12px;
-        }
-        
-        .item-name {
-            font-weight: bold;
-            margin-bottom: 3px;
-            color: #1a1a1a;
-        }
-        
-        .item-details {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: #555;
-        }
-        
-        .item-details .bold {
-            color: #000;
-        }
-        
-        .totals {
-            margin-top: 15px;
-        }
-        
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            font-size: 13px;
-        }
-        
-        .total-row span:first-child {
-            color: #555;
-        }
-        
-        .total-row span:last-child {
-            color: #000;
-            font-weight: 600;
-        }
-        
-        .total-row.grand-total {
-            font-size: 16px;
-            font-weight: bold;
-            margin-top: 8px;
-            padding-top: 8px;
-            color: #000;
-        }
-        
-        .total-row.grand-total span {
-            color: #000;
-        }
-        
-        .payment-section {
-            margin-top: 15px;
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 6px;
-        }
-        
-        .payment-section .bold.center {
-            margin-bottom: 8px;
-            color: #333;
-            font-size: 13px;
-        }
-        
-        .payment-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 12px;
-        }
-        
-        .payment-row span:first-child {
-            color: #555;
-        }
-        
-        .payment-row span:last-child {
-            color: #000;
-            font-weight: 600;
-        }
-        
-        .payment-row.bold {
-            font-weight: bold;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px dashed #ccc;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 2px dashed #333;
-        }
-        
-        .thank-you {
-            font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 15px;
-            color: #1a1a1a;
-        }
-        
-        .footer > div {
-            color: #666;
-            font-size: 12px;
-            margin-bottom: 4px;
-        }
-        
-        .loyalty-box {
-            border: 2px solid #28a745;
-            background: #d4edda;
-            padding: 12px;
-            margin: 15px 0;
-            border-radius: 6px;
-            text-align: center;
-        }
-        
-        .loyalty-box > div:first-child {
+            padding: 2px 6px;
             font-size: 11px;
-            color: #155724;
-            margin-bottom: 5px;
-            font-weight: 600;
-            text-transform: uppercase;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
             letter-spacing: 0.5px;
         }
-        
-        .loyalty-points {
-            font-size: 18px;
-            font-weight: bold;
-            color: #28a745;
-            margin: 5px 0;
+
+        .btn-tool-secondary {
+            background: var(--app-surface);
+            color: var(--app-text);
+            border-color: var(--app-border);
         }
-        
-        .loyalty-box > div:last-child {
-            font-size: 11px;
-            color: #155724;
-            margin-top: 5px;
+        .btn-tool-secondary:hover {
+            background: var(--app-surface-hover);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
         }
-        
-        .powered-by {
-            text-align: center;
-            margin-top: 15px;
-            font-size: 11px;
-            color: #999;
+
+        .btn-tool-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            box-shadow: 0 0 20px var(--app-accent-glow);
         }
-        
-        .invoice-number-footer {
-            text-align: center;
-            margin-top: 12px;
-            font-size: 11px;
-            color: #666;
+        .btn-tool-primary:hover {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 0 28px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-tool-whatsapp {
+            background: #25d366;
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(37, 211, 102, 0.3);
+        }
+        .btn-tool-whatsapp:hover {
+            background: #20bd5a;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(37, 211, 102, 0.45);
+        }
+
+        .btn-tool-info {
+            background: #0284c7;
+            color: #ffffff;
+        }
+        .btn-tool-info:hover {
+            background: #0369a1;
+            transform: translateY(-1px);
+        }
+
+        /* Segmented View Switcher */
+        .segmented-group {
+            display: inline-flex;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 3px;
+            border-radius: 10px;
+            border: 1px solid var(--app-border);
+        }
+        .segmented-btn {
+            background: transparent;
+            border: none;
+            color: var(--app-text-muted);
+            padding: 6px 12px;
+            border-radius: 7px;
+            font-size: 12.5px;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
         }
-        
-        /* ── Thermal paper size — must be top-level, not inside @media ── */
+        .segmented-btn.active {
+            background: var(--app-surface);
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* ── Workspace & Receipt Container ── */
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 36px 16px 60px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Notification / Status Banner */
+        .status-header-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 10px 20px;
+            margin-bottom: 24px;
+            color: #34d399;
+            font-size: 14px;
+            font-weight: 600;
+            animation: fadeInDown 0.4s ease;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Realistic Thermal Receipt Paper ── */
+        .thermal-paper-wrapper {
+            position: relative;
+            width: var(--paper-width);
+            max-width: 100%;
+            margin: 0 auto;
+            transition: width 0.3s ease, transform 0.2s ease;
+        }
+
+        /* Paper Serrated Edge Effect (Top & Bottom) */
+        .thermal-paper {
+            background: #ffffff;
+            color: #000000;
+            padding: 24px 20px;
+            font-family: 'JetBrains Mono', 'Space Mono', 'Courier New', monospace;
+            font-size: var(--paper-font-size);
+            line-height: 1.45;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.1);
+            position: relative;
+            border-radius: 4px;
+        }
+
+        .thermal-paper::before,
+        .thermal-paper::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background-size: 16px 8px;
+            background-repeat: repeat-x;
+            pointer-events: none;
+        }
+
+        .thermal-paper::before {
+            top: -8px;
+            background-image: radial-gradient(circle at 8px 8px, transparent 8px, #ffffff 8px);
+        }
+
+        .thermal-paper::after {
+            bottom: -8px;
+            background-image: radial-gradient(circle at 8px 0px, transparent 8px, #ffffff 8px);
+        }
+
+        /* Receipt Typography & Layout */
+        .r-center { text-align: center; }
+        .r-right { text-align: right; }
+        .r-left { text-align: left; }
+        .r-bold { font-weight: 700; }
+        .r-bolder { font-weight: 800; }
+
+        .r-logo {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .r-logo img {
+            max-height: 58px;
+            max-width: 160px;
+            object-fit: contain;
+            filter: grayscale(100%) contrast(160%);
+        }
+
+        .r-shop-name {
+            font-size: 1.25em;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            color: #000;
+        }
+
+        .r-motto {
+            font-size: 0.95em;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .r-info-text {
+            font-size: 0.9em;
+            color: #222;
+            margin-bottom: 2px;
+        }
+
+        .r-divider-dashed {
+            border-top: 1px dashed #000;
+            margin: 10px 0;
+        }
+
+        .r-divider-solid {
+            border-top: 2px solid #000;
+            margin: 10px 0;
+        }
+
+        .r-divider-double {
+            border-top: 3px double #000;
+            margin: 10px 0;
+        }
+
+        /* Info Grid Rows */
+        .r-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 3px;
+        }
+
+        .r-row-label {
+            color: #333;
+        }
+
+        .r-row-value {
+            font-weight: 600;
+            color: #000;
+            text-align: right;
+        }
+
+        /* Items Section */
+        .r-items-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 800;
+            font-size: 0.95em;
+            padding-bottom: 4px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+        }
+
+        .r-item {
+            margin-bottom: 8px;
+        }
+
+        .r-item-name {
+            font-weight: 700;
+            word-break: break-word;
+        }
+
+        .r-item-calc {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.92em;
+            color: #222;
+        }
+
+        .r-item-note {
+            font-size: 0.85em;
+            color: #555;
+            font-style: italic;
+            padding-left: 8px;
+        }
+
+        /* Totals */
+        .r-totals {
+            margin-top: 6px;
+        }
+
+        .r-grand-total {
+            font-size: 1.35em;
+            font-weight: 800;
+            padding: 6px 0;
+            margin-top: 4px;
+        }
+
+        /* Payment Breakdown */
+        .r-payment-box {
+            background: #fafafa;
+            border: 1px dashed #444;
+            padding: 8px 10px;
+            margin: 8px 0;
+            border-radius: 2px;
+        }
+
+        /* Loyalty Program */
+        .r-loyalty-box {
+            border: 1.5px solid #000;
+            padding: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .r-loyalty-title {
+            font-weight: 800;
+            font-size: 0.9em;
+            letter-spacing: 0.5px;
+        }
+        .r-loyalty-points {
+            font-size: 1.25em;
+            font-weight: 800;
+            margin: 3px 0;
+        }
+
+        /* Barcode & QR Code */
+        .r-qr-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 12px 0 6px;
+        }
+
+        .r-barcode-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px 0 4px;
+        }
+        .r-barcode-container svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .r-footer-text {
+            font-size: 0.88em;
+            color: #333;
+            margin-top: 3px;
+        }
+
+        /* ── Floating Shortcuts Help ── */
+        .shortcuts-bar {
+            margin-top: 28px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            color: var(--app-text-muted);
+            font-size: 12.5px;
+        }
+
+        .shortcuts-bar span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .shortcuts-bar kbd {
+            background: var(--app-surface);
+            border: 1px solid var(--app-border);
+            color: #ffffff;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 11px;
+        }
+
+        /* ── Modals & Dialogs ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-card {
+            background: var(--app-surface);
+            border: 1px solid var(--app-border);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 440px;
+            width: 100%;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            color: var(--app-text);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0f172a;
+            border: 1px solid var(--app-border);
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+            margin-top: 8px;
+            margin-bottom: 20px;
+        }
+        .modal-input:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+
+        /* Toast Container */
+        .toast-notification {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #10b981;
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 9999;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+        .toast-notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* ── Thermal Paper Print Media Query ── */
         @page {
             size: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} auto;
             margin: 0mm;
         }
 
         @media print {
-            body {
-                background: white;
-                padding: 0;
-                margin: 0;
-                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
+            *, *:before, *:after {
+                box-shadow: none !important;
+                text-shadow: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
-            
-            .page-footer,
-            .success-message,
-            .action-bar,
-            .shortcuts-hint {
+
+            html, body {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                min-height: auto !important;
+            }
+
+            .thermal-navbar,
+            .ambient-glow,
+            .status-header-card,
+            .shortcuts-bar,
+            .modal-overlay,
+            .toast-notification {
                 display: none !important;
             }
-            
-            .receipt-wrapper {
-                box-shadow: none;
-                border-radius: 0;
-                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
-                max-width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
-                margin: 0;
-                padding: 0;
+
+            .workspace {
+                padding: 0 !important;
+                margin: 0 !important;
+                display: block !important;
             }
-            
-            .receipt-container {
-                padding: 3mm 4mm;
-                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %};
+
+            .thermal-paper-wrapper {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                transform: none !important;
             }
-        }
-        
-        /* For 58mm thermal printers — set paper-width via JS or browser setting */
-        @media print and (max-width: 58mm) {
-            .receipt-wrapper {
-                max-width: 58mm;
-                width: 58mm;
+
+            .thermal-paper {
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                width: 100% !important;
+                padding: {% if business_settings and business_settings.thermal_receipt_width == 58 %}2mm 1mm{% else %}3mm 2mm{% endif %} !important;
+                font-size: {% if business_settings and business_settings.thermal_font_size == 'small' %}10.5px{% elif business_settings and business_settings.thermal_font_size == 'large' %}13px{% else %}11.5px{% endif %} !important;
+                line-height: 1.35 !important;
+                color: #000000 !important;
+                background: #ffffff !important;
             }
-            .receipt-container {
-                font-size: 11px;
+
+            .thermal-paper::before,
+            .thermal-paper::after {
+                display: none !important;
             }
-            .shop-name {
-                font-size: 16px;
-            }
-        }
-        
-        /* Responsive for mobile */
-        @media (max-width: 480px) {
-            body {
-                padding: 20px 10px;
-            }
-            
-            .success-message h2 {
-                font-size: 22px;
-            }
-            
-            .action-bar {
-                flex-direction: column;
-            }
-            
-            .btn {
-                width: 100%;
-                justify-content: center;
+
+            .r-payment-box, .r-loyalty-box {
+                background: #ffffff !important;
+                border: 1px dashed #000000 !important;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Receipt First -->
-    <div class="receipt-wrapper" id="receipt-content">
-        <div class="receipt-container">
-        <div class="receipt">
-        <!-- Header -->
-        <div class="header">
-            <div class="shop-name">{{ shop_name|upper }}</div>
-            {% if business_settings %}
-            {% if business_settings.address %}
-            <div class="shop-info">{{ business_settings.address }}</div>
-            {% endif %}
-            {% if business_settings.phone %}
-            <div class="shop-info">Tel: {{ business_settings.phone }}</div>
-            {% endif %}
-            {% if business_settings.email %}
-            <div class="shop-info">{{ business_settings.email }}</div>
-            {% endif %}
-            {% if business_settings.tax_id %}
-            <div class="shop-info">PIN: {{ business_settings.tax_id }}</div>
-            {% endif %}
-            {% endif %}
-        </div>
-        
-        <!-- Invoice Info -->
-        <div class="info-row">
-            <span>Invoice:</span>
-            <span class="bold">{{ sale.invoice_number }}</span>
-        </div>
-        <div class="info-row">
-            <span>Date:</span>
-            <span>{{ sale.date|date:"d/m/Y H:i" }}</span>
-        </div>
-        {% if sale.cashier %}
-        <div class="info-row">
-            <span>Cashier:</span>
-            <span>{{ sale.cashier.get_full_name|default:sale.cashier.username }}</span>
-        </div>
-        {% endif %}
-        {% if sale.customer %}
-        <div class="info-row">
-            <span>Customer:</span>
-            <span>{{ sale.customer.name }}</span>
-        </div>
-        {% endif %}
-        
-        <div class="divider"></div>
-        
-        <!-- Items -->
-        <div class="items-header">
-            <span>ITEM</span>
-            <span>TOTAL</span>
-        </div>
-        
-        {% for item in sale.items.all %}
-        <div class="item">
-            <div class="item-name">{{ item.product.name }}</div>
-            {% if item.note %}
-            <div style="font-size: 11px; color: #888; font-style: italic; margin-bottom: 2px;">↳ {{ item.note }}</div>
-            {% endif %}
-            <div class="item-details">
-                <span>{{ item.quantity }}{% if item.product.unit %} {{ item.product.unit.abbreviation }}{% endif %} x {{ item.unit_price|floatformat:2 }}</span>
-                <span class="bold">{{ item.total_price|floatformat:2 }}</span>
+    <div class="ambient-glow"></div>
+
+    <!-- ── Top Interactive Toolbar ── -->
+    <header class="thermal-navbar">
+        <div class="nav-left">
+            <a href="{% url 'pos_screen' slug=request.business.slug %}" class="btn-tool btn-tool-secondary" title="Return to POS (Esc)">
+                <i class="bi bi-arrow-left"></i> POS Terminal <kbd>Esc</kbd>
+            </a>
+            <div class="d-none d-md-flex align-items-center gap-2 text-muted small">
+                <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30 px-2.5 py-1 rounded-pill">
+                    <i class="bi bi-check-circle-fill me-1"></i> Paid · {{ sale.invoice_number }}
+                </span>
             </div>
         </div>
-        {% endfor %}
-        
-        <div class="divider"></div>
-        
-        <!-- Totals -->
-        <div class="totals">
-            <div class="total-row">
-                <span>Subtotal (excl. VAT):</span>
-                <span>{{ sale.subtotal|floatformat:2 }}</span>
+
+        <div class="nav-center">
+            <!-- Paper Width Switcher -->
+            <div class="segmented-group" title="Preview Paper Width">
+                <button type="button" class="segmented-btn {% if not business_settings or business_settings.thermal_receipt_width != 58 %}active{% endif %}" onclick="setPaperWidth(80, this)">
+                    <i class="bi bi-aspect-ratio me-1"></i> 80mm
+                </button>
+                <button type="button" class="segmented-btn {% if business_settings and business_settings.thermal_receipt_width == 58 %}active{% endif %}" onclick="setPaperWidth(58, this)">
+                    <i class="bi bi-phone me-1"></i> 58mm
+                </button>
             </div>
-            
-            {% if sale.discount_amount > 0 %}
-            <div class="total-row">
-                <span>Discount {% if sale.discount_type == 'points' %}(Points Redeemed){% else %}({{ sale.discount_value }}{% if sale.discount_type == 'percentage' %}%{% endif %}){% endif %}:</span>
-                <span>-{{ sale.discount_amount|floatformat:2 }}</span>
-            </div>
-            {% endif %}
-            
-            <div class="total-row">
-                <span>VAT ({{ sale.vat_rate }}%):</span>
-                <span>{{ sale.vat_amount|floatformat:2 }}</span>
-            </div>
-            
-            <div class="double-divider"></div>
-            
-            <div class="total-row grand-total">
-                <span>TOTAL:</span>
-                <span>{{ sale.total|floatformat:2 }}</span>
+
+            <!-- Font Scale Zoom -->
+            <div class="segmented-group" title="Preview Font Scale">
+                <button type="button" class="segmented-btn" onclick="adjustZoom(-10)" title="Zoom Out"><i class="bi bi-zoom-out"></i></button>
+                <button type="button" class="segmented-btn" onclick="resetZoom()" id="zoomLabel">100%</button>
+                <button type="button" class="segmented-btn" onclick="adjustZoom(10)" title="Zoom In"><i class="bi bi-zoom-in"></i></button>
             </div>
         </div>
-        
-        <!-- Payment Details -->
-        {% if sale.payments.exists %}
-        <div class="divider"></div>
-        <div class="payment-section">
-            <div class="bold center" style="margin-bottom: 5px;">PAYMENT</div>
-            {% for payment in sale.payments.all %}
-            <div class="payment-row">
-                <span>{{ payment.payment_method.name }}:</span>
-                <span>{{ payment.amount|floatformat:2 }}</span>
-            </div>
-            {% if payment.reference_number %}
-            <div class="payment-row" style="font-size: 10px; margin-top: -2px;">
-                <span>Ref: {{ payment.reference_number }}</span>
-                <span></span>
-            </div>
-            {% endif %}
-            {% endfor %}
-            
-            <div class="divider"></div>
-            
-            <div class="payment-row bold">
-                <span>Amount Paid:</span>
-                <span>{{ sale.amount_paid|floatformat:2 }}</span>
-            </div>
-            
-            {% if sale.change_given > 0 %}
-            <div class="payment-row bold">
-                <span>Change:</span>
-                <span>{{ sale.change_given|floatformat:2 }}</span>
-            </div>
-            {% endif %}
+
+        <div class="nav-right">
+            <button onclick="copyReceiptText()" class="btn-tool btn-tool-secondary" title="Copy Receipt Text (C)">
+                <i class="bi bi-clipboard"></i> Copy <kbd>C</kbd>
+            </button>
+            <button onclick="openWhatsAppModal()" class="btn-tool btn-tool-whatsapp" title="Share via WhatsApp (W)">
+                <i class="bi bi-whatsapp"></i> WhatsApp <kbd>W</kbd>
+            </button>
+            <button onclick="showEmailModal()" class="btn-tool btn-tool-secondary" title="Email Receipt (E)">
+                <i class="bi bi-envelope"></i> Email <kbd>E</kbd>
+            </button>
+            <button onclick="thermalPrint()" class="btn-tool btn-tool-primary" title="Print Receipt (P / Enter)">
+                <i class="bi bi-printer-fill fs-6"></i> Print Receipt <kbd>P</kbd>
+            </button>
         </div>
-        {% endif %}
-        
-        <!-- Loyalty Points -->
-        {% if sale.customer %}
-        <div class="divider"></div>
-        <div class="loyalty-box">
-            <div style="font-size: 11px; margin-bottom: 3px;">LOYALTY POINTS</div>
-            <div style="font-size: 12px; font-weight: bold; color: #155724; margin-bottom: 5px;">{{ sale.customer.name }}</div>
-            {% with sale.loyalty_transactions.all as transactions %}
-            {% if transactions %}
-                {% for transaction in transactions %}
-                    {% if transaction.transaction_type == 'redeem' %}
-                    <div style="font-size: 11px; color: #dc3545; margin-bottom: 3px;">
-                        ➖ {% if transaction.points < 0 %}{{ transaction.points|slice:"1:" }}{% else %}{{ transaction.points }}{% endif %} Points Redeemed
+    </header>
+
+    <!-- ── Main Workspace Canvas ── -->
+    <main class="workspace">
+        <div class="status-header-card">
+            <i class="bi bi-check2-circle fs-5"></i>
+            <span>Transaction Completed Successfully &nbsp;•&nbsp; Invoice #{{ sale.invoice_number }} &nbsp;•&nbsp; {{ sale.date|date:"d M Y, H:i" }}</span>
+        </div>
+
+        <!-- ── Thermal Paper Receipt ── -->
+        <div class="thermal-paper-wrapper" id="paperWrapper">
+            <div class="thermal-paper" id="receiptContent">
+                
+                <!-- Store Header -->
+                <div class="r-center">
+                    {% if business_settings and business_settings.thermal_print_logo and business_settings.logo %}
+                    <div class="r-logo">
+                        <img src="{{ business_settings.logo.url }}" alt="Logo">
                     </div>
-                    {% elif transaction.transaction_type == 'earn' %}
-                    <div class="loyalty-points">+{{ transaction.points }} Points Earned!</div>
                     {% endif %}
+
+                    <div class="r-shop-name">{{ business_settings.get_business_name|default:shop_name|upper }}</div>
+                    
+                    {% if business_settings %}
+                        {% if business_settings.receipt_header %}
+                        <div class="r-motto">{{ business_settings.receipt_header }}</div>
+                        {% endif %}
+                        {% if sale.branch %}
+                        <div class="r-info-text r-bold">Branch: {{ sale.branch.name }}</div>
+                        {% endif %}
+                        {% if business_settings.business_address or business_settings.address %}
+                        <div class="r-info-text">{{ business_settings.business_address|default:business_settings.address }}</div>
+                        {% endif %}
+                        {% if business_settings.business_phone or business_settings.phone %}
+                        <div class="r-info-text">Tel: {{ business_settings.business_phone|default:business_settings.phone }}</div>
+                        {% endif %}
+                        {% if business_settings.business_email or business_settings.email %}
+                        <div class="r-info-text">{{ business_settings.business_email|default:business_settings.email }}</div>
+                        {% endif %}
+                        {% if business_settings.tax_id %}
+                        <div class="r-info-text r-bold">KRA PIN / Tax ID: {{ business_settings.tax_id }}</div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                <div class="r-divider-double"></div>
+
+                <!-- Transaction Metadata -->
+                <div class="r-row">
+                    <span class="r-row-label">Invoice:</span>
+                    <span class="r-row-value r-bold">{{ sale.invoice_number }}</span>
+                </div>
+                <div class="r-row">
+                    <span class="r-row-label">Date & Time:</span>
+                    <span class="r-row-value">{{ sale.date|date:"d/m/Y H:i:s" }}</span>
+                </div>
+                {% if sale.cashier %}
+                <div class="r-row">
+                    <span class="r-row-label">Cashier:</span>
+                    <span class="r-row-value">{{ sale.cashier.get_full_name|default:sale.cashier.username }}</span>
+                </div>
+                {% endif %}
+                {% if sale.terminal %}
+                <div class="r-row">
+                    <span class="r-row-label">Terminal:</span>
+                    <span class="r-row-value">{{ sale.terminal.terminal_code }}</span>
+                </div>
+                {% endif %}
+                {% if sale.customer %}
+                <div class="r-row">
+                    <span class="r-row-label">Customer:</span>
+                    <span class="r-row-value r-bold">{{ sale.customer.name }} {% if sale.customer.phone %}({{ sale.customer.phone }}){% endif %}</span>
+                </div>
+                {% endif %}
+
+                <div class="r-divider-dashed"></div>
+
+                <!-- Itemized Cart -->
+                <div class="r-items-header">
+                    <span>ITEM / DESC</span>
+                    <span class="r-right">AMOUNT (KES)</span>
+                </div>
+
+                {% for item in sale.items.all %}
+                <div class="r-item">
+                    <div class="r-item-name">{{ item.product.name }}</div>
+                    {% if item.note %}
+                    <div class="r-item-note">↳ {{ item.note }}</div>
+                    {% endif %}
+                    <div class="r-item-calc">
+                        <span>{{ item.quantity }}{% if item.product.unit %} {{ item.product.unit.abbreviation }}{% endif %} x {{ item.unit_price|floatformat:2 }}</span>
+                        <span class="r-bold">{{ item.total_price|floatformat:2 }}</span>
+                    </div>
+                </div>
                 {% endfor %}
-                <div style="font-size: 10px; margin-top: 5px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
-            {% else %}
-            <div style="font-size: 11px; color: #666;">No points earned this transaction</div>
-            <div style="font-size: 10px; margin-top: 3px;">Balance: {{ sale.customer.loyalty_points }} pts</div>
-            {% endif %}
-            {% endwith %}
-            {% if sale.customer.phone %}
-            <div style="font-size: 10px; color: #155724; margin-top: 3px;">{{ sale.customer.phone }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
-        
-        <!-- Footer -->
-        <div class="divider"></div>
-        <div class="footer">
-            <div class="thank-you">THANK YOU!</div>
-            <div>Please come again</div>
-            {% if business_settings.website %}
-            <div style="margin-top: 5px;">{{ business_settings.website }}</div>
-            {% endif %}
-        </div>
-        
-        <div class="powered-by">
-            Powered by Marid POS
-        </div>
-        
-        <!-- Invoice Number -->
-        <div class="invoice-number-footer">
-            {{ sale.invoice_number }}
-        </div>
-    </div>
-    </div>
-    </div>
-    
-    <!-- Success Message & Action Buttons Below Receipt -->
-    <div class="page-footer">
-        <div class="success-message">
-            <i>✓</i>
-            <h2>Sale Completed Successfully!</h2>
-            <p>Receipt #{{ sale.invoice_number }} · {{ sale.date|date:"d/m/Y H:i" }}</p>
-        </div>
-        
-        <div class="action-bar">
-            <button onclick="thermalPrint()" class="btn btn-primary" title="Print Receipt (P)">
-                🖨️ Print Receipt
-            </button>
-            <button onclick="showEmailModal()" class="btn btn-secondary" title="Email Receipt (E)">
-                ✉️ Email Receipt
-            </button>
-            <a href="{% url 'pos_screen' slug=request.business.slug  %}" class="btn btn-success" title="New Sale (N)">
-                🛒 New Sale
-            </a>
-            <a href="{% url 'dashboard' slug=request.business.slug  %}" class="btn btn-info" title="Dashboard (D)">
-                🏠 Dashboard
-            </a>
-        </div>
-        
-        <!-- Email Receipt Modal -->
-        <div id="emailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
-            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%;">
-                <h3 style="margin-bottom: 20px; color: #333;">
-                    ✉️ Email Receipt
-                </h3>
-                <form method="POST">
-                    {% csrf_token %}
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; color: #666;">Customer Email:</label>
-                        <input type="email" name="customer_email" 
-                               value="{% if sale.customer and sale.customer.email %}{{ sale.customer.email }}{% endif %}"
-                               placeholder="customer@example.com" required
-                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;">
+
+                <div class="r-divider-dashed"></div>
+
+                <!-- Financial Totals -->
+                <div class="r-totals">
+                    <div class="r-row">
+                        <span class="r-row-label">Subtotal (Excl. Tax):</span>
+                        <span class="r-row-value">{{ sale.subtotal|floatformat:2 }}</span>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="submit" name="email_receipt" value="1" 
-                                style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                            📧 Send Email
-                        </button>
-                        <button type="button" onclick="hideEmailModal()" 
-                                style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                            Cancel
-                        </button>
+
+                    {% if sale.discount_amount > 0 %}
+                    <div class="r-row">
+                        <span class="r-row-label">Discount {% if sale.discount_type == 'points' %}(Points Redeemed){% else %}({{ sale.discount_value }}{% if sale.discount_type == 'percentage' %}%{% endif %}){% endif %}:</span>
+                        <span class="r-row-value">-{{ sale.discount_amount|floatformat:2 }}</span>
                     </div>
-                </form>
+                    {% endif %}
+
+                    <div class="r-row">
+                        <span class="r-row-label">VAT ({{ sale.vat_rate }}%):</span>
+                        <span class="r-row-value">{{ sale.vat_amount|floatformat:2 }}</span>
+                    </div>
+
+                    <div class="r-divider-solid"></div>
+
+                    <div class="r-row r-grand-total">
+                        <span>TOTAL DUE:</span>
+                        <span class="r-right">KES {{ sale.total|floatformat:2 }}</span>
+                    </div>
+                </div>
+
+                <!-- Payment Summary -->
+                {% if sale.payments.exists %}
+                <div class="r-divider-dashed"></div>
+                <div class="r-payment-box">
+                    <div class="r-center r-bold" style="margin-bottom: 5px; font-size: 0.95em;">PAYMENT SUMMARY</div>
+                    {% for payment in sale.payments.all %}
+                    <div class="r-row">
+                        <span class="r-row-label">{{ payment.payment_method.name }}:</span>
+                        <span class="r-row-value">{{ payment.amount|floatformat:2 }}</span>
+                    </div>
+                    {% if payment.reference_number %}
+                    <div class="r-row" style="font-size: 0.85em; color: #444;">
+                        <span>Ref / Code:</span>
+                        <span class="r-bold">{{ payment.reference_number }}</span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+
+                    <div class="r-divider-dashed" style="margin: 6px 0;"></div>
+
+                    <div class="r-row r-bold">
+                        <span>Amount Paid:</span>
+                        <span>{{ sale.amount_paid|floatformat:2 }}</span>
+                    </div>
+
+                    {% if sale.change_given > 0 %}
+                    <div class="r-row r-bold">
+                        <span>Change Returned:</span>
+                        <span>{{ sale.change_given|floatformat:2 }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Loyalty Program Details -->
+                {% if sale.customer %}
+                <div class="r-loyalty-box">
+                    <div class="r-loyalty-title">⭐ LOYALTY REWARDS</div>
+                    <div class="r-bold" style="font-size: 0.95em;">{{ sale.customer.name }}</div>
+                    {% with sale.loyalty_transactions.all as transactions %}
+                    {% if transactions %}
+                        {% for transaction in transactions %}
+                            {% if transaction.transaction_type == 'redeem' %}
+                            <div style="font-size: 0.9em; color: #c00;">
+                                -{% if transaction.points < 0 %}{{ transaction.points|slice:"1:" }}{% else %}{{ transaction.points }}{% endif %} Points Redeemed
+                            </div>
+                            {% elif transaction.transaction_type == 'earn' %}
+                            <div class="r-loyalty-points">+{{ transaction.points }} Points Earned!</div>
+                            {% endif %}
+                        {% endfor %}
+                        <div style="font-size: 0.88em; margin-top: 2px;">Available Balance: <strong>{{ sale.customer.loyalty_points }} pts</strong></div>
+                    {% else %}
+                        <div style="font-size: 0.88em; color: #444;">Available Balance: <strong>{{ sale.customer.loyalty_points }} pts</strong></div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+                {% endif %}
+
+                <!-- QR Code & Barcode -->
+                <div class="r-qr-container">
+                    <div id="receiptQrCode"></div>
+                </div>
+
+                <div class="r-barcode-container">
+                    <svg id="receiptBarcode"></svg>
+                </div>
+
+                <!-- Footer Notices -->
+                <div class="r-divider-dashed"></div>
+                <div class="r-center">
+                    {% if business_settings and business_settings.receipt_footer %}
+                    <div class="r-bold" style="margin-bottom: 4px;">{{ business_settings.receipt_footer }}</div>
+                    {% else %}
+                    <div class="r-bold" style="font-size: 1.05em; margin-bottom: 2px;">THANK YOU FOR YOUR BUSINESS!</div>
+                    <div class="r-footer-text">Goods once sold are returnable as per store policy.</div>
+                    {% endif %}
+
+                    {% if business_settings.business_website or business_settings.website %}
+                    <div class="r-footer-text">{{ business_settings.business_website|default:business_settings.website }}</div>
+                    {% endif %}
+                    <div class="r-footer-text" style="font-size: 0.8em; color: #666; margin-top: 6px;">
+                        Powered by Marid POS Platform
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <div class="shortcuts-hint">
-            ⌨️ Keyboard shortcuts: 
-            <kbd>P</kbd> Print · 
-            <kbd>E</kbd> Email · 
-            <kbd>N</kbd> New Sale · 
-            <kbd>D</kbd> Dashboard
+
+        <!-- ── Keyboard Shortcuts Guidance ── -->
+        <div class="shortcuts-bar">
+            <span><kbd>P</kbd> Print</span>
+            <span><kbd>W</kbd> WhatsApp</span>
+            <span><kbd>E</kbd> Email</span>
+            <span><kbd>C</kbd> Copy Text</span>
+            <span><kbd>N</kbd> New Sale</span>
+            <span><kbd>D</kbd> Dashboard</span>
+            <span><kbd>Esc</kbd> POS Terminal</span>
+        </div>
+    </main>
+
+    <!-- ── WhatsApp Share Modal ── -->
+    <div id="whatsappModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-title">
+                <i class="bi bi-whatsapp text-success fs-4"></i> Share Receipt via WhatsApp
+            </div>
+            <p style="color: var(--app-text-muted); font-size: 14px; margin-bottom: 12px;">
+                Enter customer's phone number to open WhatsApp with a formatted digital receipt summary:
+            </p>
+            <label style="font-size: 13px; font-weight: 600; color: var(--app-text-muted);">Phone Number (e.g. 0712345678 or 254712345678)</label>
+            <input type="tel" id="whatsappPhoneInput" class="modal-input" 
+                   value="{% if sale.customer and sale.customer.phone %}{{ sale.customer.phone }}{% endif %}" 
+                   placeholder="254712345678">
+
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="sendWhatsAppReceipt()" class="btn-tool btn-tool-whatsapp" style="flex: 1; justify-content: center; padding: 12px;">
+                    <i class="bi bi-send-fill"></i> Open WhatsApp
+                </button>
+                <button type="button" onclick="closeWhatsAppModal()" class="btn-tool btn-tool-secondary" style="padding: 12px 20px;">
+                    Cancel
+                </button>
+            </div>
         </div>
     </div>
-    
+
+    <!-- ── Email Receipt Modal ── -->
+    <div id="emailModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-title">
+                <i class="bi bi-envelope text-info fs-4"></i> Email Digital Receipt
+            </div>
+            <p style="color: var(--app-text-muted); font-size: 14px; margin-bottom: 12px;">
+                Send a complete PDF / HTML digital invoice copy to the customer's inbox:
+            </p>
+            <form method="POST">
+                {% csrf_token %}
+                <label style="font-size: 13px; font-weight: 600; color: var(--app-text-muted);">Customer Email Address</label>
+                <input type="email" name="customer_email" class="modal-input"
+                       value="{% if sale.customer and sale.customer.email %}{{ sale.customer.email }}{% endif %}"
+                       placeholder="customer@example.com" required>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" name="email_receipt" value="1" class="btn-tool btn-tool-primary" style="flex: 1; justify-content: center; padding: 12px;">
+                        <i class="bi bi-send-fill"></i> Send Email
+                    </button>
+                    <button type="button" onclick="hideEmailModal()" class="btn-tool btn-tool-secondary" style="padding: 12px 20px;">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Floating Toast ── -->
+    <div id="toast" class="toast-notification">
+        <i class="bi bi-check-circle-fill fs-5"></i>
+        <span id="toastMsg">Receipt copied to clipboard</span>
+    </div>
+
     <script>
-        // Email modal functions
+        // ── QR Code Generator ──
+        try {
+            const qrContainer = document.getElementById('receiptQrCode');
+            if (qrContainer) {
+                const qrData = "{{ sale.tims_verification_url|default:'' }}" || `${window.location.origin}/b/{{ request.business.slug }}/invoice/{{ sale.pk }}/`;
+                new QRCode(qrContainer, {
+                    text: qrData,
+                    width: 90,
+                    height: 90,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+        } catch (e) {
+            console.warn("QR code render skipped", e);
+        }
+
+        // ── Code 128 Barcode Generator ──
+        try {
+            JsBarcode("#receiptBarcode", "{{ sale.invoice_number }}", {
+                format: "CODE128",
+                width: 1.5,
+                height: 38,
+                displayValue: true,
+                fontSize: 11,
+                font: "JetBrains Mono",
+                margin: 0
+            });
+        } catch (e) {
+            console.warn("Barcode render skipped", e);
+        }
+
+        // ── Thermal Print Trigger ──
+        function thermalPrint() {
+            window.print();
+        }
+
+        // ── Paper Width Switcher ──
+        function setPaperWidth(widthMm, btn) {
+            document.documentElement.style.setProperty('--paper-width', widthMm + 'mm');
+            if (btn) {
+                document.querySelectorAll('.segmented-group .segmented-btn').forEach(b => {
+                    if (b.innerText.includes('mm')) b.classList.remove('active');
+                });
+                btn.classList.add('active');
+            }
+            showToast(`Preview switched to ${widthMm}mm roll`);
+        }
+
+        // ── Zoom Control ──
+        let currentZoom = 100;
+        function adjustZoom(delta) {
+            currentZoom = Math.max(70, Math.min(150, currentZoom + delta));
+            document.getElementById('paperWrapper').style.transform = `scale(${currentZoom / 100})`;
+            document.getElementById('zoomLabel').innerText = `${currentZoom}%`;
+        }
+        function resetZoom() {
+            currentZoom = 100;
+            document.getElementById('paperWrapper').style.transform = 'scale(1)';
+            document.getElementById('zoomLabel').innerText = '100%';
+        }
+
+        // ── Copy Clean Receipt Text to Clipboard ──
+        function copyReceiptText() {
+            const storeName = "{{ business_settings.get_business_name|default:shop_name }}";
+            const inv = "{{ sale.invoice_number }}";
+            const date = "{{ sale.date|date:'d/m/Y H:i' }}";
+            const total = "KES {{ sale.total|floatformat:2 }}";
+            
+            let txt = `================================\n`;
+            txt += `  ${storeName.toUpperCase()}\n`;
+            txt += `================================\n`;
+            txt += `Invoice: ${inv}\nDate: ${date}\n`;
+            {% if sale.customer %}txt += `Customer: {{ sale.customer.name }}\n`;{% endif %}
+            txt += `--------------------------------\n`;
+            txt += `ITEMS:\n`;
+            {% for item in sale.items.all %}
+            txt += `- {{ item.product.name }} (x{{ item.quantity }}) : KES {{ item.total_price|floatformat:2 }}\n`;
+            {% endfor %}
+            txt += `--------------------------------\n`;
+            txt += `Subtotal: KES {{ sale.subtotal|floatformat:2 }}\n`;
+            {% if sale.discount_amount > 0 %}txt += `Discount: -KES {{ sale.discount_amount|floatformat:2 }}\n`;{% endif %}
+            txt += `VAT ({{ sale.vat_rate }}%): KES {{ sale.vat_amount|floatformat:2 }}\n`;
+            txt += `TOTAL: ${total}\n`;
+            txt += `================================\n`;
+            txt += `Thank you for shopping with us!\n`;
+
+            navigator.clipboard.writeText(txt).then(() => {
+                showToast("✓ Receipt summary copied to clipboard!");
+            }).catch(() => {
+                showToast("Failed to copy receipt");
+            });
+        }
+
+        // ── WhatsApp Modal & Direct Share ──
+        function openWhatsAppModal() {
+            document.getElementById('whatsappModal').style.display = 'flex';
+            setTimeout(() => document.getElementById('whatsappPhoneInput').focus(), 100);
+        }
+        function closeWhatsAppModal() {
+            document.getElementById('whatsappModal').style.display = 'none';
+        }
+
+        function sendWhatsAppReceipt() {
+            let phone = document.getElementById('whatsappPhoneInput').value.trim();
+            if (!phone) {
+                alert('Please enter a valid phone number');
+                return;
+            }
+            phone = phone.replace(/[^0-9]/g, '');
+            if (phone.startsWith('0')) {
+                phone = '254' + phone.substring(1);
+            }
+
+            const storeName = "{{ business_settings.get_business_name|default:shop_name }}";
+            const inv = "{{ sale.invoice_number }}";
+            const total = "KES {{ sale.total|floatformat:2 }}";
+            const date = "{{ sale.date|date:'d/m/Y H:i' }}";
+            const url = `${window.location.origin}/b/{{ request.business.slug }}/invoice/{{ sale.pk }}/`;
+
+            const message = `Hello! Here is your e-receipt from *${storeName}*:%0A%0A🧾 *Invoice:* ${inv}%0A📅 *Date:* ${date}%0A💰 *Total Paid:* ${total}%0A%0AView / Download your full digital receipt here:%0A${encodeURIComponent(url)}%0A%0AThank you for your business! 🙏`;
+
+            const waUrl = `https://wa.me/${phone}?text=${message}`;
+            window.open(waUrl, '_blank');
+            closeWhatsAppModal();
+        }
+
+        // ── Email Modal ──
         function showEmailModal() {
             document.getElementById('emailModal').style.display = 'flex';
         }
-        
         function hideEmailModal() {
             document.getElementById('emailModal').style.display = 'none';
         }
-        
-        // Close modal on outside click
-        document.getElementById('emailModal').addEventListener('click', function(e) {
-            if (e.target === this) hideEmailModal();
-        });
 
-        // ── Thermal print via popup window ──────────────────────────────────
-        // Opens a new 80mm-wide window, prints it, then closes it.
-        // This bypasses the browser's A4 default paper size.
-        function thermalPrint() {
-            const receiptHtml = document.getElementById('receipt-content').outerHTML;
-            const styles = Array.from(document.querySelectorAll('style'))
-                .map(s => s.outerHTML).join('\n');
+        // ── Toast Utility ──
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2800);
+        }
 
-            const popup = window.open('', '_blank',
-                'width=320,height=600,toolbar=0,scrollbars=0,status=0,resizable=0');
-            if (!popup) {
-                // Popup blocked — fall back to normal print
-                window.print();
+        // ── Global Keyboard Shortcuts ──
+        document.addEventListener('keydown', function(e) {
+            if (e.target.matches('input, textarea, select')) {
+                if (e.key === 'Escape') {
+                    closeWhatsAppModal();
+                    hideEmailModal();
+                }
                 return;
             }
 
-            popup.document.write(`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Receipt</title>
-${styles}
-<style>
-  @page { size: 80mm auto; margin: 0; }
-  body { margin: 0; padding: 0; width: 80mm; background: white; }
-  .receipt-wrapper { box-shadow: none; border-radius: 0; width: 80mm; max-width: 80mm; margin: 0; }
-  .receipt-container { padding: 3mm 4mm; }
-</style>
-</head>
-<body>${receiptHtml}</body>
-</html>`);
-            popup.document.close();
-            popup.focus();
-            // Wait for content to render then print
-            popup.onload = function() {
-                popup.print();
-                setTimeout(function() { popup.close(); }, 1000);
-            };
-            // Fallback if onload doesn't fire
-            setTimeout(function() {
-                if (!popup.closed) {
-                    popup.print();
-                    setTimeout(function() { popup.close(); }, 1000);
-                }
-            }, 800);
-        }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'p' || e.key === 'P') {
-                if (!e.target.matches('input, textarea, select')) {
-                    e.preventDefault();
-                    thermalPrint();
-                }
-            }
-            if (e.key === 'e' || e.key === 'E') {
-                if (!e.target.matches('input, textarea, select')) {
-                    e.preventDefault();
-                    showEmailModal();
-                }
-            }
-            if (e.key === 'n' || e.key === 'N') {
-                if (!e.target.matches('input, textarea, select')) {
-                    e.preventDefault();
+            const key = e.key.toUpperCase();
+            if (key === 'P' || e.key === 'Enter') {
+                e.preventDefault();
+                thermalPrint();
+            } else if (key === 'W') {
+                e.preventDefault();
+                openWhatsAppModal();
+            } else if (key === 'E') {
+                e.preventDefault();
+                showEmailModal();
+            } else if (key === 'C') {
+                e.preventDefault();
+                copyReceiptText();
+            } else if (key === 'N') {
+                e.preventDefault();
+                window.location.href = "{% url 'pos_screen' slug=request.business.slug %}";
+            } else if (key === 'D') {
+                e.preventDefault();
+                window.location.href = "{% url 'dashboard' slug=request.business.slug %}";
+            } else if (e.key === 'Escape') {
+                if (document.getElementById('whatsappModal').style.display === 'flex') {
+                    closeWhatsAppModal();
+                } else if (document.getElementById('emailModal').style.display === 'flex') {
+                    hideEmailModal();
+                } else {
                     window.location.href = "{% url 'pos_screen' slug=request.business.slug %}";
                 }
             }
-            if (e.key === 'd' || e.key === 'D') {
-                if (!e.target.matches('input, textarea, select')) {
-                    e.preventDefault();
-                    window.location.href = "{% url 'dashboard' slug=request.business.slug %}";
-                }
-            }
-            if (e.key === 'Escape') hideEmailModal();
         });
 
-        // Auto-print after page fully loads — slight delay so the page is visible first
-        window.addEventListener('load', function() {
-            setTimeout(thermalPrint, 800);
+        // Close modals on backdrop click
+        window.addEventListener('click', function(e) {
+            if (e.target.id === 'whatsappModal') closeWhatsAppModal();
+            if (e.target.id === 'emailModal') hideEmailModal();
         });
+
+        // Check if autoprint query param is set
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('autoprint') === '1' || urlParams.get('print') === '1') {
+            setTimeout(() => thermalPrint(), 350);
+        }
     </script>
-
 </body>
 </html>

@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\backup\cloud.py
+# hypothesis_version: 6.167.1
+
+['/', 'AWS_ACCESS_KEY_ID', 'AWS_S3_REGION_NAME', 'Body', 'pos_cloud_mock', 'rb', 's3', 's3v4', 'us-east-1', 'wb']

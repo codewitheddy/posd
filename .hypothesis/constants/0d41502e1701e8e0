@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0094_mpesa_config_fields.py
+# hypothesis_version: 6.167.1
+
+[100, 'Buy Goods (Till)', 'Paybill', 'businesssettings', 'mpesa_account_name', 'mpesa_enabled', 'mpesa_shortcode', 'mpesa_type', 'paybill', 'pos', 'till']

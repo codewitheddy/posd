@@ -5,471 +5,646 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Z-Report #{{ zreport.z_number|stringformat:"05d" }} - {{ business.name }}</title>
     <style>
-        @media print {
-            .no-print { display: none; }
-            @page { margin: 12mm; }
-            body { padding: 0; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-
-        :root {
-            --brand: #224195;
-            --brand-deep: #1a3278;
-            --ink: #0f172a;
-            --muted: #64748b;
-            --line: #dbe3ef;
-            --panel: #f8fafc;
-            --success: #166534;
-            --success-soft: #dcfce7;
-            --danger: #b91c1c;
-            --danger-soft: #fee2e2;
-            --warn: #92400e;
-            --warn-soft: #fef3c7;
-        }
-
+        
         body {
-            font-family: "Segoe UI", Tahoma, sans-serif;
-            font-size: 12px;
-            line-height: 1.4;
-            color: var(--ink);
-            background: #eef3f8;
-            margin: 0;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #000;
         }
-
-        .report-shell {
-            max-width: 980px;
-            margin: 0 auto;
-            background: #fff;
-            border: 1px solid var(--line);
-            border-radius: 24px;
+        
+        .receipt-wrapper {
+            max-width: 420px;
+            margin: 0 auto 30px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
             overflow: hidden;
-            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .header {
-            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
-            color: #fff;
-            padding: 24px 28px 20px;
+        
+        .page-footer {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
         }
-
-        .header-top {
+        
+        .action-bar {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 24px;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
         }
-
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-            letter-spacing: -0.02em;
-        }
-
-        .header h2 {
-            margin: 6px 0 0;
-            font-size: 16px;
+        
+        .btn {
+            padding: 12px 22px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
             font-weight: 600;
-            opacity: 0.95;
-        }
-
-        .header-meta {
-            text-align: right;
-            font-size: 12px;
-            opacity: 0.95;
-        }
-
-        .subline {
-            margin-top: 6px;
-            font-size: 12px;
-            opacity: 0.9;
-        }
-
-        .void-banner {
-            margin-top: 14px;
+            text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(255, 255, 255, 0.14);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            border-radius: 999px;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: 700;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        
+        .btn-secondary {
+            background: #475569;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #334155;
+        }
+        
+        .btn-success {
+            background: #16a34a;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #15803d;
         }
 
-        .content {
-            padding: 22px 24px 24px;
+        .btn-outline-light {
+            background: transparent;
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
-
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 18px;
+        .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
-
-        .metric {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 16px;
-            padding: 14px 16px;
-        }
-
-        .metric-label {
-            display: block;
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 6px;
-        }
-
-        .metric-value {
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--ink);
-        }
-
-        .metric-note {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 4px;
-        }
-
-        .section {
-            margin-bottom: 18px;
-            page-break-inside: avoid;
-            background: #fff;
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            overflow: hidden;
-        }
-
-        .section-title {
+        
+        .shortcuts-hint {
+            text-align: center;
+            color: #94a3b8;
             font-size: 13px;
-            font-weight: 800;
-            color: var(--ink);
-            background: var(--panel);
-            border-bottom: 1px solid var(--line);
-            padding: 12px 16px;
-            letter-spacing: 0.03em;
         }
-
-        .section-body {
-            padding: 10px 14px 12px;
+        
+        .shortcuts-hint kbd {
+            background: rgba(255,255,255,0.15);
+            color: #f8fafc;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0 2px;
+            border: 1px solid rgba(255,255,255,0.2);
         }
-
-        .grid-two {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 18px;
+        
+        /* ── Thermal Receipt Layout ── */
+        .receipt-container {
+            padding: 24px 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12.5px;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
         }
-
-        table {
+        
+        .receipt {
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 0;
         }
-
-        table td,
-        table th {
-            padding: 8px 10px;
+        
+        .center {
+            text-align: center;
         }
-
-        table.data-table td,
-        table.data-table th {
-            border-bottom: 1px solid #edf2f7;
+        
+        .bold {
+            font-weight: bold;
         }
-
-        table.data-table tr:last-child td,
-        table.data-table tr:last-child th {
-            border-bottom: none;
+        
+        .header {
+            text-align: center;
+            margin-bottom: 12px;
         }
-
-        table.data-table th {
-            font-size: 11px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            text-align: left;
-            font-weight: 700;
+        
+        .shop-name {
+            font-size: 18px;
+            font-weight: 900;
+            margin-bottom: 4px;
+            color: #000;
+            letter-spacing: 0.5px;
         }
-
-        .text-right {
-            text-align: right;
+        
+        .shop-info {
+            font-size: 11.5px;
+            margin-bottom: 2px;
+            color: #333;
         }
-
-        .text-center {
+        
+        .report-title {
+            font-size: 15px;
+            font-weight: 900;
+            margin: 8px 0 4px;
+            letter-spacing: 1px;
             text-align: center;
         }
 
-        .font-bold {
-            font-weight: bold;
-        }
-
-        .highlight {
-            background-color: var(--panel);
-            font-weight: 700;
-        }
-
-        .positive { color: var(--success); font-weight: 700; }
-        .negative { color: var(--danger); font-weight: 700; }
-
-        .hash-block {
-            background: #0f172a;
-            color: #e2e8f0;
-            border-radius: 14px;
-            padding: 14px 16px;
-            font-size: 11px;
-            overflow-wrap: anywhere;
-        }
-
-        .footer {
-            margin-top: 18px;
-            padding: 16px 2px 0;
-            border-top: 1px solid var(--line);
-            font-size: 10px;
-            color: var(--muted);
-        }
-
-        .print-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            background: var(--brand);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
+        .report-number {
             font-size: 13px;
-            font-weight: 700;
-            box-shadow: 0 8px 18px rgba(34, 65, 149, 0.25);
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 6px;
         }
 
-        .print-btn:hover {
-            background: var(--brand-deep);
+        .void-watermark {
+            border: 2px solid #000;
+            padding: 4px 8px;
+            font-weight: 900;
+            text-align: center;
+            margin: 6px 0;
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
+        
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 10px 0;
+        }
+        
+        .double-divider {
+            border-top: 2px solid #000;
+            margin: 10px 0;
         }
 
-        .voided-watermark {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-45deg);
-            font-size: 120px;
-            color: rgba(185, 28, 28, 0.08);
-            font-weight: bold;
-            z-index: -1;
+        .section-header {
+            font-weight: 900;
+            font-size: 12.5px;
+            text-align: center;
+            margin: 8px 0 6px;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 12px;
+        }
+        
+        .info-row span:first-child {
+            color: #222;
+        }
+        
+        .info-row span:last-child {
+            color: #000;
+            font-weight: 600;
+            text-align: right;
+        }
+        
+        .info-row.highlight {
+            font-weight: 800;
+            color: #000;
+        }
+        .info-row.highlight span:first-child,
+        .info-row.highlight span:last-child {
+            font-weight: 800;
+            color: #000;
         }
 
-        @media (max-width: 900px) {
-            .metrics,
-            .grid-two,
-            .header-top {
-                grid-template-columns: 1fr;
-                display: block;
+        .info-row.variance-row {
+            font-size: 13.5px;
+            font-weight: 900;
+            margin: 5px 0;
+        }
+
+        .variance-status {
+            text-align: center;
+            font-weight: 800;
+            font-size: 11.5px;
+            margin-top: 3px;
+            padding: 2px 4px;
+        }
+
+        .breakdown-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin: 4px 0;
+        }
+
+        .breakdown-table th {
+            text-align: left;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 3px;
+            font-size: 11px;
+        }
+        .breakdown-table th.text-right {
+            text-align: right;
+        }
+        .breakdown-table th.text-center {
+            text-align: center;
+        }
+
+        .breakdown-table td {
+            padding: 2px 0;
+        }
+        .breakdown-table td.text-right {
+            text-align: right;
+        }
+        .breakdown-table td.text-center {
+            text-align: center;
+        }
+
+        .audit-hash {
+            font-size: 9.5px;
+            word-break: break-all;
+            text-align: center;
+            color: #333;
+            margin-top: 4px;
+            line-height: 1.2;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 14px;
+            padding-top: 10px;
+            font-size: 11px;
+            color: #444;
+        }
+        
+        /* ── Thermal paper size — must be top-level ── */
+        @page {
+            size: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} auto;
+            margin: 0mm;
+        }
+
+        @media print {
+            *, *:before, *:after {
+                box-shadow: none !important;
+                text-shadow: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
-            .header-meta {
-                text-align: left;
-                margin-top: 12px;
+            html, body {
+                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} !important;
+                max-width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+            }
+            
+            .page-footer,
+            .action-bar,
+            .shortcuts-hint,
+            .no-print,
+            header, nav, footer {
+                display: none !important;
+            }
+            
+            .receipt-wrapper {
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} !important;
+                max-width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+            }
+            
+            .receipt-container {
+                width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} !important;
+                max-width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58mm{% else %}80mm{% endif %} !important;
+                padding: {% if business_settings and business_settings.thermal_receipt_width == 58 %}2mm 1mm{% else %}3mm 2mm{% endif %} !important;
+                font-size: {% if business_settings and business_settings.thermal_receipt_width == 58 %}11px{% else %}12px{% endif %} !important;
+                line-height: 1.35 !important;
+                color: #000000 !important;
             }
 
-            .metric { margin-bottom: 10px; }
+            .shop-name {
+                font-size: {% if business_settings and business_settings.thermal_receipt_width == 58 %}15px{% else %}17px{% endif %} !important;
+            }
+
+            .header, .divider, .double-divider, .footer {
+                border-color: #000000 !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 16px 8px;
+            }
+            .action-bar {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
-    {% if zreport.is_voided %}
-    <div class="voided-watermark">VOIDED</div>
-    {% endif %}
+    <div class="receipt-wrapper" id="receipt-content">
+        <div class="receipt-container">
+            <div class="receipt">
+                <!-- Header -->
+                <div class="header">
+                    <div class="shop-name">{{ business.name|upper }}</div>
+                    {% if zreport.session.branch %}
+                    <div class="shop-info bold">BRANCH: {{ zreport.session.branch.name|upper }}</div>
+                    {% endif %}
+                    {% if zreport.session.terminal %}
+                    <div class="shop-info">TERMINAL: {{ zreport.session.terminal.name|upper }} ({{ zreport.session.terminal.terminal_code }})</div>
+                    {% endif %}
+                    {% if business_settings %}
+                        {% if business_settings.address %}
+                        <div class="shop-info">{{ business_settings.address }}</div>
+                        {% endif %}
+                        {% if business_settings.phone %}
+                        <div class="shop-info">TEL: {{ business_settings.phone }}</div>
+                        {% endif %}
+                        {% if business_settings.email %}
+                        <div class="shop-info">{{ business_settings.email }}</div>
+                        {% endif %}
+                        {% if business_settings.tax_id %}
+                        <div class="shop-info">PIN: {{ business_settings.tax_id }}</div>
+                        {% endif %}
+                    {% elif business.address %}
+                        <div class="shop-info">{{ business.address }}</div>
+                        {% if business.phone %}<div class="shop-info">TEL: {{ business.phone }}</div>{% endif %}
+                        {% if business.email %}<div class="shop-info">{{ business.email }}</div>{% endif %}
+                    {% endif %}
+                </div>
+                
+                <div class="double-divider"></div>
+                <div class="report-title">*** SHIFT Z-REPORT ***</div>
+                <div class="report-number">REPORT NO: #{{ zreport.z_number|stringformat:"05d" }}</div>
+                {% if zreport.is_voided %}
+                <div class="void-watermark">*** VOIDED REPORT ***</div>
+                {% endif %}
+                <div class="double-divider"></div>
 
-    <button class="print-btn no-print" onclick="window.print()">Print Report</button>
-
-    <div class="report-shell">
-        <div class="header">
-            <div class="header-top">
-                <div>
-                    <h1>{{ business.name }}</h1>
-                    <h2>Z-REPORT #{{ zreport.z_number|stringformat:"05d" }}</h2>
-                    <div class="subline">{{ business.address }}</div>
-                    <div class="subline">Phone: {{ business.phone }} | Email: {{ business.email }}</div>
+                <!-- Session & Cashier Info -->
+                <div class="info-row">
+                    <span>Session:</span>
+                    <span>#{{ zreport.session.session_number }}</span>
                 </div>
-                <div class="header-meta">
-                    <div><strong>Generated</strong></div>
-                    <div>{{ zreport.created_at|date:"l, F d, Y" }}</div>
-                    <div>{{ zreport.created_at|date:"H:i:s" }}</div>
+                <div class="info-row">
+                    <span>Opened By:</span>
+                    <span>{{ report_data.session.opened_by|default:zreport.session.opened_by.get_full_name|default:zreport.session.opened_by.username }}</span>
                 </div>
-            </div>
-            {% if zreport.is_voided %}
-            <div class="void-banner">VOIDED REPORT</div>
-            {% endif %}
-        </div>
-
-        <div class="content">
-            <div class="metrics">
-                <div class="metric">
-                    <span class="metric-label">Gross Sales</span>
-                    <div class="metric-value" style="color: var(--success);">KES {{ report_data.sales_summary.gross_sales|floatformat:0 }}</div>
-                    <div class="metric-note">Full session turnover</div>
+                <div class="info-row">
+                    <span>Opened At:</span>
+                    <span>{{ report_data.session.opened_at|default:zreport.session.opened_at|date:"d/m/Y H:i" }}</span>
                 </div>
-                <div class="metric">
-                    <span class="metric-label">Net Sales</span>
-                    <div class="metric-value">KES {{ report_data.sales_summary.net_sales|floatformat:0 }}</div>
-                    <div class="metric-note">After tax separation</div>
+                <div class="info-row">
+                    <span>Closed By:</span>
+                    <span>{{ report_data.session.closed_by|default:zreport.created_by.get_full_name|default:zreport.created_by.username }}</span>
                 </div>
-                <div class="metric">
-                    <span class="metric-label">Transactions</span>
-                    <div class="metric-value">{{ report_data.sales_summary.total_transactions }}</div>
-                    <div class="metric-note">Recorded in session</div>
+                <div class="info-row">
+                    <span>Closed At:</span>
+                    <span>{{ report_data.session.closed_at|default:zreport.session.closed_at|date:"d/m/Y H:i" }}</span>
                 </div>
-                <div class="metric">
-                    <span class="metric-label">Cash Difference</span>
-                    <div class="metric-value {% if report_data.cash_management.difference > 0 %}positive{% elif report_data.cash_management.difference < 0 %}negative{% endif %}">{% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|floatformat:0 }}</div>
-                    <div class="metric-note">{{ report_data.cash_management.difference_percentage|floatformat:2 }}%</div>
-                </div>
-            </div>
-
-            <div class="grid-two">
-                <div class="section">
-                    <div class="section-title">Session Information</div>
-                    <div class="section-body">
-                        <table class="data-table">
-                            <tr><td>Session Number</td><td class="text-right font-bold">#{{ zreport.session.session_number }}</td></tr>
-                            <tr><td>Opened By</td><td class="text-right">{{ report_data.session.opened_by }}</td></tr>
-                            <tr><td>Opened At</td><td class="text-right">{{ report_data.session.opened_at }}</td></tr>
-                            <tr><td>Closed By</td><td class="text-right">{{ report_data.session.closed_by }}</td></tr>
-                            <tr><td>Closed At</td><td class="text-right">{{ report_data.session.closed_at }}</td></tr>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <div class="section-title">Transaction Metrics</div>
-                    <div class="section-body">
-                        <table class="data-table">
-                            <tr><td>First Transaction</td><td class="text-right">{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</td></tr>
-                            <tr><td>Last Transaction</td><td class="text-right">{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</td></tr>
-                            <tr><td>Average Transaction</td><td class="text-right">KES {{ report_data.transaction_metrics.average_transaction_value|floatformat:2 }}</td></tr>
-                            <tr><td>Largest Transaction</td><td class="text-right">KES {{ report_data.transaction_metrics.largest_transaction|floatformat:2 }}</td></tr>
-                            <tr><td>Smallest Transaction</td><td class="text-right">KES {{ report_data.transaction_metrics.smallest_transaction|floatformat:2 }}</td></tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid-two">
-                <div class="section">
-                    <div class="section-title">Sales Summary</div>
-                    <div class="section-body">
-                        <table class="data-table">
-                            <tr><td>Total Transactions</td><td class="text-right font-bold">{{ report_data.sales_summary.total_transactions }}</td></tr>
-                            <tr class="highlight"><td>Gross Sales</td><td class="text-right">KES {{ report_data.sales_summary.gross_sales|floatformat:2 }}</td></tr>
-                            <tr><td>Total Tax</td><td class="text-right">KES {{ report_data.sales_summary.total_tax|floatformat:2 }}</td></tr>
-                            <tr class="highlight"><td>Net Sales</td><td class="text-right">KES {{ report_data.sales_summary.net_sales|floatformat:2 }}</td></tr>
-                            <tr><td>Total Discounts</td><td class="text-right">KES {{ report_data.sales_summary.total_discounts|floatformat:2 }}</td></tr>
-                            <tr><td>Total Refunds</td><td class="text-right">KES {{ report_data.sales_summary.total_refunds|floatformat:2 }}</td></tr>
-                            <tr><td>Total Voids</td><td class="text-right">KES {{ report_data.sales_summary.total_voids|floatformat:2 }}</td></tr>
-                        </table>
-                    </div>
+                <div class="info-row">
+                    <span>Generated:</span>
+                    <span>{{ zreport.created_at|date:"d/m/Y H:i:s" }}</span>
                 </div>
 
-                <div class="section">
-                    <div class="section-title">Cash Management</div>
-                    <div class="section-body">
-                        <table class="data-table">
-                            <tr><td>Opening Float</td><td class="text-right">KES {{ report_data.cash_management.opening_float|floatformat:2 }}</td></tr>
-                            <tr><td>Cash Sales</td><td class="text-right">KES {{ report_data.cash_management.cash_sales|floatformat:2 }}</td></tr>
-                            <tr class="highlight"><td>Expected Cash</td><td class="text-right">KES {{ report_data.cash_management.expected_cash|floatformat:2 }}</td></tr>
-                            <tr><td>Actual Cash Counted</td><td class="text-right">KES {{ report_data.cash_management.actual_cash_counted|floatformat:2 }}</td></tr>
-                            <tr class="highlight"><td>Difference</td><td class="text-right {% if report_data.cash_management.difference > 0 %}positive{% elif report_data.cash_management.difference < 0 %}negative{% endif %}">{% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|floatformat:2 }} ({{ report_data.cash_management.difference_percentage|floatformat:2 }}%)</td></tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
+                <div class="divider"></div>
 
-            <div class="section">
-                <div class="section-title">Payment Breakdown</div>
-                <div class="section-body">
-                    <table class="data-table">
+                <!-- Sales Summary -->
+                <div class="section-header">*** SALES SUMMARY ***</div>
+                <div class="info-row">
+                    <span>Total Transactions:</span>
+                    <span class="bold">{{ report_data.sales_summary.total_transactions|default:0 }}</span>
+                </div>
+                <div class="info-row highlight">
+                    <span>Gross Sales:</span>
+                    <span>KES {{ report_data.sales_summary.gross_sales|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="info-row">
+                    <span>Total Discounts:</span>
+                    <span>-KES {{ report_data.sales_summary.total_discounts|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="info-row">
+                    <span>Net Sales (excl VAT):</span>
+                    <span>KES {{ report_data.sales_summary.net_sales|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="info-row">
+                    <span>Tax Collected (VAT):</span>
+                    <span>KES {{ report_data.sales_summary.total_tax|default:0|floatformat:2 }}</span>
+                </div>
+                {% if report_data.sales_summary.total_refunds %}
+                <div class="info-row">
+                    <span>Total Refunds:</span>
+                    <span>KES {{ report_data.sales_summary.total_refunds|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+                {% if report_data.sales_summary.total_voids %}
+                <div class="info-row">
+                    <span>Total Voids:</span>
+                    <span>KES {{ report_data.sales_summary.total_voids|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+
+                <div class="divider"></div>
+
+                <!-- Cash Reconciliation -->
+                <div class="section-header">*** CASH DRAWER RECONCILIATION ***</div>
+                <div class="info-row">
+                    <span>Opening Float:</span>
+                    <span>KES {{ report_data.cash_management.opening_float|default:zreport.session.opening_cash|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="info-row">
+                    <span>Cash Sales in Till:</span>
+                    <span>KES {{ report_data.cash_management.cash_sales|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="info-row highlight">
+                    <span>Expected Cash in Till:</span>
+                    <span>KES {{ report_data.cash_management.expected_cash|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="info-row highlight">
+                    <span>Counted Cash in Drawer:</span>
+                    <span>KES {{ report_data.cash_management.actual_cash_counted|default:zreport.session.closing_cash|default:0|floatformat:2 }}</span>
+                </div>
+
+                <div class="double-divider"></div>
+
+                <div class="info-row variance-row">
+                    <span>CASH VARIANCE:</span>
+                    <span>{% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|default:zreport.session.cash_difference|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="variance-status">
+                    {% if report_data.cash_management.difference > 0 %}
+                    >>> OVERAGE: +KES {{ report_data.cash_management.difference|floatformat:2 }} <<<
+                    {% elif report_data.cash_management.difference < 0 %}
+                    >>> SHORTAGE: -KES {{ report_data.cash_management.difference|stringformat:"f"|slice:"1:"|default:0|floatformat:2 }} <<<
+                    {% else %}
+                    >>> EXACT MATCH / BALANCED <<<
+                    {% endif %}
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Payment Methods Breakdown -->
+                {% if report_data.payment_breakdown %}
+                <div class="section-header">*** PAYMENT BREAKDOWN ***</div>
+                <table class="breakdown-table">
+                    <thead>
                         <tr>
-                            <th>Method</th>
-                            <th class="text-center">Count</th>
-                            <th class="text-right">Amount</th>
+                            <th>METHOD</th>
+                            <th class="text-center">TXNS</th>
+                            <th class="text-right">AMOUNT (KES)</th>
                         </tr>
-                        {% for payment in report_data.payment_breakdown %}
+                    </thead>
+                    <tbody>
+                        {% for pm in report_data.payment_breakdown %}
                         <tr>
-                            <td>{{ payment.method }}</td>
-                            <td class="text-center">{{ payment.count }}</td>
-                            <td class="text-right">KES {{ payment.amount|floatformat:2 }}</td>
+                            <td>{{ pm.method|upper }}</td>
+                            <td class="text-center">{{ pm.count }}</td>
+                            <td class="text-right bold">{{ pm.amount|floatformat:2 }}</td>
                         </tr>
                         {% endfor %}
-                    </table>
-                </div>
-            </div>
+                    </tbody>
+                </table>
+                <div class="divider"></div>
+                {% endif %}
 
-            {% if report_data.tax_breakdown %}
-            <div class="section">
-                <div class="section-title">Tax Breakdown</div>
-                <div class="section-body">
-                    <table class="data-table">
+                <!-- Tax Breakdown -->
+                {% if report_data.tax_breakdown %}
+                <div class="section-header">*** TAX SUMMARY ***</div>
+                <table class="breakdown-table">
+                    <thead>
                         <tr>
-                            <th>Rate</th>
-                            <th class="text-right">Taxable Amount</th>
-                            <th class="text-right">Tax Amount</th>
+                            <th>RATE</th>
+                            <th class="text-right">TAXABLE</th>
+                            <th class="text-right">VAT AMOUNT</th>
                         </tr>
+                    </thead>
+                    <tbody>
                         {% for tax in report_data.tax_breakdown %}
                         <tr>
                             <td>{{ tax.rate }}</td>
-                            <td class="text-right">KES {{ tax.taxable_amount|floatformat:2 }}</td>
-                            <td class="text-right">KES {{ tax.tax_amount|floatformat:2 }}</td>
+                            <td class="text-right">{{ tax.taxable_amount|floatformat:2 }}</td>
+                            <td class="text-right bold">{{ tax.tax_amount|floatformat:2 }}</td>
                         </tr>
                         {% endfor %}
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if report_data.top_products %}
-            <div class="section">
-                <div class="section-title">Top 10 Products</div>
-                <div class="section-body">
-                    <table class="data-table">
-                        <tr>
-                            <th>#</th>
-                            <th>Product</th>
-                            <th class="text-center">Qty</th>
-                            <th class="text-right">Revenue</th>
-                        </tr>
-                        {% for product in report_data.top_products %}
-                        <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <td>{{ product.name }}</td>
-                            <td class="text-center">{{ product.quantity }}</td>
-                            <td class="text-right">KES {{ product.revenue|floatformat:2 }}</td>
-                        </tr>
-                        {% endfor %}
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="section">
-                <div class="section-title">Integrity Snapshot</div>
-                <div class="section-body">
-                    <div class="hash-block">{{ zreport.data_hash }}</div>
-                </div>
-            </div>
-
-            <div class="footer">
-                <div>This is an official Z-Report generated by {{ business.name }}.</div>
-                <div>Generated: {{ zreport.created_at|date:"Y-m-d H:i:s" }} | Generated By: {{ zreport.created_by.get_full_name|default:zreport.created_by.username }}</div>
-                {% if zreport.is_voided %}
-                <div style="margin-top:6px;color: var(--danger);font-weight:700;">Voided by {{ zreport.voided_by.get_full_name|default:zreport.voided_by.username }} on {{ zreport.voided_at|date:"Y-m-d H:i:s" }}</div>
+                    </tbody>
+                </table>
+                <div class="divider"></div>
                 {% endif %}
+
+                <!-- Top Products Summary -->
+                {% if report_data.top_products %}
+                <div class="section-header">*** TOP PRODUCTS ***</div>
+                <table class="breakdown-table">
+                    <thead>
+                        <tr>
+                            <th>ITEM</th>
+                            <th class="text-center">QTY</th>
+                            <th class="text-right">TOTAL (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in report_data.top_products|slice:":5" %}
+                        <tr>
+                            <td>{{ item.name|truncatechars:20 }}</td>
+                            <td class="text-center">{{ item.quantity }}</td>
+                            <td class="text-right">{{ item.revenue|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="divider"></div>
+                {% endif %}
+
+                <!-- Transaction Details / Metrics -->
+                {% if report_data.transaction_metrics %}
+                <div class="info-row">
+                    <span>First Transaction:</span>
+                    <span>{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</span>
+                </div>
+                <div class="info-row">
+                    <span>Last Transaction:</span>
+                    <span>{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</span>
+                </div>
+                <div class="info-row">
+                    <span>Average Ticket:</span>
+                    <span>KES {{ report_data.transaction_metrics.average_transaction_value|default:0|floatformat:2 }}</span>
+                </div>
+                <div class="divider"></div>
+                {% endif %}
+
+                <!-- Audit Security Hash -->
+                <div class="center" style="font-size: 10px; font-weight: bold; margin-top: 4px;">DIGITAL AUDIT HASH</div>
+                <div class="audit-hash">{{ zreport.data_hash }}</div>
+
+                <!-- Footer -->
+                <div class="double-divider"></div>
+                <div class="footer">
+                    <div class="bold">*** END OF Z-REPORT ***</div>
+                    <div>Official Shift Fiscal Summary</div>
+                    <div style="font-size: 10px; margin-top: 3px;">Powered by Marid POS</div>
+                </div>
             </div>
         </div>
     </div>
+    
+    <!-- Action Buttons & Shortcuts (Hidden during Print) -->
+    <div class="page-footer">
+        <div class="action-bar">
+            <button onclick="thermalPrint()" class="btn btn-primary" title="Print Thermal Slip (P)">
+                🖨️ Print Thermal Slip
+            </button>
+            <a href="{% url 'front_office_zreport' %}" class="btn btn-secondary" title="Shift Z-Reports">
+                📊 Shift Z-Reports
+            </a>
+            <a href="{% url 'pos_screen' %}" class="btn btn-success" title="Back to POS">
+                🛒 Back to POS
+            </a>
+            <a href="{% url 'zreport_export_pdf' z_number=zreport.z_number %}" class="btn btn-outline-light" title="Download Full PDF Archive" download>
+                📄 Full PDF Archive
+            </a>
+        </div>
+        
+        <div class="shortcuts-hint">
+            ⌨️ Keyboard shortcuts: <kbd>P</kbd> Print Slip · <kbd>Esc</kbd> Close
+        </div>
+    </div>
+    
+    <script>
+        function thermalPrint() {
+            window.print();
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'p' || e.key === 'P') {
+                if (!e.target.matches('input, textarea, select')) {
+                    e.preventDefault();
+                    thermalPrint();
+                }
+            }
+            if (e.key === 'Escape') {
+                window.history.back();
+            }
+        });
+    </script>
 </body>
 </html>

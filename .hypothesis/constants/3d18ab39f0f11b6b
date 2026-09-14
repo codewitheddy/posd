@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\hr\migrations\0007_rename_salary_to_basic_salary.py
+# hypothesis_version: 6.167.1
+
+['basic_salary', 'employee', 'hr', 'salary']

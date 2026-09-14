@@ -1,0 +1,324 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+{% block title %}VAT Codes — Tax Rates & Compliance{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <!-- Header -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h4 mb-0 fw-bold"><i class="bi bi-percent text-primary me-2"></i>VAT Codes</h1>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill">{{ total_count }} total</span>
+      </div>
+      <p class="text-muted small mb-0 mt-1">Manage value-added tax rates, exemptions, excise duty mappings, and product tax assignments for {{ request.business.name }}.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% if can_edit and total_count == 0 %}
+      <form method="post" action="{% url 'vatcode_seed_defaults' slug=request.business.slug %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-magic me-1"></i>Seed Standard Kenya VAT Codes
+        </button>
+      </form>
+      {% endif %}
+      {% if can_edit %}
+      <a href="{% url 'vatcode_create' slug=request.business.slug %}" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+        <i class="bi bi-plus-lg"></i> Add VAT Code
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm py-2" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Summary KPI Cards -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="text-muted small fw-semibold text-uppercase" style="font-size:11px">Total VAT Codes</div>
+            <div class="fs-4 fw-bold text-dark mt-1">{{ total_count }}</div>
+          </div>
+          <div class="rounded-circle p-2 bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width:42px;height:42px">
+            <i class="bi bi-calculator fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="text-muted small fw-semibold text-uppercase" style="font-size:11px">Active Codes</div>
+            <div class="fs-4 fw-bold text-success mt-1">{{ active_count }}</div>
+          </div>
+          <div class="rounded-circle p-2 bg-success-subtle text-success d-flex align-items-center justify-content-center" style="width:42px;height:42px">
+            <i class="bi bi-check-circle-fill fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="text-muted small fw-semibold text-uppercase" style="font-size:11px">Standard Rate (16%)</div>
+            <div class="fs-4 fw-bold text-primary mt-1">{{ standard_count }}</div>
+          </div>
+          <div class="rounded-circle p-2 bg-info-subtle text-info d-flex align-items-center justify-content-center" style="width:42px;height:42px">
+            <i class="bi bi-tag-fill fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="text-muted small fw-semibold text-uppercase" style="font-size:11px">Zero / Exempt (0%)</div>
+            <div class="fs-4 fw-bold text-secondary mt-1">{{ zero_exempt_count }}</div>
+          </div>
+          <div class="rounded-circle p-2 bg-secondary-subtle text-secondary d-flex align-items-center justify-content-center" style="width:42px;height:42px">
+            <i class="bi bi-shield-check fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Toolbar -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2 px-3">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-12 col-md-5 col-lg-4">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" class="form-control border-start-0" name="q" value="{{ q }}" placeholder="Search code, name, description…">
+          </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+          <select class="form-select form-select-sm" name="rate">
+            <option value="">All VAT Rates</option>
+            {% for r in available_rates %}
+            <option value="{{ r }}" {% if rate_filter == r|stringformat:"s" %}selected{% endif %}>{{ r }}%</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+          <select class="form-select form-select-sm" name="status">
+            <option value="">All Statuses</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Only</option>
+            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive Only</option>
+          </select>
+        </div>
+        <div class="col-auto d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm px-3">Filter</button>
+          {% if q or rate_filter or status_filter %}
+          <a href="{% url 'vatcode_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">Reset</a>
+          {% endif %}
+        </div>
+        <div class="col-auto ms-auto text-muted small">
+          Showing {{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:13px">
+          <thead class="table-light text-muted">
+            <tr>
+              <th class="ps-3" style="width:130px">VAT Code</th>
+              <th>Name & Description</th>
+              <th style="width:100px" class="text-center">Rate (%)</th>
+              <th style="width:120px">Excise / Duty</th>
+              <th style="width:110px">HS Chapter</th>
+              <th style="width:100px" class="text-center">Products</th>
+              <th style="width:100px" class="text-center">Status</th>
+              {% if can_edit %}<th style="width:120px" class="text-end pe-3">Actions</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for code in page_obj %}
+            <tr>
+              <td class="ps-3">
+                <span class="badge bg-light text-dark border font-monospace px-2 py-1 fs-6">{{ code.code }}</span>
+              </td>
+              <td>
+                <div class="fw-semibold text-dark">{{ code.name }}</div>
+                {% if code.description %}
+                  <div class="text-muted small text-truncate" style="max-width:380px">{{ code.description }}</div>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if code.vat_rate == 16.00 %}
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold fs-6">16%</span>
+                {% elif code.vat_rate == 0.00 %}
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1 fw-bold fs-6">0%</span>
+                {% else %}
+                  <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 fw-bold fs-6">{{ code.vat_rate }}%</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if code.is_excisable %}
+                  <div class="d-flex align-items-center gap-1 text-danger small">
+                    <i class="bi bi-shield-exclamation"></i> Excise: {{ code.excise_rate }}%
+                  </div>
+                {% endif %}
+                {% if code.import_duty and code.import_duty > 0 %}
+                  <div class="text-muted small">Import: {{ code.import_duty }}%</div>
+                {% endif %}
+                {% if not code.is_excisable and not code.import_duty %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if code.hs_code_chapter %}
+                  <span class="badge bg-light text-secondary border">Ch. {{ code.hs_code_chapter }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if code.product_count > 0 %}
+                  <a href="{% url 'product_list' slug=request.business.slug %}?vat_code={{ code.id }}" class="badge bg-primary text-white text-decoration-none rounded-pill px-2 py-1" title="View products using this VAT Code">
+                    {{ code.product_count }} product{{ code.product_count|pluralize }}
+                  </a>
+                {% else %}
+                  <span class="text-muted small">0 products</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if code.is_active %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Active</span>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">Inactive</span>
+                {% endif %}
+              </td>
+              {% if can_edit %}
+              <td class="text-end pe-3">
+                <div class="btn-group btn-group-sm">
+                  <a href="{% url 'vatcode_edit' slug=request.business.slug pk=code.id %}" class="btn btn-outline-primary btn-sm py-0 px-2" title="Edit VAT Code">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <form method="post" action="{% url 'vatcode_toggle_active' slug=request.business.slug pk=code.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2" title="Toggle Active/Inactive">
+                      {% if code.is_active %}<i class="bi bi-toggle-on text-success"></i>{% else %}<i class="bi bi-toggle-off text-muted"></i>{% endif %}
+                    </button>
+                  </form>
+                  {% if code.product_count == 0 %}
+                  <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" data-bs-toggle="modal" data-bs-target="#deleteModal{{ code.id }}" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                  {% endif %}
+                </div>
+
+                <!-- Delete Modal -->
+                {% if code.product_count == 0 %}
+                <div class="modal fade" id="deleteModal{{ code.id }}" tabindex="-1" aria-hidden="true">
+                  <div class="modal-dialog modal-dialog-centered modal-sm text-start">
+                    <div class="modal-content border-0 shadow">
+                      <div class="modal-header border-0 pb-0">
+                        <h5 class="modal-title fs-6 fw-bold">Delete VAT Code</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body py-2">
+                        <p class="small text-muted mb-0">Are you sure you want to permanently delete <strong>{{ code.code }}</strong> ({{ code.name }})?</p>
+                      </div>
+                      <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <form method="post" action="{% url 'vatcode_delete' slug=request.business.slug pk=code.id %}" class="d-inline">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" class="text-center py-5">
+                <div class="text-muted">
+                  <i class="bi bi-percent display-4 text-secondary opacity-50 d-block mb-3"></i>
+                  <h6 class="fw-bold mb-1">No VAT Codes Found</h6>
+                  <p class="small mb-3">No VAT codes match your filter criteria or none have been configured yet.</p>
+                  {% if can_edit %}
+                  <div class="d-flex justify-content-center gap-2">
+                    <a href="{% url 'vatcode_create' slug=request.business.slug %}" class="btn btn-primary btn-sm">
+                      <i class="bi bi-plus-lg me-1"></i>Create First VAT Code
+                    </a>
+                    <form method="post" action="{% url 'vatcode_seed_defaults' slug=request.business.slug %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-magic me-1"></i>Seed Standard VAT Codes
+                      </button>
+                    </form>
+                  </div>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+      <div class="card-footer bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </div>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if rate_filter %}&rate={{ rate_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Previous</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            {% endif %}
+
+            {% for p in page_obj.paginator.page_range %}
+              {% if p == page_obj.number %}
+                <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+              {% elif p > page_obj.number|add:'-3' and p < page_obj.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ p }}{% if q %}&q={{ q }}{% endif %}{% if rate_filter %}&rate={{ rate_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">{{ p }}</a></li>
+              {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if rate_filter %}&rate={{ rate_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Next</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

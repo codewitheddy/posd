@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\hr\migrations\0009_alter_employee_basic_salary.py
+# hypothesis_version: 6.167.1
+
+['0.00', 'Basic Salary', 'basic_salary', 'employee', 'hr']

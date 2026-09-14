@@ -114,7 +114,25 @@
             color: #fff;
             font-weight: 700;
             margin: 0;
-            font-size: 1.3rem;
+            font-size: 1.25rem;
+            word-break: break-word;
+        }
+
+        .sidebar-logo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-logo-img {
+            max-height: 48px;
+            max-width: 140px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 3px 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
         }
 
         .sidebar-brand small {
@@ -428,6 +446,21 @@
         .topbar .dropdown.show {
             z-index: 1032 !important;
         }
+        {% if is_front_office or user_permissions.is_cashier_only %}
+        /* Dedicated Front Office / POS Full-Width Layout */
+        .sidebar { display: none !important; }
+        .topbar { display: none !important; }
+        .main-content { 
+            margin-left: 0 !important; 
+            margin-top: 0 !important; 
+            padding: 10px 14px !important; 
+            width: 100% !important; 
+            max-width: 100% !important; 
+            min-height: 100vh !important;
+        }
+        .mobile-menu-toggle { display: none !important; }
+        .sidebar-backdrop { display: none !important; }
+        {% endif %}
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -435,39 +468,47 @@
     <!-- Sidebar Backdrop for Mobile -->
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
     
-    {% if has_business %}
+    {% if has_business and not is_front_office and not user_permissions.is_cashier_only %}
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            {% if user_permissions.can_make_sales %}
-            <a href="{% url 'pos_screen' slug=business_slug %}" style="text-decoration: none; color: inherit; cursor: pointer;">
-                <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
-                <small>Marid POS</small>
+            <a href="{% url 'dashboard' %}" style="text-decoration: none; color: inherit; cursor: pointer;">
+                {% if business_settings and business_settings.logo %}
+                <div class="sidebar-logo-container">
+                    <img src="{{ business_settings.logo.url }}" alt="{{ business_settings.get_business_name }}" class="sidebar-logo-img">
+                </div>
+                {% endif %}
+                <h4>
+                    {% if not business_settings or not business_settings.logo %}<i class="bi bi-shop"></i> {% endif %}
+                    {{ business_settings.get_business_name|default:request.business.name }}
+                </h4>
+                <small>{% if active_branch %}{{ active_branch.name }}{% else %}HQ / All Branches{% endif %}</small>
             </a>
-            {% else %}
-            <a href="{% url 'dashboard' slug=business_slug %}" style="text-decoration: none; color: inherit; cursor: pointer;">
-                <h4><i class="bi bi-shop"></i> {{ request.business.name }}</h4>
-                <small>Marid POS</small>
-            </a>
-            {% endif %}
         </div>
 
         <ul class="sidebar-menu">
             <li class="nav-section">Main</li>
             <li>
-                {% if has_business %}
-                <a href="{% url 'dashboard' slug=business_slug %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                {% else %}
-                <a href="{% url 'business_list' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                {% endif %}
+                <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                     <i class="bi bi-speedometer2"></i> Dashboard
                 </a>
             </li>
-            {% if user_permissions.can_make_sales and has_business %}
+
+            {% if user_permissions.is_manager or user.is_superuser %}
+            <li class="nav-section">Locations &amp; Branches</li>
             <li>
-                <a href="{% url 'pos_screen' slug=business_slug %}" class="{% if request.resolver_match.url_name == 'pos_screen' %}active{% endif %}">
-                    <i class="bi bi-cart-plus"></i> New Sale
-                    <span class="badge bg-success">POS</span>
+                <a href="{% url 'branch_list' %}" class="{% if 'branch' in request.path and 'login' not in request.path %}active{% endif %}">
+                    <i class="bi bi-buildings"></i> Branches &amp; Outlets
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'business_transfer_list' %}" class="{% if 'transfer' in request.path %}active{% endif %}">
+                    <i class="bi bi-arrow-left-right"></i> Stock Transfers
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'consolidated_report' %}" class="{% if 'reports/consolidated' in request.path %}active{% endif %}">
+                    <i class="bi bi-bar-chart-steps"></i> Consolidated Report
                 </a>
             </li>
             {% endif %}
@@ -475,27 +516,32 @@
             {% if user_permissions.can_manage_products or user_permissions.is_stock_manager %}
             <li class="nav-section">Inventory</li>
             <li>
-                <a href="{% url 'product_list' slug=business_slug %}" class="{% if 'product' in request.path %}active{% endif %}">
+                <a href="{% url 'product_list' %}" class="{% if 'product' in request.path %}active{% endif %}">
                     <i class="bi bi-box-seam"></i> Products
                 </a>
             </li>
             <li>
-                <a href="{% url 'hscode_list' slug=business_slug %}" class="{% if 'hs-code' in request.path %}active{% endif %}">
+                <a href="{% url 'hscode_list' %}" class="{% if 'hs-code' in request.path %}active{% endif %}">
                     <i class="bi bi-upc"></i> HS Codes
                 </a>
             </li>
             <li>
-                <a href="{% url 'category_list' slug=business_slug %}" class="{% if 'categor' in request.path %}active{% endif %}">
+                <a href="{% url 'vatcode_list' slug=request.business.slug %}" class="{% if 'vat-code' in request.path or 'vatcode' in request.path %}active{% endif %}">
+                    <i class="bi bi-percent"></i> VAT Codes
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'category_list' %}" class="{% if 'categor' in request.path %}active{% endif %}">
                     <i class="bi bi-tags"></i> Categories
                 </a>
             </li>
             <li>
-                <a href="{% url 'unit_list' slug=business_slug %}" class="{% if 'unit' in request.path %}active{% endif %}">
+                <a href="{% url 'unit_list' %}" class="{% if 'unit' in request.path %}active{% endif %}">
                     <i class="bi bi-rulers"></i> Units
                 </a>
             </li>
             <li>
-                <a href="{% url 'stock_list' slug=business_slug %}" class="{% if 'stock' in request.path %}active{% endif %}">
+                <a href="{% url 'stock_list' %}" class="{% if 'stock' in request.path %}active{% endif %}">
                     <i class="bi bi-boxes"></i> Stock Management
                 </a>
             </li>
@@ -504,22 +550,22 @@
             {% if user_permissions.can_manage_suppliers or user_permissions.is_stock_manager %}
             <li class="nav-section">Purchasing</li>
             <li>
-                <a href="{% url 'supplier_list' slug=business_slug %}" class="{% if 'supplier' in request.path %}active{% endif %}">
+                <a href="{% url 'supplier_list' %}" class="{% if 'supplier' in request.path %}active{% endif %}">
                     <i class="bi bi-truck"></i> Suppliers
                 </a>
             </li>
             <li>
-                <a href="{% url 'purchase_list' slug=business_slug %}" class="{% if 'purchase' in request.path %}active{% endif %}">
+                <a href="{% url 'purchase_list' %}" class="{% if 'purchase' in request.path %}active{% endif %}">
                     <i class="bi bi-bag-check"></i> Purchase Orders
                 </a>
             </li>
             <li>
-                <a href="{% url 'goods_received_list' slug=business_slug %}" class="{% if 'goods-received' in request.path %}active{% endif %}">
+                <a href="{% url 'goods_received_list' %}" class="{% if 'goods-received' in request.path %}active{% endif %}">
                     <i class="bi bi-box-seam"></i> Goods Received Notes
                 </a>
             </li>
             <li>
-                <a href="{% url 'grn_list' slug=business_slug %}" class="{% if 'grn' in request.path %}active{% endif %}">
+                <a href="{% url 'grn_list' %}" class="{% if 'grn' in request.path %}active{% endif %}">
                     <i class="bi bi-arrow-return-left"></i> Goods Returned Notes
                 </a>
             </li>
@@ -527,46 +573,47 @@
 
             <li class="nav-section">CRM</li>
             <li>
-                <a href="{% url 'customer_list' slug=business_slug %}" class="{% if 'customer' in request.path and 'loyalty' not in request.path and 'crm' not in request.path %}active{% endif %}">
+                <a href="{% url 'customer_list' %}" class="{% if 'customer' in request.path and 'loyalty' not in request.path and 'crm' not in request.path %}active{% endif %}">
                     <i class="bi bi-people"></i> Customers
                 </a>
             </li>
             <li>
-                <a href="{% url 'customer_credit_list' slug=business_slug %}" class="{% if 'customers/credit' in request.path %}active{% endif %}">
+                <a href="{% url 'customer_credit_list' %}" class="{% if 'customers/credit' in request.path %}active{% endif %}">
                     <i class="bi bi-credit-card-2-back"></i> Customer Credit
                 </a>
             </li>
             <li>
-                <a href="{% url 'credit_aging_report' slug=business_slug %}" class="{% if 'credit/aging' in request.path %}active{% endif %}">
+                <a href="{% url 'credit_aging_report' %}" class="{% if 'credit/aging' in request.path %}active{% endif %}">
                     <i class="bi bi-clock-history"></i> Aging Report
                 </a>
             </li>
             {% if user_permissions.is_manager %}
             <li>
-                <a href="{% url 'segment_list' slug=business_slug %}" class="{% if 'crm/segments' in request.path %}active{% endif %}">
+                <a href="{% url 'segment_list' %}" class="{% if 'crm/segments' in request.path %}active{% endif %}">
                     <i class="bi bi-diagram-3"></i> Segments
                 </a>
             </li>
             <li>
-                <a href="{% url 'campaign_list' slug=business_slug %}" class="{% if 'crm/campaigns' in request.path %}active{% endif %}">
+                <a href="{% url 'campaign_list' %}" class="{% if 'crm/campaigns' in request.path %}active{% endif %}">
                     <i class="bi bi-megaphone"></i> Campaigns
                 </a>
             </li>
             <li>
-                <a href="{% url 'crm_reports' slug=business_slug %}" class="{% if 'crm/reports' in request.path %}active{% endif %}">
+                <a href="{% url 'crm_reports' %}" class="{% if 'crm/reports' in request.path %}active{% endif %}">
                     <i class="bi bi-bar-chart-line"></i> CRM Reports
                 </a>
             </li>
             {% endif %}
+            
             <li class="nav-section">Loyalty Program</li>
             {% if user_permissions.is_manager %}
                 <li>
-                    <a href="{% url 'loyalty_rewards_list' slug=business_slug %}" class="{% if 'loyalty/rewards' in request.path %}active{% endif %}">
+                    <a href="{% url 'loyalty_rewards_list' %}" class="{% if 'loyalty/rewards' in request.path %}active{% endif %}">
                         <i class="bi bi-gift"></i> Rewards Catalog
                     </a>
                 </li>
                 <li>
-                    <a href="{% url 'promotion_list' slug=business_slug %}" class="{% if 'promotions' in request.path %}active{% endif %}">
+                    <a href="{% url 'promotion_list' %}" class="{% if 'promotions' in request.path %}active{% endif %}">
                         <i class="bi bi-tag"></i> Promotions
                     </a>
                 </li>
@@ -575,56 +622,56 @@
             {% if user_permissions.can_view_reports or user_permissions.is_viewer %}
             <li class="nav-section">Reports</li>
             <li>
-                <a href="{% url 'analytics_dashboard' slug=business_slug %}" class="{% if 'analytics' in request.path %}active{% endif %}">
+                <a href="{% url 'analytics_dashboard' %}" class="{% if 'analytics' in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up"></i> Analytics Dashboard
                     <span class="badge bg-info">New</span>
                 </a>
             </li>
             <li>
-                <a href="{% url 'sales_list' slug=business_slug %}" class="{% if 'sales_list' in request.path or request.resolver_match.url_name == 'sales_list' %}active{% endif %}">
+                <a href="{% url 'sales_list' %}" class="{% if 'sales_list' in request.path or request.resolver_match.url_name == 'sales_list' %}active{% endif %}">
                     <i class="bi bi-receipt"></i> All Sales
                 </a>
             </li>
             <li>
-                <a href="{% url 'zreport_session_status' slug=business_slug %}" class="{% if 'z-reports' in request.path %}active{% endif %}">
+                <a href="{% url 'zreport_session_status' %}" class="{% if 'z-reports' in request.path %}active{% endif %}">
                     <i class="bi bi-calculator-fill"></i> Z-Report (EOD)
                     <span class="badge bg-danger">EOD</span>
                 </a>
             </li>
             <li>
-                <a href="{% url 'sales_report' slug=business_slug %}" class="{% if 'sales_report' in request.path %}active{% endif %}">
+                <a href="{% url 'sales_report' %}" class="{% if 'sales_report' in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up"></i> Sales Report
                 </a>
             </li>
             <li>
-                <a href="{% url 'payment_transactions_report' slug=business_slug %}" class="{% if 'payment-transactions' in request.path %}active{% endif %}">
+                <a href="{% url 'payment_transactions_report' %}" class="{% if 'payment-transactions' in request.path %}active{% endif %}">
                     <i class="bi bi-credit-card-2-front"></i> Payment Transactions
                 </a>
             </li>
             {% if user_permissions.is_manager %}
             <li>
-                <a href="{% url 'cashier_report' slug=business_slug %}" class="{% if 'cashier_report' in request.path %}active{% endif %}">
+                <a href="{% url 'cashier_report' %}" class="{% if 'cashier_report' in request.path %}active{% endif %}">
                     <i class="bi bi-person-badge"></i> Cashier Report
                 </a>
             </li>
             <li>
-                <a href="{% url 'cash_float_list' slug=business_slug %}" class="{% if 'cash-float' in request.path %}active{% endif %}">
+                <a href="{% url 'cash_float_list' %}" class="{% if 'cash-float' in request.path %}active{% endif %}">
                     <i class="bi bi-cash-stack"></i> Cash Float
                 </a>
             </li>
             {% endif %}
             <li>
-                <a href="{% url 'writeoff_report' slug=business_slug %}" class="{% if 'writeoff' in request.path %}active{% endif %}">
+                <a href="{% url 'writeoff_report' %}" class="{% if 'writeoff' in request.path %}active{% endif %}">
                     <i class="bi bi-trash"></i> Write-Off Report
                 </a>
             </li>
             <li>
-                <a href="{% url 'low_stock_alert' slug=business_slug %}" class="{% if 'low_stock' in request.path %}active{% endif %}">
+                <a href="{% url 'low_stock_alert' %}" class="{% if 'low_stock' in request.path %}active{% endif %}">
                     <i class="bi bi-exclamation-triangle"></i> Stock Alerts
                 </a>
             </li>
             <li>
-                <a href="{% url 'expiry_alert' slug=business_slug %}" class="{% if 'expiry' in request.path %}active{% endif %}">
+                <a href="{% url 'expiry_alert' %}" class="{% if 'expiry' in request.path %}active{% endif %}">
                     <i class="bi bi-calendar-x"></i> Expiry Alerts
                 </a>
             </li>
@@ -633,17 +680,17 @@
             {% if user_permissions.is_manager %}
             <li class="nav-section">Finances</li>
             <li>
-                <a href="{% url 'expense_list' slug=business_slug %}" class="{% if 'finances/expenses' in request.path %}active{% endif %}">
+                <a href="{% url 'expense_list' %}" class="{% if 'finances/expenses' in request.path %}active{% endif %}">
                     <i class="bi bi-wallet2"></i> Expenses
                 </a>
             </li>
             <li>
-                <a href="{% url 'profit_dashboard' slug=business_slug %}" class="{% if 'finances/profit' in request.path %}active{% endif %}">
+                <a href="{% url 'profit_dashboard' %}" class="{% if 'finances/profit' in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up-arrow"></i> Profit
                 </a>
             </li>
             <li>
-                <a href="{% url 'pl_statement' slug=business_slug %}" class="{% if 'finances/pl' in request.path %}active{% endif %}">
+                <a href="{% url 'pl_statement' %}" class="{% if 'finances/pl' in request.path %}active{% endif %}">
                     <i class="bi bi-file-earmark-bar-graph"></i> P&amp;L Statement
                 </a>
             </li>
@@ -652,87 +699,79 @@
             {% if user_permissions.is_admin %}
             <li class="nav-section">My Work</li>
             <li>
-                <a href="{% url 'hr_attendance_list' slug=business_slug %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
+                <a href="{% url 'hr_attendance_list' %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
                     <i class="bi bi-clock-history"></i> My Attendance
+                </a>
+            </li>
+            {% endif %}
+            {% if user_permissions.is_admin %}
+            <li class="nav-section">HR &amp; Staff</li>
+            <li>
+                <a href="{% url 'hr_dashboard' %}" class="{% if '/hr/' in request.path and 'department' not in request.path %}active{% endif %}">
+                    <i class="bi bi-person-badge"></i> HR Module
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_attendance_list' %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
+                    <i class="bi bi-clock-history"></i> Staff Attendance
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_department_list' %}" class="{% if 'department' in request.path %}active{% endif %}">
+                    <i class="bi bi-diagram-3"></i> Departments
                 </a>
             </li>
             {% endif %}
 
             {% if user_permissions.is_admin %}
-            <li class="nav-section">Administration</li>
+            <li class="nav-section">System Admin</li>
+            <li>
+                <a href="{% url 'terminal_list' %}" class="{% if 'terminal' in request.path %}active{% endif %}">
+                    <i class="bi bi-pc-display"></i> POS Terminals
+                </a>
+            </li>
             {% if user_permissions.can_manage_users %}
             <li>
-                <a href="{% url 'user_management_list' slug=business_slug %}" class="{% if 'users' in request.path and 'roles' not in request.path %}active{% endif %}">
+                <a href="{% url 'user_management_list' %}" class="{% if 'users' in request.path and 'roles' not in request.path %}active{% endif %}">
                     <i class="bi bi-people-fill"></i> User Management
                 </a>
             </li>
             <li>
-                <a href="{% url 'roles_permissions' slug=business_slug %}" class="{% if 'roles-permissions' in request.path %}active{% endif %}">
-                    <i class="bi bi-shield-check"></i> Roles & Permissions
+                <a href="{% url 'roles_permissions' %}" class="{% if 'roles-permissions' in request.path %}active{% endif %}">
+                    <i class="bi bi-shield-check"></i> Roles &amp; Permissions
                 </a>
             </li>
             {% endif %}
-            <li class="nav-section">HR & Staff</li>
             <li>
-                <a href="{% url 'hr_dashboard' slug=business_slug %}" class="{% if '/hr/' in request.path and 'department' not in request.path %}active{% endif %}">
-                    <i class="bi bi-person-badge"></i> HR Module
-                </a>
-            </li>
-            <li>
-                <a href="{% url 'hr_attendance_list' slug=business_slug %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
-                    <i class="bi bi-clock-history"></i> Attendance
-                </a>
-            </li>
-            <li>
-                <a href="{% url 'hr_department_list' slug=business_slug %}" class="{% if 'department' in request.path %}active{% endif %}">
-                    <i class="bi bi-diagram-3"></i> Departments
+                <a href="{% url 'pin_audit_log_list' %}" class="{% if 'audit/pin-logins' in request.path %}active{% endif %}">
+                    <i class="bi bi-fingerprint"></i> PIN Audit Trail
                 </a>
             </li>
             {% if user_permissions.can_manage_settings %}
             <li>
-                <a href="{% url 'business_settings' slug=business_slug %}" class="{% if 'business-settings' in request.path or '/settings/' in request.path %}active{% endif %}">
-                    <i class="bi bi-gear"></i> Business Settings
+                <a href="{% url 'business_settings' %}" class="{% if 'business-settings' in request.path or '/settings/' in request.path %}active{% endif %}">
+                    <i class="bi bi-gear"></i> Store Settings
                 </a>
             </li>
-            {% if business_membership and business_membership.role == 'owner' %}
             <li>
-                <a href="{% url 'view_support_access_requests' slug=business_slug %}" class="{% if 'support-access' in request.path %}active{% endif %}">
-                    <i class="bi bi-shield-lock"></i> Support Access
-                    {% if pending_support_requests_count > 0 %}
-                    <span class="badge bg-warning text-dark">{{ pending_support_requests_count }}</span>
-                    {% endif %}
-                </a>
-            </li>
-            {% endif %}
-            <li>
-                <a href="{% url 'backup_data' slug=business_slug %}" class="{% if 'backup' in request.path %}active{% endif %}">
+                <a href="{% url 'backup_data' %}" class="{% if 'backup' in request.path %}active{% endif %}">
                     <i class="bi bi-database"></i> Data Backup
                 </a>
             </li>
             <li>
-                <a href="{% url 'integration_hub' slug=business_slug %}" class="{% if 'integrations' in request.path or 'webhooks' in request.path %}active{% endif %}">
+                <a href="{% url 'integration_hub' %}" class="{% if 'integrations' in request.path or 'webhooks' in request.path %}active{% endif %}">
                     <i class="bi bi-plug"></i> Integrations
                 </a>
             </li>
-            {% if not user.is_superuser %}
             <li>
-                <a href="{% url 'subscription' slug=business_slug %}" class="{% if 'subscription' in request.path %}active{% endif %}">
-                    <i class="bi bi-credit-card"></i> Subscription & Billing
-                    {% if business.days_until_expiry != None and business.days_until_expiry <= 7 %}
-                    <span class="badge bg-warning text-dark">{{ business.days_until_expiry }}d</span>
-                    {% endif %}
-                </a>
-            </li>
-            {% endif %}
-            <li>
-                <a href="{% url 'payment_method_list' slug=business_slug %}" class="{% if 'payment-method' in request.path %}active{% endif %}">
+                <a href="{% url 'payment_method_list' %}" class="{% if 'payment-method' in request.path %}active{% endif %}">
                     <i class="bi bi-credit-card"></i> Payment Methods
                 </a>
             </li>
             {% endif %}
             {% if user_permissions.can_view_activity_log %}
             <li>
-                <a href="{% url 'activity_log' slug=business_slug %}" class="{% if 'activity' in request.path %}active{% endif %}">
+                <a href="{% url 'activity_log' %}" class="{% if 'activity' in request.path %}active{% endif %}">
                     <i class="bi bi-clock-history"></i> Activity Log
                 </a>
             </li>
@@ -740,7 +779,6 @@
             {% endif %}
             
             {% if user.is_superuser or user.is_staff %}
-            <li class="nav-section">System Admin</li>
             <li>
                 <a href="/admin/" target="_blank" style="background: #224195; color: white; border-left: 3px solid rgba(255,255,255,0.4)">
                     <i class="bi bi-shield-lock-fill"></i> Django Admin Panel
@@ -759,6 +797,7 @@
     </div>
     {% endif %}
 
+    {% if not is_front_office and not user_permissions.is_cashier_only %}
     <!-- Top Bar -->
     <div class="topbar">
         <button class="mobile-menu-toggle" onclick="toggleSidebar()">
@@ -767,11 +806,7 @@
 
         <div class="search-bar position-relative">
             <i class="bi bi-search"></i>
-            {% if has_business %}
-            <form action="{% url 'global_search' slug=business_slug %}" method="get" id="globalSearchForm" class="d-flex">
-            {% else %}
-            <form action="#" method="get" id="globalSearchForm" class="d-flex">
-            {% endif %}
+            <form action="{% url 'global_search' %}" method="get" id="globalSearchForm" class="d-flex">
                 <input type="text" class="form-control" id="globalSearch" name="q" placeholder="Search products, customers, invoices..." autocomplete="off">
                 <button type="submit" class="btn btn-primary ms-2">
                     <i class="bi bi-search"></i> Search
@@ -780,6 +815,58 @@
         </div>
 
         <div class="topbar-right">
+            <!-- Front Office POS Launcher -->
+            {% if user_permissions.can_make_sales or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
+            <a href="{% url 'pos_screen' %}" class="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm px-3 fw-semibold" style="border-radius: 20px; font-size: 0.82rem;" title="Launch Front Office Point of Sale Register">
+                <i class="bi bi-cart-check-fill"></i>
+                <span class="d-none d-sm-inline">Point of Sale</span>
+            </a>
+            {% endif %}
+
+            <!-- Branch Selector Dropdown -->
+            {% if branches %}
+            <div class="dropdown me-1">
+                <button class="btn btn-sm dropdown-toggle d-flex align-items-center gap-1 shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="background: #f0f4ff; border: 1.5px solid #d0ddff; color: #224195; border-radius: 20px; font-weight: 600; font-size: 0.82rem; padding: 5px 12px;">
+                    <i class="bi bi-geo-alt-fill text-danger"></i>
+                    <span class="d-none d-sm-inline">
+                        {% if active_branch %}
+                            {{ active_branch.name }}
+                        {% else %}
+                            All Branches (HQ)
+                        {% endif %}
+                    </span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius: 12px; min-width: 220px; font-size: 0.88rem;">
+                    <li class="dropdown-header fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Current Location</li>
+                    {% if user_permissions.is_manager or user.is_superuser %}
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center justify-content-between py-2 {% if not active_branch %}active fw-bold{% endif %}" href="{% url 'switch_active_branch' branch_id=0 %}">
+                            <span><i class="bi bi-building me-2"></i> All Branches (HQ)</span>
+                            {% if not active_branch %}<i class="bi bi-check-lg text-primary"></i>{% endif %}
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% endif %}
+                    {% for b in branches %}
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center justify-content-between py-2 {% if active_branch and active_branch.pk == b.pk %}active fw-bold{% endif %}" href="{% url 'switch_active_branch' branch_id=b.pk %}">
+                            <span><i class="bi bi-shop me-2"></i> {{ b.name }}</span>
+                            {% if active_branch and active_branch.pk == b.pk %}<i class="bi bi-check-lg text-primary"></i>{% endif %}
+                        </a>
+                    </li>
+                    {% endfor %}
+                    {% if user_permissions.is_admin %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item text-primary py-2" href="{% url 'branch_list' %}">
+                            <i class="bi bi-gear-fill me-2"></i> Manage Branches
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
             <!-- Connection Status (inline with topbar) -->
             <div id="connectionStatus" class="connection-status-inline">
                 <i class="fas fa-wifi"></i>
@@ -793,7 +880,7 @@
             </button>
             
             <div class="notification-icon" title="Notifications">
-                <a href="{% if has_business %}{% url 'low_stock_alert' slug=business_slug %}{% else %}#{% endif %}" style="color: inherit; text-decoration: none;">
+                <a href="{% url 'low_stock_alert' %}" style="color: inherit; text-decoration: none;">
                     <i class="bi bi-bell"></i>
                     {% if alert_count and alert_count > 0 %}
                     <span class="badge bg-danger">{{ alert_count }}</span>
@@ -812,30 +899,31 @@
                     </div>
                     <i class="bi bi-chevron-down" style="font-size: 0.8rem; color: #858796;"></i>
                 </div>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    {% if user.is_superuser %}
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius: 12px;">
+                    {% if user_permissions.can_make_sales or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
                     <li>
-                        <a class="dropdown-item" href="{% url 'platform_admin_dashboard' %}">
-                            <i class="bi bi-speedometer2"></i> Platform Admin
+                        <a class="dropdown-item fw-semibold text-primary py-2" href="{% url 'pos_screen' %}">
+                            <i class="bi bi-cart-check-fill me-2"></i> Launch Point of Sale (POS)
                         </a>
                     </li>
                     <li><hr class="dropdown-divider"></li>
                     {% endif %}
                     <li>
-                        <a class="dropdown-item" href="{% url 'user_profile' slug=business_slug %}">
-                            <i class="bi bi-person"></i> My Profile
+                        <a class="dropdown-item" href="{% url 'user_profile' %}">
+                            <i class="bi bi-person me-2"></i> My Profile
                         </a>
                     </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <a class="dropdown-item text-danger" href="{% url 'logout' %}">
-                            <i class="bi bi-box-arrow-right"></i> Logout
+                            <i class="bi bi-box-arrow-right me-2"></i> Logout
                         </a>
                     </li>
                 </ul>
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Connection Status Indicator -->
     {% include 'pos/components/connection_status.html' %}
@@ -863,7 +951,7 @@
     </div>
 
     <!-- Mobile Bottom Navigation -->
-    {% if has_business %}
+    {% if has_business and not is_front_office and not user_permissions.is_cashier_only %}
         {% include 'pos/components/mobile_bottom_nav.html' %}
     {% endif %}
 

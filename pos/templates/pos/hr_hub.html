@@ -9,6 +9,11 @@
     <h1><i class="bi bi-person-badge me-2 text-primary"></i>HR & Staff Management</h1>
     <p class="page-subtitle">Manage employees, attendance, payroll, and performance</p>
   </div>
+  <div class="ms-auto">
+    <a href="{% url 'hr_dashboard' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-speedometer2 me-1"></i>Open HR Web Portal
+    </a>
+  </div>
 </div>
 
 <div class="row g-4">
@@ -22,11 +27,11 @@
       </div>
       <p class="text-muted small">Manage employee records, departments, and job assignments.</p>
       <div class="d-grid gap-2 mt-3">
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/employees/" class="btn btn-outline-primary btn-sm" target="_blank">
-          <i class="bi bi-list-ul me-1"></i>View Employees API
+        <a href="{% url 'hr_employee_list' %}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-person-lines-fill me-1"></i>Employee Directory
         </a>
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/departments/" class="btn btn-outline-secondary btn-sm" target="_blank">
-          <i class="bi bi-diagram-3 me-1"></i>Departments API
+        <a href="/hr/api/employees/" class="btn btn-outline-secondary btn-sm" target="_blank">
+          <i class="bi bi-list-ul me-1"></i>Employees API
         </a>
       </div>
     </div>
@@ -41,11 +46,11 @@
       </div>
       <p class="text-muted small">Track daily clock-in/out, view attendance sheets, and manage leave requests.</p>
       <div class="d-grid gap-2 mt-3">
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/attendance/" class="btn btn-outline-success btn-sm" target="_blank">
-          <i class="bi bi-calendar-check me-1"></i>Attendance API
+        <a href="{% url 'hr_attendance_list' %}" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-clock me-1"></i>Attendance Sheets
         </a>
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/leave/" class="btn btn-outline-secondary btn-sm" target="_blank">
-          <i class="bi bi-calendar-x me-1"></i>Leave Requests API
+        <a href="/hr/api/attendance/" class="btn btn-outline-secondary btn-sm" target="_blank">
+          <i class="bi bi-calendar-check me-1"></i>Attendance API
         </a>
       </div>
     </div>
@@ -60,11 +65,11 @@
       </div>
       <p class="text-muted small">Auto-calculate payroll from attendance, manage advances and deductions.</p>
       <div class="d-grid gap-2 mt-3">
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/payroll/" class="btn btn-outline-warning btn-sm" target="_blank">
-          <i class="bi bi-receipt me-1"></i>Payroll API
+        <a href="{% url 'hr_payroll_list' %}" class="btn btn-outline-warning btn-sm">
+          <i class="bi bi-wallet2 me-1"></i>Payroll Runs
         </a>
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/advances/" class="btn btn-outline-secondary btn-sm" target="_blank">
-          <i class="bi bi-wallet2 me-1"></i>Staff Advances API
+        <a href="/hr/api/payroll/" class="btn btn-outline-secondary btn-sm" target="_blank">
+          <i class="bi bi-receipt me-1"></i>Payroll API
         </a>
       </div>
     </div>
@@ -79,30 +84,30 @@
       </div>
       <p class="text-muted small">Track sales performance, view leaderboards, and generate performance reports.</p>
       <div class="d-grid gap-2 mt-3">
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/performance/" class="btn btn-outline-danger btn-sm" target="_blank">
-          <i class="bi bi-trophy me-1"></i>Performance API
+        <a href="{% url 'hr_performance_list' %}" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-trophy me-1"></i>Performance Leaderboard
         </a>
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/performance/leaderboard/" class="btn btn-outline-secondary btn-sm" target="_blank">
-          <i class="bi bi-bar-chart me-1"></i>Leaderboard API
+        <a href="/hr/api/performance/" class="btn btn-outline-secondary btn-sm" target="_blank">
+          <i class="bi bi-bar-chart me-1"></i>Performance API
         </a>
       </div>
     </div>
   </div>
 
-  <!-- Reports -->
+  <!-- Reports & Compliance -->
   <div class="col-md-4">
     <div class="form-card h-100">
       <div class="d-flex align-items-center gap-3 mb-3">
         <div class="stat-icon-box" style="background:#ede9fe;color:#7c3aed;"><i class="bi bi-file-earmark-bar-graph"></i></div>
-        <h5 class="mb-0">Reports</h5>
+        <h5 class="mb-0">Reports & Tax (P9)</h5>
       </div>
-      <p class="text-muted small">Attendance, payroll, performance, and shift cash difference reports.</p>
+      <p class="text-muted small">Tax deduction cards (KRA P9), payslips, and staff reports.</p>
       <div class="d-grid gap-2 mt-3">
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/reports/attendance/" class="btn btn-outline-primary btn-sm" target="_blank">
-          <i class="bi bi-file-text me-1"></i>Attendance Report
+        <a href="{% url 'hr_p9_list' %}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-file-earmark-pdf me-1"></i>P9 Tax Forms
         </a>
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/reports/shift-cash/" class="btn btn-outline-secondary btn-sm" target="_blank">
-          <i class="bi bi-cash me-1"></i>Shift Cash Report
+        <a href="{% url 'hr_leave_list' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-calendar-x me-1"></i>Leave Management
         </a>
       </div>
     </div>
@@ -113,14 +118,14 @@
     <div class="form-card h-100">
       <div class="d-flex align-items-center gap-3 mb-3">
         <div class="stat-icon-box" style="background:#e0f2fe;color:#0284c7;"><i class="bi bi-speedometer2"></i></div>
-        <h5 class="mb-0">Dashboard Metrics</h5>
+        <h5 class="mb-0">Departments & Staff</h5>
       </div>
-      <p class="text-muted small">Live HR metrics: present today, on leave, top performer, payroll this month.</p>
+      <p class="text-muted small">Organize staff by department, track disciplinary notes, and manage roles.</p>
       <div class="d-grid gap-2 mt-3">
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/dashboard/metrics/" class="btn btn-outline-info btn-sm" target="_blank">
-          <i class="bi bi-speedometer me-1"></i>HR Dashboard API
+        <a href="{% url 'hr_department_list' %}" class="btn btn-outline-info btn-sm">
+          <i class="bi bi-diagram-3 me-1"></i>Departments
         </a>
-        <a href="/b/{{ request.business.slug }}/api/hr/v1/disciplinary/" class="btn btn-outline-secondary btn-sm" target="_blank">
+        <a href="{% url 'hr_disciplinary_list' %}" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-exclamation-triangle me-1"></i>Disciplinary Records
         </a>
       </div>
@@ -131,8 +136,7 @@
 
 <div class="alert alert-info mt-4" style="font-size:13px;">
   <i class="bi bi-info-circle me-1"></i>
-  <strong>HR Module is API-based.</strong> All links open the REST API browser. Use a REST client (Postman, Insomnia) or integrate with a front-end for full HR management.
-  Base URL: <code>/b/{{ request.business.slug }}/api/hr/v1/</code>
+  <strong>HR Module & REST API:</strong> The single-store HR portal supports full web management as well as direct API access at <code>/hr/api/</code>.
 </div>
 
 </div>

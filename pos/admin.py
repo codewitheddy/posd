@@ -7,7 +7,10 @@ from .models import (
     ExpenseCategory, Expense, LoyaltyTransaction, LoyaltyReward,
     LoyaltyRedemption, SupplierPayment, PaymentAllocation,
     Business, BusinessMembership, SubscriptionPayment, DayClosureReport,
-    SupportAccessRequest, HSCode
+    SupportAccessRequest, HSCode, VATCode,
+    Branch, BranchMembership, BranchStock, StockMovement,
+    StockRequisition, StockRequisitionItem, StockTransferRequest, StockTransferItem,
+    Dispatch, DispatchItem, POSTerminal
 )
 
 
@@ -19,9 +22,54 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'product_code', 'category', 'unit_price', 'stock_quantity', 'stock_status', 'created_at']
-    list_filter = ['category']
-    search_fields = ['name', 'product_code']
+    list_display = ['name', 'product_code', 'category', 'vat_code_display', 'unit_price', 'stock_quantity', 'stock_status', 'created_at']
+    list_filter = ['category', 'vat_code', 'tax_class', 'is_active']
+    search_fields = ['name', 'product_code', 'barcode']
+    readonly_fields = ['created_at', 'updated_at', 'product_code']
+    
+    fieldsets = (
+        ('Product Information', {
+            'fields': ('business', 'name', 'description', 'product_code', 'barcode')
+        }),
+        ('Category & Classification', {
+            'fields': ('category', 'brand', 'unit')
+        }),
+        ('Pricing', {
+            'fields': ('cost_price', 'unit_price', 'wholesale_price', 'minimum_price')
+        }),
+        ('Tax Settings', {
+            'fields': ('tax_class', 'vat_code', 'hs_code_ref', 'is_excisable', 'excise_rate')
+        }),
+        ('Stock Management', {
+            'fields': ('stock_quantity', 'low_stock_threshold', 'reorder_quantity', 'preferred_supplier', 'lead_time_days')
+        }),
+        ('Expiry Information', {
+            'fields': ('expiry_date', 'expiry_alert_days'),
+            'classes': ('collapse',)
+        }),
+        ('Bulk Unit Selling', {
+            'fields': ('bulk_unit_name', 'bulk_unit_quantity', 'bulk_unit_price', 'bulk_discount_price', 'bulk_low_stock_threshold'),
+            'classes': ('collapse',)
+        }),
+        ('Variable Pricing', {
+            'fields': ('is_variable_price', 'price_per_unit', 'pricing_unit_quantity'),
+            'classes': ('collapse',)
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def vat_code_display(self, obj):
+        """Display VAT code with rate"""
+        if obj.vat_code:
+            return f"{obj.vat_code.code} ({obj.vat_code.vat_rate}%)"
+        return f"Via Tax Class: {obj.get_tax_rate()}%"
+    vat_code_display.short_description = 'VAT Code'
     
     def stock_status(self, obj):
         if obj.is_out_of_stock():
@@ -31,6 +79,11 @@ class ProductAdmin(admin.ModelAdmin):
         else:
             return '🟢 In Stock'
     stock_status.short_description = 'Status'
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        qs = super().get_queryset(request)
+        return qs.select_related('category', 'vat_code', 'hs_code_ref')
 
 
 class SaleItemInline(admin.TabularInline):
@@ -241,6 +294,41 @@ class HSCodeAdmin(admin.ModelAdmin):
     list_filter = ['chapter', 'is_active', 'is_excisable']
     search_fields = ['code', 'description', 'notes']
     ordering = ['code']
+
+
+@admin.register(VATCode)
+class VATCodeAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'vat_rate', 'hs_code_chapter', 'is_excisable', 'is_active', 'business']
+    list_filter = ['is_active', 'vat_rate', 'is_excisable', 'business', 'created_at']
+    search_fields = ['code', 'name', 'description']
+    ordering = ['code']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('business', 'code', 'name', 'description')
+        }),
+        ('Tax Rates', {
+            'fields': ('vat_rate', 'excise_rate', 'import_duty', 'is_excisable')
+        }),
+        ('HS Code Mapping', {
+            'fields': ('hs_code_chapter',),
+            'classes': ('collapse',),
+            'description': 'Optional: Link to HS Code chapter for reference'
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Audit Information', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        qs = super().get_queryset(request)
+        return qs.select_related('business')
 
 
 @admin.register(ExpenseCategory)
@@ -576,3 +664,107 @@ class SupportAccessRequestAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('business', 'requested_by', 'approved_by')
+
+
+# ============================================================================
+# MULTI-BRANCH, DISTRIBUTION & STOCK LEDGER ADMIN
+# ============================================================================
+
+@admin.register(Branch)
+class BranchAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'business', 'is_hq', 'is_default', 'is_active', 'phone', 'created_at']
+    list_filter = ['is_hq', 'is_default', 'is_active', 'business']
+    search_fields = ['name', 'code', 'phone', 'email', 'business__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(BranchMembership)
+class BranchMembershipAdmin(admin.ModelAdmin):
+    list_display = ['user', 'branch', 'role', 'is_home_branch', 'is_active', 'created_at']
+    list_filter = ['role', 'is_home_branch', 'is_active', 'branch__business', 'branch']
+    search_fields = ['user__username', 'user__email', 'branch__name']
+
+
+@admin.register(BranchStock)
+class BranchStockAdmin(admin.ModelAdmin):
+    list_display = ['product', 'branch', 'quantity', 'average_cost', 'reorder_level', 'stock_value', 'updated_at']
+    list_filter = ['branch__business', 'branch']
+    search_fields = ['product__name', 'product__product_code', 'branch__name']
+    readonly_fields = ['updated_at']
+
+
+@admin.register(StockMovement)
+class StockMovementAdmin(admin.ModelAdmin):
+    """
+    STRICTLY READ-ONLY ADMIN FOR THE STOCK LEDGER.
+    No adding, editing, or deleting movements directly.
+    """
+    list_display = [
+        'created_at', 'product', 'branch', 'quantity_delta', 'unit_cost',
+        'total_cost', 'movement_type', 'reference_number', 'balance_after',
+        'resulted_in_negative_stock', 'performed_by'
+    ]
+    list_filter = ['movement_type', 'resulted_in_negative_stock', 'branch__business', 'branch', 'created_at']
+    search_fields = ['product__name', 'product__product_code', 'reference_number', 'note', 'branch__name']
+    readonly_fields = [
+        'business', 'branch', 'product', 'quantity_delta', 'unit_cost',
+        'total_cost', 'movement_type', 'content_type', 'object_id',
+        'reference_number', 'balance_after', 'resulted_in_negative_stock',
+        'performed_by', 'note', 'created_at'
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+class StockRequisitionItemInline(admin.TabularInline):
+    model = StockRequisitionItem
+    extra = 0
+    fields = ['product', 'requested_quantity', 'approved_quantity', 'dispatched_quantity', 'received_quantity', 'notes']
+
+
+@admin.register(StockRequisition)
+class StockRequisitionAdmin(admin.ModelAdmin):
+    list_display = ['reference_number', 'requesting_branch', 'requested_by', 'status', 'created_at', 'approved_by', 'approved_at']
+    list_filter = ['status', 'requesting_branch__business', 'requesting_branch', 'created_at']
+    search_fields = ['reference_number', 'requesting_branch__name', 'requested_by__username']
+    readonly_fields = ['reference_number', 'created_at', 'updated_at', 'approved_at']
+    inlines = [StockRequisitionItemInline]
+
+
+class StockTransferItemInline(admin.TabularInline):
+    model = StockTransferItem
+    extra = 0
+    fields = ['product', 'requested_quantity', 'approved_quantity', 'dispatched_quantity', 'received_quantity', 'notes']
+
+
+@admin.register(StockTransferRequest)
+class StockTransferRequestAdmin(admin.ModelAdmin):
+    list_display = ['reference_number', 'source_branch', 'destination_branch', 'requested_by', 'status', 'created_at']
+    list_filter = ['status', 'source_branch__business', 'source_branch', 'destination_branch', 'created_at']
+    search_fields = ['reference_number', 'source_branch__name', 'destination_branch__name', 'requested_by__username']
+    readonly_fields = ['reference_number', 'created_at', 'updated_at', 'approved_at']
+    inlines = [StockTransferItemInline]
+
+
+class DispatchItemInline(admin.TabularInline):
+    model = DispatchItem
+    extra = 0
+    fields = ['product', 'dispatched_quantity', 'unit_cost', 'received_quantity', 'discrepancy_quantity', 'discrepancy_reason']
+    readonly_fields = ['unit_cost']
+
+
+@admin.register(Dispatch)
+class DispatchAdmin(admin.ModelAdmin):
+    list_display = ['reference_number', 'source_branch', 'destination_branch', 'status', 'dispatched_by', 'dispatched_at', 'received_by', 'received_at']
+    list_filter = ['status', 'source_branch__business', 'source_branch', 'destination_branch', 'dispatched_at']
+    search_fields = ['reference_number', 'source_branch__name', 'destination_branch__name', 'notes']
+    readonly_fields = ['reference_number', 'dispatched_at', 'received_at']
+    inlines = [DispatchItemInline]
+

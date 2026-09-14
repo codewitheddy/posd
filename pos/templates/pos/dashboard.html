@@ -553,11 +553,8 @@
   <div class="card-header"><span class="section-title"><i class="bi bi-lightning-charge text-warning me-2"></i>Quick Actions</span></div>
   <div class="card-body">
     <div class="qa-grid">
-      {% if user_permissions.can_make_sales %}
-      <a href="{% url 'pos_screen' slug=request.business.slug %}" class="qa-btn qa-primary"><i class="bi bi-cart-plus"></i>New Sale</a>
-      {% endif %}
       {% if user_permissions.can_manage_products %}
-      <a href="{% url 'product_create' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-plus-circle text-success"></i>Add Product</a>
+      <a href="{% url 'product_create' slug=request.business.slug %}" class="qa-btn qa-primary"><i class="bi bi-plus-circle"></i>Add Product</a>
       {% endif %}
       <a href="{% url 'customer_list' slug=request.business.slug %}" class="qa-btn"><i class="bi bi-person-plus text-info"></i>Customers</a>
       {% if user_permissions.can_manage_suppliers %}
@@ -646,6 +643,40 @@
       }
     }
   });
+})();
+
+// Real-Time Register Sync Listener for Back Office
+(function(){
+  try {
+    const sse = new EventSource('/pos/api/sync/stream/');
+    sse.addEventListener('sale_completed', function(e) {
+      const sale = JSON.parse(e.data);
+      const payload = sale.payload || sale;
+      
+      // Flash a live notification toast / update table
+      const tbody = document.querySelector('.dash-table tbody');
+      if (tbody) {
+        const tr = document.createElement('tr');
+        tr.style.backgroundColor = 'rgba(22, 163, 74, 0.12)';
+        tr.style.transition = 'background-color 1.5s ease';
+        tr.innerHTML = `
+          <td>
+            <div style="font-weight:700;color:#16a34a"><i class="bi bi-broadcast me-1"></i>${payload.invoice_number || 'New Sale'}</div>
+            <div style="font-size:11px;color:#8a94a6">Just now</div>
+          </td>
+          <td class="hide-mobile"><span class="text-muted">Walk-in</span></td>
+          <td class="hide-mobile"><span class="badge bg-primary bg-opacity-10 text-primary">${payload.cashier || 'Cashier'}</span></td>
+          <td class="hide-mobile"><span class="badge bg-light text-dark" style="font-size:11px">Cash / Card</span></td>
+          <td class="text-end fw-bold" style="color:#16a34a">KES ${parseFloat(payload.total || 0).toLocaleString()}</td>
+          <td><a href="/sales/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-receipt"></i></a></td>
+        `;
+        tbody.insertBefore(tr, tbody.firstChild);
+        setTimeout(() => { tr.style.backgroundColor = ''; }, 3000);
+      }
+    });
+  } catch (err) {
+    console.warn('[Dashboard] Live SSE not available:', err);
+  }
 })();
 </script>
 {% endblock %}

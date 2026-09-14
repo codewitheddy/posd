@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Display — {{ business.name }}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- QR Code Generator -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+    <style>
+        :root {
+            --cfd-bg: #0b0f19;
+            --cfd-card-bg: rgba(23, 32, 54, 0.85);
+            --cfd-card-border: rgba(255, 255, 255, 0.08);
+            --cfd-primary: #10b981;
+            --cfd-primary-glow: rgba(16, 185, 129, 0.25);
+            --cfd-accent: #3b82f6;
+            --cfd-text-main: #f8fafc;
+            --cfd-text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--cfd-bg);
+            color: var(--cfd-text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Ambient glowing background */
+        .ambient-glow {
+            position: fixed;
+            top: -20%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .ambient-glow-2 {
+            position: fixed;
+            bottom: -20%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .cfd-header {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--cfd-card-border);
+            padding: 14px 28px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .cfd-card {
+            background: var(--cfd-card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--cfd-card-border);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Cart table */
+        .cart-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+        .cart-table th {
+            color: #94a3b8 !important;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 8px 14px;
+            border: none;
+        }
+        .cart-table tr.cart-row {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 12px;
+            transition: all 0.25s ease;
+        }
+        .cart-table tr.cart-row:hover {
+            background: rgba(51, 65, 85, 0.9);
+        }
+        .cart-table td {
+            padding: 14px;
+            border: none;
+            vertical-align: middle;
+            color: var(--cfd-text-main);
+        }
+        .cart-table tr.cart-row td:first-child {
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+        }
+        .cart-table tr.cart-row td:last-child {
+            border-top-right-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        .cfd-item-price {
+            color: #f1f5f9 !important;
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+
+        .cfd-item-total {
+            color: #34d399 !important;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .item-badge {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        /* Total Due Panel */
+        .total-panel {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 78, 59, 0.25) 100%);
+            border: 1.5px solid rgba(16, 185, 129, 0.4);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 0 40px var(--cfd-primary-glow);
+            text-align: center;
+        }
+
+        .total-amount {
+            font-size: 3.2rem;
+            font-weight: 800;
+            color: #10b981;
+            letter-spacing: -0.02em;
+            text-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+        }
+
+        /* QR Code Container */
+        .qr-box {
+            background: white;
+            padding: 14px;
+            border-radius: 16px;
+            display: inline-block;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        }
+
+        /* Empty state welcome */
+        .welcome-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            text-align: center;
+            color: var(--cfd-text-muted);
+        }
+
+        .pulse-icon {
+            animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.08); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        /* Thank you overlay */
+        #thankYouState {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* High contrast utilities */
+        .text-muted {
+            color: #94a3b8 !important;
+        }
+        .text-slate-300 {
+            color: #cbd5e1 !important;
+        }
+
+        /* Welcome Screen Store Logo */
+        .welcome-logo-box {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.96);
+            padding: 18px 32px;
+            border-radius: 20px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+            margin-bottom: 22px;
+        }
+        .welcome-logo-img {
+            max-height: 95px;
+            max-width: 260px;
+            object-fit: contain;
+        }
+        .welcome-icon-box {
+            width: 90px;
+            height: 90px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.7);
+            border: 2px solid rgba(16, 185, 129, 0.35);
+            margin-bottom: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+    <div class="ambient-glow-2"></div>
+
+    <!-- Header -->
+    <header class="cfd-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-3">
+            <div id="cfdLogoBox">
+                {% if business_settings and business_settings.logo %}
+                    <img src="{{ business_settings.logo.url }}" alt="{{ store_name|default:business_settings.get_business_name|default:business.name }}" id="cfdLogoImg" style="height: 44px; max-width: 140px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.95); padding: 3px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                {% else %}
+                    <div class="rounded-3 bg-success bg-opacity-25 p-2 text-success">
+                        <i class="bi bi-shop fs-4"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div>
+                <h4 class="mb-0 fw-bold text-light" id="cfdBusinessName">{{ store_name|default:business_settings.get_business_name|default:business.name }}</h4>
+                <div class="small" style="color: #cbd5e1;">
+                    {% if active_branch %}<span><i class="bi bi-geo-alt"></i> {{ active_branch.name }}</span> &nbsp;•&nbsp;{% endif %}
+                    {% if terminal %}<span><i class="bi bi-pc-display"></i> {{ terminal.terminal_code }}</span> &nbsp;•&nbsp;{% endif %}
+                    <span>Customer Display</span>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <div class="badge bg-dark border border-secondary px-3 py-2 fs-6 mono text-light" id="cfdClock">--:--:--</div>
+            <div id="connectionPill" class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30 px-3 py-2">
+                <i class="bi bi-broadcast me-1"></i> Live Connected
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="container-fluid flex-grow-1 p-4 position-relative" style="z-index: 1;">
+        <!-- Standard Active Cart State -->
+        <div id="activeCartState" class="row g-4 h-100">
+            <!-- Left: Scanned Items -->
+            <div class="col-lg-7">
+                <div class="cfd-card h-100 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0 fw-bold text-light">
+                            <i class="bi bi-cart3 text-success me-2"></i>Current Order
+                        </h5>
+                        <span class="item-badge" id="itemCountBadge">0 Items</span>
+                    </div>
+
+                    <!-- Items container -->
+                    <div class="flex-grow-1 overflow-auto" style="max-height: 520px;">
+                        <div id="cartEmptyMessage" class="welcome-hero">
+                            <div id="welcomeLogoContainer">
+                                {% if business_settings and business_settings.logo %}
+                                    <div class="welcome-logo-box pulse-icon">
+                                        <img src="{{ business_settings.logo.url }}" alt="{{ store_name|default:business_settings.get_business_name|default:business.name }}" class="welcome-logo-img" id="welcomeLogoImg">
+                                    </div>
+                                {% else %}
+                                    <div class="welcome-icon-box pulse-icon" id="welcomeIconBox">
+                                        <i class="bi bi-shop fs-1 text-success"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <h3 class="text-light fw-bold mb-2" id="welcomeStoreName">Welcome to {{ store_name|default:business_settings.get_business_name|default:business.name }}</h3>
+                            <p class="mb-0 fs-6" style="color: #cbd5e1;">Items will appear here as they are scanned.</p>
+                        </div>
+
+                        <table class="cart-table" id="cartItemsTable" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th width="45%">Item</th>
+                                    <th width="20%" class="text-center">Qty</th>
+                                    <th width="15%" class="text-end">Price</th>
+                                    <th width="20%" class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cartTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Pricing & M-Pesa QR Code -->
+            <div class="col-lg-5">
+                <div class="d-flex flex-column gap-4 h-100">
+                    <!-- Total Due Panel -->
+                    <div class="total-panel">
+                        <div class="text-uppercase fw-bold small mb-1" style="color: #cbd5e1; letter-spacing: 0.05em;">Total Due</div>
+                        <div class="total-amount mono" id="totalDueDisplay">KES 0.00</div>
+                        
+                        <div class="row g-2 mt-3 pt-3 border-top border-success border-opacity-25 small" style="color: #cbd5e1;">
+                            <div class="col-4">
+                                <div>Subtotal</div>
+                                <strong class="text-light mono fs-6" id="subtotalDisplay">KES 0.00</strong>
+                            </div>
+                            <div class="col-4">
+                                <div>VAT ({{ vat_rate }}%)</div>
+                                <strong class="text-light mono fs-6" id="vatDisplay">KES 0.00</strong>
+                            </div>
+                            <div class="col-4">
+                                <div>Discount</div>
+                                <strong class="text-warning mono fs-6" id="discountDisplay">KES 0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment / M-Pesa Info Card -->
+                    <div class="cfd-card text-center flex-grow-1 d-flex flex-column justify-content-center align-items-center">
+                        {% if mpesa_enabled and mpesa_shortcode or mpesa_enabled and mpesa_phone %}
+                        <div id="mpesaPaymentPanel">
+                            <div class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30 px-3 py-1 mb-2">
+                                <i class="bi bi-phone"></i> Lipa na M-Pesa
+                            </div>
+                            <h6 class="text-light fw-bold mb-2">
+                                {% if mpesa_type == 'paybill' %}Paybill No: <span class="text-success mono fs-5">{{ mpesa_shortcode }}</span>
+                                {% elif mpesa_type == 'till' %}Buy Goods Till: <span class="text-success mono fs-5">{{ mpesa_shortcode }}</span>
+                                {% elif mpesa_type == 'phone' %}Send Money: <span class="text-success mono fs-5">{{ mpesa_phone }}</span>{% endif %}
+                            </h6>
+                            {% if mpesa_account_reference %}
+                            <div class="small mb-3" style="color: #cbd5e1;">Account: <strong class="text-light">{{ mpesa_account_reference }}</strong></div>
+                            {% endif %}
+                            
+                            <div class="qr-box mb-2" id="mpesaQrCode"></div>
+                            <div class="small fw-semibold mt-2" style="color: #cbd5e1;">Scan QR with M-Pesa App or M-Pesa Camera</div>
+                        </div>
+                        {% else %}
+                        <div class="p-3" style="color: #cbd5e1;">
+                            <i class="bi bi-credit-card-2-front fs-1 text-success mb-2 d-block"></i>
+                            <h5 class="text-light fw-bold">Multiple Payment Methods Accepted</h5>
+                            <p class="small mb-0" style="color: #cbd5e1;">Cash · Mobile Money · Bank Cards · Store Credit</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Thank You State (Shown when payment is finalized) -->
+        <div id="thankYouState" class="cfd-card text-center py-5 my-auto">
+            <div class="p-4 rounded-circle bg-success bg-opacity-20 text-success d-inline-block mb-3">
+                <i class="bi bi-check-circle-fill" style="font-size: 4.5rem;"></i>
+            </div>
+            <h1 class="fw-extrabold text-light mb-2">Payment Received!</h1>
+            <p class="fs-4 mb-4" style="color: #cbd5e1;">Thank you for shopping with <strong class="text-success" id="thankYouStoreName">{{ store_name|default:business_settings.get_business_name|default:business.name }}</strong></p>
+            
+            <div class="d-inline-flex gap-4 p-3 rounded-4 bg-dark bg-opacity-60 border border-secondary border-opacity-50 mono text-light">
+                <div>Amount Paid: <strong class="text-success fs-5" id="receiptPaidAmount">KES 0.00</strong></div>
+                <div id="receiptChangeBox" style="display: none;">Change: <strong class="text-warning fs-5" id="receiptChangeAmount">KES 0.00</strong></div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="text-center py-2 small border-top" style="color: #94a3b8; border-color: rgba(255,255,255,0.08) !important;">
+        Powered by Marid POS Platform &nbsp;•&nbsp; Customer Assistance Available at Counter
+    </footer>
+
+    <script>
+        // Live Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('cfdClock').innerText = now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // M-Pesa QR Code Generator
+        function renderMpesaQr(amount) {
+            const qrContainer = document.getElementById('mpesaQrCode');
+            if (!qrContainer) return;
+            qrContainer.innerHTML = '';
+            
+            let qrText = "MPESA:{{ mpesa_shortcode }}";
+            if (amount && amount > 0) {
+                qrText += `?amount=${amount}`;
+            }
+            try {
+                new QRCode(qrContainer, {
+                    text: qrText,
+                    width: 140,
+                    height: 140,
+                    colorDark: "#0b0f19",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (e) {
+                console.warn("QR code render skipped", e);
+            }
+        }
+        renderMpesaQr(0);
+
+        // State Renderer
+        function renderCfdState(data) {
+            if (!data) return;
+
+            if (data.type === 'STORE_SETTINGS_UPDATED' && data.settings) {
+                const s = data.settings;
+                const nameEl = document.getElementById('cfdBusinessName');
+                if (nameEl && s.business_name) {
+                    nameEl.innerText = s.business_name;
+                }
+                const welcomeNameEl = document.getElementById('welcomeStoreName');
+                if (welcomeNameEl && s.business_name) {
+                    welcomeNameEl.innerText = `Welcome to ${s.business_name}`;
+                }
+                const thankYouNameEl = document.getElementById('thankYouStoreName');
+                if (thankYouNameEl && s.business_name) {
+                    thankYouNameEl.innerText = s.business_name;
+                }
+                const logoBox = document.getElementById('cfdLogoBox');
+                if (logoBox && s.logo_url) {
+                    logoBox.innerHTML = `<img src="${s.logo_url}" alt="${escapeHtml(s.business_name || 'Logo')}" id="cfdLogoImg" style="height: 44px; max-width: 140px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,0.95); padding: 3px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">`;
+                }
+                const welcomeLogoBox = document.getElementById('welcomeLogoContainer');
+                if (welcomeLogoBox && s.logo_url) {
+                    welcomeLogoBox.innerHTML = `
+                        <div class="welcome-logo-box pulse-icon">
+                            <img src="${s.logo_url}" alt="${escapeHtml(s.business_name || 'Logo')}" class="welcome-logo-img" id="welcomeLogoImg">
+                        </div>`;
+                }
+                return;
+            }
+
+            if (data.type === 'SALE_COMPLETED') {
+                document.getElementById('activeCartState').style.display = 'none';
+                document.getElementById('thankYouState').style.display = 'block';
+                document.getElementById('receiptPaidAmount').innerText = data.paidFormatted || data.paid || 'KES 0.00';
+                const changeVal = data.changeFormatted || data.change;
+                if (changeVal && changeVal !== 'KES 0.00') {
+                    document.getElementById('receiptChangeBox').style.display = 'block';
+                    document.getElementById('receiptChangeAmount').innerText = changeVal;
+                } else {
+                    document.getElementById('receiptChangeBox').style.display = 'none';
+                }
+
+                // Reset back to empty after 8 seconds
+                setTimeout(() => {
+                    document.getElementById('thankYouState').style.display = 'none';
+                    document.getElementById('activeCartState').style.display = 'flex';
+                    renderCfdState({ items: [], totalFormatted: 'KES 0.00', subtotalFormatted: 'KES 0.00', vatFormatted: 'KES 0.00', discountFormatted: 'KES 0.00' });
+                }, 8000);
+                return;
+            }
+
+            document.getElementById('thankYouState').style.display = 'none';
+            document.getElementById('activeCartState').style.display = 'flex';
+
+            const items = data.cart || data.items || [];
+            const tbody = document.getElementById('cartTableBody');
+            const emptyMsg = document.getElementById('cartEmptyMessage');
+            const table = document.getElementById('cartItemsTable');
+
+            const totalTxt = data.totalFormatted || (typeof data.total === 'number' ? `KES ${data.total.toFixed(2)}` : (data.total || 'KES 0.00'));
+            const subtotalTxt = data.subtotalFormatted || (typeof data.subtotal === 'number' ? `KES ${data.subtotal.toFixed(2)}` : (data.subtotal || 'KES 0.00'));
+            const vatTxt = data.vatFormatted || (typeof data.vat === 'number' ? `KES ${data.vat.toFixed(2)}` : (data.vat || 'KES 0.00'));
+            const discountTxt = data.discountFormatted || (typeof data.discount === 'number' ? `KES ${data.discount.toFixed(2)}` : (data.discount || 'KES 0.00'));
+
+            document.getElementById('itemCountBadge').innerText = `${items.length} ${items.length === 1 ? 'Item' : 'Items'}`;
+            document.getElementById('totalDueDisplay').innerText = totalTxt;
+            document.getElementById('subtotalDisplay').innerText = subtotalTxt;
+            document.getElementById('vatDisplay').innerText = vatTxt;
+            document.getElementById('discountDisplay').innerText = discountTxt;
+
+            if (items.length === 0) {
+                emptyMsg.style.display = 'flex';
+                table.style.display = 'none';
+                tbody.innerHTML = '';
+                renderMpesaQr(0);
+            } else {
+                emptyMsg.style.display = 'none';
+                table.style.display = 'table';
+                tbody.innerHTML = '';
+
+                items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.className = 'cart-row';
+                    const itemPrice = typeof item.price === 'number' ? `KES ${item.price.toFixed(2)}` : (item.price || '0.00');
+                    const itemTotal = typeof item.total === 'number' ? `KES ${item.total.toFixed(2)}` : (item.total || itemPrice);
+                    row.innerHTML = `
+                        <td>
+                            <strong class="text-light fs-6">${escapeHtml(item.name)}</strong>
+                            ${item.code ? `<div class="text-secondary small mono" style="color: #94a3b8 !important;">${escapeHtml(item.code)}</div>` : ''}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary bg-opacity-75 text-light mono fs-6 px-3 py-1">${item.quantity}</span>
+                        </td>
+                        <td class="text-end mono cfd-item-price">${itemPrice}</td>
+                        <td class="text-end mono cfd-item-total">${itemTotal}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // Update QR code with exact amount if numerical
+                const rawTotal = parseFloat(String(totalTxt).replace(/[^0-9.-]+/g, ""));
+                renderMpesaQr(rawTotal || 0);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Real-Time Cross-Window Communication (BroadcastChannel + LocalStorage)
+        const channel = new BroadcastChannel('pos_customer_display_sync');
+        channel.onmessage = (event) => {
+            if (event.data) {
+                renderCfdState(event.data);
+            }
+        };
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'pos_cfd_live_cart' || e.key === 'pos_cfd_latest_cart') {
+                try {
+                    const data = JSON.parse(e.newValue);
+                    renderCfdState(data);
+                } catch (err) {}
+            }
+        });
+
+        // Initialize with latest storage state if available
+        try {
+            const initial = localStorage.getItem('pos_cfd_live_cart') || localStorage.getItem('pos_cfd_latest_cart');
+            if (initial) {
+                renderCfdState(JSON.parse(initial));
+            }
+        } catch (e) {}
+    </script>
+</body>
+</html>

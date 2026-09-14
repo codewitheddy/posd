@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,6 +39,15 @@ except ImportError:
     # python-dotenv not installed, load manually
     load_env_file()
 
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpn)fmw-z%^9o@my_d#x4jkcgo$1c0a27qm81kp@sxx5ts3q9)')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+# Test mode - bypasses authentication (ONLY FOR TESTING!)
+TEST_MODE = os.environ.get('TEST_MODE', 'False') == 'True'
+
 # ==================== SENTRY ERROR TRACKING ====================
 # Initialize Sentry for error tracking and performance monitoring
 try:
@@ -60,23 +70,12 @@ except ImportError:
     pass
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpn)fmw-z%^9o@my_d#x4jkcgo$1c0a27qm81kp@sxx5ts3q9)')
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
-
-# Test mode - bypasses authentication (ONLY FOR TESTING!)
-TEST_MODE = os.environ.get('TEST_MODE', 'False') == 'True'
-
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else []
-
-# Auto-detect Back4App and other cloud platforms
-if not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ['*']  # Allow all hosts if not specified
+# Allowed Hosts configuration
+_raw_allowed = os.environ.get('ALLOWED_HOSTS', '')
+if _raw_allowed:
+    ALLOWED_HOSTS = [h.strip().strip('"').strip("'") for h in _raw_allowed.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ['*'] if DEBUG else ['marid.co.ke', 'www.marid.co.ke']
 
 # CSRF trusted origins for production
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
@@ -133,15 +132,17 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Add WhiteNoise for static files
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'pos.middleware.SafeSessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'pos.middleware.AuditRequestMiddleware',  # Attach request to audit logs
     'django.contrib.messages.middleware.MessageMiddleware',  # Move before TenantMiddleware
-    'pos.middleware.TenantMiddleware',  # Multi-tenancy middleware
+    'pos.middleware.StoreMiddleware',  # Single-store context
     'pos.middleware.BranchMiddleware',  # Multi-branch context
+    'pos.middleware.TerminalMiddleware',  # POS Terminal device context & active session
+    'pos.middleware.RoleAccessControlMiddleware',  # Front Office / Back Office access control
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -291,32 +292,46 @@ def is_redis_running():
 REDIS_RUNNING = is_redis_running()
 
 if REDIS_AVAILABLE and REDIS_RUNNING:
-    # Use Redis if available and running
+    # High-Performance Redis configuration for 100+ concurrent registers
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_CONNECT_TIMEOUT': 3,
                 'SOCKET_TIMEOUT': 5,
                 'RETRY_ON_TIMEOUT': True,
-                'MAX_CONNECTIONS': 50,
+                'MAX_CONNECTIONS': 100,  # Scaled for 100+ concurrent registers
                 'CONNECTION_POOL_CLASS_KWARGS': {
-                    'max_connections': 50,
+                    'max_connections': 100,
                     'retry_on_timeout': True,
                 },
+                'PARSER_CLASS': 'redis.connection.HiredisParser' if 'hiredis' in sys.modules else 'redis.connection.DefaultParser',
             },
             'KEY_PREFIX': 'pos',
             'TIMEOUT': 300,  # 5 minutes default
+        },
+        'sessions': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'SOCKET_CONNECT_TIMEOUT': 3,
+                'SOCKET_TIMEOUT': 5,
+                'RETRY_ON_TIMEOUT': True,
+                'MAX_CONNECTIONS': 50,
+            },
+            'KEY_PREFIX': 'sess',
+            'TIMEOUT': 86400,  # 24 hours
         },
         'ratelimit': {
             'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'SOCKET_CONNECT_TIMEOUT': 5,
-                'SOCKET_TIMEOUT': 5,
+                'SOCKET_CONNECT_TIMEOUT': 3,
+                'SOCKET_TIMEOUT': 3,
             },
             'KEY_PREFIX': 'ratelimit',
         },
@@ -325,27 +340,33 @@ if REDIS_AVAILABLE and REDIS_RUNNING:
             'LOCATION': 'unique-snowflake',
         }
     }
+    # Session Optimization: In-memory Redis cache with database persistence
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+    SESSION_CACHE_ALIAS = 'sessions'
 else:
-    # Development fallback (no Redis) - disable rate limiting entirely
+    # Development fallback (no Redis)
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'unique-snowflake',
+        },
+        'sessions': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'session-cache',
         },
         'locmem': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'unique-snowflake',
         }
     }
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 # Rate Limiting Configuration
-# Only enable rate limiting when Redis is available (requires atomic increment support)
 if REDIS_AVAILABLE and REDIS_RUNNING:
     RATELIMIT_CACHE = 'ratelimit'
     RATELIMIT_ENABLE = True
 else:
     RATELIMIT_ENABLE = False
-    # Silence django_ratelimit system checks when Redis is not available
     SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003', 'django_ratelimit.W001']
 
 # Cache time settings (in seconds)
@@ -372,32 +393,22 @@ EMAIL_BACKEND = os.environ.get(
 )
 
 # SMTP Configuration
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'in-v3.mailjet.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'mail.marid.co.ke')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 465))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False') == 'True'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yourpos.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@marid.co.ke')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# HELO/EHLO name sent to the SMTP server.
+# cPanel rejects bare hostnames — must be a valid FQDN matching the mail domain.
+EMAIL_HELO_NAME = os.environ.get('EMAIL_HELO_NAME', 'marid.co.ke')
 
 # Email settings
 EMAIL_TIMEOUT = 10
 EMAIL_USE_LOCALTIME = True
-
-# For Mailjet, you need to:
-# 1. Verify your sender/domain in Mailjet
-# 2. Use Mailjet API key as EMAIL_HOST_USER
-# 3. Use Mailjet secret key as EMAIL_HOST_PASSWORD
-#
-# Example .env configuration:
-# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-# EMAIL_HOST=in-v3.mailjet.com
-# EMAIL_PORT=587
-# EMAIL_USE_TLS=True
-# EMAIL_HOST_USER=your_mailjet_api_key
-# EMAIL_HOST_PASSWORD=your_mailjet_secret_key
-# DEFAULT_FROM_EMAIL=verified-sender@yourdomain.com
 
 
 # Password validation
@@ -505,12 +516,17 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# Session security — expire on browser close, short max age
+# Session and CSRF security — expire on browser close, short max age
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 28800          # 8 hours max (safety net)
 SESSION_COOKIE_SECURE = not DEBUG   # HTTPS only in production
 SESSION_COOKIE_HTTPONLY = True      # No JS access to session cookie
 SESSION_COOKIE_SAMESITE = 'Lax'     # CSRF protection
+CSRF_COOKIE_SECURE = not DEBUG      # HTTPS only in production
+CSRF_COOKIE_HTTPONLY = False        # Allow frontend JS to read CSRF cookie if needed
+CSRF_COOKIE_SAMESITE = 'Lax'
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # Password Reset Token Expiry (in seconds)
 PASSWORD_RESET_TIMEOUT = 86400  # 24 hours

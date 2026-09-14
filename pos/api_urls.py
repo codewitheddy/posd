@@ -11,9 +11,12 @@ from .api_views import (
     ProductViewSet, CategoryViewSet, CustomerViewSet, SupplierViewSet,
     SaleViewSet, PurchaseViewSet, StockAdjustmentViewSet,
     PaymentMethodViewSet, LoyaltyTransactionViewSet, LoyaltyRewardViewSet,
-    BusinessSettingsViewSet, UserViewSet,
+    BusinessSettingsViewSet, UserViewSet, VATCodeViewSet,
+    StockRequisitionViewSet, StockTransferRequestViewSet, DispatchViewSet,
+    BranchStockViewSet, StockMovementViewSet,
     CustomTokenObtainPairView, CustomTokenRefreshView,
-    sync_pull, sync_push, sync_status
+    sync_pull, sync_push, sync_status,
+    POSTerminalViewSet, POSTerminalSyncView
 )
 from .integration_api_views import (
     SalesListView, SalesCSVView, ProductsCSVView, CustomersCSVView,
@@ -24,6 +27,7 @@ from .integration_api_views import (
 router = DefaultRouter()
 router.register(r'products', ProductViewSet, basename='product')
 router.register(r'categories', CategoryViewSet, basename='category')
+router.register(r'vat-codes', VATCodeViewSet, basename='vatcode')
 router.register(r'customers', CustomerViewSet, basename='customer')
 router.register(r'suppliers', SupplierViewSet, basename='supplier')
 router.register(r'sales', SaleViewSet, basename='sale')
@@ -34,8 +38,18 @@ router.register(r'loyalty-transactions', LoyaltyTransactionViewSet, basename='lo
 router.register(r'loyalty-rewards', LoyaltyRewardViewSet, basename='loyaltyreward')
 router.register(r'business-settings', BusinessSettingsViewSet, basename='businesssettings')
 router.register(r'users', UserViewSet, basename='user')
+router.register(r'requisitions', StockRequisitionViewSet, basename='stockrequisition')
+router.register(r'transfer-requests', StockTransferRequestViewSet, basename='stocktransferrequest')
+router.register(r'dispatches', DispatchViewSet, basename='dispatch')
+router.register(r'branch-stocks', BranchStockViewSet, basename='branchstock')
+router.register(r'stock-movements', StockMovementViewSet, basename='stockmovement')
+router.register(r'terminals', POSTerminalViewSet, basename='posterminal')
 
 urlpatterns = [
+    # Terminal Sync endpoints
+    path('terminals/sync/', POSTerminalSyncView.as_view(), name='terminal_sync_root'),
+    path('terminals/<int:pk>/sync/', POSTerminalSyncView.as_view(), name='terminal_sync_pk'),
+
     # Authentication endpoints with rate limiting
     path('auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),

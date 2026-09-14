@@ -15,8 +15,31 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from hypothesis import assume, given, settings
-from hypothesis import strategies as st
+try:
+    from hypothesis import assume, given, settings
+    from hypothesis import strategies as st
+    HAS_HYPOTHESIS = True
+except ImportError:
+    HAS_HYPOTHESIS = False
+
+    def given(*args, **kwargs):
+        def decorator(f):
+            return unittest.skip("hypothesis not installed")(f)
+        return decorator
+
+    def settings(*args, **kwargs):
+        def decorator(f):
+            return f
+        return decorator
+
+    def assume(condition):
+        pass
+
+    class _St:
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+
+    st = _St()
 
 # ── Helpers (import the real functions under test) ────────────────────────────
 

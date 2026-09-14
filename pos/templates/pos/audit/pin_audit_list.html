@@ -1,0 +1,142 @@
+{% extends 'pos/base.html' %}
+{% block title %}PIN &amp; Session Audit Trail — {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 fw-bold mb-1"><i class="bi bi-shield-check me-2 text-primary"></i>PIN &amp; Session Audit Trail</h1>
+      <p class="text-muted small mb-0">Complete log of all cashier PIN logins, terminal shift sessions, lockouts, and security events.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
+      </a>
+      <a href="{% url 'terminal_list' %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-pc-display me-1"></i>Manage Terminals
+      </a>
+    </div>
+  </div>
+
+  <!-- Filter Card -->
+  <div class="card shadow-sm border-0 mb-4" style="border-radius: 12px;">
+    <div class="card-body p-3">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small fw-bold text-muted mb-1">Search Cashier / Employee ID</label>
+          <input type="text" name="employee" class="form-control form-control-sm" placeholder="e.g. CASHIER-01 or name" value="{{ employee_query }}">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label small fw-bold text-muted mb-1">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">All Events</option>
+            {% for code, label in status_choices %}
+              <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label small fw-bold text-muted mb-1">Branch</label>
+          <select name="branch" class="form-select form-select-sm">
+            <option value="">All Branches</option>
+            {% for b in branches %}
+              <option value="{{ b.pk }}" {% if selected_branch == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label small fw-bold text-muted mb-1">Date From</label>
+          <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label small fw-bold text-muted mb-1">Date To</label>
+          <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+        </div>
+
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Filter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Audit Table -->
+  <div class="card shadow-sm border-0" style="border-radius: 12px; overflow: hidden;">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+        <thead class="table-light">
+          <tr>
+            <th>Timestamp</th>
+            <th>Event / Status</th>
+            <th>Cashier / User</th>
+            <th>Terminal Device</th>
+            <th>Branch</th>
+            <th>IP Address</th>
+            <th>Details / Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="text-nowrap fw-semibold text-muted">{{ log.created_at|date:"d M Y, H:i:s" }}</td>
+            <td>
+              {% if log.status == 'success' %}
+                <span class="badge bg-success-subtle text-success border border-success fw-bold px-2 py-1">
+                  <i class="bi bi-check-circle me-1"></i>Login Success
+                </span>
+              {% elif log.status == 'failed_pin' %}
+                <span class="badge bg-danger-subtle text-danger border border-danger fw-bold px-2 py-1">
+                  <i class="bi bi-x-circle me-1"></i>Incorrect PIN
+                </span>
+              {% elif log.status == 'locked_out' %}
+                <span class="badge bg-danger text-white fw-bold px-2 py-1">
+                  <i class="bi bi-lock-fill me-1"></i>Locked Out
+                </span>
+              {% elif log.status == 'session_closed' %}
+                <span class="badge bg-info-subtle text-info-emphasis border border-info fw-bold px-2 py-1">
+                  <i class="bi bi-file-earmark-lock me-1"></i>Shift Closed
+                </span>
+              {% else %}
+                <span class="badge bg-warning-subtle text-warning border border-warning fw-bold px-2 py-1">
+                  {{ log.get_status_display }}
+                </span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.user %}
+                <div class="fw-bold text-dark">{{ log.user.get_full_name|default:log.user.username }}</div>
+                <small class="text-muted">{{ log.employee_id|default:log.user.username }}</small>
+              {% else %}
+                <span class="text-muted fw-bold">{{ log.employee_id|default:"Unknown" }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.terminal %}
+                <span class="fw-semibold">{{ log.terminal.name }}</span>
+                <small class="text-muted d-block">{{ log.terminal.terminal_code }}</small>
+              {% else %}
+                <span class="text-muted">{{ log.terminal_code|default:"—" }}</span>
+              {% endif %}
+            </td>
+            <td>{{ log.branch.name|default:"—" }}</td>
+            <td><code>{{ log.ip_address|default:"—" }}</code></td>
+            <td class="small text-muted">{{ log.failure_reason|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">
+              <i class="bi bi-shield-slash fs-1 d-block mb-2"></i>
+              No audit records matching criteria.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

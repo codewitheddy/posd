@@ -10,7 +10,10 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Branch, Business, BusinessMembership, UserProfile, ActivityLog, PERMISSION_CODES, DEFAULT_PERMISSIONS
+from .models import (
+    Branch, Business, BusinessMembership, UserProfile, ActivityLog,
+    PERMISSION_CODES, DEFAULT_PERMISSIONS, PERMISSION_LABELS
+)
 from .decorators import business_required
 
 
@@ -170,6 +173,10 @@ def user_create_view(request, slug=None):
                 profile.phone = phone
                 profile.employee_id = employee_id if employee_id else None
                 profile.save()
+
+                pin = request.POST.get('pin', '').strip()
+                if pin:
+                    profile.set_pin(pin, business=request.business)
                 
                 # Create business membership
                 BusinessMembership.objects.create(
@@ -209,6 +216,8 @@ def user_create_view(request, slug=None):
                     )
                 
                 messages.success(request, f'User "{username}" created successfully with role: {dict(ROLE_CHOICES)[role]}')
+                if pin:
+                    messages.info(request, f'POS PIN configured for {username}.')
                 if employee_created:
                     messages.info(request, f'Employee profile {employee.staff_code} was created in HR and assigned to {employee.branch.name}.')
                 elif employee_warning:
@@ -270,6 +279,30 @@ def user_edit_view(request, slug=None, pk=None):
                 profile.phone = phone
                 profile.employee_id = employee_id if employee_id else None
                 profile.save()
+
+                # Update POS PIN
+                new_pin = request.POST.get('new_pin', '').strip()
+                clear_pin = request.POST.get('clear_pin') in ['1', 'on', 'true']
+                if clear_pin:
+                    profile.clear_pin()
+                    ActivityLog.log_activity(
+                        user=request.user,
+                        action_type='update',
+                        model_name='UserProfile',
+                        object_id=profile.id,
+                        description=f'Cleared POS PIN for user: {user.username}',
+                        request=request
+                    )
+                elif new_pin:
+                    profile.set_pin(new_pin, business=request.business)
+                    ActivityLog.log_activity(
+                        user=request.user,
+                        action_type='update',
+                        model_name='UserProfile',
+                        object_id=profile.id,
+                        description=f'Updated POS PIN for user: {user.username}',
+                        request=request
+                    )
                 
                 # Update membership role (only if not changing owner)
                 if role and membership.role != 'owner':
@@ -342,17 +375,6 @@ def user_edit_view(request, slug=None, pk=None):
         except Exception as e:
             messages.error(request, f'Error updating user: {str(e)}')
     
-    PERMISSION_LABELS = {
-        'can_refund_sale': 'Process Refunds',
-        'can_void_sale': 'Void Sales',
-        'can_edit_price': 'Override Item Price',
-        'can_view_cost_price': 'View Cost Price',
-        'can_apply_discount': 'Apply Discounts',
-        'can_exceed_max_discount': 'Exceed Discount Limit',
-        'can_manage_users': 'Manage Team Members',
-        'can_view_reports': 'View Reports',
-        'can_manage_stock': 'Manage Stock & Purchases',
-    }
     permission_list = [(code, PERMISSION_LABELS.get(code, code)) for code in PERMISSION_CODES]
     profile, _ = UserProfile.objects.get_or_create(user=user)
     linked_employee = getattr(user, 'employee_profile', None)

@@ -5,42 +5,16 @@
 
 {% block extra_css %}
 <style>
-    .z-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:16px; overflow:hidden; }
-    .z-card-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid #f1f5f9; }
-    .z-card-title { margin:0; font-size:15px; font-weight:700; color:#0f172a; }
-    .z-card-body { padding:18px; }
-    .z-stat { background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; padding:16px; height:100%; }
-    .z-stat-label { font-size:12px; color:#64748b; margin-bottom:4px; }
-    .z-stat-value { font-size:22px; font-weight:700; color:#0f172a; }
-    .z-stat-sub { font-size:12px; color:#94a3b8; }
-    .z-info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
-    .z-info-item { background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; }
-    .z-info-label { display:block; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
-    .z-info-value { color:#0f172a; font-weight:600; word-break:break-word; }
-    .z-table { width:100%; }
-    .z-table td, .z-table th { padding:10px 12px; font-size:13px; border-bottom:1px solid #f1f5f9; }
-    .z-table tr:last-child td, .z-table tr:last-child th { border-bottom:none; }
-    .z-table th { color:#64748b; font-weight:600; }
-    .z-table td:last-child, .z-table th:last-child { text-align:right; }
-    .z-code { display:block; background:#0f172a; color:#e2e8f0; border-radius:12px; padding:14px 16px; font-size:12px; overflow:auto; }
-    .z-action-row { display:flex; flex-wrap:wrap; gap:10px; }
-    .z-btn { display:inline-flex; align-items:center; gap:8px; border-radius:10px; padding:10px 14px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid transparent; }
-    .z-btn-primary { background:#224195; color:#fff; }
-    .z-btn-primary:hover { background:#1a3278; color:#fff; }
-    .z-btn-secondary { background:#fff; color:#334155; border-color:#dbe3ef; }
-    .z-btn-secondary:hover { background:#f8fafc; color:#0f172a; }
-    .z-btn-success { background:#166534; color:#fff; }
-    .z-btn-success:hover { background:#14532d; color:#fff; }
-    .z-btn-danger { background:#b91c1c; color:#fff; }
-    .z-btn-danger:hover { background:#991b1b; color:#fff; }
-    .z-alert-void { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:14px; padding:16px 18px; }
-    .z-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
-    .z-badge-valid { background:#dcfce7; color:#166534; }
-    .z-badge-void { background:#fee2e2; color:#b91c1c; }
-    .z-badge-audit-created { background:#dcfce7; color:#166534; }
-    .z-badge-audit-voided { background:#fee2e2; color:#b91c1c; }
-    .z-badge-audit-integrity { background:#fef3c7; color:#92400e; }
-    .z-badge-audit-other { background:#dbeafe; color:#1d4ed8; }
+  .z-info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
+  .z-info-item { background:#fafbfc; border:1px solid #f0f2f5; border-radius:10px; padding:12px 14px; }
+  .z-info-label { display:block; font-size:11px; font-weight:700; color:#8a94a6; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+  .z-info-value { color:#1a202c; font-weight:600; word-break:break-word; font-size:13px; }
+  .z-code { display:block; background:#1a202c; color:#e2e8f0; border-radius:10px; padding:14px 16px; font-size:12px; overflow:auto; }
+  .z-table { width:100%; }
+  .z-table td, .z-table th { padding:10px 14px; font-size:13px; border-bottom:1px solid #f7f8fa; vertical-align:middle; }
+  .z-table tr:last-child td, .z-table tr:last-child th { border-bottom:none; }
+  .z-table th { color:#8a94a6; font-weight:600; text-align:left; }
+  .z-table td:last-child, .z-table th:last-child { text-align:right; }
 </style>
 {% endblock %}
 
@@ -48,338 +22,356 @@
 <div class="container-fluid py-3 px-3 px-md-4">
 
 <div class="page-header">
-    <div>
-        <h1>
-            <i class="bi bi-file-earmark-bar-graph me-2 {% if zreport.is_voided %}text-danger{% else %}text-primary{% endif %}"></i>
-            Z-Report #{{ zreport.z_number|stringformat:"05d" }}
-        </h1>
-        <p class="page-subtitle">Immutable session closeout report for {{ business.name }}</p>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-        <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i>Back to List
-        </a>
-    </div>
+  <div>
+    <h1>
+      <i class="bi bi-file-earmark-bar-graph me-2 {% if zreport.is_voided %}text-danger{% else %}text-primary{% endif %}"></i>
+      Z-Report #{{ zreport.z_number|stringformat:"05d" }}
+    </h1>
+    <p class="page-subtitle">Immutable session closeout report for {{ business.name }}</p>
+  </div>
+  <a href="{% url 'zreport_list' slug=business.slug %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to List
+  </a>
 </div>
 
 {% if zreport.is_voided %}
-<div class="z-alert-void mb-3">
-    <div style="font-weight:700;margin-bottom:6px;"><i class="bi bi-ban me-1"></i>This report has been voided</div>
-    <div class="small"><strong>Voided by:</strong> {{ zreport.voided_by.get_full_name|default:zreport.voided_by.username }}</div>
-    <div class="small"><strong>Voided at:</strong> {{ zreport.voided_at|date:"Y-m-d H:i:s" }}</div>
-    <div class="small"><strong>Reason:</strong> {{ zreport.void_reason }}</div>
+<div class="alert alert-danger mb-3">
+  <div style="font-weight:700;margin-bottom:6px;"><i class="bi bi-ban me-1"></i>This report has been voided</div>
+  <div class="small"><strong>Voided by:</strong> {{ zreport.voided_by.get_full_name|default:zreport.voided_by.username }}</div>
+  <div class="small"><strong>Voided at:</strong> {{ zreport.voided_at|date:"Y-m-d H:i:s" }}</div>
+  <div class="small"><strong>Reason:</strong> {{ zreport.void_reason }}</div>
 </div>
 {% endif %}
 
+<!-- Top stat cards -->
 <div class="row g-3 mb-3">
-    <div class="col-6 col-lg-3">
-        <div class="z-stat">
-            <div class="z-stat-label">Gross Sales</div>
-            <div class="z-stat-value" style="color:#16a34a;">KES {{ report_data.sales_summary.gross_sales|floatformat:0 }}</div>
-            <div class="z-stat-sub">Session total before exclusions</div>
-        </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-graph-up-arrow"></i></div>
+      <div>
+        <div class="stat-label">Gross Sales</div>
+        <div class="stat-value" style="font-size:16px;color:#16a34a;">KES {{ report_data.sales_summary.gross_sales|floatformat:0 }}</div>
+        <div class="stat-sub">Before exclusions</div>
+      </div>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="z-stat">
-            <div class="z-stat-label">Net Sales</div>
-            <div class="z-stat-value">KES {{ report_data.sales_summary.net_sales|floatformat:0 }}</div>
-            <div class="z-stat-sub">After tax separation</div>
-        </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb;"><i class="bi bi-cash-stack"></i></div>
+      <div>
+        <div class="stat-label">Net Sales</div>
+        <div class="stat-value" style="font-size:16px;">KES {{ report_data.sales_summary.net_sales|floatformat:0 }}</div>
+        <div class="stat-sub">After tax separation</div>
+      </div>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="z-stat">
-            <div class="z-stat-label">Transactions</div>
-            <div class="z-stat-value">{{ report_data.sales_summary.total_transactions }}</div>
-            <div class="z-stat-sub">Captured in this session</div>
-        </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:#fef9c3;color:#ca8a04;"><i class="bi bi-receipt"></i></div>
+      <div>
+        <div class="stat-label">Transactions</div>
+        <div class="stat-value" style="font-size:16px;">{{ report_data.sales_summary.total_transactions }}</div>
+        <div class="stat-sub">In this session</div>
+      </div>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="z-stat">
-            <div class="z-stat-label">Cash Difference</div>
-            <div class="z-stat-value {% if report_data.cash_management.difference > 0 %}text-success{% elif report_data.cash_management.difference < 0 %}text-danger{% endif %}">
-                {% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|floatformat:0 }}
-            </div>
-            <div class="z-stat-sub">{% if report_data.cash_management.difference > 0 %}Over{% elif report_data.cash_management.difference < 0 %}Short{% else %}Balanced{% endif %}</div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon-box" style="background:{% if report_data.cash_management.difference > 0 %}#dcfce7;color:#16a34a{% elif report_data.cash_management.difference < 0 %}#fee2e2;color:#dc2626{% else %}#f0f2f5;color:#374151{% endif %};"><i class="bi bi-wallet2"></i></div>
+      <div>
+        <div class="stat-label">Cash Difference</div>
+        <div class="stat-value {% if report_data.cash_management.difference > 0 %}text-profit{% elif report_data.cash_management.difference < 0 %}text-loss{% endif %}" style="font-size:16px;">
+          {% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|floatformat:0 }}
         </div>
+        <div class="stat-sub">{% if report_data.cash_management.difference > 0 %}Over{% elif report_data.cash_management.difference < 0 %}Short{% else %}Balanced{% endif %}</div>
+      </div>
     </div>
+  </div>
 </div>
 
+<!-- Overview + Actions -->
 <div class="row g-3 mb-3">
-    <div class="col-lg-8">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-info-circle me-2 text-primary"></i>Report Overview</h2>
-                {% if zreport.is_voided %}
-                <span class="z-badge z-badge-void"><i class="bi bi-ban"></i>Voided</span>
-                {% else %}
-                <span class="z-badge z-badge-valid"><i class="bi bi-shield-check"></i>Valid</span>
-                {% endif %}
-            </div>
-            <div class="z-card-body">
-                <div class="z-info-grid">
-                    <div class="z-info-item">
-                        <span class="z-info-label">Session</span>
-                        <span class="z-info-value">#{{ zreport.session.session_number }}</span>
-                    </div>
-                    <div class="z-info-item">
-                        <span class="z-info-label">Generated</span>
-                        <span class="z-info-value">{{ zreport.created_at|date:"Y-m-d H:i:s" }}</span>
-                    </div>
-                    <div class="z-info-item">
-                        <span class="z-info-label">Generated By</span>
-                        <span class="z-info-value">{{ zreport.created_by.get_full_name|default:zreport.created_by.username }}</span>
-                    </div>
-                    <div class="z-info-item">
-                        <span class="z-info-label">Difference %</span>
-                        <span class="z-info-value">{{ report_data.cash_management.difference_percentage|floatformat:2 }}%</span>
-                    </div>
-                    <div class="z-info-item">
-                        <span class="z-info-label">First Transaction</span>
-                        <span class="z-info-value">{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</span>
-                    </div>
-                    <div class="z-info-item">
-                        <span class="z-info-label">Last Transaction</span>
-                        <span class="z-info-value">{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</span>
-                    </div>
-                </div>
-            </div>
+  <div class="col-lg-8">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-info-circle me-2"></i>Report Overview</span>
+        {% if zreport.is_voided %}
+        <span class="status-badge status-danger"><i class="bi bi-ban me-1"></i>Voided</span>
+        {% else %}
+        <span class="status-badge status-success"><i class="bi bi-shield-check me-1"></i>Valid</span>
+        {% endif %}
+      </div>
+      <div class="ui-card-body">
+        <div class="z-info-grid">
+          <div class="z-info-item">
+            <span class="z-info-label">Session</span>
+            <span class="z-info-value">#{{ zreport.session.session_number }}</span>
+          </div>
+          <div class="z-info-item">
+            <span class="z-info-label">Generated</span>
+            <span class="z-info-value">{{ zreport.created_at|date:"Y-m-d H:i:s" }}</span>
+          </div>
+          <div class="z-info-item">
+            <span class="z-info-label">Generated By</span>
+            <span class="z-info-value">{{ zreport.created_by.get_full_name|default:zreport.created_by.username }}</span>
+          </div>
+          <div class="z-info-item">
+            <span class="z-info-label">Difference %</span>
+            <span class="z-info-value">{{ report_data.cash_management.difference_percentage|floatformat:2 }}%</span>
+          </div>
+          <div class="z-info-item">
+            <span class="z-info-label">First Transaction</span>
+            <span class="z-info-value">{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</span>
+          </div>
+          <div class="z-info-item">
+            <span class="z-info-label">Last Transaction</span>
+            <span class="z-info-value">{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</span>
+          </div>
         </div>
+      </div>
     </div>
-    <div class="col-lg-4">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-lightning-charge me-2 text-primary"></i>Actions</h2>
-            </div>
-            <div class="z-card-body">
-                <div class="z-action-row mb-2">
-                    {% if can_verify_zreport %}
-                    <a href="{% url 'zreport_verify' slug=business.slug z_number=zreport.z_number %}" class="z-btn z-btn-success" onclick="return confirm('Verify report integrity?')">
-                        <i class="bi bi-shield-check"></i>Verify Integrity
-                    </a>
-                    {% endif %}
-                    <a href="{% url 'zreport_print' slug=business.slug z_number=zreport.z_number %}" class="z-btn z-btn-secondary" target="_blank">
-                        <i class="bi bi-printer"></i>Print
-                    </a>
-                    {% if not zreport.is_voided and can_void_zreport %}
-                    <a href="{% url 'zreport_void' slug=business.slug z_number=zreport.z_number %}" class="z-btn z-btn-danger">
-                        <i class="bi bi-ban"></i>Void Report
-                    </a>
-                    {% endif %}
-                </div>
-                {% if can_export_zreport %}
-                <div class="d-grid gap-2">
-                    <a href="{% url 'zreport_export_json' slug=business.slug z_number=zreport.z_number %}" class="z-btn z-btn-secondary justify-content-center"><i class="bi bi-filetype-json"></i>Export JSON</a>
-                    <a href="{% url 'zreport_export_csv' slug=business.slug z_number=zreport.z_number %}" class="z-btn z-btn-secondary justify-content-center"><i class="bi bi-filetype-csv"></i>Export CSV</a>
-                    <a href="{% url 'zreport_export_pdf' slug=business.slug z_number=zreport.z_number %}" class="z-btn z-btn-secondary justify-content-center"><i class="bi bi-filetype-pdf"></i>Export PDF</a>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-lightning-charge me-2"></i>Actions</span>
+      </div>
+      <div class="ui-card-body d-flex flex-column gap-2">
+        {% if can_verify_zreport %}
+        <a href="{% url 'zreport_verify' slug=business.slug z_number=zreport.z_number %}" class="btn btn-success btn-sm" onclick="return confirm('Verify report integrity?')">
+          <i class="bi bi-shield-check me-1"></i>Verify Integrity
+        </a>
+        {% endif %}
+        <a href="{% url 'zreport_print' slug=business.slug z_number=zreport.z_number %}" class="btn btn-outline-secondary btn-sm" target="_blank">
+          <i class="bi bi-printer me-1"></i>Print
+        </a>
+        {% if not zreport.is_voided and can_void_zreport %}
+        <a href="{% url 'zreport_void' slug=business.slug z_number=zreport.z_number %}" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-ban me-1"></i>Void Report
+        </a>
+        {% endif %}
+        {% if can_export_zreport %}
+        <hr class="my-1">
+        <a href="{% url 'zreport_export_json' slug=business.slug z_number=zreport.z_number %}" class="btn-action w-100 justify-content-center"><i class="bi bi-filetype-json"></i>Export JSON</a>
+        <a href="{% url 'zreport_export_csv' slug=business.slug z_number=zreport.z_number %}" class="btn-action w-100 justify-content-center"><i class="bi bi-filetype-csv"></i>Export CSV</a>
+        <a href="{% url 'zreport_export_pdf' slug=business.slug z_number=zreport.z_number %}" class="btn-action w-100 justify-content-center"><i class="bi bi-filetype-pdf"></i>Export PDF</a>
+        {% endif %}
+      </div>
     </div>
+  </div>
 </div>
 
+<!-- Sales + Cash -->
 <div class="row g-3 mb-3">
-    <div class="col-lg-6">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Sales Summary</h2>
-            </div>
-            <div class="z-card-body p-0">
-                <table class="z-table">
-                    <tr><th>Total Transactions</th><td>{{ report_data.sales_summary.total_transactions }}</td></tr>
-                    <tr><th>Gross Sales</th><td style="color:#16a34a;font-weight:700;">KES {{ report_data.sales_summary.gross_sales|floatformat:2 }}</td></tr>
-                    <tr><th>Total Tax</th><td>KES {{ report_data.sales_summary.total_tax|floatformat:2 }}</td></tr>
-                    <tr><th>Net Sales</th><td style="font-weight:700;">KES {{ report_data.sales_summary.net_sales|floatformat:2 }}</td></tr>
-                    <tr><th>Total Discounts</th><td style="color:#dc2626;">KES {{ report_data.sales_summary.total_discounts|floatformat:2 }}</td></tr>
-                    <tr><th>Total Refunds</th><td>KES {{ report_data.sales_summary.total_refunds|floatformat:2 }}</td></tr>
-                    <tr><th>Total Voids</th><td>KES {{ report_data.sales_summary.total_voids|floatformat:2 }}</td></tr>
-                </table>
-            </div>
-        </div>
+  <div class="col-lg-6">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-graph-up-arrow me-2"></i>Sales Summary</span>
+      </div>
+      <div class="ui-card-body p-0">
+        <table class="z-table">
+          <tr><th>Total Transactions</th><td>{{ report_data.sales_summary.total_transactions }}</td></tr>
+          <tr><th>Gross Sales</th><td class="text-profit">KES {{ report_data.sales_summary.gross_sales|floatformat:2 }}</td></tr>
+          <tr><th>Total Tax</th><td>KES {{ report_data.sales_summary.total_tax|floatformat:2 }}</td></tr>
+          <tr><th>Net Sales</th><td style="font-weight:700;">KES {{ report_data.sales_summary.net_sales|floatformat:2 }}</td></tr>
+          <tr><th>Total Discounts</th><td class="text-loss">KES {{ report_data.sales_summary.total_discounts|floatformat:2 }}</td></tr>
+          <tr><th>Total Refunds</th><td>KES {{ report_data.sales_summary.total_refunds|floatformat:2 }}</td></tr>
+          <tr><th>Total Voids</th><td>KES {{ report_data.sales_summary.total_voids|floatformat:2 }}</td></tr>
+        </table>
+      </div>
     </div>
-    <div class="col-lg-6">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-cash-coin me-2 text-primary"></i>Cash Management</h2>
-            </div>
-            <div class="z-card-body p-0">
-                <table class="z-table">
-                    <tr><th>Opening Float</th><td>KES {{ report_data.cash_management.opening_float|floatformat:2 }}</td></tr>
-                    <tr><th>Cash Sales</th><td>KES {{ report_data.cash_management.cash_sales|floatformat:2 }}</td></tr>
-                    <tr><th>Expected Cash</th><td style="font-weight:700;">KES {{ report_data.cash_management.expected_cash|floatformat:2 }}</td></tr>
-                    <tr><th>Actual Cash Counted</th><td>KES {{ report_data.cash_management.actual_cash_counted|floatformat:2 }}</td></tr>
-                    <tr><th>Difference</th><td class="{% if report_data.cash_management.difference > 0 %}text-success{% elif report_data.cash_management.difference < 0 %}text-danger{% endif %}" style="font-weight:700;">{% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|floatformat:2 }}</td></tr>
-                    <tr><th>Difference %</th><td>{{ report_data.cash_management.difference_percentage|floatformat:2 }}%</td></tr>
-                </table>
-            </div>
-        </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-cash-coin me-2"></i>Cash Management</span>
+      </div>
+      <div class="ui-card-body p-0">
+        <table class="z-table">
+          <tr><th>Opening Float</th><td>KES {{ report_data.cash_management.opening_float|floatformat:2 }}</td></tr>
+          <tr><th>Cash Sales</th><td>KES {{ report_data.cash_management.cash_sales|floatformat:2 }}</td></tr>
+          <tr><th>Expected Cash</th><td style="font-weight:700;">KES {{ report_data.cash_management.expected_cash|floatformat:2 }}</td></tr>
+          <tr><th>Actual Cash Counted</th><td>KES {{ report_data.cash_management.actual_cash_counted|floatformat:2 }}</td></tr>
+          <tr><th>Difference</th><td class="{% if report_data.cash_management.difference > 0 %}text-profit{% elif report_data.cash_management.difference < 0 %}text-loss{% endif %}" style="font-weight:700;">{% if report_data.cash_management.difference > 0 %}+{% endif %}KES {{ report_data.cash_management.difference|floatformat:2 }}</td></tr>
+          <tr><th>Difference %</th><td>{{ report_data.cash_management.difference_percentage|floatformat:2 }}%</td></tr>
+        </table>
+      </div>
     </div>
+  </div>
 </div>
 
+<!-- Payments + Metrics -->
 <div class="row g-3 mb-3">
-    <div class="col-lg-6">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-credit-card-2-front me-2 text-primary"></i>Payment Breakdown</h2>
-            </div>
-            <div class="z-card-body p-0">
-                <div class="table-responsive">
-                    <table class="table ui-table mb-0">
-                        <thead>
-                            <tr>
-                                <th>Method</th>
-                                <th class="text-end">Count</th>
-                                <th class="text-end">Amount</th>
-                                <th class="text-end">Share</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for payment in report_data.payment_breakdown %}
-                            <tr>
-                                <td>{{ payment.method }}</td>
-                                <td class="text-end">{{ payment.count }}</td>
-                                <td class="text-end">KES {{ payment.amount|floatformat:2 }}</td>
-                                <td class="text-end">{% widthratio payment.amount report_data.sales_summary.gross_sales 100 %}%</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted py-4">No payment data recorded.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  <div class="col-lg-6">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-credit-card-2-front me-2"></i>Payment Breakdown</span>
+      </div>
+      <div class="ui-card-body p-0">
+        <div class="table-responsive">
+          <table class="table ui-table mb-0">
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th class="text-end">Count</th>
+                <th class="text-end">Amount</th>
+                <th class="text-end">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for payment in report_data.payment_breakdown %}
+              <tr>
+                <td>{{ payment.method }}</td>
+                <td class="text-end">{{ payment.count }}</td>
+                <td class="text-end">KES {{ payment.amount|floatformat:2 }}</td>
+                <td class="text-end">{% widthratio payment.amount report_data.sales_summary.gross_sales 100 %}%</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted py-4">No payment data recorded.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
+      </div>
     </div>
-    <div class="col-lg-6">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-bar-chart me-2 text-primary"></i>Transaction Metrics</h2>
-            </div>
-            <div class="z-card-body p-0">
-                <table class="z-table">
-                    <tr><th>First Transaction</th><td>{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</td></tr>
-                    <tr><th>Last Transaction</th><td>{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</td></tr>
-                    <tr><th>Average Transaction</th><td>KES {{ report_data.transaction_metrics.average_transaction_value|floatformat:2 }}</td></tr>
-                    <tr><th>Largest Transaction</th><td>KES {{ report_data.transaction_metrics.largest_transaction|floatformat:2 }}</td></tr>
-                    <tr><th>Smallest Transaction</th><td>KES {{ report_data.transaction_metrics.smallest_transaction|floatformat:2 }}</td></tr>
-                </table>
-            </div>
-        </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-bar-chart me-2"></i>Transaction Metrics</span>
+      </div>
+      <div class="ui-card-body p-0">
+        <table class="z-table">
+          <tr><th>First Transaction</th><td>{{ report_data.transaction_metrics.first_transaction|default:"N/A" }}</td></tr>
+          <tr><th>Last Transaction</th><td>{{ report_data.transaction_metrics.last_transaction|default:"N/A" }}</td></tr>
+          <tr><th>Average Transaction</th><td>KES {{ report_data.transaction_metrics.average_transaction_value|floatformat:2 }}</td></tr>
+          <tr><th>Largest Transaction</th><td>KES {{ report_data.transaction_metrics.largest_transaction|floatformat:2 }}</td></tr>
+          <tr><th>Smallest Transaction</th><td>KES {{ report_data.transaction_metrics.smallest_transaction|floatformat:2 }}</td></tr>
+        </table>
+      </div>
     </div>
+  </div>
 </div>
 
 {% if report_data.tax_breakdown %}
-<div class="z-card mb-3">
-    <div class="z-card-header">
-        <h2 class="z-card-title"><i class="bi bi-percent me-2 text-primary"></i>Tax Breakdown</h2>
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-percent me-2"></i>Tax Breakdown</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead>
+          <tr>
+            <th>Tax Rate</th>
+            <th class="text-end">Taxable Amount</th>
+            <th class="text-end">Tax Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tax in report_data.tax_breakdown %}
+          <tr>
+            <td>{{ tax.rate }}</td>
+            <td class="text-end">KES {{ tax.taxable_amount|floatformat:2 }}</td>
+            <td class="text-end">KES {{ tax.tax_amount|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="z-card-body p-0">
-        <div class="table-responsive">
-            <table class="table ui-table mb-0">
-                <thead>
-                    <tr>
-                        <th>Tax Rate</th>
-                        <th class="text-end">Taxable Amount</th>
-                        <th class="text-end">Tax Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for tax in report_data.tax_breakdown %}
-                    <tr>
-                        <td>{{ tax.rate }}</td>
-                        <td class="text-end">KES {{ tax.taxable_amount|floatformat:2 }}</td>
-                        <td class="text-end">KES {{ tax.tax_amount|floatformat:2 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+  </div>
 </div>
 {% endif %}
 
 {% if report_data.top_products %}
-<div class="z-card mb-3">
-    <div class="z-card-header">
-        <h2 class="z-card-title"><i class="bi bi-trophy me-2 text-primary"></i>Top Products</h2>
+<div class="ui-card mb-3">
+  <div class="ui-card-header">
+    <span class="ui-card-title"><i class="bi bi-trophy me-2"></i>Top Products</span>
+  </div>
+  <div class="ui-card-body p-0">
+    <div class="table-responsive">
+      <table class="table ui-table mb-0">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product</th>
+            <th class="text-end">Quantity</th>
+            <th class="text-end">Revenue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in report_data.top_products %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ product.name }}</td>
+            <td class="text-end">{{ product.quantity }}</td>
+            <td class="text-end">KES {{ product.revenue|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="z-card-body p-0">
-        <div class="table-responsive">
-            <table class="table ui-table mb-0">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Product</th>
-                        <th class="text-end">Quantity</th>
-                        <th class="text-end">Revenue</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for product in report_data.top_products %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ product.name }}</td>
-                        <td class="text-end">{{ product.quantity }}</td>
-                        <td class="text-end">KES {{ product.revenue|floatformat:2 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+  </div>
 </div>
 {% endif %}
 
+<!-- Audit + Integrity -->
 <div class="row g-3">
-    <div class="col-lg-7">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-clock-history me-2 text-primary"></i>Audit Log</h2>
-            </div>
-            <div class="z-card-body p-0">
-                <div class="table-responsive">
-                    <table class="table ui-table mb-0">
-                        <thead>
-                            <tr>
-                                <th>Action</th>
-                                <th>By</th>
-                                <th>Date/Time</th>
-                                <th>IP Address</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for log in audit_logs %}
-                            <tr>
-                                <td>
-                                    <span class="z-badge {% if log.action == 'created' %}z-badge-audit-created{% elif log.action == 'voided' %}z-badge-audit-voided{% elif 'integrity' in log.action %}z-badge-audit-integrity{% else %}z-badge-audit-other{% endif %}">
-                                        {{ log.get_action_display }}
-                                    </span>
-                                </td>
-                                <td>{{ log.performed_by.get_full_name|default:log.performed_by.username }}</td>
-                                <td>{{ log.performed_at|date:"Y-m-d H:i:s" }}</td>
-                                <td>{{ log.ip_address|default:"N/A" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted py-4">No audit entries recorded yet.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  <div class="col-lg-7">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-clock-history me-2"></i>Audit Log</span>
+      </div>
+      <div class="ui-card-body p-0">
+        <div class="table-responsive">
+          <table class="table ui-table mb-0">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>By</th>
+                <th>Date/Time</th>
+                <th>IP Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in audit_logs %}
+              <tr>
+                <td>
+                  {% if log.action == 'created' %}
+                    <span class="status-badge status-success">{{ log.get_action_display }}</span>
+                  {% elif log.action == 'voided' %}
+                    <span class="status-badge status-danger">{{ log.get_action_display }}</span>
+                  {% elif 'integrity' in log.action %}
+                    <span class="status-badge status-warning">{{ log.get_action_display }}</span>
+                  {% else %}
+                    <span class="status-badge status-info">{{ log.get_action_display }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ log.performed_by.get_full_name|default:log.performed_by.username }}</td>
+                <td>{{ log.performed_at|date:"Y-m-d H:i:s" }}</td>
+                <td>{{ log.ip_address|default:"N/A" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted py-4">No audit entries recorded yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
+      </div>
     </div>
-    <div class="col-lg-5">
-        <div class="z-card h-100">
-            <div class="z-card-header">
-                <h2 class="z-card-title"><i class="bi bi-shield-lock me-2 text-primary"></i>Integrity Information</h2>
-            </div>
-            <div class="z-card-body">
-                <div class="small text-muted mb-2">SHA256 snapshot hash</div>
-                <code class="z-code">{{ zreport.data_hash }}</code>
-                <p class="small text-muted mb-0 mt-3">This cryptographic hash is used to detect any tampering with the stored report snapshot.</p>
-            </div>
-        </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="ui-card h-100">
+      <div class="ui-card-header">
+        <span class="ui-card-title"><i class="bi bi-shield-lock me-2"></i>Integrity Information</span>
+      </div>
+      <div class="ui-card-body">
+        <div class="stat-label mb-2">SHA256 snapshot hash</div>
+        <code class="z-code">{{ zreport.data_hash }}</code>
+        <p class="text-muted mb-0 mt-3" style="font-size:12px;">This cryptographic hash detects any tampering with the stored report snapshot.</p>
+      </div>
     </div>
+  </div>
 </div>
 
 </div>

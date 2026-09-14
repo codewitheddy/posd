@@ -12,7 +12,8 @@ from .models import (
     Product, Category, Sale, SaleItem, StockAdjustment, Supplier, Purchase, 
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
     SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
-    GoodsReturnedNote, GoodsReturnedNoteItem, GoodsReceivedNote, GoodsReceivedNoteItem, DayClosureReport
+    GoodsReturnedNote, GoodsReturnedNoteItem, GoodsReceivedNote, GoodsReceivedNoteItem, DayClosureReport,
+    Branch, BranchStock, StockMovement, VATCode
 )
 from .decorators import business_required, business_permission_required, feature_required
 from reportlab.lib.pagesizes import letter, A4
@@ -854,9 +855,10 @@ def product_list(request, slug=None):
     return render(request, 'pos/product_list.html', context)
 
 
+@login_required
 @business_required
 def product_bulk_upload(request, slug=None):
-    """Bulk upload products via CSV"""
+    """High-performance bulk product CSV upload with prefetching, flexible headers, and multi-branch ledger sync"""
     if request.method == 'POST':
         if 'csv_file' not in request.FILES:
             messages.error(request, 'No file uploaded!')
@@ -865,113 +867,322 @@ def product_bulk_upload(request, slug=None):
         csv_file = request.FILES['csv_file']
         
         # Validate file extension
-        if not csv_file.name.endswith('.csv'):
-            messages.error(request, 'File must be a CSV!')
+        if not csv_file.name.lower().endswith('.csv'):
+            messages.error(request, 'File must be a CSV file!')
             return redirect('product_bulk_upload', slug=request.business.slug)
         
         try:
-            # Read CSV file
             import csv
             import io
+            import re
+            from decimal import Decimal
+            from django.db import transaction
+
+            # Decode file with fallback encodings
+            raw_bytes = csv_file.read()
+            decoded_file = None
+            for encoding in ('utf-8-sig', 'utf-8', 'latin-1', 'cp1252'):
+                try:
+                    decoded_file = raw_bytes.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
             
-            decoded_file = csv_file.read().decode('utf-8')
+            if decoded_file is None:
+                messages.error(request, 'Could not decode CSV file. Please ensure it is saved in UTF-8 format.')
+                return redirect('product_bulk_upload', slug=request.business.slug)
+
             io_string = io.StringIO(decoded_file)
             reader = csv.DictReader(io_string)
+
+            if not reader.fieldnames:
+                messages.error(request, 'CSV file appears to be empty or has no header row.')
+                return redirect('product_bulk_upload', slug=request.business.slug)
+
+            # Target branch for initial inventory records
+            target_branch = Branch.objects.filter(business=request.business, is_default=True).first() or \
+                            Branch.objects.filter(business=request.business, is_hq=True).first() or \
+                            Branch.objects.filter(business=request.business).first()
+
+            # Preload lookups in memory for ultra-fast processing of hundreds/thousands of products
+            existing_products = list(Product.objects.filter(business=request.business).select_related('category', 'vat_code'))
+            barcode_map = {p.barcode.strip(): p for p in existing_products if p.barcode and p.barcode.strip()}
+            code_map = {p.product_code.strip(): p for p in existing_products if p.product_code and p.product_code.strip()}
+            name_map = {p.name.strip().lower(): p for p in existing_products if p.name}
+
+            category_map = {c.name.strip().lower(): c for c in Category.objects.filter(business=request.business)}
             
+            vat_codes = list(VATCode.objects.filter(business=request.business, is_active=True))
+            vat_code_map = {v.code.strip().lower(): v for v in vat_codes if v.code}
+            vat_name_map = {v.name.strip().lower(): v for v in vat_codes if v.name}
+
+            branch_stock_map = {}
+            if target_branch:
+                for bs in BranchStock.objects.filter(branch=target_branch).select_related('product'):
+                    branch_stock_map[bs.product_id] = bs
+
             success_count = 0
+            updated_count = 0
             error_count = 0
             errors = []
-            
-            for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+
+            def _clean_str(val):
+                return str(val).strip() if val is not None else ''
+
+            def _clean_dec(val, default=None):
+                if val is None:
+                    return default
+                s = str(val).strip()
+                if not s:
+                    return default
+                cleaned = re.sub(r'[^\d.-]', '', s)
                 try:
-                    # Get or create category
-                    category = None
-                    if row.get('category'):
-                        category, _ = Category.objects.get_or_create(business=request.business, name=row['category'].strip())
-                    
-                    # Prepare product data
-                    product_code = row.get('product_code', '').strip() or None
-                    stock_quantity = int(row.get('stock_quantity', 0))
-                    low_stock_threshold = int(row.get('low_stock_threshold', 10))
-                    
-                    # Check if product exists (by name or code)
-                    existing_product = None
-                    if product_code:
-                        existing_product = Product.objects.filter(business=request.business, product_code=product_code).first()
-                    if not existing_product:
-                        existing_product = Product.objects.filter(business=request.business, name=row['name'].strip()).first()
-                    
-                    if existing_product:
-                        # Update existing product
-                        existing_product.name = row['name'].strip()
-                        existing_product.product_code = product_code
-                        existing_product.category = category
-                        existing_product.unit_price = Decimal(row['unit_price'])
-                        existing_product.low_stock_threshold = low_stock_threshold
-                        
-                        # Update stock if provided and different
-                        if stock_quantity != existing_product.stock_quantity:
-                            previous_qty = existing_product.stock_quantity
-                            existing_product.stock_quantity = stock_quantity
-                            
-                            # Create stock adjustment record
-                            StockAdjustment.objects.create(
+                    return Decimal(cleaned)
+                except Exception:
+                    return default
+
+            with transaction.atomic():
+                for row_num, raw_row in enumerate(reader, start=2):
+                    if not raw_row or not any(raw_row.values()):
+                        continue  # Skip empty rows
+
+                    # Normalize keys: lowercase, remove non-alphanumeric
+                    row = {}
+                    for k, v in raw_row.items():
+                        if k is not None:
+                            clean_k = re.sub(r'[^a-zA-Z0-9]', '', str(k).strip().lower())
+                            row[clean_k] = _clean_str(v)
+
+                    def get_field(*aliases, default=''):
+                        for a in aliases:
+                            ca = re.sub(r'[^a-zA-Z0-9]', '', str(a).strip().lower())
+                            if ca in row and row[ca] != '':
+                                return row[ca]
+                        return default
+
+                    try:
+                        # 1. Product Name (Required)
+                        name = get_field('name', 'productname', 'itemname', 'product', 'title', 'item')
+                        if not name:
+                            raise ValueError("Product name is required.")
+
+                        # 2. Product Code & Barcode
+                        product_code = get_field('productcode', 'code', 'sku', 'itemcode', 'itemno') or None
+                        barcode = get_field('barcode', 'barcodeean', 'ean', 'upc') or ''
+
+                        # 3. Category (Find or create cached)
+                        category_name = get_field('category', 'categoryname', 'cat', 'department', 'group')
+                        category = None
+                        if category_name:
+                            cat_key = category_name.strip().lower()
+                            if cat_key in category_map:
+                                category = category_map[cat_key]
+                            else:
+                                category = Category.objects.create(
+                                    business=request.business,
+                                    name=category_name.strip()
+                                )
+                                category_map[cat_key] = category
+
+                        # 4. Pricing (Selling Price & Cost Price)
+                        unit_price_val = get_field('unitprice', 'price', 'sellingprice', 'sellprice', 'retailprice', 'pricekes')
+                        unit_price = _clean_dec(unit_price_val, default=None)
+
+                        cost_price_val = get_field('costprice', 'cost', 'buyingprice', 'purchaseprice', 'buyprice', 'unitcost', 'buyingcost')
+                        cost_price = _clean_dec(cost_price_val, default=None)
+
+                        # 5. Stock Quantity & Threshold
+                        stock_qty_val = get_field('stockquantity', 'stock', 'quantity', 'qty', 'initialstock', 'inventory')
+                        stock_quantity = _clean_dec(stock_qty_val, default=Decimal('0.000'))
+
+                        low_stock_val = get_field('lowstockthreshold', 'lowstock', 'reorderlevel', 'minstock', 'alertthreshold', 'threshold')
+                        low_stock_threshold = _clean_dec(low_stock_val, default=Decimal('10.000'))
+
+                        # 6. VAT Code
+                        vat_code_val = get_field('vatcode', 'vat', 'taxcode', 'taxclass', 'taxrate')
+                        vat_code = None
+                        if vat_code_val:
+                            v_key = vat_code_val.strip().lower()
+                            vat_code = vat_code_map.get(v_key) or vat_name_map.get(v_key)
+
+                        # Match existing product via in-memory maps
+                        existing_product = None
+                        if barcode and barcode in barcode_map:
+                            existing_product = barcode_map[barcode]
+                        elif product_code and product_code in code_map:
+                            existing_product = code_map[product_code]
+                        elif name.strip().lower() in name_map:
+                            existing_product = name_map[name.strip().lower()]
+
+                        if existing_product:
+                            # Update existing product
+                            existing_product.name = name
+                            if product_code:
+                                existing_product.product_code = product_code
+                            if barcode:
+                                existing_product.barcode = barcode
+                            if category:
+                                existing_product.category = category
+                            if vat_code:
+                                existing_product.vat_code = vat_code
+
+                            # Pricing resolution
+                            if unit_price is not None and unit_price > 0:
+                                existing_product.unit_price = unit_price
+                            if cost_price is not None and cost_price > 0:
+                                existing_product.cost_price = cost_price
+                            elif existing_product.cost_price is None or existing_product.cost_price <= 0:
+                                existing_product.cost_price = existing_product.unit_price or Decimal('0.01')
+
+                            if low_stock_threshold is not None:
+                                existing_product.low_stock_threshold = low_stock_threshold
+
+                            # Update stock if quantity was provided
+                            if stock_qty_val != '':
+                                previous_qty = existing_product.stock_quantity
+                                if stock_quantity != previous_qty:
+                                    existing_product.stock_quantity = stock_quantity
+                                    diff = stock_quantity - previous_qty
+
+                                    StockAdjustment.objects.create(
+                                        business=request.business,
+                                        product=existing_product,
+                                        adjustment_type='correction',
+                                        quantity_change=diff,
+                                        previous_quantity=previous_qty,
+                                        new_quantity=stock_quantity,
+                                        reason=f'CSV bulk upload update - Row {row_num}'
+                                    )
+
+                                    if target_branch:
+                                        b_stock = branch_stock_map.get(existing_product.id)
+                                        if not b_stock:
+                                            b_stock = BranchStock.objects.create(
+                                                branch=target_branch,
+                                                product=existing_product,
+                                                quantity=Decimal('0.000'),
+                                                average_cost=existing_product.cost_price,
+                                                reorder_level=low_stock_threshold or Decimal('10.000')
+                                            )
+                                            branch_stock_map[existing_product.id] = b_stock
+
+                                        if diff > 0:
+                                            b_stock.receive(
+                                                qty=diff,
+                                                unit_cost=existing_product.cost_price,
+                                                movement_type='manual_adjustment',
+                                                user=request.user,
+                                                note=f"CSV Bulk Upload - Row {row_num}"
+                                            )
+                                        elif diff < 0:
+                                            b_stock.deduct(
+                                                qty=abs(diff),
+                                                movement_type='manual_adjustment',
+                                                user=request.user,
+                                                note=f"CSV Bulk Upload - Row {row_num}"
+                                            )
+
+                            existing_product.save()
+                            # Update map caches
+                            if barcode:
+                                barcode_map[barcode] = existing_product
+                            if product_code:
+                                code_map[product_code] = existing_product
+                            name_map[name.strip().lower()] = existing_product
+
+                            updated_count += 1
+                        else:
+                            # Create new product
+                            if unit_price is None or unit_price <= 0:
+                                if cost_price is not None and cost_price > 0:
+                                    unit_price = cost_price
+                                else:
+                                    raise ValueError("Selling price (unit_price) must be greater than 0.")
+
+                            if cost_price is None or cost_price <= 0:
+                                cost_price = unit_price  # Default gracefully to unit price
+
+                            product = Product.objects.create(
                                 business=request.business,
-                                product=existing_product,
-                                adjustment_type='correction',
-                                quantity_change=stock_quantity - previous_qty,
-                                previous_quantity=previous_qty,
-                                new_quantity=stock_quantity,
-                                reason=f'CSV bulk upload - Row {row_num}'
+                                name=name,
+                                product_code=product_code,
+                                barcode=barcode,
+                                category=category,
+                                vat_code=vat_code,
+                                unit_price=unit_price,
+                                cost_price=cost_price,
+                                stock_quantity=stock_quantity,
+                                low_stock_threshold=low_stock_threshold or Decimal('10.000')
                             )
-                        
-                        existing_product.save()
-                        success_count += 1
-                    else:
-                        # Create new product
-                        product = Product.objects.create(
-                            business=request.business,
-                            name=row['name'].strip(),
-                            product_code=product_code,
-                            category=category,
-                            unit_price=Decimal(row['unit_price']),
-                            stock_quantity=stock_quantity,
-                            low_stock_threshold=low_stock_threshold
-                        )
-                        
-                        # Create initial stock adjustment if stock > 0
-                        if stock_quantity > 0:
-                            StockAdjustment.objects.create(
-                                business=request.business,
-                                product=product,
-                                adjustment_type='restock',
-                                quantity_change=stock_quantity,
-                                previous_quantity=0,
-                                new_quantity=stock_quantity,
-                                reason=f'CSV bulk upload - Row {row_num}'
-                            )
-                        
-                        success_count += 1
-                        
-                except Exception as e:
-                    error_count += 1
-                    errors.append(f"Row {row_num}: {str(e)}")
-            
-            # Show results
-            if success_count > 0:
-                messages.success(request, f'Successfully processed {success_count} product(s)!')
+
+                            # Add to map caches
+                            if barcode:
+                                barcode_map[barcode] = product
+                            if product_code:
+                                code_map[product_code] = product
+                            name_map[name.strip().lower()] = product
+
+                            if target_branch:
+                                b_stock = BranchStock.objects.create(
+                                    branch=target_branch,
+                                    product=product,
+                                    quantity=stock_quantity,
+                                    average_cost=cost_price,
+                                    reorder_level=low_stock_threshold or Decimal('10.000')
+                                )
+                                branch_stock_map[product.id] = b_stock
+
+                                if stock_quantity > 0:
+                                    StockMovement.objects.create(
+                                        business=request.business,
+                                        branch=target_branch,
+                                        product=product,
+                                        quantity_delta=stock_quantity,
+                                        unit_cost=cost_price,
+                                        total_cost=(stock_quantity * cost_price).quantize(Decimal('0.01')),
+                                        movement_type='initial_count',
+                                        balance_after=stock_quantity,
+                                        performed_by=request.user,
+                                        note=f"CSV Bulk Upload - Row {row_num}"
+                                    )
+                                    StockAdjustment.objects.create(
+                                        business=request.business,
+                                        product=product,
+                                        adjustment_type='restock',
+                                        quantity_change=stock_quantity,
+                                        previous_quantity=0,
+                                        new_quantity=stock_quantity,
+                                        reason=f'CSV bulk upload - Row {row_num}'
+                                    )
+
+                            success_count += 1
+
+                    except Exception as e:
+                        error_count += 1
+                        errors.append(f"Row {row_num}: {str(e)}")
+
+            # Show flash messages
+            total_processed = success_count + updated_count
+            if total_processed > 0:
+                msg_parts = []
+                if success_count > 0:
+                    msg_parts.append(f'{success_count} new product(s) created')
+                if updated_count > 0:
+                    msg_parts.append(f'{updated_count} existing product(s) updated')
+                messages.success(request, f'Successfully processed CSV: {", ".join(msg_parts)}!')
+
             if error_count > 0:
                 error_msg = f'{error_count} error(s) occurred:<br>' + '<br>'.join(errors[:10])
                 if len(errors) > 10:
                     error_msg += f'<br>...and {len(errors) - 10} more errors'
                 messages.error(request, error_msg)
-            
+
             return redirect('product_list', slug=request.business.slug)
-            
+
         except Exception as e:
             messages.error(request, f'Error processing CSV file: {str(e)}')
             return redirect('product_bulk_upload', slug=request.business.slug)
-    
+
     return render(request, 'pos/product_bulk_upload.html')
 
 
@@ -999,14 +1210,16 @@ def product_export_csv(request, slug=None):
     response['Content-Disposition'] = 'attachment; filename="products_export.csv"'
     
     writer = csv.writer(response)
-    writer.writerow(['name', 'product_code', 'category', 'unit_price', 'stock_quantity', 'low_stock_threshold'])
+    writer.writerow(['name', 'product_code', 'barcode', 'category', 'cost_price', 'unit_price', 'stock_quantity', 'low_stock_threshold'])
     
     products = Product.objects.filter(business=request.business).select_related('category').all()
     for product in products:
         writer.writerow([
             product.name,
             product.product_code or '',
+            product.barcode or '',
             product.category.name if product.category else '',
+            product.cost_price,
             product.unit_price,
             product.stock_quantity,
             product.low_stock_threshold
@@ -1016,7 +1229,8 @@ def product_export_csv(request, slug=None):
 
 
 @login_required
-def product_download_template(request):
+@business_required
+def product_download_template(request, slug=None):
     """Download CSV template for bulk upload"""
     import csv
     
@@ -1024,24 +1238,25 @@ def product_download_template(request):
     response['Content-Disposition'] = 'attachment; filename="product_upload_template.csv"'
     
     writer = csv.writer(response)
-    writer.writerow(['name', 'product_code', 'category', 'unit_price', 'stock_quantity', 'low_stock_threshold'])
+    writer.writerow(['name', 'product_code', 'barcode', 'category', 'cost_price', 'unit_price', 'stock_quantity', 'low_stock_threshold'])
     
     # Add sample rows
-    writer.writerow(['Sample Product 1', 'PROD001', 'Electronics', '1500.00', '50', '10'])
-    writer.writerow(['Sample Product 2', 'PROD002', 'Groceries', '250.50', '100', '20'])
-    writer.writerow(['Sample Product 3', '', 'Beverages', '80.00', '75', '15'])
+    writer.writerow(['Sample Product 1', 'PROD001', '1234567890123', 'Electronics', '1000.00', '1500.00', '50', '10'])
+    writer.writerow(['Sample Product 2', 'PROD002', '', 'Groceries', '180.00', '250.50', '100', '20'])
+    writer.writerow(['Sample Product 3', '', '', 'Beverages', '55.00', '80.00', '75', '15'])
     
     return response
 
 
 def _product_form_context(request):
     """Shared context builder for product create/edit forms"""
-    from .models import UnitOfMeasurement, Brand
+    from .models import UnitOfMeasurement, Brand, VATCode
     return {
         'categories': Category.objects.filter(business=request.business).order_by('name'),
         'brands': Brand.objects.filter(business=request.business).order_by('name'),
         'units': UnitOfMeasurement.objects.filter(business=request.business, is_active=True),
         'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
+        'vat_codes': VATCode.objects.filter(business=request.business, is_active=True).order_by('code'),
     }
 
 
@@ -1804,19 +2019,33 @@ def pos_screen(request, slug=None):
     
     logger = logging.getLogger(__name__)
     
-    # Check if there's an open POS session
-    open_session = POSSession.objects.filter(
-        business=request.business,
-        status='open'
-    ).first()
+    # Check if there's an open POS session for this cashier / terminal
+    session_id = request.session.get('pos_session_id')
+    terminal = getattr(request, 'terminal', None)
     
+    open_session = None
+    if session_id:
+        open_session = POSSession.objects.filter(pk=session_id, business=request.business, status='open').first()
     if not open_session:
-        # No open session - redirect to Z-Report page to open one
-        messages.warning(
+        open_session = POSSession.objects.filter(
+            business=request.business, status='open'
+        ).filter(
+            Q(cashier=request.user) | Q(opened_by=request.user)
+        ).order_by('-opened_at').first()
+    if not open_session and terminal:
+        open_session = POSSession.objects.filter(
+            business=request.business, terminal=terminal, status='open'
+        ).order_by('-opened_at').first()
+    
+    if open_session:
+        request.session['pos_session_id'] = open_session.pk
+    else:
+        request.session.pop('pos_session_id', None)
+        messages.info(
             request,
-            'No active POS session. Please open a new session before making sales.'
+            'Please open your cashier shift session to begin scanning and selling.'
         )
-        return redirect('zreport_session_status', slug=request.business.slug)
+        return redirect('terminal_session_open')
     
     # Simple diagnostic endpoint
     if request.GET.get('test_ajax'):
@@ -2015,23 +2244,74 @@ def pos_screen(request, slug=None):
 
 
 @business_required
+def customer_display(request, slug=None, terminal_id=None):
+    """
+    Customer-Facing Display (CFD) for secondary pole monitor or tablet.
+    Live-syncs line items, subtotal, VAT, discounts, total, and M-Pesa QR code.
+    """
+    from .models import BusinessSettings, POSTerminal
+    
+    biz_settings = getattr(request.business, 'settings', None)
+    if not biz_settings:
+        biz_settings, _ = BusinessSettings.objects.get_or_create(business=request.business)
+
+    terminal = getattr(request, 'terminal', None)
+    if not terminal and terminal_id:
+        terminal = POSTerminal.objects.filter(business=request.business, pk=terminal_id, is_active=True).first()
+
+    context = {
+        'business': request.business,
+        'business_settings': biz_settings,
+        'store_settings': biz_settings,
+        'store_name': biz_settings.get_business_name(),
+        'active_branch': getattr(request, 'branch', None),
+        'terminal': terminal,
+        'biz_settings': biz_settings,
+        'vat_rate': getattr(biz_settings, 'vat_rate', 16),
+        'mpesa_enabled': getattr(biz_settings, 'mpesa_enabled', False),
+        'mpesa_type': getattr(biz_settings, 'mpesa_type', 'paybill'),
+        'mpesa_shortcode': getattr(biz_settings, 'mpesa_shortcode', ''),
+        'mpesa_phone': getattr(biz_settings, 'mpesa_phone', ''),
+        'mpesa_account_name': getattr(biz_settings, 'mpesa_account_name', ''),
+        'mpesa_account_reference': getattr(biz_settings, 'mpesa_account_reference', ''),
+    }
+    return render(request, 'pos/customer_display.html', context)
+
+
+@business_required
 def complete_sale(request, slug=None):
     """Process and complete a sale"""
     if request.method == 'POST':
         try:
             from django.db import transaction as db_transaction
             from .models import POSSession
-            open_session = POSSession.objects.filter(
-                business=request.business,
-                status='open'
-            ).first()
+            from django.db.models import Q
+            
+            session_id = request.session.get('pos_session_id')
+            terminal = getattr(request, 'terminal', None)
+            
+            open_session = None
+            if session_id:
+                open_session = POSSession.objects.filter(pk=session_id, business=request.business, status='open').first()
+            if not open_session:
+                open_session = POSSession.objects.filter(
+                    business=request.business, status='open'
+                ).filter(
+                    Q(cashier=request.user) | Q(opened_by=request.user)
+                ).order_by('-opened_at').first()
+            if not open_session and terminal:
+                open_session = POSSession.objects.filter(
+                    business=request.business, terminal=terminal, status='open'
+                ).order_by('-opened_at').first()
             
             if not open_session:
                 messages.error(
                     request,
-                    'Cannot complete sale: No active POS session. Please open a new session first.'
+                    'Cannot complete sale: No active cashier shift session found. Please open a shift float first.'
                 )
-                return redirect('zreport_session_status', slug=request.business.slug)
+                return redirect('terminal_session_open')
+            
+            request.session['pos_session_id'] = open_session.pk
             
             # Get sale data
             items_data = request.POST.getlist('items')
@@ -2164,8 +2444,24 @@ def complete_sale(request, slug=None):
             
             # Create sale atomically — all or nothing
             with db_transaction.atomic():
+                # Acquire database row-level locks on all items being purchased to prevent race condition overselling
+                product_ids = [item['product'].id for item in sale_items]
+                locked_products = {
+                    p.id: p for p in Product.objects.select_for_update().filter(
+                        id__in=product_ids, business=request.business
+                    )
+                }
+
+                # Verify stock availability under atomic row lock
+                for item in sale_items:
+                    locked_prod = locked_products.get(item['product'].id)
+                    if not locked_prod or not locked_prod.has_sufficient_stock(item['quantity']):
+                        raise ValueError(f"Insufficient stock for {locked_prod.name if locked_prod else 'item'} during final checkout verification.")
+                    item['product'] = locked_prod
+
                 sale = Sale.objects.create(
                     business=request.business,
+                    branch=getattr(request, 'branch', None),
                     cashier=request.user,
                     customer=customer,
                     session=open_session,
@@ -2194,8 +2490,18 @@ def complete_sale(request, slug=None):
                     )
                     previous_qty = item['product'].stock_quantity
                     item['product'].deduct_stock(item['quantity'])
+                    
+                    if getattr(request, 'branch', None):
+                        from .branch_services import BranchStockService
+                        try:
+                            BranchStockService.deduct(request.branch, item['product'], item['quantity'])
+                        except Exception as b_err:
+                            import logging
+                            logging.getLogger(__name__).warning(f"Branch stock deduction logged: {b_err}")
+
                     StockAdjustment.objects.create(
                         product=item['product'],
+                        branch=getattr(request, 'branch', None),
                         adjustment_type='sale',
                         quantity_change=-item['quantity'],
                         previous_quantity=previous_qty,
@@ -2316,12 +2622,20 @@ def thermal_receipt(request, slug, pk):
     """View thermal printer receipt - Optimized for fast loading"""
     from .models import BusinessSettings
     
+    # Check permission to print receipts
+    membership = getattr(request, 'business_membership', None)
+    if not request.user.is_superuser and (not membership or not membership.has_permission('can_print_receipt')):
+        messages.error(request, 'You do not have permission to print receipts')
+        return redirect('pos_screen', slug=slug)
+    
     # Optimize query with select_related and prefetch_related to avoid N+1 queries
     sale = get_object_or_404(
         Sale.objects.select_related(
             'customer',
             'cashier',
-            'business'
+            'business',
+            'branch',
+            'terminal'
         ).prefetch_related(
             'items__product__unit',  # Prefetch items with product and unit
             'payments__payment_method',  # Prefetch payments with payment method
@@ -2363,6 +2677,12 @@ def thermal_receipt(request, slug, pk):
 @login_required
 def invoice_pdf(request, slug, pk):
     """Generate PDF invoice"""
+    # Check permission to print receipts
+    membership = getattr(request, 'business_membership', None)
+    if not request.user.is_superuser and (not membership or not membership.has_permission('can_print_receipt')):
+        messages.error(request, 'You do not have permission to print invoices')
+        return redirect('pos_screen', slug=slug)
+    
     sale = get_object_or_404(Sale, pk=pk)
     shop_name = getattr(settings, 'SHOP_NAME', 'My Retail Shop')
     
@@ -2464,19 +2784,50 @@ def invoice_pdf(request, slug, pk):
 @business_required
 @business_permission_required('can_view_reports')
 def sales_report(request, slug=None):
-    """Daily sales report"""
+    """Daily/Period sales report with Cashier, Branch, and Terminal tracking"""
+    from .models import POSTerminal, Branch
+    from django.db.models import Q
+    from django.contrib.auth.models import User
+    
     # Get date filter
     date_str = request.GET.get('date')
-    if date_str:
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    sales = Sale.objects.filter(business=request.business).select_related(
+        'cashier', 'customer', 'branch', 'session', 'session__terminal'
+    ).prefetch_related('items', 'payments__payment_method')
+    
+    filter_date = None
+    if start_date_str and end_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            sales = sales.filter(date__date__gte=start_date, date__date__lte=end_date)
+            filter_date = start_date
+        except ValueError:
+            pass
+    elif date_str:
         try:
             filter_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            sales = sales.filter(date__date=filter_date)
         except ValueError:
-            filter_date = timezone.now().date()
-    else:
-        filter_date = timezone.now().date()
+            pass
     
-    # Get sales for the date - filter by business
-    sales = Sale.objects.filter(business=request.business, date__date=filter_date).prefetch_related('items')
+    # Cashier filter
+    cashier_id = request.GET.get('cashier')
+    if cashier_id:
+        sales = sales.filter(cashier_id=cashier_id)
+        
+    # Branch filter
+    branch_id = request.GET.get('branch')
+    if branch_id:
+        sales = sales.filter(Q(branch_id=branch_id) | Q(session__branch_id=branch_id))
+
+    # Terminal filter
+    terminal_id = request.GET.get('terminal')
+    if terminal_id:
+        sales = sales.filter(Q(terminal_id=terminal_id) | Q(session__terminal_id=terminal_id))
     
     # Calculate summary
     summary = sales.aggregate(
@@ -2486,22 +2837,39 @@ def sales_report(request, slug=None):
         transaction_count=Count('id')
     )
     
+    cashiers = User.objects.filter(business_memberships__business=request.business).distinct()
+    branches = Branch.objects.filter(business=request.business, is_active=True).order_by('name')
+    terminals = POSTerminal.objects.filter(business=request.business, is_active=True).select_related('branch').order_by('branch__name', 'terminal_code')
+    
     context = {
         'sales': sales,
         'filter_date': filter_date,
+        'start_date': start_date_str or '',
+        'end_date': end_date_str or '',
         'summary': summary,
+        'cashiers': cashiers,
+        'branches': branches,
+        'terminals': terminals,
+        'cashier_id': cashier_id,
+        'branch_id': branch_id,
+        'terminal_id': terminal_id,
     }
     return render(request, 'pos/sales_report.html', context)
 
 
 @business_required
+@business_permission_required('can_view_reports')
 def sales_list(request, slug=None):
     """List all sales with filters and pagination"""
     from django.core.paginator import Paginator
     from datetime import datetime, timedelta
+    from .models import POSTerminal, Branch
+    from django.db.models import Q
     
     # Get all sales for the business
-    sales = Sale.objects.filter(business=request.business).select_related('cashier', 'customer').prefetch_related('items', 'payments')
+    sales = Sale.objects.filter(business=request.business).select_related(
+        'cashier', 'customer', 'branch', 'session', 'session__terminal'
+    ).prefetch_related('items', 'payments__payment_method')
     
     # Date range filter
     start_date = request.GET.get('start_date')
@@ -2554,6 +2922,16 @@ def sales_list(request, slug=None):
     cashier_id = request.GET.get('cashier')
     if cashier_id:
         sales = sales.filter(cashier_id=cashier_id)
+
+    # Branch filter
+    branch_id = request.GET.get('branch')
+    if branch_id:
+        sales = sales.filter(Q(branch_id=branch_id) | Q(session__branch_id=branch_id))
+
+    # POS Terminal filter
+    terminal_id = request.GET.get('terminal')
+    if terminal_id:
+        sales = sales.filter(session__terminal_id=terminal_id)
     
     # Customer filter
     customer_id = request.GET.get('customer')
@@ -2620,6 +2998,8 @@ def sales_list(request, slug=None):
     
     # Get filter options
     cashiers = User.objects.filter(business_memberships__business=request.business).distinct()
+    branches = Branch.objects.filter(business=request.business, is_active=True).order_by('name')
+    terminals = POSTerminal.objects.filter(business=request.business, is_active=True).select_related('branch').order_by('branch__name', 'terminal_code')
     customers = Customer.objects.filter(business=request.business)
     payment_methods = PaymentMethod.objects.filter(business=request.business)
     categories = Category.objects.filter(business=request.business).order_by('name')
@@ -2628,6 +3008,8 @@ def sales_list(request, slug=None):
         'sales': sales_page,
         'summary': summary,
         'cashiers': cashiers,
+        'branches': branches,
+        'terminals': terminals,
         'customers': customers,
         'payment_methods': payment_methods,
         'categories': categories,
@@ -2636,6 +3018,8 @@ def sales_list(request, slug=None):
         'end_date': end_date or '',
         'date_range': date_range,
         'cashier_id': cashier_id,
+        'branch_id': branch_id,
+        'terminal_id': terminal_id,
         'customer_id': customer_id,
         'payment_method_id': payment_method_id,
         'category_id': category_id,
@@ -3000,7 +3384,7 @@ def supplier_create(request, slug=None):
         
         if not name:
             messages.error(request, 'Supplier name is required!')
-            return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
+            return render(request, 'pos/supplier_form.html', {'supplier': None, 'form_data': request.POST})
         
         if email:
             from django.core.validators import validate_email
@@ -3009,11 +3393,11 @@ def supplier_create(request, slug=None):
                 validate_email(email)
             except DjangoValidationError:
                 messages.error(request, f'"{email}" is not a valid email address.')
-                return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
+                return render(request, 'pos/supplier_form.html', {'supplier': None, 'form_data': request.POST})
 
         if Supplier.objects.filter(business=request.business, name__iexact=name).exists():
             messages.error(request, f'Supplier "{name}" already exists for this business.')
-            return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
+            return render(request, 'pos/supplier_form.html', {'supplier': None, 'form_data': request.POST})
         
         try:
             Supplier.objects.create(
@@ -3028,12 +3412,12 @@ def supplier_create(request, slug=None):
             )
         except IntegrityError:
             messages.error(request, f'Supplier "{name}" already exists for this business.')
-            return render(request, 'pos/supplier_form.html', {'form_data': request.POST})
+            return render(request, 'pos/supplier_form.html', {'supplier': None, 'form_data': request.POST})
         
         messages.success(request, f'Supplier "{name}" created successfully!')
         return redirect('supplier_list', slug=request.business.slug)
     
-    return render(request, 'pos/supplier_form.html', {'form_data': {}})
+    return render(request, 'pos/supplier_form.html', {'supplier': None, 'form_data': {}})
 
 
 @business_required
@@ -3858,13 +4242,12 @@ from django.contrib.auth.decorators import login_required
 
 @ratelimit(key='ip', rate='3/m', method='POST', block=True)
 def login_view(request):
-    """User login"""
+    """User login for Single-Store POS"""
     # TEST MODE: Auto-login for testing (REMOVE IN PRODUCTION!)
     if getattr(settings, 'TEST_MODE', False):
         from django.contrib.auth import get_user_model
         UserModel = get_user_model()
         
-        # Get or create test user
         test_user, created = UserModel.objects.get_or_create(
             username='testuser',
             defaults={
@@ -3877,15 +4260,88 @@ def login_view(request):
         # Auto-login
         auth_login(request, test_user, backend='django.contrib.auth.backends.ModelBackend')
         messages.success(request, '🧪 TEST MODE: Auto-logged in as testuser')
-        return redirect('business_list')
+        return redirect('dashboard')
     
     if request.user.is_authenticated:
-        # Redirect superusers to platform admin dashboard
-        if request.user.is_superuser:
-            return redirect('platform_admin_dashboard')
-        return redirect('business_list')
+        return redirect('dashboard')
     
     if request.method == 'POST':
+        pin = request.POST.get('pin', '').strip()
+        login_type = request.POST.get('login_type', '')
+
+        if pin or login_type == 'pin':
+            if not pin:
+                messages.error(request, 'Please enter your unique 4–6 digit security PIN.')
+                return render(request, 'pos/login.html', {'active_tab': 'pin'})
+
+            business = getattr(request, 'business', None)
+            if not business:
+                from .models import Business
+                business = Business.objects.filter(is_active=True).first() or Business.objects.first()
+
+            from .models import UserProfile, PINLoginAuditLog, Branch, BusinessMembership
+            profile = UserProfile.find_by_pin(pin, business=business)
+
+            if not profile:
+                if business:
+                    PINLoginAuditLog.objects.create(
+                        business=business,
+                        branch=Branch.objects.filter(business=business, is_default=True).first(),
+                        status='failed_pin',
+                        failure_reason='Incorrect PIN or unknown cashier',
+                        ip_address=request.META.get('REMOTE_ADDR', ''),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+                    )
+                messages.error(request, 'Invalid PIN. Please check your unique cashier PIN and try again.')
+                return render(request, 'pos/login.html', {'active_tab': 'pin'})
+
+            user = profile.user
+            auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+
+            ActivityLog.log_activity(
+                user=user,
+                action_type='login',
+                description=f'Cashier logged in via unique PIN: {user.username}',
+                request=request
+            )
+
+            # Ensure business membership exists and is active
+            if business:
+                membership = BusinessMembership.objects.filter(user=user, business=business).first()
+                if not membership:
+                    role = 'admin' if user.is_superuser else ('manager' if user.is_staff else 'cashier')
+                    membership = BusinessMembership.objects.create(
+                        user=user,
+                        business=business,
+                        role=role,
+                        is_active=True
+                    )
+                elif not membership.is_active:
+                    membership.is_active = True
+                    membership.save(update_fields=['is_active'])
+
+            request.session['is_front_office_session'] = True
+
+            from .models import POSSession
+            from django.db.models import Q
+            pos_session = None
+            if business:
+                pos_session = POSSession.objects.filter(
+                    business=business,
+                    status='open'
+                ).filter(
+                    Q(cashier=user) | Q(opened_by=user)
+                ).order_by('-opened_at').first()
+
+            cashier_name = user.get_full_name() or user.username
+            if pos_session:
+                request.session['pos_session_id'] = pos_session.pk
+                messages.success(request, f'Welcome back, {cashier_name}! Active shift #{pos_session.session_number} resumed.')
+                return redirect('pos_screen')
+            else:
+                messages.info(request, f'Welcome, {cashier_name}! Please enter opening float to begin your shift.')
+                return redirect('terminal_session_open')
+
         username_or_email = request.POST.get('username')
         password = request.POST.get('password')
         
@@ -3895,26 +4351,12 @@ def login_view(request):
         # If authentication fails, try with email
         if user is None:
             try:
-                # Check if input is an email and get the user
                 user_obj = User.objects.get(email=username_or_email)
                 user = authenticate(request, username=user_obj.username, password=password)
-            except User.DoesNotExist:
+            except (User.DoesNotExist, User.MultipleObjectsReturned):
                 user = None
         
         if user is not None:
-            # Check if user has any active businesses
-            from .models import Business
-            user_businesses = Business.objects.filter(owner=user)
-            
-            if user_businesses.exists() and not user_businesses.filter(is_active=True).exists():
-                # User has businesses but none are active (pending activation)
-                messages.warning(
-                    request, 
-                    'Your account is pending activation. Our team will review and activate your account within 24 hours. '
-                    'You will receive an email notification once activated.'
-                )
-                return render(request, 'pos/login.html')
-            
             auth_login(request, user)
             
             # Log login activity
@@ -3925,18 +4367,22 @@ def login_view(request):
                 request=request
             )
             
-            # Redirect superusers to platform admin dashboard
-            if user.is_superuser:
-                messages.success(request, f'Welcome back, {user.username}!')
-                return redirect('platform_admin_dashboard')
-            
-            next_url = request.GET.get('next', 'business_list')
-            messages.success(request, f'Welcome back, {user.username}!')
+            next_url = request.GET.get('next')
+            if not next_url:
+                from .models import BusinessMembership
+                membership = BusinessMembership.objects.filter(user=user, is_active=True).first()
+                if membership and membership.role in ['cashier', 'sales']:
+                    next_url = 'pos_screen'
+                else:
+                    next_url = 'dashboard'
+
+            messages.success(request, f'Welcome back, {user.get_full_name() or user.username}!')
             return redirect(next_url)
         else:
             messages.error(request, 'Invalid username/email or password')
     
     return render(request, 'pos/login.html')
+
 
 
 def logout_view(request):
@@ -4068,37 +4514,61 @@ def password_reset_confirm(request, uidb64, token):
 
 @login_required
 @business_required
-@manager_required
+@business_permission_required('can_view_reports')
 def cashier_report(request, slug=None):
-    """View sales by cashier"""
+    """View sales by cashier with date range, branch, and terminal filtering"""
     from django.contrib.auth.models import User
     from django.utils import timezone
+    from .models import POSTerminal, Branch
+    from django.db.models import Q
     
     # Get date filter
     date_str = request.GET.get('date')
-    if date_str:
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    base_sales = Sale.objects.filter(business=request.business).select_related(
+        'cashier', 'branch', 'session', 'session__terminal'
+    ).prefetch_related('items')
+    
+    filter_date = None
+    if start_date_str and end_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            base_sales = base_sales.filter(date__date__gte=start_date, date__date__lte=end_date)
+            filter_date = start_date
+        except ValueError:
+            pass
+    elif date_str:
         try:
             filter_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            base_sales = base_sales.filter(date__date=filter_date)
         except ValueError:
-            filter_date = timezone.now().date()
-    else:
-        filter_date = timezone.now().date()
+            pass
     
-    # Get all users who have made sales for this business
-    cashiers = User.objects.filter(
-        sales__business=request.business,
-        sales__isnull=False
-    ).distinct()
+    # Cashier filter
+    cashier_id = request.GET.get('cashier')
+    if cashier_id:
+        base_sales = base_sales.filter(cashier_id=cashier_id)
+
+    # Branch filter
+    branch_id = request.GET.get('branch')
+    if branch_id:
+        base_sales = base_sales.filter(Q(branch_id=branch_id) | Q(session__branch_id=branch_id))
+
+    # POS Terminal filter
+    terminal_id = request.GET.get('terminal')
+    if terminal_id:
+        base_sales = base_sales.filter(Q(terminal_id=terminal_id) | Q(session__terminal_id=terminal_id))
+    
+    # All users who are members of this business
+    cashiers = User.objects.filter(business_memberships__business=request.business).distinct()
+    target_cashiers = cashiers.filter(id=cashier_id) if cashier_id else cashiers
     
     cashier_stats = []
-    for cashier in cashiers:
-        # Get sales for this cashier on the selected date for this business
-        sales = Sale.objects.filter(
-            business=request.business,
-            cashier=cashier,
-            date__date=filter_date
-        )
-        
+    for cashier in target_cashiers:
+        sales = base_sales.filter(cashier=cashier)
         if sales.exists():
             stats = sales.aggregate(
                 total_sales=Count('id'),
@@ -4114,20 +4584,27 @@ def cashier_report(request, slug=None):
                 'sales': sales
             })
     
-    # Overall totals for this business
-    all_sales = Sale.objects.filter(
-        business=request.business,
-        date__date=filter_date
-    )
-    overall_stats = all_sales.aggregate(
+    # Overall totals for the filtered sales
+    overall_stats = base_sales.aggregate(
         total_sales=Count('id'),
         total_revenue=Sum('total')
     )
     
+    branches = Branch.objects.filter(business=request.business, is_active=True).order_by('name')
+    terminals = POSTerminal.objects.filter(business=request.business, is_active=True).select_related('branch').order_by('branch__name', 'terminal_code')
+    
     context = {
         'filter_date': filter_date,
+        'start_date': start_date_str or '',
+        'end_date': end_date_str or '',
         'cashier_stats': cashier_stats,
         'overall_stats': overall_stats,
+        'cashiers': cashiers,
+        'branches': branches,
+        'terminals': terminals,
+        'cashier_id': cashier_id,
+        'branch_id': branch_id,
+        'terminal_id': terminal_id,
     }
     return render(request, 'pos/cashier_report.html', context)
 
@@ -7736,7 +8213,7 @@ def held_orders_list(request, slug=None):
     from .models import HeldOrder
     orders = (
         HeldOrder.objects
-        .filter(business=request.business, is_active=True)
+        .filter(business=request.business)
         .order_by('-created_at')
         .values('id', 'name', 'cart_json', 'customer_json',
                 'discount_type', 'discount_value', 'created_at')
@@ -7749,8 +8226,8 @@ def held_orders_list(request, slug=None):
             'cart': o['cart_json'],
             'customer': o['customer_json'],
             'discount_type': o['discount_type'],
-            'discount_value': float(o['discount_value']),
-            'timestamp': o['created_at'].isoformat(),
+            'discount_value': float(o['discount_value'] or 0),
+            'timestamp': o['created_at'].isoformat() if o['created_at'] else '',
         })
     return JsonResponse({'success': True, 'orders': result})
 
@@ -7759,9 +8236,8 @@ def held_orders_list(request, slug=None):
 @business_required
 @require_POST
 def held_order_delete(request, slug=None, pk=None):
-    """Soft-delete a held order."""
+    """Delete a held order."""
     from .models import HeldOrder
     held = get_object_or_404(HeldOrder, pk=pk, business=request.business)
-    held.is_active = False
-    held.save(update_fields=['is_active'])
+    held.delete()
     return JsonResponse({'success': True})

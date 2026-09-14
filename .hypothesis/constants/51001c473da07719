@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0095_mpesa_phone_field.py
+# hypothesis_version: 6.167.1
+
+['Buy Goods (Till)', 'Paybill', 'businesssettings', 'mpesa_phone', 'mpesa_type', 'paybill', 'phone', 'pos', 'till']

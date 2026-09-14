@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\migrations\0092_businesssettings_overtime_multiplier.py
+# hypothesis_version: 6.167.1
+
+['1.00', '1.50', '5.00', 'businesssettings', 'pos']

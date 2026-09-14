@@ -7,6 +7,8 @@ from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
 from django.core.exceptions import ValidationError
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 from .image_utils import ImageOptimizer, generate_upload_path
 import uuid
 import threading
@@ -324,6 +326,8 @@ class Business(models.Model):
 # ==================== USER MANAGEMENT CONSTANTS ====================
 
 PERMISSION_CODES = [
+    'can_create_sale',
+    'can_print_receipt',
     'can_refund_sale',
     'can_void_sale',
     'can_edit_price',
@@ -338,12 +342,12 @@ PERMISSION_CODES = [
 DEFAULT_PERMISSIONS = {
     'owner':         list(PERMISSION_CODES),
     'admin':         list(PERMISSION_CODES),
-    'manager':       ['can_refund_sale', 'can_void_sale', 'can_edit_price',
+    'manager':       ['can_create_sale', 'can_print_receipt', 'can_refund_sale', 'can_void_sale', 'can_edit_price',
                       'can_view_cost_price', 'can_apply_discount',
                       'can_exceed_max_discount', 'can_view_reports', 'can_manage_stock'],
     'stock_manager': ['can_manage_stock', 'can_view_reports', 'can_view_cost_price'],
-    'cashier':       ['can_apply_discount', 'can_refund_sale'],
-    'sales':         ['can_apply_discount'],
+    'cashier':       ['can_create_sale', 'can_print_receipt', 'can_view_reports', 'can_apply_discount', 'can_refund_sale'],
+    'sales':         ['can_create_sale', 'can_print_receipt', 'can_view_reports', 'can_apply_discount'],
     'viewer':        ['can_view_reports'],
 }
 
@@ -355,6 +359,21 @@ DEFAULT_MAX_DISCOUNT = {
     'sales':         Decimal('20.00'),
     'stock_manager': Decimal('0.00'),
     'viewer':        Decimal('0.00'),
+}
+
+
+PERMISSION_LABELS = {
+    'can_create_sale': 'Create Sales',
+    'can_print_receipt': 'Print Receipts',
+    'can_refund_sale': 'Process Refunds',
+    'can_void_sale': 'Void Sales',
+    'can_edit_price': 'Override Item Price',
+    'can_view_cost_price': 'View Cost Price',
+    'can_apply_discount': 'Apply Discounts',
+    'can_exceed_max_discount': 'Exceed Discount Limit',
+    'can_manage_users': 'Manage Team Members',
+    'can_view_reports': 'View Reports',
+    'can_manage_stock': 'Manage Stock & Purchases',
 }
 
 
@@ -408,9 +427,20 @@ class BusinessMembership(models.Model):
         Supports both legacy broad codes and new granular permission codes."""
         if not self.is_active:
             return False
+        # Owners, Administrators, and Superusers have all permissions
+        if self.role in ['owner', 'admin'] or (getattr(self, 'user', None) and self.user.is_superuser):
+            return True
         # Granular permission check
         if permission in PERMISSION_CODES:
-            return permission in self.permissions
+            if self.permissions:
+                if permission in self.permissions:
+                    return True
+                # Essential capabilities fallback for roles where it is a default
+                if permission in ['can_create_sale', 'can_print_receipt'] and permission in DEFAULT_PERMISSIONS.get(self.role, []):
+                    return True
+                return False
+            # If permissions field is empty/unset, fall back to role defaults
+            return permission in DEFAULT_PERMISSIONS.get(self.role, [])
         # Legacy broad permission check (backward compatibility)
         legacy_map = {
             'owner': ['all'],
@@ -677,6 +707,129 @@ class HSCode(models.Model):
         return self.code
 
 
+# ==================== VAT CODES ====================
+
+class VATCode(CacheInvalidationMixin, AuditModelMixin, models.Model):
+    """
+    VAT Code for grouping products with the same tax treatment.
+    Each business can define custom VAT codes for their products.
+    
+    Examples:
+    - Standard Rated (16%)
+    - Zero Rated (0%)
+    - Exempt (0%)
+    - Special Rate (varies by product type)
+    """
+    
+    RATE_CHOICES = [
+        (Decimal('0.00'), '0% (Zero Rated)'),
+        (Decimal('8.00'), '8% (Half Rate)'),
+        (Decimal('14.00'), '14% (Reduced Rate)'),
+        (Decimal('16.00'), '16% (Standard Rate)'),
+        (Decimal('20.00'), '20% (High Rate)'),
+    ]
+    
+    business = models.ForeignKey(
+        'Business',
+        on_delete=models.CASCADE,
+        related_name='vat_codes',
+        help_text="Business/tenant this VAT code belongs to"
+    )
+    code = models.CharField(
+        max_length=20,
+        help_text="Unique VAT code identifier (e.g., VAT-STD, VAT-ZERO, VAT-EXEMPT)"
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Descriptive name (e.g., 'Standard Rated (16%)')"
+    )
+    vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('16.00'),
+        help_text="VAT rate as percentage (e.g., 16.00 for 16%)"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Additional details about when this VAT code applies"
+    )
+    
+    # HS Code mapping (optional)
+    hs_code_chapter = models.CharField(
+        max_length=2,
+        blank=True,
+        null=True,
+        help_text="HS Code chapter (2-digit) this VAT code typically applies to (e.g., '09')"
+    )
+    
+    # Excise duty information (optional)
+    excise_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Excise duty rate percentage (if applicable)"
+    )
+    is_excisable = models.BooleanField(
+        default=False,
+        help_text="Whether products with this VAT code are subject to excise duty"
+    )
+    
+    # Import duty (for imported goods)
+    import_duty = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Import duty rate percentage (if applicable)"
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive VAT codes cannot be assigned to new products"
+    )
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'VAT Code'
+        verbose_name_plural = 'VAT Codes'
+        ordering = ['code']
+        unique_together = [['business', 'code']]
+        indexes = [
+            models.Index(fields=['business', 'is_active']),
+            models.Index(fields=['business', 'vat_rate']),
+            models.Index(fields=['business', 'hs_code_chapter']),
+        ]
+    
+    def __str__(self):
+        return f"{self.code} - {self.name} ({self.vat_rate}%)"
+    
+    def get_display_name(self):
+        """Get formatted display name with rate"""
+        return f"{self.name} ({self.vat_rate}%)"
+    
+    def get_total_tax_rate(self):
+        """Get total tax rate (VAT + excise + import duty)"""
+        return self.vat_rate + self.excise_rate + self.import_duty
+    
+    def save(self, *args, **kwargs):
+        # Validate VAT rate is between 0 and 100
+        if not (Decimal('0') <= self.vat_rate <= Decimal('100')):
+            raise ValidationError("VAT rate must be between 0 and 100")
+        
+        # Validate excise rate
+        if not (Decimal('0') <= self.excise_rate <= Decimal('100')):
+            raise ValidationError("Excise rate must be between 0 and 100")
+        
+        # Validate import duty
+        if not (Decimal('0') <= self.import_duty <= Decimal('100')):
+            raise ValidationError("Import duty must be between 0 and 100")
+        
+        super().save(*args, **kwargs)
+
+
 class Product(CacheInvalidationMixin, models.Model):
     """Products available for sale"""
     TAX_CLASS_CHOICES = [
@@ -705,6 +858,14 @@ class Product(CacheInvalidationMixin, models.Model):
     wholesale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Wholesale / bulk customer price")
     minimum_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Minimum allowed selling price")
     tax_class = models.CharField(max_length=20, choices=TAX_CLASS_CHOICES, default='standard', help_text="Tax classification for this product")
+    vat_code = models.ForeignKey(
+        'VATCode',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products',
+        help_text="VAT Code for tax treatment (if not set, uses tax_class)"
+    )
     stock_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, help_text="Current stock quantity")
     low_stock_threshold = models.DecimalField(max_digits=10, decimal_places=3, default=10, help_text="Alert when stock falls below this level")
     reorder_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0, blank=True, help_text="Suggested reorder quantity")
@@ -783,6 +944,14 @@ class Product(CacheInvalidationMixin, models.Model):
     class Meta:
         unique_together = [['business', 'product_code']]
         ordering = ['name']
+
+    @property
+    def sku(self):
+        return self.product_code or ''
+
+    @property
+    def selling_price(self):
+        return self.unit_price
 
     def __str__(self):
         return f"{self.name} - KES {self.unit_price}"
@@ -1072,10 +1241,21 @@ class Sale(AuditModelMixin, CacheInvalidationMixin, models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='sales')
+    terminal = models.ForeignKey('POSTerminal', null=True, blank=True, on_delete=models.SET_NULL, related_name='sales', help_text="POS Terminal that originated this sale")
+    idempotency_key = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client-generated UUID for offline sync idempotency")
+    is_offline_sync = models.BooleanField(default=False, help_text="True if recorded offline and synced later")
+    client_created_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when sale was recorded locally on terminal")
 
     class Meta:
         ordering = ['-date']
         unique_together = [['business', 'invoice_number']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['business', 'idempotency_key'],
+                name='unique_business_sale_idempotency_key',
+                condition=models.Q(idempotency_key__isnull=False)
+            )
+        ]
 
     def __str__(self):
         return f"Invoice {self.invoice_number} - KES {self.total}"
@@ -1696,27 +1876,74 @@ class UserProfile(models.Model):
         """Returns True if a PIN has been set for this user."""
         return bool(self.pin_hash)
 
-    def set_pin(self, raw_pin):
-        """Validate and hash a 4-6 digit PIN. Raises ValidationError on invalid input."""
+    def set_pin(self, raw_pin, business=None):
+        """
+        Validate, ensure uniqueness, and hash a 4-6 digit PIN.
+        Raises ValidationError if the PIN is invalid or already in use by another cashier.
+        """
         import re
         from django.core.exceptions import ValidationError
-        from django.contrib.auth.hashers import make_password
-        if not re.fullmatch(r'\d{4,6}', str(raw_pin)):
-            raise ValidationError('PIN must be 4 to 6 digits.')
-        self.pin_hash = make_password(str(raw_pin))
+        from django.contrib.auth.hashers import make_password, check_password
+
+        raw_str = str(raw_pin or '').strip()
+        if not re.fullmatch(r'\d{4,6}', raw_str):
+            raise ValidationError('PIN must be 4 to 6 digits (numbers only).')
+
+        other_profiles = UserProfile.objects.filter(
+            user__is_active=True
+        ).exclude(pk=self.pk).exclude(pin_hash__isnull=True).exclude(pin_hash='').select_related('user')
+
+        for other in other_profiles:
+            if other.check_pin(raw_str):
+                other_name = other.user.get_full_name() or other.user.username
+                raise ValidationError(
+                    f'This PIN is already assigned to {other_name}. '
+                    'Each cashier must have a unique PIN.'
+                )
+
+        self.pin_hash = make_password(raw_str)
         self.save(update_fields=['pin_hash'])
 
     def check_pin(self, raw_pin):
         """Returns True if raw_pin matches the stored hash."""
-        if not self.pin_hash:
+        if not self.pin_hash or not raw_pin:
             return False
         from django.contrib.auth.hashers import check_password
-        return check_password(str(raw_pin), self.pin_hash)
+        return check_password(str(raw_pin).strip(), self.pin_hash)
 
     def clear_pin(self):
         """Remove the stored PIN hash."""
         self.pin_hash = None
         self.save(update_fields=['pin_hash'])
+
+    @classmethod
+    def find_by_pin(cls, raw_pin, business=None):
+        """
+        Find the unique active UserProfile matching raw_pin within the business/store.
+        Returns the UserProfile instance if a match is found, otherwise None.
+        """
+        raw_str = str(raw_pin or '').strip()
+        if not raw_str or not (4 <= len(raw_str) <= 6) or not raw_str.isdigit():
+            return None
+
+        # Fetch active profiles that have a PIN configured
+        profiles = list(cls.objects.filter(
+            user__is_active=True
+        ).exclude(pin_hash__isnull=True).exclude(pin_hash='').select_related('user'))
+
+        # If business provided, check matching business profiles first
+        if business:
+            for p in profiles:
+                has_biz_membership = p.user.business_memberships.filter(business=business, is_active=True).exists()
+                if has_biz_membership and p.check_pin(raw_str):
+                    return p
+
+        # Fallback to any active profile matching the PIN
+        for p in profiles:
+            if p.check_pin(raw_str):
+                return p
+
+        return None
 
 
 # ==================== BUSINESS SETTINGS ====================
@@ -1997,7 +2224,27 @@ class BusinessSettings(CacheInvalidationMixin, models.Model):
     
     def get_business_name(self):
         """Get business name (use override if set, otherwise use business.name)"""
-        return self.business_name or self.business.name
+        return self.business_name or (self.business.name if self.business_id else '')
+
+    @property
+    def name(self):
+        return self.get_business_name()
+
+    @property
+    def address(self):
+        return self.business_address or (self.business.address if self.business_id else '')
+
+    @property
+    def phone(self):
+        return self.business_phone or (self.business.phone if self.business_id else '')
+
+    @property
+    def email(self):
+        return self.business_email or (self.business.email if self.business_id else '')
+
+    @property
+    def website(self):
+        return self.business_website or (self.business.website if self.business_id else '')
     
     def format_currency(self, amount):
         """Format amount with currency symbol"""
@@ -3702,6 +3949,7 @@ class POSSession(models.Model):
     
     # Session lifecycle
     opened_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='sessions_opened')
+    cashier = models.ForeignKey(User, null=True, blank=True, on_delete=models.PROTECT, related_name='cashier_sessions')
     opened_at = models.DateTimeField(auto_now_add=True)
     opening_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Starting cash in drawer")
     
@@ -3712,10 +3960,14 @@ class POSSession(models.Model):
     
     closed_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True, related_name='sessions_closed')
     closed_at = models.DateTimeField(null=True, blank=True)
+    closing_cash = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Counted cash at close")
+    cash_difference = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Difference between expected and counted cash")
     
     # Metadata
     notes = models.TextField(blank=True, help_text="Optional notes about this session")
     branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='pos_sessions')
+    terminal = models.ForeignKey('POSTerminal', null=True, blank=True, on_delete=models.SET_NULL, related_name='sessions')
+    terminal_identifier = models.CharField(max_length=128, blank=True, help_text="Snapshot of terminal identifier/code")
     
     class Meta:
         unique_together = [['business', 'session_number']]
@@ -3727,11 +3979,11 @@ class POSSession(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(status='open') | (models.Q(status='closed') & models.Q(closed_at__isnull=False)),
+                condition=models.Q(status='open') | (models.Q(status='closed') & models.Q(closed_at__isnull=False)),
                 name='pos_session_closed_requires_timestamp'
             ),
             models.CheckConstraint(
-                check=models.Q(opening_cash__gte=0),
+                condition=models.Q(opening_cash__gte=0),
                 name='pos_session_opening_cash_non_negative'
             ),
         ]
@@ -4575,6 +4827,47 @@ class Branch(models.Model):
     email = models.EmailField(blank=True)
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
+    is_hq = models.BooleanField(
+        default=False,
+        help_text="Designates this branch as the central HQ. Exactly one branch per business can be HQ."
+    )
+
+    # KRA TIMS / eTIMS Multi-Branch Compliance (Kenya)
+    kra_pin = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Branch-specific KRA PIN (defaults to business KRA PIN if blank)"
+    )
+    kra_branch_id = models.CharField(
+        max_length=10,
+        blank=True,
+        default='00',
+        help_text="KRA eTIMS Branch ID (e.g. 00 for HQ, 01 for Branch 1, 02 for Branch 2)"
+    )
+    cu_number = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Branch Control Unit Number (e.g., KRAMW0012345)"
+    )
+    cu_serial_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Branch CU Device / VSCU Serial Number"
+    )
+    tims_middleware_url = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Local/LAN endpoint for TIMS middleware (e.g. http://192.168.1.150:8080)"
+    )
+    tims_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable KRA TIMS/eTIMS invoice signing for this branch"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -4583,7 +4876,8 @@ class Branch(models.Model):
         verbose_name_plural = 'branches'
 
     def __str__(self):
-        return f"{self.name} ({self.code})"
+        hq_flag = " [HQ]" if self.is_hq else ""
+        return f"{self.name} ({self.code}){hq_flag}"
 
     def _generate_code(self):
         import re
@@ -4593,6 +4887,17 @@ class Branch(models.Model):
         count = Branch.objects.filter(business=self.business).count()
         return f"{prefix}-{count + 1:03d}"
 
+    def clean(self):
+        super().clean()
+        if self.business_id:
+            # If no other branch is HQ in this business, this branch must be HQ
+            other_hq = Branch.objects.filter(business=self.business, is_hq=True).exclude(pk=self.pk)
+            if not other_hq.exists() and not self.is_hq:
+                # If this is the only branch, make it HQ by default
+                total_branches = Branch.objects.filter(business=self.business).exclude(pk=self.pk).count()
+                if total_branches == 0:
+                    self.is_hq = True
+
     def save(self, *args, **kwargs):
         if not self.code:
             self.code = self._generate_code()
@@ -4600,14 +4905,23 @@ class Branch(models.Model):
             Branch.objects.filter(
                 business=self.business, is_default=True
             ).exclude(pk=self.pk).update(is_default=False)
+        if self.is_hq:
+            Branch.objects.filter(
+                business=self.business, is_hq=True
+            ).exclude(pk=self.pk).update(is_hq=False)
+        elif self.business_id and not Branch.objects.filter(business=self.business, is_hq=True).exclude(pk=self.pk).exists():
+            # Guarantee at least one HQ branch exists per business
+            self.is_hq = True
         super().save(*args, **kwargs)
 
 
 class BranchMembership(models.Model):
     ROLE_CHOICES = [
+        ('cashier', 'Cashier'),
+        ('branch_manager', 'Branch Manager'),
+        ('hq_admin', 'HQ Admin'),
         ('manager', 'Manager'),
         ('stock_manager', 'Stock Manager'),
-        ('cashier', 'Cashier'),
         ('sales', 'Sales Associate'),
         ('viewer', 'Viewer'),
     ]
@@ -4617,7 +4931,11 @@ class BranchMembership(models.Model):
     branch = models.ForeignKey(
         Branch, on_delete=models.CASCADE, related_name='memberships'
     )
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='cashier')
+    is_home_branch = models.BooleanField(
+        default=False,
+        help_text="Default home branch for initial user scoping"
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -4625,7 +4943,19 @@ class BranchMembership(models.Model):
         unique_together = [['user', 'branch']]
 
     def __str__(self):
-        return f"{self.user} @ {self.branch} ({self.role})"
+        home_tag = " (Home)" if self.is_home_branch else ""
+        return f"{self.user} @ {self.branch} ({self.role}){home_tag}"
+
+    def save(self, *args, **kwargs):
+        if self.is_home_branch and self.user_id:
+            BranchMembership.objects.filter(
+                user=self.user, is_home_branch=True
+            ).exclude(pk=self.pk).update(is_home_branch=False)
+        super().save(*args, **kwargs)
+
+
+# Alias for explicit domain naming
+BranchStaff = BranchMembership
 
 
 class BranchStock(models.Model):
@@ -4635,7 +4965,15 @@ class BranchStock(models.Model):
     product = models.ForeignKey(
         'Product', on_delete=models.CASCADE, related_name='branch_stocks'
     )
-    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    average_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Moving weighted average cost per unit"
+    )
+    reorder_level = models.DecimalField(
+        max_digits=10, decimal_places=3, default=Decimal('10.000'),
+        help_text="Branch-specific reorder trigger level"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -4643,9 +4981,484 @@ class BranchStock(models.Model):
         indexes = [models.Index(fields=['branch', 'product'])]
 
     def __str__(self):
-        return f"{self.product} @ {self.branch}: {self.quantity}"
+        return f"{self.product.name} @ {self.branch.name}: {self.quantity} (Avg Cost: KES {self.average_cost})"
+
+    @property
+    def is_low_stock(self):
+        return self.quantity <= self.reorder_level
+
+    @property
+    def stock_value(self):
+        return (self.quantity * self.average_cost).quantize(Decimal('0.01'))
+
+    def receive(self, qty=None, unit_cost=None, movement_type='purchase_in', reference_obj=None, user=None, note='', quantity=None, performed_by=None, notes=''):
+        """
+        Add stock to this branch, recalculate moving-average unit cost,
+        and atomically write an append-only StockMovement ledger entry.
+        """
+        from django.db import transaction
+        from decimal import Decimal
+        from django.contrib.contenttypes.models import ContentType
+
+        qty_val = qty if qty is not None else quantity
+        if qty_val is None:
+            raise ValueError("Quantity is required.")
+        qty = Decimal(str(qty_val))
+        unit_cost = Decimal(str(unit_cost)) if unit_cost is not None else self.average_cost
+        user = user or performed_by
+        note = note or notes
+
+        if qty <= 0:
+            raise ValueError("Received quantity must be greater than zero.")
+
+        with transaction.atomic():
+            stock = BranchStock.objects.select_for_update().get(pk=self.pk)
+            existing_qty = stock.quantity
+            existing_cost = stock.average_cost
+
+            if existing_qty <= 0:
+                new_avg_cost = unit_cost
+            else:
+                total_existing = existing_qty * existing_cost
+                total_new = qty * unit_cost
+                new_total_qty = existing_qty + qty
+                if new_total_qty > 0:
+                    new_avg_cost = ((total_existing + total_new) / new_total_qty).quantize(Decimal('0.01'))
+                else:
+                    new_avg_cost = unit_cost
+
+            stock.average_cost = new_avg_cost
+            stock.quantity += qty
+            stock.save(update_fields=['quantity', 'average_cost', 'updated_at'])
+
+            # Synchronize product.stock_quantity aggregate
+            total_prod_qty = BranchStock.objects.filter(
+                branch__business=stock.branch.business, product=stock.product
+            ).aggregate(total=Sum('quantity'))['total'] or Decimal('0')
+            Product.objects.filter(pk=stock.product_id).update(stock_quantity=total_prod_qty)
+
+            # Generic relation extraction
+            ct = None
+            obj_id = None
+            ref_num = ''
+            if reference_obj:
+                ct = ContentType.objects.get_for_model(reference_obj)
+                obj_id = str(reference_obj.pk)
+                ref_num = getattr(
+                    reference_obj, 'reference_number',
+                    getattr(reference_obj, 'reference', getattr(reference_obj, 'invoice_number', str(reference_obj)))
+                )
+
+            total_cost = (qty * unit_cost).quantize(Decimal('0.01'))
+            movement = StockMovement.objects.create(
+                business=stock.branch.business,
+                branch=stock.branch,
+                product=stock.product,
+                quantity_delta=qty,
+                unit_cost=unit_cost,
+                total_cost=total_cost,
+                movement_type=movement_type,
+                content_type=ct,
+                object_id=obj_id,
+                reference_number=ref_num,
+                balance_after=stock.quantity,
+                resulted_in_negative_stock=stock.quantity < 0,
+                performed_by=user,
+                note=note,
+            )
+
+            self.quantity = stock.quantity
+            self.average_cost = stock.average_cost
+            return stock, movement
+
+    def deduct(self, qty=None, movement_type='sale', reference_obj=None, user=None, note='', unit_cost=None, quantity=None, performed_by=None, notes='', terminal=None, idempotency_key=None):
+        """
+        Deduct stock from this branch, allow negative stock with warning/flag,
+        and atomically write an append-only StockMovement ledger entry.
+        """
+        from django.db import transaction
+        from decimal import Decimal
+        from django.contrib.contenttypes.models import ContentType
+
+        qty_val = qty if qty is not None else quantity
+        if qty_val is None:
+            raise ValueError("Quantity is required.")
+        qty = Decimal(str(qty_val))
+        user = user or performed_by
+        note = note or notes
+        if qty <= 0:
+            raise ValueError("Deducted quantity must be greater than zero.")
+
+        with transaction.atomic():
+            stock = BranchStock.objects.select_for_update().get(pk=self.pk)
+            applied_unit_cost = Decimal(str(unit_cost)) if unit_cost is not None else stock.average_cost
+
+            stock.quantity -= qty
+            resulted_in_neg = stock.quantity < 0
+            stock.save(update_fields=['quantity', 'updated_at'])
+
+            # Synchronize product.stock_quantity aggregate
+            total_prod_qty = BranchStock.objects.filter(
+                branch__business=stock.branch.business, product=stock.product
+            ).aggregate(total=Sum('quantity'))['total'] or Decimal('0')
+            Product.objects.filter(pk=stock.product_id).update(stock_quantity=total_prod_qty)
+
+            ct = None
+            obj_id = None
+            ref_num = ''
+            if reference_obj:
+                ct = ContentType.objects.get_for_model(reference_obj)
+                obj_id = str(reference_obj.pk)
+                ref_num = getattr(
+                    reference_obj, 'reference_number',
+                    getattr(reference_obj, 'reference', getattr(reference_obj, 'invoice_number', str(reference_obj)))
+                )
+
+            term = terminal or getattr(reference_obj, 'terminal', None)
+            idem = idempotency_key or getattr(reference_obj, 'idempotency_key', None)
+
+            total_cost = (qty * applied_unit_cost).quantize(Decimal('0.01'))
+            movement = StockMovement.objects.create(
+                business=stock.branch.business,
+                branch=stock.branch,
+                product=stock.product,
+                quantity_delta=-qty,
+                unit_cost=applied_unit_cost,
+                total_cost=total_cost,
+                movement_type=movement_type,
+                content_type=ct,
+                object_id=obj_id,
+                reference_number=ref_num,
+                balance_after=stock.quantity,
+                resulted_in_negative_stock=resulted_in_neg,
+                performed_by=user,
+                terminal=term,
+                idempotency_key=idem,
+                note=note,
+            )
+
+            self.quantity = stock.quantity
+            return stock, movement
 
 
+class StockMovement(models.Model):
+    """
+    Single append-only ledger tracking every inventory modification event.
+    Acts as the single source of truth for stock reconciliations.
+    """
+    MOVEMENT_TYPE_CHOICES = [
+        ('sale', 'Sale'),
+        ('sale_return', 'Sale Return'),
+        ('purchase_in', 'Purchase / GRN In'),
+        ('supplier_return_out', 'Supplier Return Out'),
+        ('hq_dispatch_out', 'HQ Dispatch Out'),
+        ('branch_receipt_in', 'Branch Receipt In'),
+        ('transfer_out', 'Transfer Out'),
+        ('transfer_in', 'Transfer In'),
+        ('manual_adjustment', 'Manual Adjustment'),
+        ('damage_writeoff', 'Damage Write-off'),
+        ('expiry_writeoff', 'Expiry Write-off'),
+        ('initial_count', 'Initial Stock Count'),
+    ]
+
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='stock_movements'
+    )
+    branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='stock_movements'
+    )
+    product = models.ForeignKey(
+        'Product', on_delete=models.PROTECT, related_name='stock_movements'
+    )
+    quantity_delta = models.DecimalField(
+        max_digits=10, decimal_places=3,
+        help_text="Signed (+ for increase, - for decrease)"
+    )
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    movement_type = models.CharField(max_length=30, choices=MOVEMENT_TYPE_CHOICES, db_index=True)
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.SET_NULL, null=True, blank=True)
+    object_id = models.CharField(max_length=64, null=True, blank=True)
+    reference_document = GenericForeignKey('content_type', 'object_id')
+    reference_number = models.CharField(max_length=100, blank=True, help_text="Human readable document number")
+
+    balance_after = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    resulted_in_negative_stock = models.BooleanField(default=False)
+    performed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_movements'
+    )
+    terminal = models.ForeignKey(
+        'POSTerminal', on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_movements'
+    )
+    idempotency_key = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', '-created_at']),
+            models.Index(fields=['branch', 'product', '-created_at']),
+            models.Index(fields=['movement_type', '-created_at']),
+        ]
+
+    @property
+    def delta_quantity(self):
+        return self.quantity_delta
+
+    def __str__(self):
+        sign = "+" if self.quantity_delta > 0 else ""
+        return f"[{self.get_movement_type_display()}] {self.product.name} ({sign}{self.quantity_delta}) @ {self.branch.name}"
+
+
+# ============================================================================
+# HQ DISTRIBUTION & INTER-BRANCH TRANSFERS
+# ============================================================================
+
+class StockRequisition(models.Model):
+    """
+    Branch request for stock replenishment from HQ.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('dispatched', 'In Transit / Dispatched'),
+        ('partially_fulfilled', 'Partially Fulfilled'),
+        ('fulfilled', 'Fulfilled'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='stock_requisitions'
+    )
+    reference_number = models.CharField(max_length=30, unique=True, editable=False)
+    requesting_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='requisitions_made'
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='requisitions_requested'
+    )
+    approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='requisitions_approved'
+    )
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending', db_index=True)
+    notes = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', '-created_at']),
+            models.Index(fields=['requesting_branch', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.reference_number} — {self.requesting_branch.name} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.reference_number:
+            from django.utils import timezone as tz
+            today = tz.now().strftime('%Y%m%d')
+            count = StockRequisition.objects.filter(
+                business=self.business, created_at__date=tz.now().date()
+            ).count()
+            self.reference_number = f"REQ-{today}-{count + 1:04d}"
+        super().save(*args, **kwargs)
+
+
+class StockRequisitionItem(models.Model):
+    requisition = models.ForeignKey(
+        StockRequisition, on_delete=models.CASCADE, related_name='items'
+    )
+    product = models.ForeignKey(
+        'Product', on_delete=models.PROTECT, related_name='requisition_items'
+    )
+    requested_quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    approved_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    dispatched_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    received_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    notes = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.product.name} (Req: {self.requested_quantity}, Appr: {self.approved_quantity})"
+
+
+class StockTransferRequest(models.Model):
+    """
+    Inter-branch transfer request between two non-HQ or peer branches.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('dispatched', 'In Transit / Dispatched'),
+        ('partially_received', 'Partially Received'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='transfer_requests'
+    )
+    reference_number = models.CharField(max_length=30, unique=True, editable=False)
+    source_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='transfer_requests_out'
+    )
+    destination_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='transfer_requests_in'
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='transfers_requested'
+    )
+    approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='transfers_approved'
+    )
+    reason = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending', db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', '-created_at']),
+            models.Index(fields=['source_branch', 'status']),
+            models.Index(fields=['destination_branch', 'status']),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.source_branch_id and self.destination_branch_id and self.source_branch_id == self.destination_branch_id:
+            raise ValidationError("Source branch and destination branch must be different.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        if not self.reference_number:
+            from django.utils import timezone as tz
+            today = tz.now().strftime('%Y%m%d')
+            count = StockTransferRequest.objects.filter(
+                business=self.business, created_at__date=tz.now().date()
+            ).count()
+            self.reference_number = f"TRF-{today}-{count + 1:04d}"
+        super().save(*args, **kwargs)
+
+
+class StockTransferItem(models.Model):
+    transfer_request = models.ForeignKey(
+        StockTransferRequest, on_delete=models.CASCADE, related_name='items'
+    )
+    product = models.ForeignKey(
+        'Product', on_delete=models.PROTECT, related_name='transfer_items'
+    )
+    requested_quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    approved_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    dispatched_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    received_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    notes = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.product.name} (Req: {self.requested_quantity})"
+
+
+class Dispatch(models.Model):
+    """
+    Physical shipment record shared by both HQ Requisitions and Inter-Branch Transfers.
+    Tracks in-transit goods, unit moving cost at shipment, and receipt discrepancies.
+    """
+    STATUS_CHOICES = [
+        ('in_transit', 'In Transit'),
+        ('partially_received', 'Partially Received'),
+        ('received', 'Received / Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='dispatches'
+    )
+    reference_number = models.CharField(max_length=30, unique=True, editable=False)
+    source_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='dispatches_out'
+    )
+    destination_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='dispatches_in'
+    )
+    requisition = models.ForeignKey(
+        StockRequisition, null=True, blank=True, on_delete=models.SET_NULL, related_name='dispatches'
+    )
+    transfer_request = models.ForeignKey(
+        StockTransferRequest, null=True, blank=True, on_delete=models.SET_NULL, related_name='dispatches'
+    )
+    dispatched_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='dispatches_sent'
+    )
+    dispatched_at = models.DateTimeField(auto_now_add=True)
+    received_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='dispatches_received'
+    )
+    received_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='in_transit', db_index=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-dispatched_at']
+        indexes = [
+            models.Index(fields=['business', '-dispatched_at']),
+            models.Index(fields=['source_branch', 'status']),
+            models.Index(fields=['destination_branch', 'status']),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.requisition and self.transfer_request:
+            raise ValidationError("A dispatch can link to a Requisition OR a Transfer Request, never both.")
+        if not self.requisition and not self.transfer_request:
+            raise ValidationError("A dispatch must link to either a Requisition or a Transfer Request.")
+        if self.source_branch_id == self.destination_branch_id:
+            raise ValidationError("Source and destination branch cannot be the same.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        if not self.reference_number:
+            from django.utils import timezone as tz
+            today = tz.now().strftime('%Y%m%d')
+            count = Dispatch.objects.filter(
+                business=self.business, dispatched_at__date=tz.now().date()
+            ).count()
+            self.reference_number = f"DSP-{today}-{count + 1:04d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.reference_number} ({self.source_branch.name} → {self.destination_branch.name}) [{self.get_status_display()}]"
+
+
+class DispatchItem(models.Model):
+    dispatch = models.ForeignKey(
+        Dispatch, on_delete=models.CASCADE, related_name='items'
+    )
+    product = models.ForeignKey(
+        'Product', on_delete=models.PROTECT, related_name='dispatch_items'
+    )
+    dispatched_quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Moving avg unit cost at source branch at shipment time"
+    )
+    received_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    discrepancy_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    discrepancy_reason = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.product.name} (Dispatched: {self.dispatched_quantity}, Recv: {self.received_quantity})"
+
+
+# Legacy StockTransfer model kept for backward compatibility
 class StockTransfer(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -4712,3 +5525,130 @@ class BranchPriceOverride(models.Model):
 
     def __str__(self):
         return f"{self.product} @ {self.branch}: {self.price}"
+
+
+# ============================================================================
+# FRONT OFFICE TERMINAL & PIN LOGIN AUDIT MODELS
+# ============================================================================
+
+class POSTerminal(models.Model):
+    """
+    Represents a registered physical point-of-sale terminal/device within a branch.
+    Enforces terminal-specific cashier sessions.
+    """
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='terminals')
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='terminals')
+    name = models.CharField(max_length=100, help_text="Terminal display name (e.g. Counter 1)")
+    terminal_code = models.CharField(max_length=50, help_text="Unique terminal code (e.g. TERM-01)")
+    device_token = models.CharField(max_length=128, unique=True, db_index=True, help_text="Unique device cookie / token identifier")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    allowed_cashiers = models.ManyToManyField(
+        User, blank=True, related_name='assigned_terminals',
+        help_text="Optional: restrict to specific cashiers. If empty, any cashier assigned to this branch can log in."
+    )
+
+    # Terminal-Specific KRA Control Unit (for physical ESDs attached per-counter)
+    cu_number = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Override CU Number for this terminal if using dedicated physical ESD"
+    )
+    cu_serial_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Override CU Serial Number for this terminal"
+    )
+    tims_middleware_url = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Override TIMS Middleware URL for this terminal"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_active_at = models.DateTimeField(null=True, blank=True)
+    last_sync_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp of last successful bidirectional sync")
+    sync_status = models.CharField(
+        max_length=20,
+        default='idle',
+        choices=[
+            ('idle', 'Idle'),
+            ('syncing', 'Syncing'),
+            ('synced', 'Synced'),
+            ('error', 'Error'),
+        ],
+        help_text="Current or last known sync status"
+    )
+
+    class Meta:
+        unique_together = [['business', 'terminal_code']]
+        ordering = ['branch', 'terminal_code']
+        indexes = [
+            models.Index(fields=['business', 'device_token']),
+            models.Index(fields=['branch', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.terminal_code}) — {self.branch.name}"
+
+    def can_cashier_login(self, user):
+        """Check if user is allowed to log into this terminal."""
+        if not self.is_active:
+            return False, "Terminal is inactive"
+        if self.branch and not self.branch.is_active:
+            return False, "Branch is inactive"
+        if self.allowed_cashiers.exists() and not self.allowed_cashiers.filter(pk=user.pk).exists():
+            return False, "User not authorized for this specific terminal"
+        has_branch_access = (
+            user.is_superuser
+            or user.is_staff
+            or not self.branch
+            or BranchMembership.objects.filter(user=user, branch=self.branch, is_active=True).exists()
+            or not BranchMembership.objects.filter(user=user, is_active=True).exists()
+        )
+        if not has_branch_access:
+            return False, "User not assigned to this branch"
+        return True, ""
+
+
+class PINLoginAuditLog(models.Model):
+    """
+    Audit log tracking all PIN login attempts, terminal sessions, and access events.
+    """
+    STATUS_CHOICES = [
+        ('success', 'Success'),
+        ('failed_pin', 'Incorrect PIN'),
+        ('locked_out', 'Account Locked'),
+        ('invalid_terminal', 'Invalid / Unregistered Terminal'),
+        ('terminal_inactive', 'Terminal Inactive'),
+        ('no_pin_set', 'No PIN Configured'),
+        ('unauthorized_branch', 'Unauthorized Branch'),
+        ('session_closed', 'Session Closed'),
+    ]
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='pin_audit_logs')
+    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name='pin_audit_logs')
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='pin_audit_logs')
+    employee_id = models.CharField(max_length=50, blank=True)
+    terminal = models.ForeignKey(POSTerminal, null=True, blank=True, on_delete=models.SET_NULL, related_name='pin_audit_logs')
+    terminal_code = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, db_index=True)
+    failure_reason = models.TextField(blank=True)
+    ip_address = models.CharField(max_length=45, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', '-created_at']),
+            models.Index(fields=['branch', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.employee_id or (self.user.username if self.user else 'Unknown')} @ {self.terminal_code or 'Unknown'} ({self.created_at:%Y-%m-%d %H:%M})"
+

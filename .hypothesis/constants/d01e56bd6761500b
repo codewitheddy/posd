@@ -1,0 +1,4 @@
+# file: D:\V2POS\posd\pos\tests_zreport_regression.py
+# hypothesis_version: 6.167.1
+
+[777.0, 900.0, 1000.0, 200, 302, 403, '1000.00', 'ZReport Business', 'api_zreport_data', 'can_export_zreport', 'can_verify_zreport', 'can_void_zreport', 'cash_management', 'cashier', 'closed', 'difference', 'error', 'gross_sales', 'is_voided', 'net_sales', 'ok', 'owner', 'pass123!', 'payment_breakdown', 'sales_summary', 'slug', 'top_products', 'total_transactions', 'viewer', 'void_reason', 'voided_at', 'voided_by', 'z-cashier', 'z-owner', 'z-viewer', 'z_number', 'zreport-business', 'zreport_detail', 'zreport_export_json']
