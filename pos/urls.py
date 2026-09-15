@@ -9,7 +9,7 @@ from . import (
     views, tenant_views, cash_float_views, user_management_views,
     support_access_views, zreport_views, sync_views, financial_views,
     crm_views, webhook_views, branch_views, promotion_views, hscode_views,
-    front_office_views, terminal_views, vatcode_views
+    front_office_views, terminal_views, vatcode_views, cashier_assignment_views
 )
 
 
@@ -95,6 +95,14 @@ urlpatterns = [
 
     # Multi-Branch Management
     path('branches/', branch_views.branch_list, name='branch_list'),
+    path('branches/assignments/', cashier_assignment_views.cashier_assignment_dashboard, name='cashier_assignment_dashboard'),
+    path('branches/assignments/request-transfer/', cashier_assignment_views.request_transfer_view, name='request_transfer_view'),
+    path('branches/assignments/transfers/<int:pk>/approve/', cashier_assignment_views.approve_transfer_view, name='approve_transfer_view'),
+    path('branches/assignments/transfers/<int:pk>/reject/', cashier_assignment_views.reject_transfer_view, name='reject_transfer_view'),
+    path('branches/assignments/transfers/<int:pk>/cancel/', cashier_assignment_views.cancel_transfer_view, name='cancel_transfer_view'),
+    path('branches/assignments/assign-till/', cashier_assignment_views.assign_till_view, name='assign_till_view'),
+    path('branches/assignments/tills/<int:pk>/activate/', cashier_assignment_views.activate_till_view, name='activate_till_view'),
+    path('branches/assignments/tills/<int:pk>/release/', cashier_assignment_views.release_till_view, name='release_till_view'),
     path('branches/<int:branch_id>/', branch_views.branch_detail, name='branch_detail'),
     path('branches/<int:branch_id>/stock/', branch_views.branch_stock, name='branch_stock'),
     path('branches/<int:branch_id>/transfers/', branch_views.transfer_list, name='transfer_list'),
@@ -122,6 +130,8 @@ urlpatterns = [
     path('transfers/requests/<int:pk>/approve/', branch_views.transfer_request_approve, name='transfer_request_approve'),
     path('transfers/requests/<int:pk>/reject/', branch_views.transfer_request_reject, name='transfer_request_reject'),
     path('transfers/requests/<int:pk>/dispatch/', branch_views.transfer_request_dispatch, name='transfer_request_dispatch'),
+    path('transfers/requests/<int:pk>/resolve-discrepancy/', branch_views.transfer_request_resolve_discrepancy, name='transfer_request_resolve_discrepancy'),
+    path('transfers/rules/', branch_views.transfer_approval_rules_list, name='transfer_approval_rules'),
 
     # In-Transit Dispatches & Receiving
     path('dispatches/', branch_views.dispatch_list, name='dispatch_list'),
@@ -145,6 +155,7 @@ urlpatterns = [
 
     # Front Office POS & PIN Authentication
     path('pos/login/', front_office_views.terminal_pin_login, name='terminal_pin_login'),
+    path('pos/login/', front_office_views.terminal_pin_login, name='front_office_login'),
     path('pos/pin-login/', front_office_views.terminal_pin_login, name='pos_pin_login'),
     path('pos/lock/', front_office_views.terminal_lock, name='terminal_lock'),
     path('pos/terminals/register/', front_office_views.terminal_register, name='terminal_register'),
@@ -254,6 +265,8 @@ urlpatterns = [
     path('transfers/requests/<int:pk>/approve/', branch_views.transfer_request_approve, name='transfer_request_approve'),
     path('transfers/requests/<int:pk>/reject/', branch_views.transfer_request_reject, name='transfer_request_reject'),
     path('transfers/requests/<int:pk>/dispatch/', branch_views.transfer_request_dispatch, name='transfer_request_dispatch'),
+    path('transfers/requests/<int:pk>/resolve-discrepancy/', branch_views.transfer_request_resolve_discrepancy, name='transfer_request_resolve_discrepancy'),
+    path('transfers/rules/', branch_views.transfer_approval_rules_list, name='transfer_approval_rules'),
 
     # Dispatches & Shipments
     path('dispatches/', branch_views.dispatch_list, name='dispatch_list'),

@@ -1,66 +1,1150 @@
 {% extends 'pos/base.html' %}
-{% block title %}New Transfer — {{ branch.name }}{% endblock %}
+{% load static %}
+{% block title %}Transfer Stock from {{ branch.name }} — {{ business.name }}{% endblock %}
+
 {% block extra_css %}
 <style>
-.form-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:28px 32px}
-.field-label{font-size:12px;font-weight:700;color:#374151;margin-bottom:5px;display:block}
-.form-control,.form-select{border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;padding:9px 12px}
-.form-control:focus,.form-select:focus{border-color:#224195;box-shadow:0 0 0 3px rgba(34,65,149,.08);outline:none}
-.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn-primary-sm:hover{background:#1a3278;color:#fff}
-.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+:root {
+  --primary-color: #224195;
+  --primary-hover: #193275;
+  --primary-light: #eef2ff;
+  --border-color: #e5e7eb;
+  --text-muted: #6b7280;
+  --card-bg: #ffffff;
+}
+
+/* Full page layout without restrictive max-width */
+.transfer-page-full {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 20px 28px 110px 28px;
+  margin: 0;
+}
+
+.header-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px 24px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.workspace-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4b5563;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-control, .form-select {
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 13px;
+  padding: 8px 12px;
+  transition: all 0.15s ease;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(34, 65, 149, 0.12);
+  outline: none;
+}
+
+/* Filter pills */
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-btn {
+  background: #f8fafc;
+  border: 1.5px solid var(--border-color);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.filter-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.filter-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(34, 65, 149, 0.25);
+}
+
+.filter-btn.active-slow {
+  background: #ea580c !important;
+  border-color: #ea580c !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3) !important;
+}
+
+/* Table styles - full page scroll */
+.product-table-wrapper {
+  max-height: calc(100vh - 330px);
+  min-height: 520px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-color);
+}
+
+.product-table-wrapper::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.product-table-wrapper::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+.product-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.product-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.table-custom {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table-custom thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 10;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  padding: 12px 18px;
+  border-bottom: 1.5px solid var(--border-color);
+}
+
+.table-custom tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.1s ease;
+}
+
+.table-custom tbody tr:hover {
+  background: #f8fafc;
+}
+
+.table-custom tbody tr.row-selected {
+  background: #eff6ff !important;
+}
+
+.table-custom td {
+  padding: 11px 18px;
+  vertical-align: middle;
+}
+
+/* Badges */
+.badge-stock-healthy {
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-stock-low {
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-stock-zero {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-sold-least {
+  background: #ffedd5;
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-sold-high {
+  background: #e0e7ff;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-category {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.badge-code {
+  font-family: monospace;
+  font-size: 11px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* Quantity Stepper */
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.qty-stepper button {
+  background: #f8fafc;
+  border: none;
+  width: 30px;
+  height: 32px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qty-stepper button:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.qty-stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qty-stepper input {
+  width: 65px;
+  height: 32px;
+  border: none;
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  padding: 0 4px;
+}
+
+.btn-max-qty {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+  margin-left: 6px;
+}
+
+.btn-max-qty:hover {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+/* Sticky Bottom Summary Bar adjusted for desktop sidebar */
+.sticky-transfer-bar {
+  position: fixed;
+  bottom: 0;
+  left: var(--sidebar-width, 260px);
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1.5px solid var(--border-color);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+  padding: 12px 32px;
+  z-index: 1020;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 991.98px) {
+  .sticky-transfer-bar {
+    left: 0;
+    padding: 12px 16px;
+  }
+}
+
+.btn-primary-sm {
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+}
+
+.btn-primary-sm:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: #fff;
+}
+
+.btn-primary-sm:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn-outline-sm {
+  background: #fff;
+  color: #374151;
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-outline-sm:hover {
+  border-color: #9ca3af;
+  color: #111;
+  background: #f9fafb;
+}
+
+/* Custom Checkbox */
+.custom-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
 </style>
 {% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4 px-3 px-md-5" style="max-width:700px;margin:0 auto">
-  <div class="d-flex align-items-center gap-3 mb-4">
-    <a href="{% url 'transfer_list' branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
-    <h1 style="font-size:20px;font-weight:700;margin:0">Transfer Stock from {{ branch.name }}</h1>
+<div class="container-fluid transfer-page-full">
+  <!-- Top Navigation & Header -->
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <a href="{% url 'transfer_list' branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px" title="Back to Transfers">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <h1 style="font-size:22px;font-weight:700;margin:0;color:#0f172a">
+          Transfer Stock from {{ branch.name }}
+        </h1>
+        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0">
+          Select single or multiple products, filter slow-moving stock, and transfer directly to another branch.
+        </p>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-light text-dark border px-3 py-2" style="font-size:12px">
+        <i class="bi bi-geo-alt-fill text-danger me-1"></i> Source Origin: <strong>{{ branch.name }}</strong> ({{ branch.code }})
+      </span>
+      <a href="{% url 'transfer_request_list' %}" class="btn-outline-sm">
+        <i class="bi bi-card-checklist me-1"></i> All Inter-Branch Transfers
+      </a>
+    </div>
   </div>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
-    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-  </div>
-  {% endfor %}{% endif %}
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+      {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  {% endif %}
 
-  <div class="form-card">
-    <form method="post">
-      {% csrf_token %}
+  <!-- Main Transfer Form -->
+  <form method="post" id="transferForm" onsubmit="return handleFormSubmit(event)">
+    {% csrf_token %}
+    <input type="hidden" name="items_json" id="itemsJsonInput" value="[]">
+
+    <!-- Destination & Note Configuration Card -->
+    <div class="header-card">
       <div class="row g-3">
-        <div class="col-12">
-          <label class="field-label">Destination Branch *</label>
-          <select name="destination_branch" class="form-select" required>
-            <option value="">— Select branch —</option>
+        <div class="col-md-5">
+          <label class="field-label" for="destinationBranch">
+            <i class="bi bi-arrow-right-circle-fill text-primary"></i> Destination Branch *
+          </label>
+          <select name="destination_branch" id="destinationBranch" class="form-select" required onchange="updateSummaryBar()">
+            <option value="">— Select destination receiving branch —</option>
             {% for b in other_branches %}
-            <option value="{{ b.pk }}">{{ b.name }} ({{ b.code }})</option>
+            <option value="{{ b.pk }}">{{ b.name }} ({{ b.code }}){% if b.is_hq %} — HQ Warehouse{% endif %}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-12">
-          <label class="field-label">Product *</label>
-          <select name="product" class="form-select" required>
-            <option value="">— Select product —</option>
-            {% for p in products %}
-            <option value="{{ p.pk }}">{{ p.name }} ({{ p.product_code }})</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="field-label">Quantity *</label>
-          <input type="number" name="quantity" class="form-control" step="0.001" min="0.001" required>
-        </div>
-        <div class="col-12">
-          <label class="field-label">Note</label>
-          <textarea name="note" class="form-control" rows="2" placeholder="Optional reason for transfer"></textarea>
+        <div class="col-md-7">
+          <label class="field-label" for="transferNote">
+            <i class="bi bi-card-text text-muted"></i> Transfer Purpose / Consignment Note (Optional)
+          </label>
+          <input type="text" name="note" id="transferNote" class="form-control" placeholder="e.g. Slow-moving stock rebalancing, regional demand re-allocation, seasonal stock shift...">
         </div>
       </div>
-      <div class="d-flex justify-content-between align-items-center mt-4 pt-3" style="border-top:1px solid #f3f4f6">
-        <a href="{% url 'transfer_list' branch_id=branch.pk %}" class="btn-outline-sm">Cancel</a>
-        <button type="submit" class="btn-primary-sm"><i class="bi bi-arrow-left-right"></i> Transfer</button>
+    </div>
+
+    <!-- Product Selection & Filtering Workspace -->
+    <div class="workspace-card">
+      <!-- Search and Filter Bar -->
+      <div class="p-3 bg-light border-bottom">
+        <div class="row g-2 align-items-center mb-2">
+          <!-- Live Search Input -->
+          <div class="col-lg-5 col-md-6">
+            <div class="input-group">
+              <span class="input-group-text bg-white border-end-0 text-muted" style="border-radius:8px 0 0 8px;border-color:var(--border-color)">
+                <i class="bi bi-search"></i>
+              </span>
+              <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search products by name, SKU, barcode, category..." oninput="handleSearchInput()" autocomplete="off">
+              <button type="button" class="btn btn-outline-secondary border" id="clearSearchBtn" style="border-color:var(--border-color);display:none" onclick="clearSearch()" title="Clear search">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Category Filter -->
+          <div class="col-lg-4 col-md-3">
+            <select id="categoryFilter" class="form-select" onchange="handleFilterChange()">
+              <option value="all">All Categories</option>
+              {% for c in categories %}
+              <option value="{{ c.pk }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Stock Level Filter -->
+          <div class="col-lg-3 col-md-3">
+            <select id="stockFilter" class="form-select" onchange="handleFilterChange()">
+              <option value="all">All Stock Statuses</option>
+              <option value="in_stock" selected>In Stock Only (> 0)</option>
+              <option value="low_stock">Low Stock (≤ 10)</option>
+              <option value="zero_stock">Zero Stock (= 0)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Quick Filter Pills: Least Sold, Most Sold, Newest, Oldest -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pt-1">
+          <div class="filter-pills" id="quickFilters">
+            <button type="button" class="filter-btn active" data-sort="default" onclick="setSortMode('default', this)">
+              <i class="bi bi-grid"></i> All Products
+            </button>
+            <button type="button" class="filter-btn" data-sort="least_sold" onclick="setSortMode('least_sold', this)" title="Filter slow-moving / dead stock products first">
+              <i class="bi bi-arrow-down-right-circle text-warning"></i> <strong>Slow-Moving / Least Sold</strong>
+            </button>
+            <button type="button" class="filter-btn" data-sort="dead_stock" onclick="setSortMode('dead_stock', this)" title="Filter products with exactly 0 sales at this branch">
+              <i class="bi bi-pause-circle text-danger"></i> Dead Stock (0 Sales)
+            </button>
+            <button type="button" class="filter-btn" data-sort="most_sold" onclick="setSortMode('most_sold', this)" title="Show best selling products first">
+              <i class="bi bi-fire text-danger"></i> Fast Movers (Top Sold)
+            </button>
+            <button type="button" class="filter-btn" data-sort="newest" onclick="setSortMode('newest', this)" title="Show newly added products first">
+              <i class="bi bi-stars text-primary"></i> Newest Added
+            </button>
+            <button type="button" class="filter-btn" data-sort="oldest" onclick="setSortMode('oldest', this)" title="Show oldest inventory products first">
+              <i class="bi bi-clock-history text-secondary"></i> Oldest Added
+            </button>
+          </div>
+
+          <!-- Batch selection helpers -->
+          <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px" onclick="selectAllFiltered(true)">
+              <i class="bi bi-check-all"></i> Select Filtered Items
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px" onclick="clearAllSelection()">
+              <i class="bi bi-x-circle"></i> Clear Selection
+            </button>
+          </div>
+        </div>
       </div>
-    </form>
+
+      <!-- Live Count & Active Filter Indicator -->
+      <div class="px-4 py-2 bg-white border-bottom d-flex align-items-center justify-content-between" style="font-size:12px;color:var(--text-muted)">
+        <div>
+          Showing <strong id="visibleCount" class="text-dark">0</strong> of <strong class="text-dark">{{ products|length }}</strong> products
+          <span id="activeSortLabel" class="badge bg-light text-primary border ms-2">All Products</span>
+        </div>
+        <div>
+          <span id="selectedCountBadge" class="badge bg-primary px-3 py-1" style="font-size:12px">0 products selected</span>
+        </div>
+      </div>
+
+      <!-- Product Table -->
+      <div class="product-table-wrapper">
+        <table class="table-custom" id="productsTable">
+          <thead>
+            <tr>
+              <th style="width:48px" class="text-center">
+                <input type="checkbox" id="masterCheckbox" class="custom-checkbox" title="Select all visible products" onchange="toggleSelectAllVisible(this.checked)">
+              </th>
+              <th>Product Details</th>
+              <th>Category</th>
+              <th class="text-center" style="width:140px">Kong1 Branch Stock</th>
+              <th class="text-center" style="width:170px">Branch Sales Velocity</th>
+              <th class="text-center" style="width:120px">Date Added</th>
+              <th class="text-end" style="width:190px">Transfer Quantity</th>
+            </tr>
+          </thead>
+          <tbody id="productsTableBody">
+            <!-- Dynamic product rows rendered by JavaScript -->
+          </tbody>
+        </table>
+
+        <!-- Empty state message -->
+        <div id="noProductsFound" class="text-center py-5" style="display:none">
+          <i class="bi bi-box-seam text-muted" style="font-size:40px"></i>
+          <h6 class="mt-3 text-dark font-weight-bold">No matching products found</h6>
+          <p class="text-muted small mb-3">Try adjusting your search query, category, or filter criteria.</p>
+          <button type="button" class="btn btn-sm btn-outline-primary" onclick="resetAllFilters()">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset Filters
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Sticky Bottom Summary & Submit Bar -->
+<div class="sticky-transfer-bar" id="stickyBar">
+  <div class="d-flex align-items-center gap-3">
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-primary" id="barSelectedCount" style="font-size:13px;padding:6px 14px;border-radius:8px">
+        0 Selected
+      </span>
+      <div style="font-size:13px;color:#334155">
+        Total Units: <strong id="barTotalUnits" class="text-dark">0</strong> units
+      </div>
+    </div>
+    <div class="d-none d-md-block text-muted" style="font-size:13px;border-left:1px solid #cbd5e1;padding-left:14px">
+      Transfer To: <span id="barDestBranchName" class="text-dark font-weight-bold">Select destination above</span>
+    </div>
+  </div>
+
+  <div class="d-flex align-items-center gap-2">
+    <a href="{% url 'transfer_list' branch_id=branch.pk %}" class="btn-outline-sm">
+      Cancel
+    </a>
+    <button type="button" id="submitTransferBtn" class="btn-primary-sm" onclick="triggerSubmit()" disabled>
+      <i class="bi bi-arrow-left-right"></i>
+      <span id="submitBtnText">Select Products to Transfer</span>
+    </button>
   </div>
 </div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmTransferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 10px 25px rgba(0,0,0,0.15)">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title font-weight-bold">Confirm Stock Transfer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3">
+        <p class="text-muted mb-3" style="font-size:13px">
+          You are about to transfer the selected inventory items from <strong>{{ branch.name }}</strong> to <strong id="modalDestName"></strong>.
+        </p>
+        <div class="p-3 bg-light rounded mb-3" style="font-size:13px">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Total Products:</span>
+            <strong id="modalProductCount">0</strong>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Total Units:</span>
+            <strong id="modalTotalUnits">0</strong>
+          </div>
+          <div class="d-flex justify-content-between" id="modalNoteRow" style="display:none">
+            <span class="text-muted">Reason/Note:</span>
+            <span id="modalNoteText" class="text-truncate" style="max-width:240px"></span>
+          </div>
+        </div>
+        <div class="alert alert-info py-2 mb-0" style="font-size:12px">
+          <i class="bi bi-info-circle me-1"></i> Stock ledger movements and moving-average costs will be updated immediately.
+        </div>
+      </div>
+      <div class="modal-footer border-top-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Go Back</button>
+        <button type="button" class="btn btn-primary" id="finalSubmitBtn" onclick="doFinalSubmit()">
+          <i class="bi bi-check2-circle"></i> Confirm & Transfer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Raw products data injected from server view
+const RAW_PRODUCTS = {{ products_json|safe }};
+
+// State store
+const state = {
+  products: [...RAW_PRODUCTS],
+  selected: new Map(), // Map of product_id -> quantity
+  searchQuery: '',
+  categoryId: 'all',
+  stockFilter: 'in_stock',
+  sortMode: 'default', // 'default', 'least_sold', 'dead_stock', 'most_sold', 'newest', 'oldest'
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Read URL search params
+  const params = new URLSearchParams(window.location.search);
+  const paramProductId = params.get('product_id');
+  const paramDest = params.get('destination') || params.get('dest');
+  const paramSort = params.get('sort');
+  const paramCategory = params.get('category') || params.get('cat');
+  const paramSearch = params.get('q') || params.get('search');
+
+  if (paramDest) {
+    const destSelect = document.getElementById('destinationBranch');
+    if (destSelect) {
+      destSelect.value = paramDest;
+    }
+  }
+
+  if (paramCategory && paramCategory !== 'all') {
+    state.categoryId = paramCategory;
+    const catEl = document.getElementById('categoryFilter');
+    if (catEl) catEl.value = paramCategory;
+  }
+
+  if (paramSearch) {
+    state.searchQuery = paramSearch.trim().toLowerCase();
+    const searchEl = document.getElementById('searchInput');
+    if (searchEl) {
+      searchEl.value = paramSearch;
+      document.getElementById('clearSearchBtn').style.display = 'inline-block';
+    }
+  }
+
+  if (paramSort && ['least_sold', 'dead_stock', 'most_sold', 'newest', 'oldest', 'default'].includes(paramSort)) {
+    const btn = document.querySelector(`#quickFilters [data-sort="${paramSort}"]`);
+    setSortMode(paramSort, btn);
+  } else {
+    renderTable();
+  }
+
+  if (paramProductId) {
+    const pId = parseInt(paramProductId);
+    const targetProduct = state.products.find(p => p.id === pId);
+    if (targetProduct) {
+      if (targetProduct.stock <= 0 && state.stockFilter === 'in_stock') {
+        state.stockFilter = 'all';
+        const stockFilterEl = document.getElementById('stockFilter');
+        if (stockFilterEl) stockFilterEl.value = 'all';
+        renderTable();
+      }
+      state.selected.set(pId, targetProduct.stock > 0 ? 1 : 1);
+      renderTable();
+      setTimeout(() => {
+        const row = document.getElementById(`row-${pId}`);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }
+
+  updateSummaryBar();
+});
+
+// Format numbers
+function formatQty(num) {
+  const n = parseFloat(num) || 0;
+  return Number.isInteger(n) ? n.toString() : n.toFixed(2);
+}
+
+// Search and filter handlers
+function handleSearchInput() {
+  const val = document.getElementById('searchInput').value;
+  state.searchQuery = val.trim().toLowerCase();
+  document.getElementById('clearSearchBtn').style.display = state.searchQuery ? 'inline-block' : 'none';
+  renderTable();
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  state.searchQuery = '';
+  document.getElementById('clearSearchBtn').style.display = 'none';
+  renderTable();
+}
+
+function handleFilterChange() {
+  state.categoryId = document.getElementById('categoryFilter').value;
+  state.stockFilter = document.getElementById('stockFilter').value;
+  renderTable();
+}
+
+function setSortMode(mode, btnEl) {
+  state.sortMode = mode;
+  document.querySelectorAll('#quickFilters .filter-btn').forEach(b => {
+    b.classList.remove('active');
+    b.classList.remove('active-slow');
+  });
+  if (btnEl) {
+    if (mode === 'least_sold' || mode === 'dead_stock') {
+      btnEl.classList.add('active-slow');
+    } else {
+      btnEl.classList.add('active');
+    }
+  }
+
+  const labels = {
+    'default': 'All Products (Alphabetical)',
+    'least_sold': '📉 Sorted by Slow-Moving Stock (Least Sold First)',
+    'dead_stock': '📦 Filtered: Dead Stock (0 Sales at Branch)',
+    'most_sold': '🔥 Sorted by Fast Movers (Top Sold)',
+    'newest': '✨ Sorted by Newest Added',
+    'oldest': '📦 Sorted by Oldest Added',
+  };
+  document.getElementById('activeSortLabel').textContent = labels[mode] || mode;
+  renderTable();
+}
+
+function resetAllFilters() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('categoryFilter').value = 'all';
+  document.getElementById('stockFilter').value = 'in_stock';
+  state.searchQuery = '';
+  state.categoryId = 'all';
+  state.stockFilter = 'in_stock';
+  setSortMode('default', document.querySelector('#quickFilters [data-sort="default"]'));
+}
+
+// Filter and sort items
+function getFilteredAndSortedProducts() {
+  let list = state.products.filter(p => {
+    // Search query
+    if (state.searchQuery) {
+      const q = state.searchQuery;
+      const matchName = (p.name || '').toLowerCase().includes(q);
+      const matchCode = (p.code || '').toLowerCase().includes(q);
+      const matchBarcode = (p.barcode || '').toLowerCase().includes(q);
+      const matchCat = (p.category_name || '').toLowerCase().includes(q);
+      if (!matchName && !matchCode && !matchBarcode && !matchCat) return false;
+    }
+
+    // Category filter
+    if (state.categoryId !== 'all') {
+      if (String(p.category_id) !== String(state.categoryId)) return false;
+    }
+
+    // Stock filter
+    if (state.stockFilter === 'in_stock' && p.stock <= 0) return false;
+    if (state.stockFilter === 'low_stock' && (p.stock <= 0 || p.stock > 10)) return false;
+    if (state.stockFilter === 'zero_stock' && p.stock > 0) return false;
+
+    // Dead stock mode
+    if (state.sortMode === 'dead_stock' && p.sold > 0) return false;
+
+    return true;
+  });
+
+  // Sorting logic
+  if (state.sortMode === 'least_sold' || state.sortMode === 'dead_stock') {
+    list.sort((a, b) => {
+      // Smallest sold first (0 sales at top)
+      if (a.sold !== b.sold) return a.sold - b.sold;
+      // Secondary sort: highest available stock first (dead stock holding cash)
+      return b.stock - a.stock;
+    });
+  } else if (state.sortMode === 'most_sold') {
+    list.sort((a, b) => {
+      if (b.sold !== a.sold) return b.sold - a.sold;
+      return a.name.localeCompare(b.name);
+    });
+  } else if (state.sortMode === 'newest') {
+    list.sort((a, b) => (b.created_timestamp || 0) - (a.created_timestamp || 0));
+  } else if (state.sortMode === 'oldest') {
+    list.sort((a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0));
+  } else {
+    // Default alphabetical
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return list;
+}
+
+// Render product table rows
+function renderTable() {
+  const tbody = document.getElementById('productsTableBody');
+  const emptyState = document.getElementById('noProductsFound');
+  const visibleCountEl = document.getElementById('visibleCount');
+  const filtered = getFilteredAndSortedProducts();
+
+  visibleCountEl.textContent = filtered.length;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
+    updateMasterCheckboxState([]);
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  let html = '';
+  filtered.forEach(p => {
+    const isSelected = state.selected.has(p.id);
+    const qtyValue = isSelected ? state.selected.get(p.id) : (p.stock > 0 ? 1 : 0);
+
+    // Stock status badge
+    let stockBadge = '';
+    if (p.stock > 10) {
+      stockBadge = `<span class="badge-stock-healthy"><i class="bi bi-check-circle-fill"></i> ${formatQty(p.stock)} ${p.unit}</span>`;
+    } else if (p.stock > 0) {
+      stockBadge = `<span class="badge-stock-low"><i class="bi bi-exclamation-triangle-fill"></i> Low: ${formatQty(p.stock)} ${p.unit}</span>`;
+    } else {
+      stockBadge = `<span class="badge-stock-zero"><i class="bi bi-x-circle-fill"></i> 0 ${p.unit}</span>`;
+    }
+
+    // Sales velocity badge
+    let salesBadge = '';
+    if (p.sold === 0) {
+      salesBadge = `<span class="badge-sold-least" title="0 units sold at Kong1 branch"><i class="bi bi-exclamation-octagon-fill"></i> 0 sold (Slow Moving)</span>`;
+    } else if (p.sold > 20) {
+      salesBadge = `<span class="badge-sold-high" title="${p.sold} units sold"><i class="bi bi-fire"></i> ${formatQty(p.sold)} sold</span>`;
+    } else {
+      salesBadge = `<span class="badge bg-light text-dark border" style="font-size:11px">${formatQty(p.sold)} sold</span>`;
+    }
+
+    // Date display
+    const dateDisplay = p.created_at_display || '—';
+
+    html += `
+      <tr class="${isSelected ? 'row-selected' : ''}" id="row-${p.id}">
+        <td class="text-center">
+          <input type="checkbox" class="custom-checkbox row-check" data-id="${p.id}" ${isSelected ? 'checked' : ''} onchange="toggleProductSelection(${p.id}, this.checked)">
+        </td>
+        <td>
+          <div style="font-weight:600;color:#0f172a;font-size:14px;margin-bottom:2px">${escapeHtml(p.name)}</div>
+          <div class="d-flex align-items-center gap-1">
+            ${p.code ? `<span class="badge-code">${escapeHtml(p.code)}</span>` : ''}
+            ${p.barcode ? `<span class="badge-code"><i class="bi bi-upc me-1"></i>${escapeHtml(p.barcode)}</span>` : ''}
+          </div>
+        </td>
+        <td>
+          <span class="badge-category">${escapeHtml(p.category_name)}</span>
+        </td>
+        <td class="text-center">
+          ${stockBadge}
+        </td>
+        <td class="text-center">
+          ${salesBadge}
+        </td>
+        <td class="text-center text-muted" style="font-size:12px">
+          ${dateDisplay}
+        </td>
+        <td class="text-end">
+          <div class="d-inline-flex align-items-center">
+            <div class="qty-stepper">
+              <button type="button" onclick="adjustQty(${p.id}, -1)">-</button>
+              <input type="number" id="qty-input-${p.id}" min="0.001" step="1" value="${qtyValue}" onchange="handleQtyInput(${p.id}, this.value)" oninput="handleQtyInput(${p.id}, this.value)">
+              <button type="button" onclick="adjustQty(${p.id}, 1)">+</button>
+            </div>
+            ${p.stock > 0 ? `<button type="button" class="btn-max-qty" title="Set to max available stock (${p.stock})" onclick="setMaxQty(${p.id}, ${p.stock})">MAX</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+  updateMasterCheckboxState(filtered);
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Selection handling
+function toggleProductSelection(productId, isChecked) {
+  const row = document.getElementById(`row-${productId}`);
+  const input = document.getElementById(`qty-input-${productId}`);
+
+  if (isChecked) {
+    let q = parseFloat(input ? input.value : 1) || 1;
+    if (q <= 0) q = 1;
+    state.selected.set(productId, q);
+    if (row) row.classList.add('row-selected');
+  } else {
+    state.selected.delete(productId);
+    if (row) row.classList.remove('row-selected');
+  }
+  updateSummaryBar();
+  updateMasterCheckboxState(getFilteredAndSortedProducts());
+}
+
+function handleQtyInput(productId, value) {
+  let q = parseFloat(value);
+  if (isNaN(q) || q <= 0) q = 1;
+
+  // Auto select when user alters quantity
+  state.selected.set(productId, q);
+  const row = document.getElementById(`row-${productId}`);
+  const checkbox = row ? row.querySelector('.row-check') : null;
+  if (checkbox) checkbox.checked = true;
+  if (row) row.classList.add('row-selected');
+
+  updateSummaryBar();
+  updateMasterCheckboxState(getFilteredAndSortedProducts());
+}
+
+function adjustQty(productId, delta) {
+  const input = document.getElementById(`qty-input-${productId}`);
+  let current = parseFloat(input.value) || 1;
+  let next = Math.max(1, current + delta);
+  input.value = next;
+  handleQtyInput(productId, next);
+}
+
+function setMaxQty(productId, maxStock) {
+  const input = document.getElementById(`qty-input-${productId}`);
+  const val = Math.max(1, parseFloat(maxStock) || 1);
+  input.value = val;
+  handleQtyInput(productId, val);
+}
+
+function toggleSelectAllVisible(isChecked) {
+  const filtered = getFilteredAndSortedProducts();
+  filtered.forEach(p => {
+    if (isChecked) {
+      const input = document.getElementById(`qty-input-${p.id}`);
+      let q = parseFloat(input ? input.value : 1) || 1;
+      if (q <= 0) q = (p.stock > 0 ? p.stock : 1);
+      state.selected.set(p.id, q);
+    } else {
+      state.selected.delete(p.id);
+    }
+  });
+  renderTable();
+  updateSummaryBar();
+}
+
+function selectAllFiltered(selectInStockOnly = false) {
+  const filtered = getFilteredAndSortedProducts();
+  filtered.forEach(p => {
+    if (!selectInStockOnly || p.stock > 0) {
+      let q = p.stock > 0 ? (p.stock > 10 ? 1 : p.stock) : 1;
+      state.selected.set(p.id, q);
+    }
+  });
+  renderTable();
+  updateSummaryBar();
+}
+
+function clearAllSelection() {
+  state.selected.clear();
+  renderTable();
+  updateSummaryBar();
+}
+
+function updateMasterCheckboxState(filteredList) {
+  const master = document.getElementById('masterCheckbox');
+  if (!master || filteredList.length === 0) {
+    if (master) { master.checked = false; master.indeterminate = false; }
+    return;
+  }
+  const selectedVisible = filteredList.filter(p => state.selected.has(p.id));
+  if (selectedVisible.length === 0) {
+    master.checked = false;
+    master.indeterminate = false;
+  } else if (selectedVisible.length === filteredList.length) {
+    master.checked = true;
+    master.indeterminate = false;
+  } else {
+    master.checked = false;
+    master.indeterminate = true;
+  }
+}
+
+// Update summary & submit bar
+function updateSummaryBar() {
+  const count = state.selected.size;
+  let totalUnits = 0;
+  state.selected.forEach(qty => {
+    totalUnits += (parseFloat(qty) || 0);
+  });
+
+  document.getElementById('selectedCountBadge').textContent = `${count} product${count === 1 ? '' : 's'} selected`;
+  document.getElementById('barSelectedCount').textContent = `${count} Selected`;
+  document.getElementById('barTotalUnits').textContent = formatQty(totalUnits);
+
+  const destSelect = document.getElementById('destinationBranch');
+  const destName = destSelect.options[destSelect.selectedIndex]?.text || '';
+  const destVal = destSelect.value;
+
+  const destLabel = document.getElementById('barDestBranchName');
+  if (destVal) {
+    destLabel.textContent = destName;
+    destLabel.className = 'text-primary font-weight-bold';
+  } else {
+    destLabel.textContent = 'Select destination above';
+    destLabel.className = 'text-muted';
+  }
+
+  const submitBtn = document.getElementById('submitTransferBtn');
+  const submitText = document.getElementById('submitBtnText');
+
+  if (count > 0 && destVal) {
+    submitBtn.disabled = false;
+    submitText.textContent = `Transfer ${count} Product${count === 1 ? '' : 's'} (${formatQty(totalUnits)} units)`;
+  } else {
+    submitBtn.disabled = true;
+    if (!destVal) {
+      submitText.textContent = 'Select Destination Branch';
+    } else {
+      submitText.textContent = 'Select Products to Transfer';
+    }
+  }
+}
+
+// Form Submission & Confirmation Modal
+function triggerSubmit() {
+  const destSelect = document.getElementById('destinationBranch');
+  if (!destSelect.value) {
+    alert('Please select a destination branch.');
+    destSelect.focus();
+    return;
+  }
+
+  if (state.selected.size === 0) {
+    alert('Please select at least one product to transfer.');
+    return;
+  }
+
+  // Populate modal
+  const count = state.selected.size;
+  let totalUnits = 0;
+  state.selected.forEach(qty => { totalUnits += (parseFloat(qty) || 0); });
+
+  document.getElementById('modalDestName').textContent = destSelect.options[destSelect.selectedIndex].text;
+  document.getElementById('modalProductCount').textContent = `${count} item${count === 1 ? '' : 's'}`;
+  document.getElementById('modalTotalUnits').textContent = `${formatQty(totalUnits)} units`;
+
+  const note = document.getElementById('transferNote').value.trim();
+  const noteRow = document.getElementById('modalNoteRow');
+  if (note) {
+    document.getElementById('modalNoteText').textContent = note;
+    noteRow.style.display = 'flex';
+  } else {
+    noteRow.style.display = 'none';
+  }
+
+  const modal = new bootstrap.Modal(document.getElementById('confirmTransferModal'));
+  modal.show();
+}
+
+function doFinalSubmit() {
+  const submitBtn = document.getElementById('finalSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Transferring...';
+
+  // Build items array
+  const items = [];
+  state.selected.forEach((qty, productId) => {
+    items.push({
+      product_id: productId,
+      quantity: parseFloat(qty) || 1,
+    });
+  });
+
+  document.getElementById('itemsJsonInput').value = JSON.stringify(items);
+  document.getElementById('transferForm').submit();
+}
+
+function handleFormSubmit(e) {
+  // Prevent raw form submit if JSON input is empty
+  const jsonVal = document.getElementById('itemsJsonInput').value;
+  if (!jsonVal || jsonVal === '[]') {
+    e.preventDefault();
+    triggerSubmit();
+    return false;
+  }
+  return true;
+}
+</script>
 {% endblock %}

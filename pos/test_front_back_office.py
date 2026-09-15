@@ -253,3 +253,29 @@ class FrontBackOfficeSegregationTest(TestCase):
         # Verify Z-Report created
         zreport = ZReport.objects.filter(session=session).first()
         self.assertIsNotNone(zreport)
+
+    def test_terminal_register_post_and_lock(self):
+        """Test registering a new device as a terminal and locking terminal"""
+        self.client.force_login(self.admin_user)
+        
+        # POST to terminal_register
+        register_url = reverse('terminal_register')
+        response = self.client.post(register_url, {
+            'name': 'Counter 2 Express Till',
+            'terminal_code': 'TILL-EXP-02',
+            'branch_id': self.branch.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('terminal_pin_login'), response.url)
+        self.assertIn('pos_terminal_token', response.cookies)
+        
+        # Verify terminal was created in database
+        term = POSTerminal.objects.filter(terminal_code='TILL-EXP-02').first()
+        self.assertIsNotNone(term)
+        self.assertEqual(term.name, 'Counter 2 Express Till')
+        
+        # Test terminal lock
+        lock_url = reverse('terminal_lock')
+        lock_res = self.client.post(lock_url)
+        self.assertEqual(lock_res.status_code, 302)
+        self.assertIn(reverse('terminal_pin_login'), lock_res.url)

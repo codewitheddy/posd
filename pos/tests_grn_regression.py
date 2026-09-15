@@ -219,3 +219,81 @@ class GRNRegressionTests(TestCase):
         rendered_context = mock_render.call_args[0][2]
         self.assertFalse(rendered_context['can_create_return_note'])
         self.assertEqual(rendered_context['remaining_damaged_qty'], 0)
+
+    def test_grn_list_view_renders_successfully(self):
+        # Create draft and credited GRNs
+        grn1 = GoodsReturnedNote.objects.create(
+            business=self.business,
+            supplier=self.supplier,
+            return_reason='damaged',
+            reason_details='Broken seals',
+            created_by=self.user,
+            status='draft',
+            total_value=Decimal('150.00'),
+        )
+        grn2 = GoodsReturnedNote.objects.create(
+            business=self.business,
+            supplier=self.supplier,
+            return_reason='expired',
+            reason_details='Past expiration date',
+            created_by=self.user,
+            status='credited',
+            total_value=Decimal('300.00'),
+            credit_note_number='CN-999',
+            credit_note_amount=Decimal('300.00'),
+        )
+
+        response = self.client.get(reverse('grn_list', kwargs={'slug': self.business.slug}))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'pos/grn_list.html')
+        self.assertIn('grns', response.context)
+        self.assertIn('metrics', response.context)
+        self.assertEqual(response.context['metrics']['total_count'], 2)
+        self.assertEqual(response.context['metrics']['draft_count'], 1)
+        self.assertEqual(response.context['metrics']['credited_count'], 1)
+
+        content = response.content.decode('utf-8')
+        self.assertIn('GRN Number', content)
+        self.assertIn('Total Value', content)
+        self.assertIn(grn1.grn_number, content)
+        self.assertIn(grn2.grn_number, content)
+
+    def test_grn_list_filtering_and_search(self):
+        grn_draft = GoodsReturnedNote.objects.create(
+            business=self.business,
+            supplier=self.supplier,
+            return_reason='wrong_item',
+            reason_details='Incorrect sizes shipped',
+            created_by=self.user,
+            status='draft',
+            total_value=Decimal('100.00'),
+        )
+        grn_credited = GoodsReturnedNote.objects.create(
+            business=self.business,
+            supplier=self.supplier,
+            return_reason='damaged',
+            reason_details='Water damage during transit',
+            created_by=self.user,
+            status='credited',
+            credit_note_number='CN-ALPHA-01',
+            credit_note_amount=Decimal('500.00'),
+            total_value=Decimal('500.00'),
+        )
+
+        # Status filter
+        resp_draft = self.client.get(reverse('grn_list', kwargs={'slug': self.business.slug}), {'status': 'draft'})
+        self.assertEqual(resp_draft.status_code, 200)
+        self.assertEqual(resp_draft.context['filtered_count'], 1)
+        self.assertEqual(resp_draft.context['grns'][0].pk, grn_draft.pk)
+
+        # Search by credit note
+        resp_search = self.client.get(reverse('grn_list', kwargs={'slug': self.business.slug}), {'q': 'ALPHA'})
+        self.assertEqual(resp_search.status_code, 200)
+        self.assertEqual(resp_search.context['filtered_count'], 1)
+        self.assertEqual(resp_search.context['grns'][0].pk, grn_credited.pk)
+
+        # Sort by value desc
+        resp_sort = self.client.get(reverse('grn_list', kwargs={'slug': self.business.slug}), {'sort': 'value_desc'})
+        self.assertEqual(resp_sort.status_code, 200)
+        self.assertEqual(resp_sort.context['grns'][0].pk, grn_credited.pk)
+

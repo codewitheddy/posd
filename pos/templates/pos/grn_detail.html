@@ -29,7 +29,7 @@
                         {% elif grn.status == 'collected' %}bg-warning
                         {% elif grn.status == 'credited' %}bg-success
                         {% elif grn.status == 'cancelled' %}bg-danger
-                        {% endif %} fs-6">
+                        {% endif %} fs-6 text-white">
                         {{ grn.get_status_display }}
                     </span>
                 </div>
@@ -52,7 +52,7 @@
                         <div class="col-md-6">
                             <p><strong>Related Purchase:</strong><br>
                                 <a href="{% url 'purchase_detail' slug=business_slug pk=grn.related_purchase.pk %}">
-                                    {{ grn.related_purchase.po_number }}
+                                    {{ grn.related_purchase.purchase_number|default:grn.related_purchase.po_number }}
                                 </a>
                             </p>
                         </div>

@@ -1026,6 +1026,11 @@ class Product(CacheInvalidationMixin, models.Model):
                 pass
         return '/static/images/no-image.png'  # Placeholder
     
+    @property
+    def sku(self):
+        """Return product code or barcode as SKU identifier"""
+        return self.product_code or self.barcode or ''
+
     def is_low_stock(self):
         """Check if product is low on stock"""
         return self.stock_quantity <= self.low_stock_threshold
@@ -1127,6 +1132,20 @@ class Product(CacheInvalidationMixin, models.Model):
             return 0
         profit = self.get_profit_per_unit()
         return (profit / self.cost_price) * 100
+
+    @property
+    def total_cost_value(self):
+        """Total valuation based on cost price"""
+        if self.stock_quantity and self.cost_price:
+            return self.stock_quantity * self.cost_price
+        return Decimal('0.00')
+
+    @property
+    def total_retail_value(self):
+        """Total valuation based on selling price"""
+        if self.stock_quantity and self.unit_price:
+            return self.stock_quantity * self.unit_price
+        return Decimal('0.00')
     
     # Multi-unit selling methods
     def has_bulk_unit(self):
@@ -5155,6 +5174,9 @@ class StockMovement(models.Model):
         ('branch_receipt_in', 'Branch Receipt In'),
         ('transfer_out', 'Transfer Out'),
         ('transfer_in', 'Transfer In'),
+        ('in_transit_out', 'In Transit Out (Dispatched)'),
+        ('transit_loss_writeoff', 'Transit Loss Write-off'),
+        ('transit_return_in', 'Transit Return In'),
         ('manual_adjustment', 'Manual Adjustment'),
         ('damage_writeoff', 'Damage Write-off'),
         ('expiry_writeoff', 'Expiry Write-off'),
@@ -5264,10 +5286,12 @@ class StockRequisition(models.Model):
         if not self.reference_number:
             from django.utils import timezone as tz
             today = tz.now().strftime('%Y%m%d')
-            count = StockRequisition.objects.filter(
-                business=self.business, created_at__date=tz.now().date()
-            ).count()
-            self.reference_number = f"REQ-{today}-{count + 1:04d}"
+            count = StockRequisition.objects.filter(business=self.business).count() + 1
+            ref = f"REQ-{today}-{count:04d}"
+            while StockRequisition.objects.filter(business=self.business, reference_number=ref).exists():
+                count += 1
+                ref = f"REQ-{today}-{count:04d}"
+            self.reference_number = ref
         super().save(*args, **kwargs)
 
 
@@ -5293,12 +5317,17 @@ class StockTransferRequest(models.Model):
     Inter-branch transfer request between two non-HQ or peer branches.
     """
     STATUS_CHOICES = [
+        ('draft', 'Draft'),
         ('pending', 'Pending Approval'),
+        ('pending_approval', 'Pending Approval'),
         ('approved', 'Approved'),
-        ('rejected', 'Rejected'),
         ('dispatched', 'In Transit / Dispatched'),
+        ('receiving', 'Receiving in Progress'),
         ('partially_received', 'Partially Received'),
+        ('discrepancy_flagged', 'Discrepancy Flagged'),
+        ('resolved', 'Discrepancy Resolved'),
         ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
         ('cancelled', 'Cancelled'),
     ]
 
@@ -5320,7 +5349,15 @@ class StockTransferRequest(models.Model):
     )
     reason = models.TextField(blank=True)
     rejection_reason = models.TextField(blank=True)
-    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending', db_index=True)
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending_approval', db_index=True)
+    total_estimated_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    requires_approval = models.BooleanField(default=True)
+    auto_approved = models.BooleanField(default=False)
+    discrepancy_resolved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='transfers_discrepancy_resolved'
+    )
+    discrepancy_resolved_at = models.DateTimeField(null=True, blank=True)
+    discrepancy_resolution_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -5343,14 +5380,22 @@ class StockTransferRequest(models.Model):
         if not self.reference_number:
             from django.utils import timezone as tz
             today = tz.now().strftime('%Y%m%d')
-            count = StockTransferRequest.objects.filter(
-                business=self.business, created_at__date=tz.now().date()
-            ).count()
-            self.reference_number = f"TRF-{today}-{count + 1:04d}"
+            count = StockTransferRequest.objects.filter(business=self.business).count() + 1
+            ref = f"TRF-{today}-{count:04d}"
+            while StockTransferRequest.objects.filter(business=self.business, reference_number=ref).exists():
+                count += 1
+                ref = f"TRF-{today}-{count:04d}"
+            self.reference_number = ref
         super().save(*args, **kwargs)
 
 
 class StockTransferItem(models.Model):
+    DISCREPANCY_RESOLUTION_CHOICES = [
+        ('writeoff_loss', 'Write-off as Transit Loss'),
+        ('returned_to_source', 'Return to Source Branch'),
+        ('accepted_variance', 'Accepted Variance / Adjustment'),
+    ]
+
     transfer_request = models.ForeignKey(
         StockTransferRequest, on_delete=models.CASCADE, related_name='items'
     )
@@ -5361,10 +5406,108 @@ class StockTransferItem(models.Model):
     approved_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     dispatched_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
     received_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    unit_cost_at_dispatch = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Moving avg unit cost at source branch when dispatched"
+    )
+    discrepancy_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal('0.000'))
+    discrepancy_reason = models.TextField(blank=True)
+    discrepancy_resolution = models.CharField(
+        max_length=30, blank=True, choices=DISCREPANCY_RESOLUTION_CHOICES
+    )
     notes = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return f"{self.product.name} (Req: {self.requested_quantity})"
+
+
+class TransferEvent(models.Model):
+    """
+    Immutable append-only audit trail capturing every status transition,
+    decision, discrepancy flag, and resolution for StockTransfers and Dispatches.
+    """
+    EVENT_TYPE_CHOICES = [
+        ('created', 'Created Draft / Request'),
+        ('submitted', 'Submitted for Approval'),
+        ('auto_approved', 'Auto-Approved by Rule'),
+        ('approved', 'Approved by Authorizer'),
+        ('rejected', 'Rejected'),
+        ('dispatched', 'Dispatched / In Transit'),
+        ('received_full', 'Fully Received'),
+        ('received_partial', 'Partially Received (Discrepancy Flagged)'),
+        ('discrepancy_resolved', 'Discrepancy Resolved'),
+        ('cancelled', 'Cancelled'),
+        ('note_added', 'Audit Note Added'),
+    ]
+
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='transfer_events'
+    )
+    transfer_request = models.ForeignKey(
+        StockTransferRequest, null=True, blank=True, on_delete=models.CASCADE, related_name='events'
+    )
+    requisition = models.ForeignKey(
+        'StockRequisition', null=True, blank=True, on_delete=models.CASCADE, related_name='events'
+    )
+    dispatch = models.ForeignKey(
+        'Dispatch', null=True, blank=True, on_delete=models.CASCADE, related_name='events'
+    )
+    from_status = models.CharField(max_length=30, blank=True)
+    to_status = models.CharField(max_length=30)
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES, db_index=True)
+    performed_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='transfer_events_performed'
+    )
+    notes = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['business', '-created_at']),
+            models.Index(fields=['transfer_request', 'created_at']),
+            models.Index(fields=['dispatch', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_event_type_display()}] {self.from_status} -> {self.to_status} ({self.created_at})"
+
+
+class TransferApprovalRule(models.Model):
+    """
+    Business-scoped configurable rules governing when inter-branch transfers
+    can auto-approve vs require supervisor / HQ approval.
+    """
+    business = models.ForeignKey(
+        'Business', on_delete=models.CASCADE, related_name='transfer_approval_rules'
+    )
+    name = models.CharField(max_length=100, default="Default Transfer Policy")
+    is_active = models.BooleanField(default=True)
+    auto_approve_below_threshold = models.BooleanField(
+        default=False,
+        help_text="If True, transfers with total value <= min_value_threshold auto-approve immediately"
+    )
+    min_value_threshold = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Transfers exceeding this monetary value require explicit manager approval"
+    )
+    min_quantity_threshold = models.DecimalField(
+        max_digits=10, decimal_places=3, default=Decimal('0.000'),
+        help_text="Transfers exceeding this total unit count require explicit approval"
+    )
+    requires_hq_approval = models.BooleanField(
+        default=False,
+        help_text="If True, transfers require HQ admin sign-off even for peer branch transfers"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.business.name} - {self.name} (Active: {self.is_active})"
 
 
 class Dispatch(models.Model):
@@ -5501,11 +5644,12 @@ class StockTransfer(models.Model):
         if not self.reference:
             from django.utils import timezone as tz
             today = tz.now().strftime('%Y%m%d')
-            count = StockTransfer.objects.filter(
-                business=self.business,
-                created_at__date=tz.now().date(),
-            ).count()
-            self.reference = f"TRF-{today}-{count + 1:04d}"
+            count = StockTransfer.objects.filter(business=self.business).count() + 1
+            ref = f"TRF-{today}-{count:04d}"
+            while StockTransfer.objects.filter(business=self.business, reference=ref).exists():
+                count += 1
+                ref = f"TRF-{today}-{count:04d}"
+            self.reference = ref
         super().save(*args, **kwargs)
 
 
@@ -5583,16 +5727,46 @@ class POSTerminal(models.Model):
         help_text="Current or last known sync status"
     )
 
+    OPERATIONAL_STATUS_CHOICES = [
+        ('available', 'Available'),
+        ('in_use', 'In Use'),
+        ('offline', 'Offline'),
+        ('maintenance', 'Maintenance'),
+    ]
+    operational_status = models.CharField(
+        max_length=20,
+        default='available',
+        choices=OPERATIONAL_STATUS_CHOICES,
+        help_text="Real-time till operational status"
+    )
+
     class Meta:
         unique_together = [['business', 'terminal_code']]
         ordering = ['branch', 'terminal_code']
         indexes = [
             models.Index(fields=['business', 'device_token']),
             models.Index(fields=['branch', 'is_active']),
+            models.Index(fields=['branch', 'operational_status']),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.terminal_code}) — {self.branch.name}"
+
+    @property
+    def current_active_assignment(self):
+        """Returns currently active CashierTillAssignment if any."""
+        return self.till_assignments.filter(status='active').select_related('cashier', 'branch').first()
+
+    def get_status_display_badge(self):
+        active = self.current_active_assignment
+        if not self.is_active or self.operational_status == 'offline':
+            return {'status': 'offline', 'label': 'Offline', 'badge_class': 'bg-secondary'}
+        if self.operational_status == 'maintenance':
+            return {'status': 'maintenance', 'label': 'Maintenance', 'badge_class': 'bg-warning text-dark'}
+        if active:
+            cashier_name = active.cashier.get_full_name() or active.cashier.username
+            return {'status': 'in_use', 'label': f'In Use ({cashier_name})', 'badge_class': 'bg-success', 'cashier': cashier_name}
+        return {'status': 'available', 'label': 'Available', 'badge_class': 'bg-primary'}
 
     def can_cashier_login(self, user):
         """Check if user is allowed to log into this terminal."""
@@ -5651,4 +5825,169 @@ class PINLoginAuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.employee_id or (self.user.username if self.user else 'Unknown')} @ {self.terminal_code or 'Unknown'} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+# ============================================================================
+# CASHIER TILL ASSIGNMENT & CROSS-BRANCH TRANSFER SYSTEM
+# ============================================================================
+
+class CashierTillAssignment(models.Model):
+    """
+    Assignment of a cashier to a specific till / terminal for a scheduled shift window.
+    Enforces that a till has only one active cashier and a cashier has only one active till.
+    """
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('active', 'Active (Shift In Progress)'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='cashier_assignments')
+    cashier = models.ForeignKey(User, on_delete=models.CASCADE, related_name='till_assignments')
+    terminal = models.ForeignKey(POSTerminal, on_delete=models.CASCADE, related_name='till_assignments')
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='till_assignments')
+    
+    shift_start = models.DateTimeField(db_index=True, help_text="Scheduled shift start time")
+    shift_end = models.DateTimeField(db_index=True, help_text="Scheduled shift end time")
+    actual_start = models.DateTimeField(null=True, blank=True, help_text="Timestamp when cashier clocked in / opened till")
+    actual_end = models.DateTimeField(null=True, blank=True, help_text="Timestamp when cashier clocked out / released till")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled', db_index=True)
+    hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), help_text="Hourly labor rate in KES")
+    assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_shifts')
+    notes = models.TextField(blank=True, default='')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-shift_start']
+        indexes = [
+            models.Index(fields=['business', 'branch', 'status']),
+            models.Index(fields=['cashier', 'status', 'shift_start']),
+            models.Index(fields=['terminal', 'status', 'shift_start']),
+        ]
+
+    def __str__(self):
+        return f"{self.cashier.username} @ {self.terminal.terminal_code} ({self.shift_start:%Y-%m-%d %H:%M} - {self.shift_end:%H:%M}) [{self.get_status_display()}]"
+
+    def calculate_hours_worked(self):
+        """Calculate duration worked in hours (decimal). Uses actual duration if available, else scheduled."""
+        if self.actual_start and self.actual_end:
+            duration = self.actual_end - self.actual_start
+        elif self.actual_start and self.status == 'active':
+            duration = timezone.now() - self.actual_start
+        else:
+            duration = self.shift_end - self.shift_start
+        return max(Decimal('0.00'), Decimal(str(round(duration.total_seconds() / 3600.0, 2))))
+
+    def calculate_labor_cost(self):
+        """Returns labor cost = hours worked * hourly rate"""
+        return round(self.calculate_hours_worked() * self.hourly_rate, 2)
+
+
+class CashierTransferRequest(models.Model):
+    """
+    Cross-branch transfer request for cashiers.
+    Supports permanent and temporary transfers with start and optional end dates.
+    Requires approval from the receiving branch's manager before taking effect.
+    """
+    TYPE_CHOICES = [
+        ('permanent', 'Permanent Transfer'),
+        ('temporary', 'Temporary Transfer'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='cashier_transfers')
+    cashier = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cashier_transfers')
+    from_branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='cashier_transfers_out')
+    to_branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='cashier_transfers_in')
+    transfer_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='temporary')
+    
+    start_date = models.DateField(db_index=True)
+    end_date = models.DateField(null=True, blank=True, db_index=True, help_text="End date required for temporary transfers")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='requested_cashier_transfers')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_cashier_transfers')
+    action_date = models.DateTimeField(null=True, blank=True)
+    
+    reason = models.TextField(help_text="Reason for transfer")
+    rejection_reason = models.TextField(blank=True, default='')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['to_branch', 'status']),
+            models.Index(fields=['from_branch', 'status']),
+            models.Index(fields=['cashier', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_transfer_type_display()} of {self.cashier.username}: {self.from_branch.code} → {self.to_branch.code} [{self.get_status_display()}]"
+
+    def is_active_for_date(self, target_date=None):
+        """Check if this approved transfer is active on a specific date (defaults to today)."""
+        if self.status != 'approved':
+            return False
+        if target_date is None:
+            target_date = timezone.localdate()
+        if self.transfer_type == 'permanent':
+            return target_date >= self.start_date
+        # Temporary transfer
+        if self.end_date:
+            return self.start_date <= target_date <= self.end_date
+        return target_date >= self.start_date
+
+
+class CashierAssignmentAuditLog(models.Model):
+    """
+    Audit log capturing every transfer and assignment change with timestamp, approver, and reason.
+    """
+    ACTION_CHOICES = [
+        ('transfer_requested', 'Transfer Requested'),
+        ('transfer_approved', 'Transfer Approved'),
+        ('transfer_rejected', 'Transfer Rejected'),
+        ('transfer_cancelled', 'Transfer Cancelled'),
+        ('transfer_expired', 'Temporary Transfer Expired (Reverted)'),
+        ('till_assigned', 'Till Scheduled / Assigned'),
+        ('till_activated', 'Till Activated (Shift Started)'),
+        ('till_released', 'Till Released (Shift Ended)'),
+        ('conflict_prevented', 'Schedule Conflict Prevented'),
+    ]
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='assignment_audit_logs')
+    cashier = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assignment_audit_logs')
+    action = models.CharField(max_length=40, choices=ACTION_CHOICES, db_index=True)
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='performed_assignment_audits')
+    from_branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    to_branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    terminal = models.ForeignKey(POSTerminal, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    assignment = models.ForeignKey(CashierTillAssignment, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    transfer_request = models.ForeignKey(CashierTransferRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    reason = models.TextField(blank=True, default='')
+    details = models.JSONField(default=dict, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['business', '-timestamp']),
+            models.Index(fields=['cashier', '-timestamp']),
+            models.Index(fields=['action', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_action_display()}] {self.cashier.username} by {self.performed_by.username if self.performed_by else 'System'} ({self.timestamp:%Y-%m-%d %H:%M})"
 

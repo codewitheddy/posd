@@ -9,11 +9,16 @@
 .t-table tbody tr:hover{background:#f8f9fc}
 .t-table tbody td{padding:12px 16px;vertical-align:middle}
 .badge-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
-.badge-pending{background:#fef3c7;color:#92400e}
+.badge-draft{background:#f3f4f6;color:#374151}
+.badge-pending,.badge-pending_approval{background:#fef3c7;color:#92400e}
 .badge-approved{background:#dbeafe;color:#1e40af}
 .badge-dispatched{background:#e0e7ff;color:#4338ca}
+.badge-in_transit{background:#ede9fe;color:#5b21b6}
+.badge-receiving{background:#fef9c3;color:#854d0e}
 .badge-partially_fulfilled{background:#fed7aa;color:#9a3412}
-.badge-fulfilled{background:#dcfce7;color:#166534}
+.badge-fulfilled,.badge-completed{background:#dcfce7;color:#166534}
+.badge-discrepancy_flagged{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.badge-resolved{background:#f0fdf4;color:#166534;border:1px solid #86efac}
 .badge-rejected{background:#fee2e2;color:#991b1b}
 .badge-cancelled{background:#f3f4f6;color:#6b7280}
 .btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
@@ -30,6 +35,11 @@
       <p style="font-size:13px;color:#6b7280;margin:3px 0 0">Transfer products between peer branches (e.g., rebalance stock from slow-moving to high-demand locations).</p>
     </div>
     <div class="d-flex gap-2">
+      {% if is_hq %}
+      <a href="{% url 'transfer_approval_rules' %}" class="btn-outline-sm">
+        <i class="bi bi-sliders"></i> Approval Policies
+      </a>
+      {% endif %}
       <a href="{% url 'transfer_request_create' %}" class="btn-primary-sm">
         <i class="bi bi-arrow-left-right"></i> Request Stock Transfer
       </a>
@@ -73,13 +83,6 @@
               <a href="{% url 'transfer_request_detail' pk=t.pk %}" class="btn-outline-sm" style="padding:5px 10px;font-size:12px">
                 Review & Manage <i class="bi bi-arrow-right ms-1"></i>
               </a>
-            </td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="8" style="text-align:center;padding:48px;color:#9ca3af">
-              <i class="bi bi-arrow-left-right" style="font-size:2rem;display:block;margin-bottom:8px"></i>
-              No inter-branch transfer requests found. Click "Request Stock Transfer" to initiate one.
             </td>
           </tr>
           {% endfor %}

@@ -1,0 +1,141 @@
+{% extends 'pos/base.html' %}
+{% block title %}Stock Transfer Policies & Approval Rules — {{ business.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px}
+.int-card-header{padding:16px 20px;background:#fafbfc;border-bottom:1.5px solid #e5e7eb;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.int-card-body{padding:24px}
+.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary-sm:hover{background:#1a3278;color:#fff}
+.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+.form-label{font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+.form-help{font-size:12px;color:#6b7280;margin-top:4px}
+.rule-switch-box{background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;padding:16px 20px;margin-bottom:16px;transition:border-color .15s}
+.rule-switch-box:hover{border-color:#cbd5e1}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-md-5" style="max-width:960px">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="{% url 'transfer_request_list' %}" class="btn-outline-sm" style="padding:4px 8px"><i class="bi bi-arrow-left"></i> Back to Transfers</a>
+        <h1 style="font-size:22px;font-weight:700;margin:0">Transfer Approval Policies</h1>
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin:0">Configure business rules, automatic threshold approvals, and HQ oversight for multi-branch stock movements.</p>
+    </div>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <form method="POST">
+    {% csrf_token %}
+    <div class="int-card">
+      <div class="int-card-header">
+        <span><i class="bi bi-sliders me-2"></i>Automated Transfer Governance</span>
+        {% if rule and rule.is_active %}
+        <span class="badge bg-success">Policy Active</span>
+        {% else %}
+        <span class="badge bg-secondary">Default Settings</span>
+        {% endif %}
+      </div>
+      <div class="int-card-body">
+        
+        <div class="mb-4">
+          <label class="form-label" for="id_name">Policy Name</label>
+          <input type="text" name="name" id="id_name" class="form-control" value="{{ rule.name|default:'Business Stock Transfer Policy' }}" required>
+          <div class="form-help">A descriptive name for this transfer governance policy.</div>
+        </div>
+
+        <!-- Master Enable Switch -->
+        <div class="rule-switch-box">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" name="is_active" id="id_is_active" {% if not rule or rule.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="id_is_active" style="font-weight:600;font-size:14px">
+              Enable Transfer Governance Rules
+            </label>
+          </div>
+          <div class="form-help ms-4">When disabled, all transfer requests require manual approval from source branch managers.</div>
+        </div>
+
+        <!-- Auto-Approve Below Threshold -->
+        <div class="rule-switch-box">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" name="auto_approve_below_threshold" id="id_auto_approve" {% if rule.auto_approve_below_threshold %}checked{% endif %}>
+            <label class="form-check-label" for="id_auto_approve" style="font-weight:600;font-size:14px">
+              Auto-Approve Low-Risk Transfers Below Threshold
+            </label>
+          </div>
+          <div class="form-help ms-4">If checked, transfer requests that fall strictly below the monetary value and item quantity limits will bypass manual approval and move straight to <strong>Approved</strong>.</div>
+        </div>
+
+        <div class="row g-3 mb-4 ps-md-4">
+          <div class="col-md-6">
+            <label class="form-label" for="id_max_val">Max Auto-Approve Transfer Value</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-cash-stack"></i></span>
+              <input type="number" step="0.01" min="0" name="min_value_threshold" id="id_max_val" class="form-control" value="{{ rule.min_value_threshold|default:'500.00' }}">
+            </div>
+            <div class="form-help">Transfers with total calculated value under this amount can be auto-approved.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="id_max_qty">Max Auto-Approve Total Units</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-boxes"></i></span>
+              <input type="number" step="1" min="0" name="min_quantity_threshold" id="id_max_qty" class="form-control" value="{{ rule.min_quantity_threshold|default:'50' }}">
+            </div>
+            <div class="form-help">Transfers with total item quantity under this limit can be auto-approved.</div>
+          </div>
+        </div>
+
+        <!-- HQ Approval Required -->
+        <div class="rule-switch-box">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" name="requires_hq_approval" id="id_requires_hq" {% if rule.requires_hq_approval %}checked{% endif %}>
+            <label class="form-check-label" for="id_requires_hq" style="font-weight:600;font-size:14px">
+              Require HQ Admin Approval for All Inter-Branch Transfers
+            </label>
+          </div>
+          <div class="form-help ms-4">When enabled, branch managers cannot approve transfers on their own; an HQ Business Owner or Admin must sign off on every inter-branch stock movement. Auto-approval will also be disabled.</div>
+        </div>
+
+        <div class="d-flex justify-content-end pt-3 border-top">
+          <button type="submit" class="btn-primary-sm">
+            <i class="bi bi-save me-1"></i> Save Transfer Policy
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </form>
+
+  <!-- How It Works Information Card -->
+  <div class="int-card" style="background:#f8fafc">
+    <div class="int-card-header" style="background:#f1f5f9">
+      <span><i class="bi bi-info-circle me-2"></i>How Stock Transfer State Flow Works</span>
+    </div>
+    <div class="int-card-body" style="font-size:13px;color:#475569">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div style="font-weight:700;color:#1e293b;margin-bottom:4px">1. Request / Creation</div>
+          <p class="mb-0">Branch staff initiate transfer requests. If auto-approval threshold conditions are met, status becomes <code>Approved</code> immediately; otherwise it enters <code>Pending Approval</code>.</p>
+        </div>
+        <div class="col-md-4">
+          <div style="font-weight:700;color:#1e293b;margin-bottom:4px">2. In-Transit Dispatch</div>
+          <p class="mb-0">Source branch dispatches stock. Units are debited from source inventory and credited to an <code>in_transit_out</code> balance with deterministic row-level locks.</p>
+        </div>
+        <div class="col-md-4">
+          <div style="font-weight:700;color:#1e293b;margin-bottom:4px">3. Receipt & Discrepancy</div>
+          <p class="mb-0">Destination branch receives stock. Full deliveries mark transfer <code>Completed</code>. Short or damaged deliveries trigger <code>Discrepancy Flagged</code> for supervisor write-off or return.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

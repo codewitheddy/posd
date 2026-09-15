@@ -3289,34 +3289,36 @@ def invoice_pdf(request, slug=None, pk=None):
     elements.append(Spacer(1, 0.3*inch))
     
     # Items table
-    data = [['Item', 'Qty', 'Price', 'Total']]
+    data = [['Item', 'Code', 'Qty', 'Price', 'Total']]
     for item in sale.items.all():
+        code = item.product.product_code or item.product.barcode or '-'
         data.append([
             item.product.name,
+            code,
             str(item.quantity),
             f'KES {item.unit_price:,.2f}',
             f'KES {item.total_price:,.2f}'
         ])
     
     # Add totals
-    data.append(['', '', 'Subtotal (excl. VAT):', f'KES {sale.subtotal:,.2f}'])
+    data.append(['', '', '', 'Subtotal (excl. VAT):', f'KES {sale.subtotal:,.2f}'])
     if sale.discount_amount > 0:
-        data.append(['', '', f'Discount ({sale.discount_value}{"%" if sale.discount_type == "percentage" else ""}):', f'KES {sale.discount_amount:,.2f}'])
-    data.append(['', '', f'VAT ({sale.vat_rate}%):', f'KES {sale.vat_amount:,.2f}'])
-    data.append(['', '', '<b>TOTAL (incl. VAT):</b>', f'<b>KES {sale.total:,.2f}</b>'])
+        data.append(['', '', '', f'Discount ({sale.discount_value}{"%" if sale.discount_type == "percentage" else ""}):', f'KES {sale.discount_amount:,.2f}'])
+    data.append(['', '', '', f'VAT ({sale.vat_rate}%):', f'KES {sale.vat_amount:,.2f}'])
+    data.append(['', '', '', '<b>TOTAL (incl. VAT):</b>', f'<b>KES {sale.total:,.2f}</b>'])
     
-    table = Table(data, colWidths=[3*inch, 1*inch, 1.5*inch, 1.5*inch])
+    table = Table(data, colWidths=[2.6*inch, 1.2*inch, 0.8*inch, 1.2*inch, 1.2*inch])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (1, -1), 'LEFT'),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
         ('GRID', (0, 0), (-1, -5), 1, colors.black),
-        ('LINEBELOW', (2, -4), (-1, -4), 1, colors.black),
-        ('LINEBELOW', (2, -1), (-1, -1), 2, colors.black),
+        ('LINEBELOW', (3, -4), (-1, -4), 1, colors.black),
+        ('LINEBELOW', (3, -1), (-1, -1), 2, colors.black),
     ]))
     
     elements.append(table)
@@ -3787,20 +3789,250 @@ def search_customer_by_phone(request, slug=None):
 
 @business_required
 def stock_list(request, slug=None):
-    """View all products with stock information"""
-    # Filter options
-    status_filter = request.GET.get('status', 'all')
+    """View and manage all products with stock information, advanced filtering, velocity metrics, export and print."""
+    from django.db.models import Subquery, OuterRef, Sum, Value, DecimalField, F, Q, ExpressionWrapper, Count
+    from django.db.models.functions import Coalesce
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    import csv
+
+    today = timezone.now().date()
     
-    products = Product.objects.filter(business=request.business).select_related('category').all()
-    
+    # 1. Base Queryset with sales quantity annotation
+    sales_subquery = SaleItem.objects.filter(
+        product=OuterRef('pk'),
+        business=request.business
+    ).values('product').annotate(
+        total_sold=Sum('quantity')
+    ).values('total_sold')
+
+    products = Product.objects.filter(
+        business=request.business
+    ).select_related('category', 'unit').annotate(
+        sold_qty=Coalesce(
+            Subquery(sales_subquery, output_field=DecimalField(max_digits=12, decimal_places=3)),
+            Value(Decimal('0'), output_field=DecimalField(max_digits=12, decimal_places=3))
+        ),
+        stock_val=ExpressionWrapper(
+            F('stock_quantity') * F('cost_price'),
+            output_field=DecimalField(max_digits=14, decimal_places=2)
+        )
+    )
+
+    # 2. Get Filters & Search
+    status_filter = request.GET.get('status', 'all').strip()
+    category_id = request.GET.get('category', '').strip()
+    sort_by = request.GET.get('sort', 'latest').strip()
+    search_query = request.GET.get('q', '').strip()
+
+    # Search filter across multiple fields
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(product_code__icontains=search_query) |
+            Q(barcode__icontains=search_query) |
+            Q(category__name__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    # Category filter
+    if category_id:
+        if category_id == 'uncategorized':
+            products = products.filter(category__isnull=True)
+        elif category_id.isdigit():
+            products = products.filter(category_id=int(category_id))
+
+    # Selected IDs filter (for selected items export/print)
+    selected_ids_param = request.GET.get('selected_ids', '').strip()
+    if selected_ids_param:
+        try:
+            sel_ids = [int(x.strip()) for x in selected_ids_param.split(',') if x.strip().isdigit()]
+            if sel_ids:
+                products = products.filter(id__in=sel_ids)
+        except Exception:
+            pass
+
+    # Status filter
     if status_filter == 'low':
-        products = products.filter(stock_quantity__lte=models.F('low_stock_threshold'))
+        products = products.filter(
+            stock_quantity__lte=F('low_stock_threshold'),
+            stock_quantity__gt=0
+        )
     elif status_filter == 'out':
-        products = products.filter(stock_quantity=0)
+        products = products.filter(stock_quantity__lte=0)
+    elif status_filter == 'in_stock':
+        products = products.filter(stock_quantity__gt=F('low_stock_threshold'))
+    elif status_filter == 'expired':
+        products = products.filter(
+            expiry_date__isnull=False,
+            expiry_date__lt=today
+        )
+    elif status_filter == 'expiring_soon':
+        products = products.filter(
+            expiry_date__isnull=False,
+            expiry_date__gte=today,
+            expiry_date__lte=today + timedelta(days=30)
+        )
+    elif status_filter == 'least_sold':
+        products = products.filter(sold_qty__lte=0)
+    elif status_filter == 'most_sold':
+        products = products.filter(sold_qty__gt=0)
+
+    # 3. Sorting
+    if sort_by == 'latest' or sort_by == 'newest':
+        products = products.order_by('-created_at', '-id')
+    elif sort_by == 'oldest':
+        products = products.order_by('created_at', 'id')
+    elif sort_by == 'least_sold':
+        # Slowest moving / dead stock first (0 or fewest sales + highest stock first)
+        products = products.order_by('sold_qty', '-stock_quantity', 'name')
+    elif sort_by == 'most_sold':
+        # Fast movers / high velocity first
+        products = products.order_by('-sold_qty', '-stock_quantity', 'name')
+    elif sort_by == 'stock_asc':
+        products = products.order_by('stock_quantity', 'name')
+    elif sort_by == 'stock_desc':
+        products = products.order_by('-stock_quantity', 'name')
+    elif sort_by == 'name_asc':
+        products = products.order_by('name')
+    elif sort_by == 'name_desc':
+        products = products.order_by('-name')
+    elif sort_by == 'val_desc':
+        products = products.order_by('-stock_val', '-stock_quantity')
+    else:
+        products = products.order_by('-created_at', '-id')
+
+    # 4. Global Inventory Statistics (Calculated across all products for this business)
+    all_biz_products = Product.objects.filter(business=request.business)
+    total_products_count = all_biz_products.count()
     
+    # Valuation aggregates
+    stats_agg = all_biz_products.aggregate(
+        total_stock_units=Coalesce(Sum('stock_quantity', filter=Q(stock_quantity__gt=0)), Value(Decimal('0'))),
+        total_cost_val=Coalesce(Sum(F('stock_quantity') * F('cost_price'), filter=Q(stock_quantity__gt=0)), Value(Decimal('0'), output_field=DecimalField(max_digits=14, decimal_places=2))),
+        total_retail_val=Coalesce(Sum(F('stock_quantity') * F('unit_price'), filter=Q(stock_quantity__gt=0)), Value(Decimal('0'), output_field=DecimalField(max_digits=14, decimal_places=2))),
+        low_stock_count=Count('id', filter=Q(stock_quantity__lte=F('low_stock_threshold'), stock_quantity__gt=0)),
+        out_of_stock_count=Count('id', filter=Q(stock_quantity__lte=0)),
+        expired_count=Count('id', filter=Q(expiry_date__isnull=False, expiry_date__lt=today)),
+        expiring_soon_count=Count('id', filter=Q(expiry_date__isnull=False, expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))),
+    )
+
+    # 5. CSV Export Handler
+    if request.GET.get('export') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        filename = f"stock_inventory_{request.business.slug}_{today.strftime('%Y%m%d')}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        # Write UTF-8 BOM so Excel opens CSV directly with correct encoding
+        response.write('\ufeff')
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            '#',
+            'Product Name',
+            'Product Code / SKU',
+            'Barcode',
+            'Category',
+            'Current Stock',
+            'Low Stock Alert Level',
+            'Unit of Measure',
+            'Cost Price (KES)',
+            'Selling Price (KES)',
+            'Total Cost Valuation (KES)',
+            'Total Retail Valuation (KES)',
+            'Units Sold',
+            'Stock Status',
+            'Expiry Date',
+            'Expiry Status',
+            'Date Added'
+        ])
+        
+        for idx, p in enumerate(products, 1):
+            cost_val = (p.stock_quantity * p.cost_price) if p.stock_quantity and p.cost_price else Decimal('0.00')
+            retail_val = (p.stock_quantity * p.unit_price) if p.stock_quantity and p.unit_price else Decimal('0.00')
+            writer.writerow([
+                idx,
+                p.name,
+                p.product_code or '',
+                p.barcode or '',
+                p.category.name if p.category else 'Uncategorized',
+                float(p.stock_quantity),
+                float(p.low_stock_threshold),
+                p.unit.name if p.unit else '',
+                f"{p.cost_price:.2f}",
+                f"{p.unit_price:.2f}",
+                f"{cost_val:.2f}",
+                f"{retail_val:.2f}",
+                float(p.sold_qty) if hasattr(p, 'sold_qty') else 0,
+                p.stock_status,
+                p.expiry_date.strftime('%Y-%m-%d') if p.expiry_date else 'N/A',
+                p.expiry_status,
+                p.created_at.strftime('%Y-%m-%d %H:%M') if p.created_at else ''
+            ])
+            
+        try:
+            ActivityLog.log_activity(
+                user=request.user,
+                action_type='export',
+                description=f"Exported stock inventory to CSV ({products.count()} items)",
+                request=request,
+                business=request.business,
+                operation_type='export_stock_inventory'
+            )
+        except Exception:
+            pass
+
+        return response
+
+    # 6. Categories for Filter Dropdown
+    categories = Category.objects.filter(business=request.business).annotate(
+        product_count=Count('products')
+    ).order_by('name')
+
+    # Filtered count
+    filtered_count = products.count()
+
+    # 7. Pagination
+    per_page = request.GET.get('per_page', '50').strip()
+    if per_page == 'all':
+        page_obj = products
+        is_paginated = False
+    else:
+        try:
+            per_page_num = int(per_page)
+            if per_page_num not in [25, 50, 100, 200]:
+                per_page_num = 50
+        except ValueError:
+            per_page_num = 50
+        
+        paginator = Paginator(products, per_page_num)
+        page_number = request.GET.get('page', 1)
+        try:
+            page_obj = paginator.get_page(page_number)
+        except (PageNotAnInteger, EmptyPage):
+            page_obj = paginator.get_page(1)
+        is_paginated = paginator.num_pages > 1
+
+    # Preserve GET parameters for pagination links (strip 'page')
+    query_params = request.GET.copy()
+    if 'page' in query_params:
+        query_params.pop('page')
+    querystring = query_params.urlencode()
+
     context = {
-        'products': products,
+        'products': page_obj,
+        'all_filtered_products': products,
+        'is_paginated': is_paginated,
+        'filtered_count': filtered_count,
+        'total_products_count': total_products_count,
+        'categories': categories,
         'status_filter': status_filter,
+        'selected_category': category_id,
+        'sort_by': sort_by,
+        'search_query': search_query,
+        'per_page': per_page,
+        'querystring': querystring,
+        'stats': stats_agg,
+        'now': timezone.now(),
     }
     return render(request, 'pos/stock_list.html', context)
 
@@ -8084,34 +8316,133 @@ def goods_received_print(request, slug=None, pk=None):
 @business_required
 @can_manage_purchases
 def grn_list(request, slug=None):
-    """List all GRNs"""
-    grns = GoodsReturnedNote.objects.filter(business=request.business).select_related('supplier', 'created_by')
-    
-    # Filter by status
-    status_filter = request.GET.get('status')
+    """List all GRNs with comprehensive filtering, search, metrics, and pagination"""
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Base query for current business
+    all_grns = GoodsReturnedNote.objects.filter(business=request.business)
+
+    # Top summary metrics (unfiltered across the business)
+    raw_metrics = all_grns.aggregate(
+        total_count=Count('id'),
+        total_val=Coalesce(Sum('total_value'), Decimal('0.00')),
+        draft_count=Count('id', filter=Q(status='draft')),
+        draft_val=Coalesce(Sum('total_value', filter=Q(status='draft')), Decimal('0.00')),
+        submitted_count=Count('id', filter=Q(status='submitted')),
+        acknowledged_count=Count('id', filter=Q(status='acknowledged')),
+        collected_count=Count('id', filter=Q(status='collected')),
+        pending_count=Count('id', filter=Q(status__in=['submitted', 'acknowledged', 'collected'])),
+        pending_val=Coalesce(Sum('total_value', filter=Q(status__in=['submitted', 'acknowledged', 'collected'])), Decimal('0.00')),
+        credited_count=Count('id', filter=Q(status='credited')),
+        credited_val=Coalesce(Sum('credit_note_amount', filter=Q(status='credited')), Decimal('0.00')),
+        cancelled_count=Count('id', filter=Q(status='cancelled')),
+    )
+    metrics = {
+        'total_count': raw_metrics['total_count'],
+        'total_value': raw_metrics['total_val'],
+        'draft_count': raw_metrics['draft_count'],
+        'draft_value': raw_metrics['draft_val'],
+        'submitted_count': raw_metrics['submitted_count'],
+        'acknowledged_count': raw_metrics['acknowledged_count'],
+        'collected_count': raw_metrics['collected_count'],
+        'pending_count': raw_metrics['pending_count'],
+        'pending_value': raw_metrics['pending_val'],
+        'credited_count': raw_metrics['credited_count'],
+        'credited_value': raw_metrics['credited_val'],
+        'cancelled_count': raw_metrics['cancelled_count'],
+    }
+
+    # Optimized queryset for display
+    grns = all_grns.select_related('supplier', 'created_by', 'related_purchase').annotate(
+        items_count=Count('items', distinct=True),
+        total_qty=Coalesce(Sum('items__quantity'), 0)
+    )
+
+    # Filters
+    status_filter = request.GET.get('status', '').strip()
     if status_filter:
-        grns = grns.filter(status=status_filter)
-    
-    # Filter by supplier
-    supplier_filter = request.GET.get('supplier')
+        if status_filter == 'pending':
+            grns = grns.filter(status__in=['submitted', 'acknowledged', 'collected'])
+        else:
+            grns = grns.filter(status=status_filter)
+
+    supplier_filter = request.GET.get('supplier', '').strip()
     if supplier_filter:
         grns = grns.filter(supplier_id=supplier_filter)
-    
-    # Filter by date range
-    from_date = request.GET.get('from_date')
-    to_date = request.GET.get('to_date')
+
+    reason_filter = request.GET.get('reason', '').strip()
+    if reason_filter:
+        grns = grns.filter(return_reason=reason_filter)
+
+    from_date = request.GET.get('from_date', '').strip()
     if from_date:
-        grns = grns.filter(return_date__gte=from_date)
+        try:
+            grns = grns.filter(return_date__gte=datetime.strptime(from_date, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    to_date = request.GET.get('to_date', '').strip()
     if to_date:
-        grns = grns.filter(return_date__lte=to_date)
-    
+        try:
+            grns = grns.filter(return_date__lte=datetime.strptime(to_date, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    search = request.GET.get('q', '').strip()
+    if search:
+        grns = grns.filter(
+            Q(grn_number__icontains=search) |
+            Q(supplier__name__icontains=search) |
+            Q(credit_note_number__icontains=search) |
+            Q(reason_details__icontains=search) |
+            Q(related_purchase__purchase_number__icontains=search)
+        )
+
+    # Sorting
+    sort_by = request.GET.get('sort', 'newest').strip()
+    sort_map = {
+        'newest': ('-return_date', '-created_at'),
+        'oldest': ('return_date', 'created_at'),
+        'value_desc': ('-total_value', '-return_date'),
+        'value_asc': ('total_value', '-return_date'),
+        'supplier_asc': ('supplier__name', '-return_date'),
+    }
+    order_fields = sort_map.get(sort_by, ('-return_date', '-created_at'))
+    grns = grns.order_by(*order_fields)
+
+    # Filtered metrics
+    filtered_count = grns.count()
+    filtered_value = grns.aggregate(val=Coalesce(Sum('total_value'), Decimal('0.00')))['val']
+
+    # Pagination
+    paginator = Paginator(grns, 20)
+    page = request.GET.get('page', 1)
+    try:
+        grns_page = paginator.page(page)
+    except PageNotAnInteger:
+        grns_page = paginator.page(1)
+    except EmptyPage:
+        grns_page = paginator.page(paginator.num_pages)
+
     context = {
-        'grns': grns,
-        'suppliers': Supplier.objects.filter(business=request.business, is_active=True),
+        'grns': grns_page,
+        'paginator': paginator,
+        'page_obj': grns_page,
+        'is_paginated': grns_page.has_other_pages(),
+        'suppliers': Supplier.objects.filter(business=request.business, is_active=True).order_by('name'),
+        'status_choices': GoodsReturnedNote.STATUS_CHOICES,
+        'return_reason_choices': GoodsReturnedNote.RETURN_REASON_CHOICES,
         'status_filter': status_filter,
         'supplier_filter': supplier_filter,
-        'from_date': from_date or '',
-        'to_date': to_date or '',
+        'reason_filter': reason_filter,
+        'from_date': from_date,
+        'to_date': to_date,
+        'search': search,
+        'sort_by': sort_by,
+        'metrics': metrics,
+        'filtered_count': filtered_count,
+        'filtered_value': filtered_value,
+        'business_slug': slug or getattr(request.business, 'slug', 'main-store'),
     }
     return render(request, 'pos/grn_list.html', context)
 

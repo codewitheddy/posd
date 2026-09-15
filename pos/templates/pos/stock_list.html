@@ -1,101 +1,1130 @@
 {% extends 'pos/base.html' %}
+{% load static %}
+{% load business_tags %}
 {% block title %}Stock Management — {{ request.business.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* ── Full Width & Modern Screen Styling ── */
+  .stock-container {
+    width: 100%;
+    max-width: 100%;
+    padding: 0.5rem 0;
+  }
+
+  /* ── KPI Stat Cards ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .kpi-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+  }
+  .kpi-icon.primary { background: #e0e7ff; color: #4338ca; }
+  .kpi-icon.success { background: #dcfce7; color: #15803d; }
+  .kpi-icon.warning { background: #fef3c7; color: #b45309; }
+  .kpi-icon.danger  { background: #fee2e2; color: #b91c1c; }
+  .kpi-icon.info    { background: #e0f2fe; color: #0369a1; }
+  .kpi-content { flex: 1; min-width: 0; }
+  .kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    margin-bottom: 0.2rem;
+  }
+  .kpi-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.2;
+  }
+  .kpi-sub {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 0.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Filter & Search Bar ── */
+  .filter-panel {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e2e8f0;
+  }
+  .filter-chip {
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .filter-chip:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+  }
+  .filter-chip.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+  }
+
+  /* ── Floating Sticky Selection Toolbar ── */
+  .selection-toolbar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(120%);
+    background: #1e293b;
+    color: #ffffff;
+    padding: 0.75rem 1.25rem;
+    border-radius: 50px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1050;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .selection-toolbar.show {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Inventory Table Styling ── */
+  .table-card {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .table-card-header {
+    background: #ffffff;
+    border-bottom: 1px solid #f1f5f9;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .inventory-table {
+    width: 100%;
+    margin-bottom: 0;
+    font-size: 0.82rem;
+  }
+  .inventory-table thead th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 0.72rem;
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .inventory-table tbody td {
+    padding: 0.75rem 0.85rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+  }
+  .inventory-table tbody tr:hover td {
+    background-color: #f8fafc;
+  }
+  .table-row-selected td {
+    background-color: #f0fdf4 !important;
+  }
+
+  /* ── Checkbox Column Spacing & Left Margin ── */
+  .inventory-table th:first-child, 
+  .inventory-table td:first-child {
+    padding-left: 1.5rem !important;
+  }
+  .inventory-table th:last-child, 
+  .inventory-table td:last-child {
+    padding-right: 1.5rem !important;
+  }
+  .select-checkbox-col {
+    width: 54px !important;
+    min-width: 54px !important;
+    padding-left: 1.5rem !important;
+    padding-right: 0.75rem !important;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .select-checkbox-col .form-check-input {
+    margin: 0 auto;
+    cursor: pointer;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 1.5px solid #94a3b8;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    display: block;
+  }
+  .select-checkbox-col .form-check-input:checked {
+    background-color: #2563eb;
+    border-color: #2563eb;
+  }
+  .select-checkbox-col .form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+  }
+
+  /* ── Badges & Velocity Indicators ── */
+  .velocity-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .velocity-hot { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+  .velocity-active { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+  .velocity-slow { background: #fef9c3; color: #a16207; border: 1px solid #fef08a; }
+  .velocity-zero { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+
+  .stock-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    padding: 0.25rem 0.6rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.82rem;
+  }
+  .stock-pill.in-stock { background: #dcfce7; color: #15803d; }
+  .stock-pill.low-stock { background: #fef3c7; color: #b45309; }
+  .stock-pill.out-stock { background: #fee2e2; color: #b91c1c; }
+
+  /* ── Action Buttons ── */
+  .btn-action-group {
+    display: inline-flex;
+    gap: 0.3rem;
+  }
+  .btn-action-btn {
+    padding: 0.3rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #475569;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .btn-action-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
+  }
+  .btn-action-btn.primary {
+    border-color: #3b82f6;
+    color: #2563eb;
+    background: #eff6ff;
+  }
+  .btn-action-btn.primary:hover {
+    background: #2563eb;
+    color: #ffffff;
+  }
+  .btn-action-btn.warning {
+    border-color: #f59e0b;
+    color: #d97706;
+    background: #fffbeb;
+  }
+  .btn-action-btn.warning:hover {
+    background: #f59e0b;
+    color: #ffffff;
+  }
+
+  /* ── Print Audit Specific Elements (Screen vs Print) ── */
+  .print-audit-header,
+  .print-audit-footer,
+  .print-col {
+    display: none;
+  }
+
+  /* ── STRICT PRINT MEDIA RULES (ONLY PRODUCTS TABLE & AUDIT HEADER) ── */
+  @media print {
+    @page {
+      size: landscape;
+      margin: 8mm 10mm;
+    }
+    *, *::before, *::after {
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+    html, body {
+      background: #ffffff !important;
+      color: #000000 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+      font-size: 8.5pt !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      height: auto !important;
+    }
+    /* HIDE ENTIRE APP SHELL: Topbar, Sidebar, Mobile Nav, Connection Status, Backdrop, Modals, Headers, Forms */
+    .topbar, #topbar,
+    .sidebar, #sidebar, .sidebar-backdrop, #sidebarBackdrop,
+    .mobile-bottom-nav, nav.mobile-bottom-nav, .offcanvas, .offcanvas-mobile,
+    .connection-status, #connection-status,
+    .navbar, .header, .page-header, .filter-panel, .pagination-wrapper,
+    .kpi-grid, .kpi-card, .selection-toolbar, #selectionToolbar,
+    .btn, .btn-group, .btn-action-group, .alert, footer,
+    .no-print, .screen-only-col, .d-print-none {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      width: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    /* RESET MAIN CONTENT CONTAINER */
+    .main-content {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: auto !important;
+    }
+    .stock-container {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .table-card {
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: transparent !important;
+    }
+    .table-card-header {
+      display: none !important;
+    }
+    .table-responsive {
+      overflow: visible !important;
+      display: block !important;
+      width: 100% !important;
+    }
+    /* AUDIT HEADER */
+    .print-audit-header {
+      display: block !important;
+      margin-bottom: 12px !important;
+      border-bottom: 2px solid #000000 !important;
+      padding-bottom: 8px !important;
+    }
+    /* PURE PRODUCTS TABLE */
+    .inventory-table {
+      width: 100% !important;
+      max-width: 100% !important;
+      table-layout: auto !important;
+      border-collapse: collapse !important;
+      font-size: 8pt !important;
+    }
+    .inventory-table tr {
+      page-break-inside: avoid !important;
+    }
+    .inventory-table th, 
+    .inventory-table td {
+      border: 1px solid #333333 !important;
+      padding: 5px 6px !important;
+      color: #000000 !important;
+      background: transparent !important;
+      vertical-align: middle !important;
+    }
+    .inventory-table thead th {
+      background-color: #f1f3f5 !important;
+      color: #000000 !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .print-col {
+      display: table-cell !important;
+    }
+    /* AUDIT FOOTER */
+    .print-audit-footer {
+      display: block !important;
+      margin-top: 25px !important;
+      page-break-inside: avoid !important;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-3 px-3 px-md-4">
+<div class="container-fluid px-3 px-md-4 py-3 stock-container">
 
-<div class="page-header">
-  <div>
-    <h1><i class="bi bi-boxes me-2 text-primary"></i>Stock Management</h1>
-    <p class="page-subtitle">Monitor and adjust inventory levels</p>
+  <!-- ── PRINT AUDIT SHEET HEADER (Shown ONLY during printing) ── -->
+  <div class="print-audit-header">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h3 class="mb-0 text-uppercase fw-bold">{{ request.business.name }}</h3>
+        <p class="mb-0 text-muted small fw-semibold" id="printAuditReportTitle">
+          PHYSICAL INVENTORY AUDIT &amp; STOCKTAKE SHEET
+          {% if request.business.phone %} | Tel: {{ request.business.phone }}{% endif %}
+          {% if request.business.kra_pin %} | PIN: {{ request.business.kra_pin }}{% endif %}
+        </p>
+      </div>
+      <div class="text-end small">
+        <div><strong>Date Printed:</strong> {{ now|date:"d M Y, H:i" }}</div>
+        <div><strong>Printed By:</strong> {{ request.user.get_full_name|default:request.user.username }}</div>
+        <div id="printFilterMeta"><strong>Filter:</strong> Status: {{ status_filter|title }} | Category: {{ selected_category|default:"All" }}</div>
+      </div>
+    </div>
   </div>
-  <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-warning btn-sm">
-    <i class="bi bi-exclamation-triangle me-1"></i>Stock Alerts
-  </a>
-</div>
 
-<!-- Filter -->
-<div class="filter-bar mb-3">
-  <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
-    <label class="form-label mb-0" style="font-size:13px;font-weight:600">Status:</label>
-    <select class="form-select form-select-sm" style="width:auto" name="status" onchange="this.form.submit()">
-      <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Products</option>
-      <option value="low" {% if status_filter == 'low' %}selected{% endif %}>Low Stock</option>
-      <option value="out" {% if status_filter == 'out' %}selected{% endif %}>Out of Stock</option>
-    </select>
-  </form>
-</div>
+  <!-- ── PAGE HEADER (Screen only) ── -->
+  <div class="page-header no-print">
+    <div>
+      <h1 class="h4 fw-bold mb-1">
+        <i class="bi bi-boxes me-2 text-primary"></i>Stock Management
+      </h1>
+      <p class="page-subtitle mb-0">Monitor inventory health, sales velocity, select products to print/export, or perform physical audits</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <!-- Export Dropdown -->
+      <div class="btn-group shadow-sm">
+        <a href="?{{ querystring }}&export=csv" class="btn btn-outline-success btn-sm d-inline-flex align-items-center gap-1" title="Export all filtered inventory to CSV">
+          <i class="bi bi-file-earmark-spreadsheet"></i>
+          <span>Export CSV</span>
+        </a>
+        <button type="button" class="btn btn-outline-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+          <span class="visually-hidden">Toggle Export Options</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size: 0.8rem;">
+          <li>
+            <a class="dropdown-item" href="?{{ querystring }}&export=csv">
+              <i class="bi bi-download me-2 text-success"></i>Export All Filtered ({{ filtered_count }} items)
+            </a>
+          </li>
+          <li>
+            <button class="dropdown-item" type="button" onclick="exportSelectedCSV()">
+              <i class="bi bi-check2-square me-2 text-primary"></i>Export Selected Products Only
+            </button>
+          </li>
+        </ul>
+      </div>
 
-<div class="ui-card">
-  <div class="ui-card-header">
-    <span class="ui-card-title"><i class="bi bi-boxes me-2"></i>Inventory</span>
-    <span class="badge bg-light text-dark">{{ products|length }} products</span>
+      <!-- Print Dropdown (Products Only / Selected) -->
+      <div class="btn-group shadow-sm">
+        <button type="button" onclick="printProductsOnly()" class="btn btn-outline-dark btn-sm d-inline-flex align-items-center gap-1" title="Print products table only without dashboard widgets">
+          <i class="bi bi-printer"></i>
+          <span>Print Products</span>
+        </button>
+        <button type="button" class="btn btn-outline-dark btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+          <span class="visually-hidden">Toggle Print Options</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size: 0.8rem;">
+          <li>
+            <button class="dropdown-item" type="button" onclick="printSelectedProducts()">
+              <i class="bi bi-check2-circle me-2 text-primary"></i>Print Selected Products Only
+            </button>
+          </li>
+          <li>
+            <button class="dropdown-item" type="button" onclick="printProductsOnly()">
+              <i class="bi bi-file-earmark-text me-2 text-dark"></i>Print Current Page Products
+            </button>
+          </li>
+          <li>
+            <a class="dropdown-item" href="?{{ querystring }}&per_page=all" onclick="setTimeout(function(){ window.print(); }, 600);">
+              <i class="bi bi-journals me-2 text-info"></i>Print All Matching Products (Full Dataset)
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Stock Alerts Shortcut -->
+      <a href="{% url 'low_stock_alert' slug=request.business.slug %}" class="btn btn-outline-warning btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Stock Alerts</span>
+        {% if stats.low_stock_count %}
+          <span class="badge bg-warning text-dark rounded-pill">{{ stats.low_stock_count }}</span>
+        {% endif %}
+      </a>
+
+      <!-- Stock Transfers -->
+      <a href="{% url 'business_transfer_list' slug=request.business.slug %}" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
+        <i class="bi bi-arrow-left-right"></i>
+        <span>Stock Transfers</span>
+      </a>
+    </div>
   </div>
-  <div class="ui-card-body p-0">
+
+  <!-- ── 5 KPI METRICS CARDS (Screen only, completely hidden on print) ── -->
+  <div class="kpi-grid no-print">
+    <!-- 1. Total Stock Valuation (Cost & Retail) -->
+    <div class="kpi-card">
+      <div class="kpi-icon primary"><i class="bi bi-cash-stack"></i></div>
+      <div class="kpi-content">
+        <div class="kpi-label">Total Cost Valuation</div>
+        <div class="kpi-value text-primary">KES {{ stats.total_cost_val|floatformat:2 }}</div>
+        <div class="kpi-sub">Retail Value: KES {{ stats.total_retail_val|floatformat:2 }}</div>
+      </div>
+    </div>
+
+    <!-- 2. Total In-Stock Items -->
+    <div class="kpi-card">
+      <div class="kpi-icon success"><i class="bi bi-box-seam"></i></div>
+      <div class="kpi-content">
+        <div class="kpi-label">Stocked Inventory</div>
+        <div class="kpi-value text-success">{{ stats.total_stock_units|floatformat:0 }} <span style="font-size:0.8rem;font-weight:500;">Units</span></div>
+        <div class="kpi-sub">Across {{ total_products_count }} Total Products</div>
+      </div>
+    </div>
+
+    <!-- 3. Low Stock Alerts -->
+    <div class="kpi-card">
+      <div class="kpi-icon warning"><i class="bi bi-exclamation-circle"></i></div>
+      <div class="kpi-content">
+        <div class="kpi-label">Low Stock Alerts</div>
+        <div class="kpi-value text-warning">{{ stats.low_stock_count }}</div>
+        <div class="kpi-sub">At or below reorder threshold</div>
+      </div>
+    </div>
+
+    <!-- 4. Out of Stock -->
+    <div class="kpi-card">
+      <div class="kpi-icon danger"><i class="bi bi-x-octagon"></i></div>
+      <div class="kpi-content">
+        <div class="kpi-label">Out of Stock</div>
+        <div class="kpi-value text-danger">{{ stats.out_of_stock_count }}</div>
+        <div class="kpi-sub">Depleted inventory items</div>
+      </div>
+    </div>
+
+    <!-- 5. Expiry Status -->
+    <div class="kpi-card">
+      <div class="kpi-icon info"><i class="bi bi-calendar2-week"></i></div>
+      <div class="kpi-content">
+        <div class="kpi-label">Expiring Soon</div>
+        <div class="kpi-value text-info">{{ stats.expiring_soon_count }}</div>
+        <div class="kpi-sub">{{ stats.expired_count }} already expired</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADVANCED FILTER & SEARCH PANEL (Screen only) ── -->
+  <div class="filter-panel no-print">
+    <form method="GET" id="stockFilterForm" class="row g-2 align-items-end">
+      <!-- Search Input -->
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold text-muted mb-1">Search Products</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" value="{{ search_query }}" class="form-control form-control-sm" placeholder="Name, SKU, Barcode, Category...">
+          {% if search_query %}
+            <a href="?{% if selected_category %}category={{ selected_category }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Clear search"><i class="bi bi-x"></i></a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold text-muted mb-1">Category</label>
+        <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">All Categories ({{ total_products_count }})</option>
+          <option value="uncategorized" {% if selected_category == 'uncategorized' %}selected{% endif %}>Uncategorized</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}" {% if selected_category == cat.id|stringformat:"s" %}selected{% endif %}>
+              {{ cat.name }} ({{ cat.product_count }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Status Filter -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold text-muted mb-1">Stock Status</label>
+        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Stock Statuses</option>
+          <option value="in_stock" {% if status_filter == 'in_stock' %}selected{% endif %}>In Stock (Healthy)</option>
+          <option value="low" {% if status_filter == 'low' %}selected{% endif %}>Low Stock Alerts ({{ stats.low_stock_count }})</option>
+          <option value="out" {% if status_filter == 'out' %}selected{% endif %}>Out of Stock ({{ stats.out_of_stock_count }})</option>
+          <option value="expiring_soon" {% if status_filter == 'expiring_soon' %}selected{% endif %}>Expiring Soon ({{ stats.expiring_soon_count }})</option>
+          <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired Items ({{ stats.expired_count }})</option>
+          <option value="least_sold" {% if status_filter == 'least_sold' %}selected{% endif %}>Least Sold (0 Sales)</option>
+          <option value="most_sold" {% if status_filter == 'most_sold' %}selected{% endif %}>Most Sold (Active)</option>
+        </select>
+      </div>
+
+      <!-- Sorting Options -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold text-muted mb-1">Sort Order</label>
+        <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="latest" {% if sort_by == 'latest' %}selected{% endif %}>Latest Added (Newest)</option>
+          <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>Oldest Added</option>
+          <option value="least_sold" {% if sort_by == 'least_sold' %}selected{% endif %}>Least Sold (Slow Moving)</option>
+          <option value="most_sold" {% if sort_by == 'most_sold' %}selected{% endif %}>Most Sold (Top Movers)</option>
+          <option value="stock_asc" {% if sort_by == 'stock_asc' %}selected{% endif %}>Stock: Low &rarr; High</option>
+          <option value="stock_desc" {% if sort_by == 'stock_desc' %}selected{% endif %}>Stock: High &rarr; Low</option>
+          <option value="val_desc" {% if sort_by == 'val_desc' %}selected{% endif %}>Stock Value: High &rarr; Low</option>
+          <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Product Name (A &rarr; Z)</option>
+          <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Product Name (Z &rarr; A)</option>
+        </select>
+      </div>
+
+      <!-- Items Per Page -->
+      <div class="col-6 col-md-1">
+        <label class="form-label small fw-semibold text-muted mb-1">Show</label>
+        <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="25" {% if per_page == '25' %}selected{% endif %}>25</option>
+          <option value="50" {% if per_page == '50' %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == '100' %}selected{% endif %}>100</option>
+          <option value="200" {% if per_page == '200' %}selected{% endif %}>200</option>
+          <option value="all" {% if per_page == 'all' %}selected{% endif %}>All</option>
+        </select>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="col-12 col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="{% url 'stock_list' slug=request.business.slug %}" class="btn btn-light btn-sm border" title="Reset all filters"><i class="bi bi-arrow-counterclockwise"></i></a>
+      </div>
+    </form>
+
+    <!-- Quick Filter Chips -->
+    <div class="filter-chips">
+      <span class="small text-muted align-self-center me-1">Quick Filters:</span>
+      <a href="?status=all" class="filter-chip {% if status_filter == 'all' and not sort_by and not selected_category %}active{% endif %}">
+        <i class="bi bi-grid-fill"></i> All Products
+      </a>
+      <a href="?status=low" class="filter-chip {% if status_filter == 'low' %}active{% endif %}">
+        <i class="bi bi-exclamation-triangle-fill text-warning"></i> Low Stock
+        <span class="badge bg-warning text-dark ms-1">{{ stats.low_stock_count }}</span>
+      </a>
+      <a href="?status=out" class="filter-chip {% if status_filter == 'out' %}active{% endif %}">
+        <i class="bi bi-x-circle-fill text-danger"></i> Out of Stock
+        <span class="badge bg-danger text-white ms-1">{{ stats.out_of_stock_count }}</span>
+      </a>
+      <a href="?sort=least_sold" class="filter-chip {% if sort_by == 'least_sold' %}active{% endif %}">
+        <i class="bi bi-hourglass-bottom text-secondary"></i> Least Sold (Dead Stock)
+      </a>
+      <a href="?sort=most_sold" class="filter-chip {% if sort_by == 'most_sold' %}active{% endif %}">
+        <i class="bi bi-fire text-danger"></i> Most Sold (Top Movers)
+      </a>
+      <a href="?status=expiring_soon" class="filter-chip {% if status_filter == 'expiring_soon' %}active{% endif %}">
+        <i class="bi bi-clock-history text-info"></i> Expiring Soon
+        {% if stats.expiring_soon_count %}
+          <span class="badge bg-info text-dark ms-1">{{ stats.expiring_soon_count }}</span>
+        {% endif %}
+      </a>
+      <a href="?sort=val_desc" class="filter-chip {% if sort_by == 'val_desc' %}active{% endif %}">
+        <i class="bi bi-graph-up-arrow text-success"></i> Highest Valuation
+      </a>
+    </div>
+  </div>
+
+  <!-- ── FLOATING BULK SELECTION ACTION BAR (Appears when 1+ products are selected) ── -->
+  <div id="selectionToolbar" class="selection-toolbar no-print">
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-primary rounded-pill px-2 py-1" id="selectedCountBadge">0</span>
+      <span class="small"><span id="selectedCountText" class="fw-bold">0</span> product(s) selected</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" onclick="printSelectedProducts()" class="btn btn-light btn-sm text-dark fw-semibold shadow-sm">
+        <i class="bi bi-printer me-1 text-primary"></i>Print Selected
+      </button>
+      <button type="button" onclick="exportSelectedCSV()" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-file-earmark-spreadsheet me-1 text-success"></i>Export CSV
+      </button>
+      <button type="button" onclick="clearSelection()" class="btn btn-link text-white-50 btn-sm text-decoration-none p-0 ms-1" title="Clear selection">
+        <i class="bi bi-x-circle fs-5"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── INVENTORY TABLE CARD ── -->
+  <div class="table-card">
+    <div class="table-card-header no-print">
+      <div class="d-flex align-items-center gap-2">
+        <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-table me-2 text-primary"></i>Stock Inventory</h6>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill">
+          {{ filtered_count }} matching product{{ filtered_count|pluralize }}
+        </span>
+      </div>
+      <div class="d-flex align-items-center gap-2 small text-muted">
+        <span>Use checkboxes to select specific products to print or export</span>
+      </div>
+    </div>
+
     <div class="table-responsive">
-      <table class="table ui-table mb-0">
+      <table class="table inventory-table mb-0 align-middle" id="inventoryTable">
         <thead>
           <tr>
-            <th>Product</th><th>Code</th><th>Category</th>
-            <th class="text-center">Stock</th><th class="text-center">Alert At</th>
-            <th>Expiry</th><th>Status</th><th>Actions</th>
+            <!-- Checkbox (Screen Only) -->
+            <th class="select-checkbox-col text-center screen-only-col no-print">
+              <input type="checkbox" id="selectAllCheckbox" class="form-check-input" onchange="toggleSelectAll(this)" title="Select all on this page">
+            </th>
+            <!-- Index (Always) -->
+            <th style="width: 35px;" class="text-center">#</th>
+            <!-- Product & SKU (Always) -->
+            <th style="min-width: 180px;">Product &amp; SKU</th>
+            <!-- Category (Always) -->
+            <th>Category</th>
+            <!-- Stock Level (Always) -->
+            <th class="text-center">System Stock</th>
+            <!-- Alert At (Screen Only) -->
+            <th class="text-center screen-only-col no-print">Alert At</th>
+            <!-- Cost Price (Always) -->
+            <th class="text-end">Cost Price</th>
+            <!-- Total Cost Valuation (Print Only) -->
+            <th class="text-end print-col">Total Cost Value</th>
+            <!-- Selling Price (Screen Only) -->
+            <th class="text-end screen-only-col no-print">Selling Price</th>
+            <!-- Valuation (Screen Only) -->
+            <th class="text-end screen-only-col no-print">Total Valuation</th>
+            <!-- Sales Velocity (Screen Only) -->
+            <th class="text-center screen-only-col no-print">Sales Velocity</th>
+            <!-- Expiry (Screen Only) -->
+            <th class="screen-only-col no-print">Expiry Date</th>
+            <!-- Status (Screen Only) -->
+            <th class="text-center screen-only-col no-print">Status</th>
+            <!-- Print Physical Audit Columns (Print Only) -->
+            <th class="print-col text-center" style="width: 95px;">Physical Count</th>
+            <th class="print-col text-center" style="width: 75px;">Variance</th>
+            <th class="print-col" style="width: 110px;">Auditor Remarks</th>
+            <!-- Screen-only action column -->
+            <th class="screen-actions-col text-end screen-only-col no-print" style="min-width: 140px;">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for product in products %}
-          <tr>
-            <td style="font-weight:600">{{ product.name }}</td>
-            <td>{% if product.product_code %}<span class="status-badge status-info">{{ product.product_code }}</span>{% else %}—{% endif %}</td>
-            <td style="color:#8a94a6">{{ product.category.name|default:"Uncategorized" }}</td>
-            <td class="text-center">
-              <span class="status-badge {% if product.is_out_of_stock %}status-danger{% elif product.is_low_stock %}status-warning{% else %}status-success{% endif %}" style="font-size:13px;font-weight:700">
-                {{ product.stock_quantity }}
+          <tr data-product-id="{{ product.id }}" id="row-product-{{ product.id }}">
+            <!-- Row Selection Checkbox (Screen Only) -->
+            <td class="select-checkbox-col text-center screen-only-col no-print">
+              <input type="checkbox" class="product-row-checkbox form-check-input" value="{{ product.id }}" onchange="updateSelectionUI()">
+            </td>
+
+            <!-- Index -->
+            <td class="text-center text-muted small">
+              {% if is_paginated %}
+                {{ forloop.counter0|add:products.start_index }}
+              {% else %}
+                {{ forloop.counter }}
+              {% endif %}
+            </td>
+
+            <!-- Product Name, SKU, Barcode -->
+            <td>
+              <div class="fw-bold text-dark">{{ product.name }}</div>
+              <div class="d-flex align-items-center gap-2 mt-1">
+                {% if product.product_code %}
+                  <span class="badge bg-light text-secondary border px-1" style="font-size:0.68rem;">SKU: {{ product.product_code }}</span>
+                {% endif %}
+                {% if product.barcode %}
+                  <span class="text-muted" style="font-size:0.68rem;"><i class="bi bi-upc-scan me-1"></i>{{ product.barcode }}</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Category -->
+            <td>
+              <span class="badge bg-light text-dark border px-2 py-1">
+                {{ product.category.name|default:"Uncategorized" }}
               </span>
             </td>
-            <td class="text-center" style="color:#8a94a6">{{ product.low_stock_threshold }}</td>
-            <td>
+
+            <!-- Stock Level -->
+            <td class="text-center">
+              <span class="stock-pill {% if product.is_out_of_stock %}out-stock{% elif product.is_low_stock %}low-stock{% else %}in-stock{% endif %}">
+                {{ product.stock_quantity|floatformat:2 }}
+              </span>
+              {% if product.unit %}
+                <span class="small text-muted d-block" style="font-size:0.68rem;">{{ product.unit.abbreviation|default:product.unit.name }}</span>
+              {% endif %}
+            </td>
+
+            <!-- Alert Threshold (Screen Only) -->
+            <td class="text-center text-muted font-monospace small screen-only-col no-print">
+              {{ product.low_stock_threshold|floatformat:0 }}
+            </td>
+
+            <!-- Cost Price (Always) -->
+            <td class="text-end">
+              <div class="text-dark font-monospace">KES {{ product.cost_price|floatformat:2 }}</div>
+            </td>
+
+            <!-- Total Cost Value (Print Only) -->
+            <td class="text-end print-col font-monospace fw-bold">
+              KES {{ product.total_cost_value|floatformat:2 }}
+            </td>
+
+            <!-- Selling Price (Screen Only) -->
+            <td class="text-end screen-only-col no-print">
+              <div class="text-dark fw-semibold">KES {{ product.unit_price|floatformat:2 }}</div>
+            </td>
+
+            <!-- Total Valuation (Screen Only) -->
+            <td class="text-end screen-only-col no-print">
+              <div class="fw-bold text-dark font-monospace">
+                KES {{ product.total_cost_value|floatformat:2 }}
+              </div>
+              <div class="text-muted small" style="font-size:0.68rem;">
+                Retail: KES {{ product.total_retail_value|floatformat:2 }}
+              </div>
+            </td>
+
+            <!-- Sales Velocity (Screen Only) -->
+            <td class="text-center screen-only-col no-print">
+              {% if product.sold_qty > 50 %}
+                <span class="velocity-badge velocity-hot" title="Hot Selling Fast Mover">
+                  <i class="bi bi-fire"></i> {{ product.sold_qty|floatformat:0 }} sold
+                </span>
+              {% elif product.sold_qty > 0 %}
+                <span class="velocity-badge velocity-active" title="Active Selling Product">
+                  <i class="bi bi-arrow-up-right"></i> {{ product.sold_qty|floatformat:0 }} sold
+                </span>
+              {% else %}
+                <span class="velocity-badge velocity-zero" title="Slow Moving / Zero Sales Recorded">
+                  <i class="bi bi-dash-circle"></i> 0 sold
+                </span>
+              {% endif %}
+            </td>
+
+            <!-- Expiry Status (Screen Only) -->
+            <td class="screen-only-col no-print">
               {% if product.expiry_date %}
                 {% if product.is_expired %}
-                  <span class="status-badge status-danger">{{ product.expiry_date|date:"d M Y" }}</span>
+                  <span class="badge bg-danger text-white">{{ product.expiry_date|date:"d M Y" }}</span>
+                  <div class="small text-danger fw-semibold" style="font-size:0.68rem;">Expired!</div>
                 {% elif product.is_expiring_soon %}
-                  <span class="status-badge status-warning">{{ product.expiry_date|date:"d M Y" }}</span>
-                  <div style="font-size:11px;color:#ca8a04">{{ product.days_until_expiry }}d left</div>
+                  <span class="badge bg-warning text-dark">{{ product.expiry_date|date:"d M Y" }}</span>
+                  <div class="small text-warning-emphasis fw-semibold" style="font-size:0.68rem;">{{ product.days_until_expiry }}d left</div>
                 {% else %}
-                  <span class="status-badge status-success">{{ product.expiry_date|date:"d M Y" }}</span>
+                  <span class="badge bg-light text-secondary border">{{ product.expiry_date|date:"d M Y" }}</span>
                 {% endif %}
               {% else %}
-                <span style="color:#8a94a6;font-size:12px">No expiry</span>
+                <span class="text-muted small" style="font-size:0.75rem;">No expiry</span>
               {% endif %}
             </td>
-            <td>
+
+            <!-- Stock Status (Screen Only) -->
+            <td class="text-center screen-only-col no-print">
               {% if product.is_out_of_stock %}
-                <span class="status-badge status-danger">Out of Stock</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">Out of Stock</span>
               {% elif product.is_low_stock %}
-                <span class="status-badge status-warning">Low Stock</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">Low Stock</span>
               {% else %}
-                <span class="status-badge status-success">In Stock</span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">In Stock</span>
               {% endif %}
             </td>
-            <td>
-              <div class="d-flex gap-1 flex-wrap">
+
+            <!-- Print Physical Stocktake Fields (Print Only) -->
+            <td class="print-col text-center">[ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ]</td>
+            <td class="print-col text-center">[ &nbsp; &nbsp; &nbsp; &nbsp; ]</td>
+            <td class="print-col">&nbsp;</td>
+
+            <!-- Screen Action Buttons (Screen Only) -->
+            <td class="screen-actions-col text-end screen-only-col no-print">
+              <div class="btn-action-group">
                 {% if product.is_low_stock or product.is_out_of_stock %}
-                <a href="{% url 'purchase_create' slug=request.business.slug %}?product={{ product.pk }}" class="btn-action btn-action-primary"><i class="bi bi-cart-plus"></i> Order</a>
+                  <a href="{% url 'purchase_create' slug=request.business.slug %}?product={{ product.pk }}" class="btn-action-btn warning" title="Create Purchase Order for restocking">
+                    <i class="bi bi-cart-plus"></i> Restock
+                  </a>
                 {% else %}
-                <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn-action btn-action-primary"><i class="bi bi-plus-minus"></i> Adjust</a>
+                  <a href="{% url 'stock_adjust' slug=request.business.slug pk=product.pk %}" class="btn-action-btn primary" title="Adjust stock level (write-off, return, damage, recount)">
+                    <i class="bi bi-plus-slash-minus"></i> Adjust
+                  </a>
                 {% endif %}
-                <a href="{% url 'update_expiry' slug=request.business.slug pk=product.pk %}" class="btn-action"><i class="bi bi-calendar-event"></i></a>
-                <a href="{% url 'stock_history' slug=request.business.slug pk=product.pk %}" class="btn-action"><i class="bi bi-clock-history"></i></a>
+                <a href="{% url 'update_expiry' slug=request.business.slug pk=product.pk %}" class="btn-action-btn" title="Update Expiry Date">
+                  <i class="bi bi-calendar-event"></i>
+                </a>
+                <a href="{% url 'stock_history' slug=request.business.slug pk=product.pk %}" class="btn-action-btn" title="View Stock Movement Audit History">
+                  <i class="bi bi-clock-history"></i>
+                </a>
               </div>
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="8"><div class="empty-state"><i class="bi bi-boxes"></i><p>No products found.</p></div></td></tr>
+          <tr>
+            <td colspan="12" class="text-center py-5">
+              <div class="empty-state">
+                <i class="bi bi-boxes display-4 text-muted opacity-50 mb-3 d-block"></i>
+                <h6 class="fw-bold text-dark">No Products Found</h6>
+                <p class="text-muted small mb-3">No inventory items matched your selected filters or search criteria.</p>
+                <a href="{% url 'stock_list' slug=request.business.slug %}" class="btn btn-outline-primary btn-sm">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset All Filters
+                </a>
+              </div>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    <!-- ── PAGINATION CONTROLS (Screen only) ── -->
+    {% if is_paginated %}
+    <div class="p-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2 pagination-wrapper no-print">
+      <div class="small text-muted">
+        Showing {{ products.start_index }} to {{ products.end_index }} of {{ filtered_count }} products
+      </div>
+      <nav aria-label="Inventory Pagination">
+        <ul class="pagination pagination-sm mb-0">
+          {% if products.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?{{ querystring }}&page=1" title="First Page">&laquo;</a>
+            </li>
+            <li class="page-item">
+              <a class="page-link" href="?{{ querystring }}&page={{ products.previous_page_number }}">Previous</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+          {% endif %}
+
+          <li class="page-item active">
+            <span class="page-link">{{ products.number }} / {{ products.paginator.num_pages }}</span>
+          </li>
+
+          {% if products.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?{{ querystring }}&page={{ products.next_page_number }}">Next</a>
+            </li>
+            <li class="page-item">
+              <a class="page-link" href="?{{ querystring }}&page={{ products.paginator.num_pages }}" title="Last Page">&raquo;</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
   </div>
-</div>
+
+  <!-- ── PRINT AUDIT SHEET SIGN-OFF FOOTER (Shown ONLY during printing) ── -->
+  <div class="print-audit-footer">
+    <div class="row pt-4 text-center">
+      <div class="col-4">
+        <div style="border-top: 1px solid #333; margin: 0 20px; padding-top: 5px;">
+          <strong>Physical Count Conducted By</strong>
+          <div class="small text-muted mt-1">Name &amp; Signature / Date</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div style="border-top: 1px solid #333; margin: 0 20px; padding-top: 5px;">
+          <strong>Verified &amp; Audited By</strong>
+          <div class="small text-muted mt-1">Inventory Controller / Date</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div style="border-top: 1px solid #333; margin: 0 20px; padding-top: 5px;">
+          <strong>Branch / Store Manager Approval</strong>
+          <div class="small text-muted mt-1">Authorized Signature / Stamp</div>
+        </div>
+      </div>
+    </div>
+    <div class="text-center small text-muted mt-3">
+      Page generated on {{ now|date:"Y-m-d H:i:s" }} — Marid POS System Inventory Module
+    </div>
+  </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  /**
+   * Selection and Printing Utilities for Stock Management
+   */
+  function getSelectedProductIds() {
+    const checkboxes = document.querySelectorAll('.product-row-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+  }
+
+  function updateSelectionUI() {
+    const selected = getSelectedProductIds();
+    const count = selected.length;
+    const toolbar = document.getElementById('selectionToolbar');
+    const countSpan = document.getElementById('selectedCountText');
+    const countBadge = document.getElementById('selectedCountBadge');
+    const selectAll = document.getElementById('selectAllCheckbox');
+
+    if (countSpan) countSpan.textContent = count;
+    if (countBadge) countBadge.textContent = count;
+
+    if (count > 0) {
+      toolbar.classList.add('show');
+    } else {
+      toolbar.classList.remove('show');
+    }
+
+    // Update individual row selected highlight
+    document.querySelectorAll('.product-row-checkbox').forEach(cb => {
+      const tr = cb.closest('tr');
+      if (tr) {
+        if (cb.checked) {
+          tr.classList.add('table-row-selected');
+        } else {
+          tr.classList.remove('table-row-selected');
+        }
+      }
+    });
+
+    // Update master selectAll state
+    const allBoxes = document.querySelectorAll('.product-row-checkbox');
+    if (selectAll && allBoxes.length > 0) {
+      selectAll.checked = (selected.length === allBoxes.length);
+      selectAll.indeterminate = (selected.length > 0 && selected.length < allBoxes.length);
+    }
+  }
+
+  function toggleSelectAll(master) {
+    document.querySelectorAll('.product-row-checkbox').forEach(cb => {
+      cb.checked = master.checked;
+    });
+    updateSelectionUI();
+  }
+
+  function clearSelection() {
+    document.querySelectorAll('.product-row-checkbox').forEach(cb => {
+      cb.checked = false;
+    });
+    const selectAll = document.getElementById('selectAllCheckbox');
+    if (selectAll) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    }
+    updateSelectionUI();
+  }
+
+  /**
+   * Print ONLY the selected products
+   */
+  function printSelectedProducts() {
+    const selectedIds = getSelectedProductIds();
+    if (selectedIds.length === 0) {
+      alert('Please select at least one product using the checkboxes to print selected items.');
+      return;
+    }
+
+    // Hide unselected rows in print
+    const allRows = document.querySelectorAll('#inventoryTable tbody tr[data-product-id]');
+    allRows.forEach(tr => {
+      const pid = tr.getAttribute('data-product-id');
+      if (!selectedIds.includes(pid)) {
+        tr.classList.add('d-print-none');
+      } else {
+        tr.classList.remove('d-print-none');
+      }
+    });
+
+    const printTitle = document.getElementById('printAuditReportTitle');
+    const printMeta = document.getElementById('printFilterMeta');
+    const origTitle = printTitle ? printTitle.textContent : '';
+    const origMeta = printMeta ? printMeta.innerHTML : '';
+
+    if (printTitle) {
+      printTitle.textContent = `SELECTED INVENTORY AUDIT SHEET (${selectedIds.length} SELECTED ITEMS)`;
+    }
+    if (printMeta) {
+      printMeta.innerHTML = `<strong>Items:</strong> ${selectedIds.length} Selected Products`;
+    }
+
+    window.print();
+
+    // Restore table rows after print window closes
+    const restoreHandler = function() {
+      allRows.forEach(tr => tr.classList.remove('d-print-none'));
+      if (printTitle) printTitle.textContent = origTitle;
+      if (printMeta) printMeta.innerHTML = origMeta;
+      window.removeEventListener('afterprint', restoreHandler);
+    };
+    window.addEventListener('afterprint', restoreHandler);
+  }
+
+  /**
+   * Print Products Table Only (Current Page)
+   */
+  function printProductsOnly() {
+    const allRows = document.querySelectorAll('#inventoryTable tbody tr[data-product-id]');
+    allRows.forEach(tr => tr.classList.remove('d-print-none'));
+
+    const printTitle = document.getElementById('printAuditReportTitle');
+    if (printTitle) {
+      printTitle.textContent = 'PHYSICAL INVENTORY AUDIT & STOCKTAKE SHEET';
+    }
+
+    window.print();
+  }
+
+  /**
+   * Export only the selected products to CSV
+   */
+  function exportSelectedCSV() {
+    const selectedIds = getSelectedProductIds();
+    if (selectedIds.length === 0) {
+      alert('Please select at least one product using the checkboxes to export.');
+      return;
+    }
+
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('export', 'csv');
+    currentUrl.searchParams.set('selected_ids', selectedIds.join(','));
+    window.location.href = currentUrl.toString();
+  }
+</script>
 {% endblock %}

@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.cache import cache
 
 from pos.models import (
-    Business, BusinessSettings, BusinessMembership, Branch, Product, Category, Sale, PaymentMethod
+    Business, BusinessSettings, BusinessMembership, Branch, Product, Category, Sale, SaleItem, PaymentMethod
 )
 from pos.sync_views import emit_sync_event, CACHE_SYNC_PREFIX
 
@@ -58,15 +58,10 @@ class StoreSettingsSyncTestCase(TestCase):
 
     def _create_test_image(self):
         file = io.BytesIO()
-        image = Image.new('RGBA', size=(200, 200), color=(25, 135, 84, 255))
-        image.save(file, 'png')
-        file.name = 'test_store_logo.png'
+        image = Image.new('RGB', (100, 100), color='blue')
+        image.save(file, 'JPEG')
         file.seek(0)
-        return SimpleUploadedFile(
-            file.name,
-            file.read(),
-            content_type='image/png'
-        )
+        return SimpleUploadedFile("logo.jpg", file.getvalue(), content_type="image/jpeg")
 
     def test_context_processor_injects_business_settings(self):
         """Verify business_context context processor delivers business_settings & store_settings"""
@@ -208,3 +203,55 @@ class StoreSettingsSyncTestCase(TestCase):
         self.assertIn('MARID PRIME GROCERS', content)
         self.assertIn('*** VIP CUSTOMER RECEIPT ***', content)
         self.assertIn('*** NO REFUND WITHOUT RECEIPT ***', content)
+
+    def test_receipt_and_invoice_renders_product_code(self):
+        """Thermal receipt and invoice render product code / SKU for sold line items"""
+        category = Category.objects.create(business=self.business, name='Beverages')
+        product = Product.objects.create(
+            business=self.business,
+            name='Premium Mineral Water 500ml',
+            product_code='WAT-500-PRM',
+            category=category,
+            cost_price=Decimal('20.00'),
+            unit_price=Decimal('50.00'),
+            stock_quantity=100
+        )
+
+        sale = Sale.objects.create(
+            business=self.business,
+            branch=self.branch,
+            cashier=self.user,
+            invoice_number='INV-TEST-CODE-001',
+            subtotal=Decimal('50.00'),
+            vat_rate=Decimal('16.00'),
+            vat_amount=Decimal('8.00'),
+            total=Decimal('58.00'),
+            amount_paid=Decimal('58.00')
+        )
+        SaleItem.objects.create(
+            business=self.business,
+            sale=sale,
+            product=product,
+            quantity=Decimal('1.000'),
+            unit_price=Decimal('50.00'),
+            total_price=Decimal('50.00')
+        )
+
+        # 1. Verify Thermal Receipt
+        thermal_res = self.client.get(reverse('thermal_receipt', kwargs={'slug': self.business.slug, 'pk': sale.pk}))
+        self.assertEqual(thermal_res.status_code, 200)
+        thermal_content = thermal_res.content.decode('utf-8')
+        self.assertIn('Premium Mineral Water 500ml', thermal_content)
+        self.assertIn('WAT-500-PRM', thermal_content)
+
+        # 2. Verify Invoice View
+        invoice_res = self.client.get(reverse('invoice_view', kwargs={'slug': self.business.slug, 'pk': sale.pk}))
+        self.assertEqual(invoice_res.status_code, 200)
+        invoice_content = invoice_res.content.decode('utf-8')
+        self.assertIn('Premium Mineral Water 500ml', invoice_content)
+        self.assertIn('WAT-500-PRM', invoice_content)
+
+        # 3. Verify Invoice PDF View
+        pdf_res = self.client.get(reverse('invoice_pdf', kwargs={'slug': self.business.slug, 'pk': sale.pk}))
+        self.assertEqual(pdf_res.status_code, 200)
+        self.assertEqual(pdf_res['Content-Type'], 'application/pdf')

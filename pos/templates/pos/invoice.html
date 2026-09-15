@@ -40,6 +40,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Item</th>
+                            <th>Code</th>
                             <th class="text-center">Qty</th>
                             <th class="text-end">Price</th>
                             <th class="text-end">Total</th>
@@ -48,8 +49,16 @@
                     <tbody>
                         {% for item in sale.items.all %}
                         <tr>
-                            <td>{{ item.product.name }}</td>
-                            <td class="text-center">{{ item.quantity }}</td>
+                            <td>
+                                <strong>{{ item.product.name }}</strong>
+                                {% if item.note %}
+                                <div class="small text-muted fst-italic">↳ {{ item.note }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code class="text-dark">{{ item.product.product_code|default:item.product.barcode|default:"-" }}</code>
+                            </td>
+                            <td class="text-center">{{ item.quantity }}{% if item.product.unit %} {{ item.product.unit.abbreviation }}{% endif %}</td>
                             <td class="text-end">KES {{ item.unit_price|floatformat:2 }}</td>
                             <td class="text-end">KES {{ item.total_price|floatformat:2 }}</td>
                         </tr>

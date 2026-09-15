@@ -10,7 +10,8 @@ from .models import (
     SupportAccessRequest, HSCode, VATCode,
     Branch, BranchMembership, BranchStock, StockMovement,
     StockRequisition, StockRequisitionItem, StockTransferRequest, StockTransferItem,
-    Dispatch, DispatchItem, POSTerminal
+    Dispatch, DispatchItem, POSTerminal,
+    CashierTillAssignment, CashierTransferRequest, CashierAssignmentAuditLog
 )
 
 
@@ -847,4 +848,38 @@ class DispatchAdmin(admin.ModelAdmin):
     search_fields = ['reference_number', 'source_branch__name', 'destination_branch__name', 'notes']
     readonly_fields = ['reference_number', 'dispatched_at', 'received_at']
     inlines = [DispatchItemInline]
+
+
+@admin.register(CashierTillAssignment)
+class CashierTillAssignmentAdmin(admin.ModelAdmin):
+    list_display = ['cashier', 'terminal', 'branch', 'shift_start', 'shift_end', 'status', 'hourly_rate', 'assigned_by']
+    list_filter = ['status', 'branch__business', 'branch', 'shift_start']
+    search_fields = ['cashier__username', 'cashier__first_name', 'cashier__last_name', 'terminal__terminal_code', 'terminal__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(CashierTransferRequest)
+class CashierTransferRequestAdmin(admin.ModelAdmin):
+    list_display = ['cashier', 'from_branch', 'to_branch', 'transfer_type', 'start_date', 'end_date', 'status', 'requested_by', 'approved_by']
+    list_filter = ['status', 'transfer_type', 'from_branch__business', 'to_branch', 'from_branch']
+    search_fields = ['cashier__username', 'cashier__first_name', 'cashier__last_name', 'reason']
+    readonly_fields = ['created_at', 'updated_at', 'action_date']
+
+
+@admin.register(CashierAssignmentAuditLog)
+class CashierAssignmentAuditLogAdmin(admin.ModelAdmin):
+    list_display = ['timestamp', 'action', 'cashier', 'performed_by', 'from_branch', 'to_branch', 'terminal']
+    list_filter = ['action', 'business', 'from_branch', 'to_branch', 'timestamp']
+    search_fields = ['cashier__username', 'performed_by__username', 'reason']
+    readonly_fields = ['business', 'cashier', 'action', 'performed_by', 'from_branch', 'to_branch', 'terminal', 'assignment', 'transfer_request', 'reason', 'details', 'timestamp']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
 

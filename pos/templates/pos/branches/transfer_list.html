@@ -1,60 +1,493 @@
 {% extends 'pos/base.html' %}
-{% block title %}Transfers — {{ branch.name }}{% endblock %}
+{% load static %}
+{% block title %}Stock Transfers — {{ branch.name }}{% endblock %}
+
 {% block extra_css %}
 <style>
-.int-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;overflow:hidden}
-.t-table{width:100%;border-collapse:collapse;font-size:13px}
-.t-table thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:10px 16px;border-bottom:1.5px solid #e5e7eb;background:#fafbfc}
-.t-table tbody tr{border-bottom:1px solid #f3f4f6}
-.t-table tbody tr:hover{background:#f8f9fc}
-.t-table tbody td{padding:11px 16px;vertical-align:middle}
-.badge-completed{background:#dcfce7;color:#166534;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
-.badge-pending{background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
-.badge-cancelled{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
-.badge-in_transit{background:#dbeafe;color:#1e40af;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
-.btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn-primary-sm:hover{background:#1a3278;color:#fff}
-.btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn-outline-sm:hover{border-color:#9ca3af;color:#111}
+:root {
+  --primary: #224195;
+  --primary-hover: #193275;
+  --primary-light: #eef2ff;
+  --border-color: #e5e7eb;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --card-bg: #ffffff;
+}
+
+.transfers-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 20px 28px 60px 28px;
+  margin: 0;
+}
+
+/* Page Header */
+.page-header-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+/* KPI Stat Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.stat-icon-blue { background: #eef2ff; color: #224195; }
+.stat-icon-orange { background: #fff7ed; color: #ea580c; }
+.stat-icon-green { background: #ecfdf5; color: #059669; }
+.stat-icon-purple { background: #f5f3ff; color: #7c3aed; }
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.stat-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Filter Card */
+.filter-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px 14px 0 0;
+  border-bottom: none;
+  padding: 16px 20px;
+}
+
+/* Table Container */
+.int-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.t-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.t-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  padding: 12px 18px;
+  border-bottom: 1.5px solid var(--border-color);
+  background: #f8fafc;
+}
+
+.t-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.12s ease;
+}
+
+.t-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.t-table tbody td {
+  padding: 13px 18px;
+  vertical-align: middle;
+}
+
+/* Badges */
+.badge-direction-out {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-direction-in {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-completed { background: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.badge-pending { background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.badge-cancelled { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.badge-in_transit { background: #dbeafe; color: #1e40af; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+
+.badge-category {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.btn-primary-custom {
+  background: var(--primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+}
+
+.btn-primary-custom:hover {
+  background: var(--primary-hover);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(34, 65, 149, 0.25);
+}
+
+.btn-outline-custom {
+  background: #ffffff;
+  color: #374151;
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-outline-custom:hover {
+  border-color: #9ca3af;
+  color: #111827;
+  background: #f9fafb;
+}
+
+.form-control-sm, .form-select-sm {
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 12.5px;
+  padding: 6px 12px;
+}
+
+.form-control-sm:focus, .form-select-sm:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(34, 65, 149, 0.12);
+  outline: none;
+}
 </style>
 {% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4 px-3 px-md-5">
-  <div class="d-flex align-items-center gap-3 mb-4">
-    <a href="{% url 'branch_detail' branch_id=branch.pk %}" class="btn-outline-sm" style="padding:7px 12px"><i class="bi bi-arrow-left"></i></a>
-    <div>
-      <h1 style="font-size:20px;font-weight:700;margin:0">Transfers — {{ branch.name }}</h1>
+<div class="container-fluid transfers-container">
+
+  <!-- Header Card -->
+  <div class="page-header-card d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <a href="{% url 'branch_detail' branch_id=branch.pk %}" class="btn-outline-custom" title="Back to Branch Overview">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <h1 style="font-size:20px;font-weight:800;margin:0;color:var(--text-main)">Stock Transfers</h1>
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" style="font-size:12px;font-weight:700">
+            {{ branch.name }}
+          </span>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin:3px 0 0">
+          Direct inter-branch stock movements sent from or received at this branch.
+        </p>
+      </div>
     </div>
-    <div class="ms-auto">
-      <a href="{% url 'transfer_create' branch_id=branch.pk %}" class="btn-primary-sm">
-        <i class="bi bi-plus-circle"></i> New Transfer
+    <div class="d-flex align-items-center gap-2">
+      <a href="{% url 'branch_stock' branch_id=branch.pk %}" class="btn-outline-custom">
+        <i class="bi bi-boxes"></i> Branch Inventory
+      </a>
+      <a href="{% url 'transfer_create' branch_id=branch.pk %}" class="btn-primary-custom">
+        <i class="bi bi-arrow-left-right"></i> New Stock Transfer
       </a>
     </div>
   </div>
 
+  <!-- Messages -->
+  {% if messages %}{% for m in messages %}
+  <div class="alert alert-{{ m.tags }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:13px">
+    {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}{% endif %}
+
+  <!-- KPI Metrics Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-blue">
+        <i class="bi bi-arrow-left-right"></i>
+      </div>
+      <div>
+        <div class="stat-label">Total Movements</div>
+        <div class="stat-value">{{ stats.total_count }}</div>
+        <div class="stat-subtext">{{ stats.completed_count }} completed</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-orange">
+        <i class="bi bi-arrow-up-right-circle"></i>
+      </div>
+      <div>
+        <div class="stat-label">Outbound Sent</div>
+        <div class="stat-value">{{ stats.outbound_units|floatformat:2 }} <span style="font-size:12px;font-weight:600;color:var(--text-muted)">units</span></div>
+        <div class="stat-subtext">{{ stats.outbound_count }} transfer{{ stats.outbound_count|pluralize }} dispatched</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-green">
+        <i class="bi bi-arrow-down-left-circle"></i>
+      </div>
+      <div>
+        <div class="stat-label">Inbound Received</div>
+        <div class="stat-value">{{ stats.inbound_units|floatformat:2 }} <span style="font-size:12px;font-weight:600;color:var(--text-muted)">units</span></div>
+        <div class="stat-subtext">{{ stats.inbound_count }} transfer{{ stats.inbound_count|pluralize }} received</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon stat-icon-purple">
+        <i class="bi bi-check-circle"></i>
+      </div>
+      <div>
+        <div class="stat-label">Success Rate</div>
+        <div class="stat-value">
+          {% if stats.total_count > 0 %}
+            {{ stats.completed_count|floatformat:0 }} / {{ stats.total_count }}
+          {% else %}
+            100%
+          {% endif %}
+        </div>
+        <div class="stat-subtext">Instant ledger synchronization</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Bar -->
+  <div class="filter-card">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white text-muted"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" value="{{ search_query }}" class="form-control form-control-sm" placeholder="Search reference, product, SKU, or note...">
+        </div>
+      </div>
+
+      <div class="col-md-3 col-6">
+        <select name="direction" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="all" {% if direction == 'all' %}selected{% endif %}>All Directions (Inbound & Outbound)</option>
+          <option value="outgoing" {% if direction == 'outgoing' %}selected{% endif %}>📤 Outbound (Sent from this branch)</option>
+          <option value="incoming" {% if direction == 'incoming' %}selected{% endif %}>📥 Inbound (Received at this branch)</option>
+        </select>
+      </div>
+
+      <div class="col-md-3 col-6">
+        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+          <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+          <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+          <option value="in_transit" {% if status_filter == 'in_transit' %}selected{% endif %}>In Transit</option>
+          <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
+        </select>
+      </div>
+
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary w-100" style="font-weight:600;background:var(--primary);border:none">
+          Filter
+        </button>
+        {% if search_query or direction != 'all' or status_filter != 'all' %}
+        <a href="{% url 'transfer_list' branch_id=branch.pk %}" class="btn btn-sm btn-outline-secondary" title="Reset Filters">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Transfers Table -->
   <div class="int-card">
     <div class="table-responsive">
       <table class="t-table">
         <thead>
-          <tr><th>Reference</th><th>Product</th><th>From</th><th>To</th><th class="text-end">Qty</th><th>Status</th><th>Date</th></tr>
+          <tr>
+            <th>Reference</th>
+            <th>Movement / Route</th>
+            <th>Product & SKU</th>
+            <th>Category</th>
+            <th class="text-end">Quantity</th>
+            <th>Status</th>
+            <th>Initiated By</th>
+            <th>Date & Time</th>
+            <th>Note</th>
+          </tr>
         </thead>
         <tbody>
           {% for t in transfers %}
           <tr>
-            <td style="font-family:monospace;font-size:12px;color:#224195">{{ t.reference }}</td>
-            <td style="font-weight:600">{{ t.product.name }}</td>
-            <td style="color:#6b7280">{{ t.source_branch.name }}</td>
-            <td style="color:#6b7280">{{ t.destination_branch.name }}</td>
-            <td class="text-end" style="font-weight:700">{{ t.quantity|floatformat:3 }}</td>
-            <td><span class="badge-{{ t.status }}">{{ t.get_status_display }}</span></td>
-            <td style="color:#6b7280;font-size:12px">{{ t.created_at|date:"d M Y H:i" }}</td>
+            <td>
+              <span style="font-family:monospace;font-weight:700;color:var(--primary);font-size:12.5px">
+                {{ t.reference }}
+              </span>
+            </td>
+
+            <td>
+              {% if t.source_branch_id == branch.pk %}
+                <div class="d-flex align-items-center gap-1">
+                  <span class="badge-direction-out">
+                    <i class="bi bi-arrow-up-right"></i> Outbound
+                  </span>
+                  <span style="font-size:12px;color:var(--text-muted)">to</span>
+                  <strong style="color:var(--text-main);font-size:12.5px">{{ t.destination_branch.name }}</strong>
+                </div>
+              {% else %}
+                <div class="d-flex align-items-center gap-1">
+                  <span class="badge-direction-in">
+                    <i class="bi bi-arrow-down-left"></i> Inbound
+                  </span>
+                  <span style="font-size:12px;color:var(--text-muted)">from</span>
+                  <strong style="color:var(--text-main);font-size:12.5px">{{ t.source_branch.name }}</strong>
+                </div>
+              {% endif %}
+            </td>
+
+            <td>
+              <div style="font-weight:600;color:var(--text-main)">{{ t.product.name }}</div>
+              {% if t.product.product_code or t.product.barcode %}
+              <div style="font-size:11px;color:var(--text-muted);font-family:monospace">
+                {{ t.product.product_code|default:t.product.barcode }}
+              </div>
+              {% endif %}
+            </td>
+
+            <td>
+              <span class="badge-category">{{ t.product.category.name|default:"Uncategorized" }}</span>
+            </td>
+
+            <td class="text-end">
+              <span style="font-size:14px;font-weight:800;color:var(--text-main)">
+                {{ t.quantity|floatformat:3 }}
+              </span>
+              <span style="font-size:11px;color:var(--text-muted)">{{ t.product.unit.name|default:"pcs" }}</span>
+            </td>
+
+            <td>
+              <span class="badge-{{ t.status }}">{{ t.get_status_display }}</span>
+            </td>
+
+            <td>
+              <span style="color:var(--text-muted);font-size:12px">
+                {{ t.initiated_by.username|default:"—" }}
+              </span>
+            </td>
+
+            <td style="color:var(--text-muted);font-size:12px;white-space:nowrap">
+              {{ t.created_at|date:"d M Y, H:i" }}
+            </td>
+
+            <td style="font-size:12px;color:var(--text-muted);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ t.note }}">
+              {{ t.note|default:"—" }}
+            </td>
           </tr>
           {% empty %}
-          <tr><td colspan="7" style="text-align:center;padding:48px;color:#9ca3af">No transfers yet.</td></tr>
+          <tr>
+            <td colspan="9" style="text-align:center;padding:56px 20px;color:var(--text-muted)">
+              <div class="mb-3">
+                <i class="bi bi-arrow-left-right" style="font-size:36px;color:#cbd5e1"></i>
+              </div>
+              <h5 style="font-weight:700;color:var(--text-main);margin-bottom:6px">No stock transfers found</h5>
+              <p style="font-size:13px;max-width:400px;margin:0 auto 16px">
+                {% if search_query or direction != 'all' or status_filter != 'all' %}
+                  No transfers match your filter criteria. Try resetting the filters.
+                {% else %}
+                  No stock transfers have been logged for this branch yet. You can transfer items easily between branches.
+                {% endif %}
+              </p>
+              {% if search_query or direction != 'all' or status_filter != 'all' %}
+                <a href="{% url 'transfer_list' branch_id=branch.pk %}" class="btn-outline-custom">
+                  <i class="bi bi-arrow-counterclockwise"></i> Reset Filters
+                </a>
+              {% else %}
+                <a href="{% url 'transfer_create' branch_id=branch.pk %}" class="btn-primary-custom">
+                  <i class="bi bi-plus-circle"></i> Create First Stock Transfer
+                </a>
+              {% endif %}
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+
 </div>
 {% endblock %}

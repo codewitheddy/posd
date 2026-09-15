@@ -313,7 +313,7 @@ def terminal_lock(request):
     request.session['is_terminal_locked'] = True
     auth.logout(request)
     messages.info(request, 'Terminal locked. Enter PIN to resume.')
-    return redirect('front_office_login')
+    return redirect('terminal_pin_login')
 
 
 @login_required
@@ -357,7 +357,7 @@ def terminal_register(request):
         )
 
         messages.success(request, f'Terminal "{terminal.name}" ({terminal.terminal_code}) registered successfully on this device.')
-        response = redirect('front_office_login')
+        response = redirect('terminal_pin_login')
         response.set_cookie('pos_terminal_token', terminal.device_token, max_age=315360000)
         return response
 

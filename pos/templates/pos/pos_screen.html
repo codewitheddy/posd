@@ -5,7 +5,7 @@
 {% block extra_css %}
 {% load static %}
 <link rel="stylesheet" href="{% static 'css/pos-mobile.css' %}">
-<link rel="stylesheet" href="{% static 'css/pos-desktop-optimized.css' %}">
+<link rel="stylesheet" href="{% static 'css/pos-desktop-optimized.css' %}?v=2.2">
 <style>
     /* Custom 5-column grid for large screens */
     @media (min-width: 992px) {
@@ -46,11 +46,6 @@
         font-size: 2.2rem;
         color: #adb5bd;
     }
-    .cart-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
-    #cart-total { font-size: 1.5rem; font-weight: bold; }
-    #barcode-input { font-size: 1.1rem; border: 2px solid #0d6efd; }
-    .barcode-section { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-    
     /* List View Styles */
     .product-row {
         transition: background-color 0.2s;
@@ -181,396 +176,508 @@
     .cat-pill:hover { border-color: #0d6efd; background: #f0f8ff; }
     .cat-pill.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
 
-    /* POS info bar */
-    .pos-info-bar { font-size: 0.82rem; }
+    /* Cart item card styling & generous inner padding */
+    #cart-items {
+        padding: 12px 14px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    #cart-items .cart-item,
+    .cart-item {
+        display: flex !important;
+        flex-direction: column !important;
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 14px 16px !important;
+        margin-bottom: 0 !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+        box-sizing: border-box !important;
+    }
+    #cart-items .cart-item:hover,
+    .cart-item:hover {
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+    }
+    .cart-item-header {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        margin-bottom: 4px !important;
+    }
+    .cart-item-title-wrap {
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+    .cart-item-name {
+        font-size: 0.93rem !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+        line-height: 1.35 !important;
+        display: block !important;
+        word-break: break-word !important;
+    }
+    .cart-item-remove-btn {
+        flex-shrink: 0 !important;
+        width: 30px !important;
+        height: 30px !important;
+        border-radius: 8px !important;
+        border: 1px solid #fee2e2 !important;
+        background: #fef2f2 !important;
+        color: #ef4444 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 0.88rem !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+        padding: 0 !important;
+    }
+    .cart-item-remove-btn:hover {
+        background: #ef4444 !important;
+        border-color: #ef4444 !important;
+        color: #ffffff !important;
+        transform: scale(1.08) !important;
+    }
+    .cart-item-meta {
+        display: flex !important;
+        align-items: center !important;
+        font-size: 0.82rem !important;
+        color: #64748b !important;
+        margin-bottom: 10px !important;
+    }
+    .cart-item-actions {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        margin-bottom: 10px !important;
+    }
+    .cart-stepper {
+        display: inline-flex !important;
+        align-items: center !important;
+        background: #f8fafc !important;
+        border: 1.5px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+    }
+    .cart-item-total {
+        display: flex !important;
+        align-items: baseline !important;
+        gap: 4px !important;
+        flex-shrink: 0 !important;
+    }
+    .cart-item-extra-row {
+        margin-top: 2px !important;
+    }
+    .cart-item-extra-row .input-group {
+        background: #f8fafc !important;
+        border-radius: 8px !important;
+        border: 1px solid #e2e8f0 !important;
+        overflow: hidden !important;
+    }
+    .cart-item-extra-row .input-group-text {
+        background: #f8fafc !important;
+        border: none !important;
+        border-right: 1px solid #e2e8f0 !important;
+        padding: 5px 8px !important;
+        font-size: 0.78rem !important;
+    }
+    .cart-item-extra-row .form-control {
+        background: #ffffff !important;
+        border: none !important;
+        padding: 5px 8px !important;
+        font-size: 0.8rem !important;
+        height: 30px !important;
+    }
 
-    /* btn-xs */
-    .btn-xs { font-size: 0.75rem; line-height: 1.2; }
-
+    /* Suppress duplicate/overlapping inner outlines on focused inputs inside custom containers */
+    .pos-command-bar input,
+    .pos-command-bar input:focus,
+    .pos-command-bar input:focus-visible,
+    .pos-search-box input,
+    .pos-search-box input:focus,
+    .pos-search-box input:focus-visible,
+    .pos-barcode-box input,
+    .pos-barcode-box input:focus,
+    .pos-barcode-box input:focus-visible,
+    .pos-customer-box input,
+    .pos-customer-box input:focus,
+    .pos-customer-box input:focus-visible,
+    .cart-stepper input,
+    .cart-stepper input:focus,
+    .cart-stepper input:focus-visible,
+    .cart-item-extra-row .form-control,
+    .cart-item-extra-row .form-control:focus,
+    .cart-item-extra-row .form-control:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- POS Top Control & Info Bar -->
-<div class="pos-info-bar d-flex justify-content-between align-items-center mb-3 px-3 py-2 bg-dark text-white rounded shadow-sm flex-wrap gap-2">
-    <div class="d-flex align-items-center gap-2 flex-wrap" id="posStoreHeaderInfo">
-        {% if business_settings and business_settings.logo %}
-            <img src="{{ business_settings.logo.url }}" alt="{{ business_settings.get_business_name }}" id="posStoreLogo" style="height: 26px; max-width: 80px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px 4px;">
-        {% endif %}
-        <span class="fw-bold text-warning" id="posStoreName"><i class="bi bi-shop"></i> {{ business_settings.get_business_name|default:request.business.name }}</span>
-        {% if active_branch %}
-            <span class="badge bg-secondary font-monospace"><i class="bi bi-geo-alt"></i> {{ active_branch.name }}</span>
-        {% endif %}
-        {% if active_terminal %}
-            <span class="badge bg-primary font-monospace" title="Registered Terminal"><i class="bi bi-pc-display"></i> {{ active_terminal.terminal_code }}</span>
-        {% else %}
-            <a href="{% url 'terminal_register' %}" class="badge bg-warning text-dark text-decoration-none" title="Click to register this device as a POS terminal">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i>Register Device
-            </a>
-        {% endif %}
-        {% if current_session %}
-            <span class="badge bg-success font-monospace" title="Active Session #{{ current_session.session_number }} (Opened: {{ current_session.opened_at|date:'M d, g:i A' }})">
-                <i class="bi bi-circle-fill text-light me-1" style="font-size: 0.5rem; vertical-align: middle;"></i>Session #{{ current_session.session_number }} Active
-            </span>
-        {% endif %}
-        <span class="text-light small"><i class="bi bi-person-badge"></i> {{ request.user.get_full_name|default:request.user.username }} ({{ user_permissions.user_role }})</span>
-    </div>
-    
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-        <span class="text-light small d-none d-lg-inline"><i class="bi bi-receipt"></i> Order #<span id="pos-order-number">---</span></span>
-        <span class="badge bg-dark border text-light font-monospace" id="pos-clock"><i class="bi bi-clock"></i> --:--</span>
-        <span id="posSyncStatusBadge" class="badge rounded-pill bg-success bg-opacity-15 text-success border border-success border-opacity-25 px-2 py-1"><i class="bi bi-broadcast me-1"></i>Live Sync</span>
-        
-        <!-- Front Office Actions -->
-        <a href="{% url 'customer_display' %}" target="_blank" class="btn btn-outline-info btn-sm py-1 px-2 fw-semibold" title="Launch Customer-Facing Display on second screen / window">
-            <i class="bi bi-display me-1"></i><span class="d-none d-md-inline">Customer Display</span>
-        </a>
-        <button type="button" class="btn btn-outline-light btn-sm py-1 px-2 fw-semibold" onclick="if(window.posKeyboard) window.posKeyboard.showShortcuts(); else { const sp = document.getElementById('shortcuts-panel'); if(sp) sp.style.display='block'; }" title="Keyboard Shortcuts (F12)">
-            <i class="bi bi-keyboard me-1"></i><span class="d-none d-lg-inline">Shortcuts</span>
-        </button>
-        <a href="{% url 'terminal_lock' %}" class="btn btn-warning btn-sm py-1 px-2 fw-semibold" title="Lock Screen (Requires PIN)">
-            <i class="bi bi-lock-fill"></i> <span class="d-none d-sm-inline">Lock</span>
-        </a>
-
-        {% if current_session %}
-            <a href="{% url 'terminal_session_close' %}" class="btn btn-outline-danger btn-sm py-1 px-2 fw-semibold" title="Close Current Cashier Shift &amp; Generate Z-Report">
-                <i class="bi bi-door-closed-fill"></i> <span class="d-none d-sm-inline">Close Shift</span>
-            </a>
-        {% else %}
-            <a href="{% url 'terminal_session_open' %}" class="btn btn-success btn-sm py-1 px-2 fw-semibold" title="Open Till Shift / Float">
-                <i class="bi bi-door-open-fill"></i> <span class="d-none d-sm-inline">Open Shift</span>
-            </a>
-        {% endif %}
-
-        {% if user_permissions.can_access_back_office or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
-            <a href="{% url 'dashboard' %}" class="btn btn-outline-light btn-sm py-1 px-2 fw-semibold" title="Switch to Back Office Management">
-                <i class="bi bi-speedometer2 me-1"></i><span class="d-none d-md-inline">Back Office</span>
-            </a>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Mobile Cart Toggle Button -->
-<button class="cart-toggle-btn d-md-none" onclick="toggleMobileCart()" id="cartToggleBtn">
-    <i class="bi bi-cart3"></i>
-    <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
-</button>
-
-<!-- Mobile Cart (Bottom Sheet) -->
-<div class="cart-sticky-mobile" id="mobileCart">
-    <div class="card border-0">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="bi bi-cart3"></i> Cart</h5>
-            <div>
-                <button class="btn btn-sm btn-light me-1" onclick="refreshCartPrices()" title="Refresh cart prices">
-                    <i class="bi bi-arrow-clockwise"></i>
-                </button>
-                <button class="btn btn-sm btn-light" onclick="toggleMobileCart()">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
+<div class="pos-workspace-container">
+    <!-- POS Top Control & Info Bar -->
+    <div class="pos-info-bar">
+        <div class="d-flex align-items-center gap-2 flex-wrap" id="posStoreHeaderInfo">
+            {% if business_settings and business_settings.logo %}
+                <img src="{{ business_settings.logo.url }}" alt="{{ business_settings.get_business_name }}" id="posStoreLogo" style="height: 22px; max-width: 70px; object-fit: contain; border-radius: 4px; background: #fff; padding: 1px 3px;">
+            {% endif %}
+            <span class="fw-bold text-warning" id="posStoreName"><i class="bi bi-shop"></i> {{ business_settings.get_business_name|default:request.business.name }}</span>
+            {% if active_branch %}
+                <span class="badge bg-secondary font-monospace"><i class="bi bi-geo-alt"></i> {{ active_branch.name }}</span>
+            {% endif %}
+            {% if active_terminal %}
+                <span class="badge bg-primary font-monospace" title="Registered Terminal"><i class="bi bi-pc-display"></i> {{ active_terminal.terminal_code }}</span>
+            {% else %}
+                <a href="{% url 'terminal_register' %}" class="badge bg-warning text-dark text-decoration-none" title="Click to register this device as a POS terminal">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Register Device
+                </a>
+            {% endif %}
+            {% if current_session %}
+                <span class="badge bg-success font-monospace" title="Active Session #{{ current_session.session_number }} (Opened: {{ current_session.opened_at|date:'M d, g:i A' }})">
+                    <i class="bi bi-circle-fill text-light me-1" style="font-size: 0.45rem; vertical-align: middle;"></i>Shift #{{ current_session.session_number }}
+                </span>
+            {% endif %}
+            <span class="text-light opacity-75 small d-none d-xl-inline"><i class="bi bi-person-badge"></i> {{ request.user.get_full_name|default:request.user.username }}</span>
         </div>
-        <div class="card-body">
-            <div id="mobile-cart-items" style="max-height: 200px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
-                <p class="text-muted text-center">Cart is empty</p>
-            </div>
-
-            <hr>
-
-            <div class="mb-2">
-                <label class="form-label small">Discount Type:</label>
-                <select id="mobile-discount-type" class="form-select form-select-sm" onchange="syncDiscount('type')">
-                    <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed Amount (KES)</option>
-                    <option value="points">Loyalty Points</option>
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label small">Discount Value:</label>
-                <input type="number" id="mobile-discount-value" class="form-control form-control-sm" value="0" min="0" step="0.01" onchange="syncDiscount('value')">
-            </div>
-
-            <div class="mb-2 d-flex justify-content-between">
-                <strong>Subtotal (excl. VAT):</strong> <span id="mobile-subtotal">KES 0.00</span>
-            </div>
-            <div class="mb-2 d-flex justify-content-between">
-                <strong>Discount:</strong> <span id="mobile-discount">KES 0.00</span>
-            </div>
-            <div class="mb-2 d-flex justify-content-between">
-                <strong id="mobile-vat-label">VAT ({{ vat_rate }}%):</strong> <span id="mobile-vat">KES 0.00</span>
-            </div>
-            <div class="mb-3 d-flex justify-content-between">
-                <h5>Total:</h5> <h5 class="text-primary" id="mobile-cart-total">KES 0.00</h5>
-            </div>
+        
+        <div class="d-flex align-items-center gap-1 flex-wrap">
+            <span class="text-light small d-none d-xxl-inline me-1"><i class="bi bi-receipt"></i> Order #<span id="pos-order-number">---</span></span>
+            <span class="badge bg-dark border text-light font-monospace d-none d-lg-inline" id="pos-clock"><i class="bi bi-clock"></i> --:--</span>
+            <span id="posSyncStatusBadge" class="badge rounded-pill bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-2 py-1"><i class="bi bi-broadcast me-1"></i>Live Sync</span>
             
-            <!-- Loyalty Points Info -->
-            <div id="mobile-loyalty-info" class="alert alert-success" style="display: none;">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <i class="bi bi-star-fill"></i> <strong>Points to Earn:</strong>
-                    </div>
-                    <div>
-                        <span class="badge bg-success" id="mobile-points-to-earn">0</span> points
-                    </div>
-                </div>
-            </div>
+            <!-- Front Office Actions -->
+            <a href="{% url 'customer_display' %}" target="_blank" class="btn btn-outline-info btn-sm py-0 px-2 fw-semibold" title="Launch Customer-Facing Display on second screen / window">
+                <i class="bi bi-display me-1"></i><span class="d-none d-xl-inline">CFD</span>
+            </a>
+            <button type="button" class="btn btn-outline-light btn-sm py-0 px-2 fw-semibold" onclick="if(window.posKeyboard) window.posKeyboard.showShortcuts(); else { const sp = document.getElementById('shortcuts-panel'); if(sp) sp.style.display='block'; }" title="Keyboard Shortcuts (F12)">
+                <i class="bi bi-keyboard me-1"></i><span class="d-none d-xl-inline">Keys</span>
+            </button>
+            <a href="{% url 'terminal_lock' %}" class="btn btn-warning btn-sm py-0 px-2 fw-semibold" title="Lock Screen (Requires PIN)">
+                <i class="bi bi-lock-fill"></i> <span class="d-none d-sm-inline">Lock</span>
+            </a>
 
-            <!-- Action Buttons -->
-            <div class="row g-2">
-                <div class="col-12">
-                    <button class="btn btn-success btn-lg w-100" onclick="completeSale()" id="mobile-complete-btn" disabled>
-                        <i class="bi bi-check-circle"></i> Complete Sale
-                    </button>
-                </div>
-                <div class="col-6">
-                    <button class="btn btn-danger w-100" onclick="clearCart()">
-                        <i class="bi bi-trash"></i> Clear Cart
-                    </button>
-                </div>
-                <div class="col-6">
-                    <button class="btn btn-warning w-100" onclick="holdOrder()" id="mobile-hold-order-btn" disabled>
-                        <i class="bi bi-pause-circle"></i> Hold Order
-                    </button>
-                </div>
-            </div>
+            {% if current_session %}
+                <a href="{% url 'terminal_session_close' %}" class="btn btn-outline-danger btn-sm py-0 px-2 fw-semibold" title="Close Current Cashier Shift &amp; Generate Z-Report">
+                    <i class="bi bi-door-closed-fill"></i> <span class="d-none d-sm-inline">Close Shift</span>
+                </a>
+            {% else %}
+                <a href="{% url 'terminal_session_open' %}" class="btn btn-success btn-sm py-0 px-2 fw-semibold" title="Open Till Shift / Float">
+                    <i class="bi bi-door-open-fill"></i> <span class="d-none d-sm-inline">Open Shift</span>
+                </a>
+            {% endif %}
+
+            {% if user_permissions.can_access_back_office or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-light btn-sm py-0 px-2 fw-semibold" title="Switch to Back Office Management">
+                    <i class="bi bi-speedometer2 me-1"></i><span class="d-none d-md-inline">Back Office</span>
+                </a>
+            {% endif %}
         </div>
     </div>
-</div>
 
-<div class="row mt-4">
-    <div class="col-12 col-md-8 products-section">
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-3">
-                <h3 class="mb-0">Select Products</h3>
-                <!-- Dual View Switcher (Grid & List) -->
-                <div class="btn-group btn-group-sm view-switcher-wrap" role="group" aria-label="Product View">
-                    <button type="button" class="btn btn-outline-primary active" id="view-mode-grid-btn" onclick="setProductView('grid')" title="Touch Grid View (F6)">
-                        <i class="bi bi-grid-fill me-1"></i>Grid
+    <!-- Mobile Cart Toggle Button (Handheld / phone mode only) -->
+    <button class="cart-toggle-btn d-md-none" onclick="toggleMobileCart()" id="cartToggleBtn">
+        <i class="bi bi-cart3"></i>
+        <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
+    </button>
+
+    <!-- Mobile Cart (Bottom Sheet for phones) -->
+    <div class="cart-sticky-mobile d-md-none" id="mobileCart">
+        <div class="card border-0">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-cart3"></i> Cart</h5>
+                <div>
+                    <button class="btn btn-sm btn-light me-1" onclick="refreshCartPrices()" title="Refresh cart prices">
+                        <i class="bi bi-arrow-clockwise"></i>
                     </button>
-                    <button type="button" class="btn btn-outline-primary" id="view-mode-list-btn" onclick="setProductView('list')" title="High-Density List View (F7)">
-                        <i class="bi bi-list-ul me-1"></i>List
+                    <button class="btn btn-sm btn-light" onclick="toggleMobileCart()">
+                        <i class="bi bi-x-lg"></i>
                     </button>
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-warning position-relative" onclick="showHeldOrders()" id="held-orders-btn" title="View Held Orders (F4)">
-                    <i class="bi bi-pause-circle"></i> Held Orders
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
-                          id="held-orders-badge" style="display: none;">
-                        0
-                    </span>
-                </button>
-            </div>
-        </div>
-        <div class="alert alert-info mb-3">
-            <i class="bi bi-info-circle"></i> <strong>Note:</strong> All prices shown are tax-inclusive (VAT included). Tax breakdown will be shown in the cart.
-        </div>
-        
-        <!-- Customer Selection and Barcode Scanner Section - Side by Side -->
-        <div class="card mb-3 border-primary">
             <div class="card-body">
-                <div class="row">
-                    <!-- Customer Lookup by Phone -->
-                    <div class="col-md-6 mb-3 mb-md-0">
-                        <label for="customer-phone-input" class="form-label">
-                            <i class="bi bi-person-circle"></i> <strong>Customer Phone/Code (Optional - for Loyalty Points)</strong>
-                        </label>
-                        <div class="input-group">
-                            <input type="text" id="customer-phone-input" class="form-control" 
-                                   placeholder="Type phone number (auto-search)..." 
-                                   autocomplete="off">
-                            <button class="btn btn-success" type="button" onclick="searchCustomer()">
-                                <i class="bi bi-search"></i>
-                            </button>
-                            <button class="btn btn-outline-secondary" type="button" onclick="clearCustomer()" id="clear-customer-btn" style="display: none;">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
+                <div id="mobile-cart-items" style="max-height: 200px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
+                    <p class="text-muted text-center">Cart is empty</p>
+                </div>
+
+                <hr>
+
+                <div class="mb-2">
+                    <label class="form-label small">Discount Type:</label>
+                    <select id="mobile-discount-type" class="form-select form-select-sm" onchange="syncDiscount('type')">
+                        <option value="percentage">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (KES)</option>
+                        <option value="points">Loyalty Points</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Discount Value:</label>
+                    <input type="number" id="mobile-discount-value" class="form-control form-control-sm" value="0" min="0" step="0.01" onchange="syncDiscount('value')">
+                </div>
+
+                <div class="mb-2 d-flex justify-content-between">
+                    <strong>Subtotal (excl. VAT):</strong> <span id="mobile-subtotal">KES 0.00</span>
+                </div>
+                <div class="mb-2 d-flex justify-content-between">
+                    <strong>Discount:</strong> <span id="mobile-discount">KES 0.00</span>
+                </div>
+                <div class="mb-2 d-flex justify-content-between">
+                    <strong id="mobile-vat-label">VAT ({{ vat_rate }}%):</strong> <span id="mobile-vat">KES 0.00</span>
+                </div>
+                <div class="mb-3 d-flex justify-content-between">
+                    <h5>Total:</h5> <h5 class="text-primary" id="mobile-cart-total">KES 0.00</h5>
+                </div>
+                
+                <!-- Loyalty Points Info -->
+                <div id="mobile-loyalty-info" class="alert alert-success" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-star-fill"></i> <strong>Points to Earn:</strong>
                         </div>
-                        <small class="text-muted">Auto-searches after 9+ digits or CUST- code</small>
-                        <div id="customer-info" class="mt-2" style="display: none;">
-                            <div class="alert alert-success mb-0 py-2">
-                                <small>
-                                    <i class="bi bi-check-circle"></i> <strong id="customer-name"></strong><br>
-                                    <span class="badge bg-warning text-dark" id="customer-tier"></span>
-                                    <span class="badge bg-success" id="customer-points"></span>
-                                    <span class="badge bg-info" id="customer-credit" style="display:none;"></span>
-                                </small>
-                            </div>
+                        <div>
+                            <span class="badge bg-success" id="mobile-points-to-earn">0</span> points
                         </div>
-                        <div id="customer-error" class="mt-2" style="display: none;">
-                            <div class="alert alert-danger mb-0 py-2">
-                                <small id="customer-error-message"></small>
-                            </div>
-                        </div>
-                        <input type="hidden" id="selected-customer-id" value="">
                     </div>
-                    
-                    <!-- Barcode Scanner -->
-                    <div class="col-md-6">
-                        <label for="barcode-input" class="form-label">
-                            <i class="bi bi-upc-scan"></i> <strong>Barcode Scanner</strong>
-                        </label>
-                        <div class="input-group">
-                            <input type="text" id="barcode-input" class="form-control" 
-                                   placeholder="Scan barcode here..." 
-                                   autocomplete="off">
-                            <button class="btn btn-primary" type="button" onclick="searchByBarcode()">
-                                <i class="bi bi-search"></i>
-                            </button>
-                        </div>
-                        <small class="text-muted">Focus here and scan with barcode scanner</small>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row g-2">
+                    <div class="col-12">
+                        <button class="btn btn-success btn-lg w-100" onclick="completeSale()" id="mobile-complete-btn" disabled>
+                            <i class="bi bi-check-circle"></i> Complete Sale
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-danger w-100" onclick="clearCart()">
+                            <i class="bi bi-trash"></i> Clear Cart
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-warning w-100" onclick="holdOrder()" id="mobile-hold-order-btn" disabled>
+                            <i class="bi bi-pause-circle"></i> Hold Order
+                        </button>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Product Search Bar -->
-        <div class="pos-search-wrap mb-2">
-            <i class="bi bi-search pos-search-icon"></i>
-            <input type="text" id="search-input" class="form-control pos-search-input"
-                   placeholder="Search by name, SKU, barcode..."
-                   value="{{ search_query }}"
-                   oninput="handleSearchInput()"
-                   onkeypress="if(event.key === 'Enter') searchProducts()"
-                   autofocus>
-            <button class="btn btn-sm btn-link pos-search-clear" type="button" onclick="clearFilters()" id="clear-filters-btn" style="display:none;" title="Clear">
-                <i class="bi bi-x-lg text-muted"></i>
-            </button>
-        </div>
-        <div id="filter-info-text" class="text-muted small mt-1"></div>
-
-        <!-- Category Pill Buttons -->
-        <div class="category-pills mb-3" id="category-pills">
-            <button class="cat-pill active" onclick="filterByCategory('')" data-cat="">
-                <i class="bi bi-grid-3x3-gap"></i> All
-            </button>
-            {% for category in categories %}
-            <button class="cat-pill" onclick="filterByCategory('{{ category.id }}')" data-cat="{{ category.id }}">
-                {{ category.name }}
-            </button>
-            {% endfor %}
-        </div>
-
-        <!-- Hidden select for compatibility -->
-        <select id="category-filter" style="display:none;" onchange="handleCategoryChange()">
-            <option value="">All Categories</option>
-            {% for category in categories %}
-            <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
-            {% endfor %}
-        </select>
-
-        <!-- Products Loading Skeleton -->
-        <div id="products-loading" class="py-3">
-            <div class="row" id="products-skeleton">
-                <!-- Skeleton cards for better perceived performance -->
-                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3" style="--bs-gutter-x: 1rem;">
-                    <div class="card skeleton-card">
-                        <div class="skeleton skeleton-image"></div>
-                        <div class="card-body">
-                            <div class="skeleton skeleton-text mb-2"></div>
-                            <div class="skeleton skeleton-text-short"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
-                    <div class="card skeleton-card">
-                        <div class="skeleton skeleton-image"></div>
-                        <div class="card-body">
-                            <div class="skeleton skeleton-text mb-2"></div>
-                            <div class="skeleton skeleton-text-short"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
-                    <div class="card skeleton-card">
-                        <div class="skeleton skeleton-image"></div>
-                        <div class="card-body">
-                            <div class="skeleton skeleton-text mb-2"></div>
-                            <div class="skeleton skeleton-text-short"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
-                    <div class="card skeleton-card">
-                        <div class="skeleton skeleton-image"></div>
-                        <div class="card-body">
-                            <div class="skeleton skeleton-text mb-2"></div>
-                            <div class="skeleton skeleton-text-short"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6 col-sm-4 col-md-3 col-lg-2-4 mb-3">
-                    <div class="card skeleton-card">
-                        <div class="skeleton skeleton-image"></div>
-                        <div class="card-body">
-                            <div class="skeleton skeleton-text mb-2"></div>
-                            <div class="skeleton skeleton-text-short"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="text-center mt-3">
-                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                    <span class="visually-hidden">Loading products...</span>
-                </div>
-                <p class="mt-2 text-muted small">Loading products...</p>
-            </div>
-        </div>
-        
-        <!-- Touch Tile Grid View Container -->
-        <div id="products-grid" class="pos-touch-grid mb-3" style="display: none;">
-            <!-- Grid cards loaded via AJAX -->
-        </div>
-
-        <!-- Products List View Container -->
-        <div id="products-list" style="display: none;">
-            <div class="table-responsive">
-                <table class="table table-hover table-sm">
-                    <thead class="table-light sticky-top" style="top: 0; z-index: 10;">
-                        <tr>
-                            <th width="12%">Code</th>
-                            <th width="35%">Product</th>
-                            <th width="15%">Category</th>
-                            <th width="12%">Stock</th>
-                            <th width="13%">Price</th>
-                            <th width="13%">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="products-list-body">
-                        <!-- Products will be loaded here via AJAX -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        <!-- Empty State -->
-        <div id="products-empty" class="col-12 text-center py-5" style="display: none;">
-            <i class="bi bi-box-seam" style="font-size: 3rem; color: #ccc;"></i>
-            <p class="text-muted mt-2">No products found</p>
-            <a href="{% url 'product_create' slug=request.business.slug %}" class="btn btn-primary">Add Products</a>
-        </div>
-        
-        <!-- Load More Button -->
-        <div id="load-more-container" class="text-center my-3" style="display: none;">
-            <button id="load-more-btn" class="btn btn-outline-primary" onclick="loadMoreProducts()">
-                Load More Products
-            </button>
         </div>
     </div>
 
-    <div class="col-md-4 d-none d-md-block desktop-cart">
-        <div class="card sticky-top" style="top: 80px;">
-            <div class="card-header bg-primary text-white p-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="fw-bold fs-6"><i class="bi bi-cart3 me-1"></i>Cart Tabs</span>
+    <!-- POS Main 2-Column Split Workspace -->
+    <div class="pos-main-wrapper">
+        <!-- LEFT COLUMN: Product Catalog & Rapid Entry Strip -->
+        <div class="products-section">
+            <!-- Sleek Professional POS Command Bar -->
+            <div class="pos-command-bar">
+                <div class="pos-command-row">
+                    <!-- Search Box -->
+                    <div class="pos-search-box" title="Search by Name, SKU, or Keyword (F1)">
+                        <i class="bi bi-search text-muted pos-search-icon" style="font-size:0.9rem;"></i>
+                        <input type="text" id="search-input" class="pos-search-input"
+                               placeholder="Search product (F1)..."
+                               value="{{ search_query }}"
+                               oninput="handleSearchInput()"
+                               onkeypress="if(event.key === 'Enter') searchProducts()"
+                               autofocus>
+                        <button class="btn btn-sm btn-link p-0 text-decoration-none" type="button" onclick="clearFilters()" id="clear-filters-btn" style="display:none;" title="Clear Search">
+                            <i class="bi bi-x-circle text-muted"></i>
+                        </button>
+                    </div>
+
+                    <!-- Barcode Scanner Fast Box -->
+                    <div class="pos-barcode-box" title="Scan Barcode with scanner gun (F2)">
+                        <i class="bi bi-upc-scan text-success me-1" style="font-size:0.95rem;"></i>
+                        <input type="text" id="barcode-input"
+                               placeholder="Scan Barcode (F2)..." 
+                               autocomplete="off">
+                        <button class="btn btn-sm btn-link p-0 text-success" type="button" onclick="searchByBarcode()" title="Lookup Barcode">
+                            <i class="bi bi-arrow-right-circle-fill"></i>
+                        </button>
+                    </div>
+
+                    <!-- Customer Lookup Box -->
+                    <div class="pos-customer-box" title="Attach Customer for Loyalty Points & Credit (F10)">
+                        <i class="bi bi-person-circle text-primary me-1" style="font-size:0.95rem;"></i>
+                        <input type="text" id="customer-phone-input"
+                               placeholder="Customer Phone (F10)..." 
+                               autocomplete="off">
+                        <button class="btn btn-sm btn-link p-0 text-primary" type="button" onclick="searchCustomer()" title="Search Customer">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <button class="btn btn-sm btn-link p-0 text-danger ms-1" type="button" onclick="clearCustomer()" id="clear-customer-btn" style="display:none;" title="Remove Customer">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                    </div>
+
+                    <!-- Dual View Switcher (Grid / List) -->
+                    <div class="btn-group btn-group-sm view-switcher-wrap flex-shrink-0" role="group" aria-label="Product View">
+                        <button type="button" class="btn btn-outline-primary active px-2" id="view-mode-grid-btn" onclick="setProductView('grid')" title="Touch Grid View (F6)">
+                            <i class="bi bi-grid-fill me-1"></i><span class="d-none d-lg-inline">Grid</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary px-2" id="view-mode-list-btn" onclick="setProductView('list')" title="High-Density List View (F7)">
+                            <i class="bi bi-list-ul me-1"></i><span class="d-none d-lg-inline">List</span>
+                        </button>
+                    </div>
+
+                    <!-- Held Orders Button -->
+                    <button class="btn btn-warning btn-sm px-2 position-relative flex-shrink-0 fw-semibold" onclick="showHeldOrders()" id="held-orders-btn" title="View Held Orders (F4)">
+                        <i class="bi bi-pause-circle me-1"></i><span>Held Orders</span>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
+                              id="held-orders-badge" style="display: none;">0</span>
+                    </button>
+                </div>
+
+                <!-- Attached Customer Info Banner (Shown when customer attached) -->
+                <div id="customer-info" class="mt-1" style="display: none;">
+                    <div class="alert alert-success mb-0 py-1 px-2 d-flex justify-content-between align-items-center" style="font-size:0.75rem;">
+                        <div>
+                            <i class="bi bi-check-circle-fill me-1"></i><strong id="customer-name"></strong>
+                            <span class="badge bg-warning text-dark ms-1" id="customer-tier"></span>
+                            <span class="badge bg-success ms-1" id="customer-points"></span>
+                            <span class="badge bg-info ms-1" id="customer-credit" style="display:none;"></span>
+                        </div>
+                    </div>
+                </div>
+                <div id="customer-error" class="mt-1" style="display: none;">
+                    <div class="alert alert-danger mb-0 py-1 px-2" style="font-size:0.75rem;">
+                        <small id="customer-error-message"></small>
+                    </div>
+                </div>
+                <input type="hidden" id="selected-customer-id" value="">
+
+                <!-- Category Pills Bar -->
+                <div class="category-pills-bar" id="category-pills">
+                    <button class="cat-pill active" onclick="filterByCategory('')" data-cat="">
+                        <i class="bi bi-grid-3x3-gap"></i> All
+                    </button>
+                    {% for category in categories %}
+                    <button class="cat-pill" onclick="filterByCategory('{{ category.id }}')" data-cat="{{ category.id }}">
+                        {{ category.name }}
+                    </button>
+                    {% endfor %}
+                </div>
+                
+                <div id="filter-info-text" class="text-muted small" style="display:none;"></div>
+            </div>
+
+            <!-- Hidden select for JS compatibility -->
+            <select id="category-filter" style="display:none;" onchange="handleCategoryChange()">
+                <option value="">All Categories</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}" {% if category_filter == category.id|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+                {% endfor %}
+            </select>
+
+            <!-- Independently Scrollable Catalog Area -->
+            <div id="products-catalog-scroll">
+                <!-- Products Loading Skeleton -->
+                <div id="products-loading" class="py-2">
+                    <div class="row g-2" id="products-skeleton">
+                        <div class="col-6 col-sm-4 col-md-3 col-lg-2-4">
+                            <div class="card skeleton-card">
+                                <div class="skeleton skeleton-image" style="height:70px;"></div>
+                                <div class="card-body p-2">
+                                    <div class="skeleton skeleton-text mb-1"></div>
+                                    <div class="skeleton skeleton-text-short"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-sm-4 col-md-3 col-lg-2-4">
+                            <div class="card skeleton-card">
+                                <div class="skeleton skeleton-image" style="height:70px;"></div>
+                                <div class="card-body p-2">
+                                    <div class="skeleton skeleton-text mb-1"></div>
+                                    <div class="skeleton skeleton-text-short"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-sm-4 col-md-3 col-lg-2-4">
+                            <div class="card skeleton-card">
+                                <div class="skeleton skeleton-image" style="height:70px;"></div>
+                                <div class="card-body p-2">
+                                    <div class="skeleton skeleton-text mb-1"></div>
+                                    <div class="skeleton skeleton-text-short"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-sm-4 col-md-3 col-lg-2-4">
+                            <div class="card skeleton-card">
+                                <div class="skeleton skeleton-image" style="height:70px;"></div>
+                                <div class="card-body p-2">
+                                    <div class="skeleton skeleton-text mb-1"></div>
+                                    <div class="skeleton skeleton-text-short"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-2">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading products...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- High-Density Touch Tile Grid Container -->
+                <div id="products-grid" class="pos-touch-grid" style="display: none;">
+                    <!-- Grid cards loaded via AJAX -->
+                </div>
+
+                <!-- High-Density List View Container -->
+                <div id="products-list" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th width="14%">Code</th>
+                                    <th width="36%">Product</th>
+                                    <th width="16%">Category</th>
+                                    <th width="12%">Stock</th>
+                                    <th width="12%">Price</th>
+                                    <th width="10%">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-list-body">
+                                <!-- Products loaded via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="products-empty" class="col-12 text-center py-4" style="display: none;">
+                    <i class="bi bi-box-seam" style="font-size: 2.5rem; color: #ccc;"></i>
+                    <p class="text-muted mt-1 small">No products found</p>
+                    <a href="{% url 'product_create' slug=request.business.slug %}" class="btn btn-sm btn-primary">Add Products</a>
+                </div>
+
+                <!-- Load More Button -->
+                <div id="load-more-container" class="text-center my-2" style="display: none;">
+                    <button id="load-more-btn" class="btn btn-sm btn-outline-primary" onclick="loadMoreProducts()">
+                        Load More Products
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Active Cart & Rapid Checkout Dock (Pinned Footer) -->
+        <div class="desktop-cart">
+            <!-- Multi-Cart Header & Tabs Navigation -->
+            <div class="cart-tabs-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="fw-bold" style="font-size:0.82rem;"><i class="bi bi-cart3 me-1"></i>Cart Tabs</span>
                     </div>
                     <div class="d-flex align-items-center gap-1">
-                        <button class="btn btn-xs btn-light py-1 px-2 fw-semibold" onclick="addNewMultiCart()" title="Open New Cart Tab (F3)">
+                        <button class="btn btn-xs btn-light py-0 px-2 fw-semibold" onclick="addNewMultiCart()" title="Open New Cart Tab (F3)" style="font-size:0.72rem;">
                             <i class="bi bi-plus-lg me-1"></i>New Tab
                         </button>
-                        <button class="btn btn-xs btn-outline-light py-1 px-2" onclick="refreshCartPrices()" title="Refresh cart prices">
+                        <button class="btn btn-xs btn-outline-light py-0 px-2" onclick="refreshCartPrices()" title="Refresh cart prices" style="font-size:0.72rem;">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                     </div>
@@ -580,135 +687,140 @@
                     <!-- Dynamic tabs rendered by JavaScript -->
                 </div>
             </div>
-            <div class="card-body">
-                <div id="cart-items" style="max-height: 280px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #dee2e6 transparent;">
-                    <p class="text-muted text-center">Cart is empty</p>
-                </div>
 
-                <hr>
+            <!-- Scrollable Cart Items Container -->
+            <div id="cart-items">
+                <p class="text-muted text-center py-4 small">Cart is empty</p>
+            </div>
 
-                <!-- Promo Code -->
-                <div class="mb-3">
-                  <label class="form-label small fw-semibold"><i class="bi bi-tag me-1"></i>Promo Code</label>
-                  <div class="input-group input-group-sm">
-                    <input type="text" id="promo-code-input" class="form-control text-uppercase"
-                           placeholder="Enter code…" style="text-transform:uppercase">
-                    <button class="btn btn-outline-success" type="button" onclick="applyPromoCode()">Apply</button>
-                    <button class="btn btn-outline-secondary" type="button" id="clear-promo-btn"
-                            onclick="clearPromo()" style="display:none" title="Remove promo">
-                      <i class="bi bi-x"></i>
+            <!-- Permanently Docked Checkout Panel (Zero Scrolling Needed!) -->
+            <div class="cart-docked-footer">
+                <!-- Collapsible Adjustments Bar (Promo, Discount, Notes) -->
+                <div class="cart-adjust-row">
+                    <button type="button" class="cart-adjust-btn" onclick="const p=document.getElementById('promo-collapse-box'); p.style.display=p.style.display==='none'?'block':'none'; this.classList.toggle('active');" title="Add Promo Code">
+                        <i class="bi bi-tag me-1"></i>Promo
                     </button>
-                  </div>
-                  <div id="promo-feedback" class="mt-1" style="font-size:12px"></div>
+                    <button type="button" class="cart-adjust-btn" onclick="const d=document.getElementById('discount-collapse-box'); d.style.display=d.style.display==='none'?'block':'none'; this.classList.toggle('active');" title="Apply Discount">
+                        <i class="bi bi-percent me-1"></i>Discount
+                    </button>
+                    <button type="button" class="cart-adjust-btn" onclick="const n=document.getElementById('notes-collapse-box'); n.style.display=n.style.display==='none'?'block':'none'; this.classList.toggle('active');" title="Add Order Notes">
+                        <i class="bi bi-chat-left-text me-1"></i>Note
+                    </button>
                 </div>
 
-                <div class="mb-3">
-                    <label>Discount Type:</label>
-                    <select id="discount-type" class="form-select" onchange="handleDiscountTypeChange()">
-                        <option value="percentage">Percentage (%)</option>
-                        <option value="fixed">Fixed Amount (KES)</option>
-                        <option value="points">Loyalty Points</option>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label id="discount-label">Discount Value:</label>
-                    <input type="number" id="discount-value" class="form-control" value="0" min="0" step="0.01" onchange="onDiscountInputChange(this)">
-                    <small class="text-muted" id="discount-hint"></small>
-                </div>
-                
-                <!-- Quick Points Redemption -->
-                <div id="points-redemption-section" style="display: none;" class="mb-3">
-                    <div class="alert alert-info py-2 mb-2">
-                        <small>
-                            <i class="bi bi-info-circle"></i> 
-                            <strong id="available-points-text">0 points available</strong> 
-                            (1 point = KES 1, min 100 pts)
-                        </small>
+                <!-- Promo Code Drawer -->
+                <div id="promo-collapse-box" class="p-2 mb-2 bg-light rounded border" style="display:none;">
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="promo-code-input" class="form-control form-control-sm text-uppercase"
+                               placeholder="Enter promo code…" style="text-transform:uppercase;">
+                        <button class="btn btn-sm btn-outline-success" type="button" onclick="applyPromoCode()">Apply</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="clear-promo-btn"
+                                onclick="clearPromo()" style="display:none" title="Remove promo">
+                            <i class="bi bi-x"></i>
+                        </button>
                     </div>
-                    <div class="btn-group w-100 mb-2" role="group">
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="redeemPoints(100)">100 pts</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="redeemPoints(200)">200 pts</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="redeemPoints(500)">500 pts</button>
-                        <button type="button" class="btn btn-sm btn-outline-success" onclick="redeemAllPoints()">All</button>
+                    <div id="promo-feedback" class="mt-1 small"></div>
+                </div>
+
+                <!-- Discount & Loyalty Points Drawer -->
+                <div id="discount-collapse-box" class="p-2 mb-2 bg-light rounded border" style="display:none;">
+                    <div class="row g-2 mb-1">
+                        <div class="col-6">
+                            <select id="discount-type" class="form-select form-select-sm" onchange="handleDiscountTypeChange()">
+                                <option value="percentage">% Discount</option>
+                                <option value="fixed">Fixed (KES)</option>
+                                <option value="points">Points</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <input type="number" id="discount-value" class="form-control form-control-sm" value="0" min="0" step="0.01" onchange="onDiscountInputChange(this)">
+                        </div>
+                    </div>
+                    <small class="text-muted" id="discount-label" style="display:none;"></small>
+                    <small class="text-muted d-block" id="discount-hint"></small>
+
+                    <!-- Quick Points Redemption -->
+                    <div id="points-redemption-section" style="display: none;" class="mt-1">
+                        <div class="alert alert-info py-1 px-2 mb-1 small">
+                            <i class="bi bi-info-circle me-1"></i><strong id="available-points-text">0 pts available</strong>
+                        </div>
+                        <div class="btn-group btn-group-sm w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="redeemPoints(100)">100</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="redeemPoints(200)">200</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="redeemPoints(500)">500</button>
+                            <button type="button" class="btn btn-outline-success" onclick="redeemAllPoints()">All</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="mb-2">
-                    <strong>Subtotal (excl. VAT):</strong> <span class="float-end" id="subtotal">KES 0.00</span>
-                </div>
-                <div class="mb-2">
-                    <strong>Discount:</strong> <span class="float-end" id="discount">KES 0.00</span>
-                </div>
-                <div class="mb-2">
-                    <strong id="vat-label">VAT ({{ vat_rate }}%):</strong> <span class="float-end" id="vat">KES 0.00</span>
-                </div>
-                
-                <!-- Total on one row -->
-                <div class="mb-3 d-flex justify-content-between align-items-center p-3 bg-light rounded">
-                    <h4 class="mb-0">Total (incl. VAT):</h4>
-                    <h4 class="mb-0 text-primary" id="cart-total">KES 0.00</h4>
+                <!-- Order Notes Drawer -->
+                <div id="notes-collapse-box" class="p-2 mb-2 bg-light rounded border" style="display:none;">
+                    <textarea id="order-notes" class="form-control form-control-sm" rows="2" placeholder="Order notes / special instructions..."></textarea>
                 </div>
 
-                <!-- Fast-Tender 1-Tap Checkout Bar -->
-                <div class="fast-tender-panel mb-3" id="fast-tender-panel">
+                <!-- Loyalty Info Banner (if customer earning points) -->
+                <div id="loyalty-info" class="alert alert-success py-1 px-2 mb-1 small" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div><i class="bi bi-star-fill text-warning me-1"></i>Points to Earn:</div>
+                        <div><span class="badge bg-success" id="points-to-earn">0</span> pts</div>
+                    </div>
+                </div>
+
+                <!-- Financial Breakdown -->
+                <div class="cart-breakdown-row">
+                    <span>Subtotal (excl. VAT):</span>
+                    <strong id="subtotal">KES 0.00</strong>
+                </div>
+                <div class="cart-breakdown-row">
+                    <span>Discount:</span>
+                    <strong id="discount" class="text-danger">KES 0.00</strong>
+                </div>
+                <div class="cart-breakdown-row">
+                    <span id="vat-label">VAT ({{ vat_rate }}%):</span>
+                    <strong id="vat">KES 0.00</strong>
+                </div>
+
+                <!-- Grand Total Banner -->
+                <div class="cart-total-banner">
+                    <span class="cart-total-label">Total (VAT incl.)</span>
+                    <span class="cart-total-amount" id="cart-total">KES 0.00</span>
+                </div>
+
+                <!-- 1-Tap Fast Tender Panel -->
+                <div class="fast-tender-panel" id="fast-tender-panel">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">⚡ Fast Tender</span>
-                        <span class="small text-muted" id="fast-tender-hint">Exact or smart cash</span>
+                        <span class="fw-bold text-muted text-uppercase" style="font-size: 0.68rem; letter-spacing: 0.5px;">⚡ Fast Tender</span>
+                        <span class="text-muted" id="fast-tender-hint" style="font-size: 0.68rem;">Exact or round cash</span>
                     </div>
-                    <div class="quick-cash-row mb-2" id="fast-quick-cash-chips">
+                    <div class="quick-cash-row" id="fast-quick-cash-chips">
                         <!-- Dynamic Quick Cash chips rendered by JS -->
                     </div>
                     <div class="tender-actions-grid">
                         <button type="button" class="btn-tender-cash" id="btn-fast-cash" onclick="fastTenderCash()" title="Fast Cash Tender (F8)">
-                            <div><i class="bi bi-cash-stack me-1"></i>CASH</div>
-                            <span class="tender-sub-text" id="fast-cash-sub">Exact (F8)</span>
+                            <div><i class="bi bi-cash-stack me-1"></i>CASH (F8)</div>
+                            <span class="tender-sub-text" id="fast-cash-sub">Exact</span>
                         </button>
                         <button type="button" class="btn-tender-mpesa" id="btn-fast-mpesa" onclick="fastTenderMpesa()" title="Fast M-Pesa Tender (F9)">
-                            <div><i class="bi bi-phone-fill me-1"></i>M-PESA</div>
-                            <span class="tender-sub-text">Paybill/Till (F9)</span>
+                            <div><i class="bi bi-phone-fill me-1"></i>M-PESA (F9)</div>
+                            <span class="tender-sub-text">Paybill / Till</span>
                         </button>
                     </div>
                 </div>
-                
-                <!-- Loyalty Points Info -->
-                <div id="loyalty-info" class="alert alert-success" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <i class="bi bi-star-fill"></i> <strong>Points to Earn:</strong>
-                        </div>
-                        <div>
-                            <span class="badge bg-success" id="points-to-earn">0</span> points
-                        </div>
+
+                <!-- Primary Action Buttons -->
+                <button class="btn btn-success" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled title="Open Payment & Tender (F10)">
+                    <i class="bi bi-credit-card-2-front me-2"></i>Pay / Split / Credit (F10)
+                </button>
+                <div class="row g-2 mt-1">
+                    <div class="col-6">
+                        <button class="btn btn-outline-danger btn-sm w-100 py-1 fw-semibold" onclick="clearCart()">
+                            <i class="bi bi-trash me-1"></i>Clear
+                        </button>
                     </div>
-                    <small class="text-muted">1 point per KES 100 spent (with tier multiplier)</small>
-                </div>
-
-                <!-- Order Notes -->
-                <div class="mb-2">
-                    <label class="form-label small text-muted"><i class="bi bi-chat-left-text"></i> Order Notes</label>
-                    <textarea id="order-notes" class="form-control form-control-sm" rows="2" placeholder="Add note for this order..."></textarea>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="d-grid gap-2">
-                    <!-- Complete Sale - Full Width -->
-                    <button class="btn btn-success btn-lg" onclick="console.log('Complete Sale button clicked'); completeSale();" id="complete-btn" disabled>
-                        <i class="bi bi-credit-card-2-front me-1"></i> Pay / Split / Credit
-                    </button>
-                    
-                    <!-- Clear Cart and Hold Order - One Row -->
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <button class="btn btn-danger w-100" onclick="clearCart()">
-                                <i class="bi bi-trash"></i> Clear Cart
-                            </button>
-                        </div>
-                        <div class="col-6">
-                            <button class="btn btn-warning w-100" onclick="holdOrder()" id="hold-order-btn" disabled>
-                                <i class="bi bi-pause-circle"></i> Hold Order
-                            </button>
-                        </div>
+                    <div class="col-6">
+                        <button class="btn btn-outline-warning btn-sm w-100 py-1 fw-semibold text-dark" onclick="holdOrder()" id="hold-order-btn" disabled>
+                            <i class="bi bi-pause-circle me-1"></i>Hold (F4)
+                        </button>
                     </div>
                 </div>
             </div>
@@ -3353,41 +3465,49 @@ function updateCart() {
             
             html += `
                 <div class="cart-item" id="cart-item-${item.id}">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1 me-2">
-                            <strong>${item.name}</strong>
+                    <div class="cart-item-header">
+                        <div class="cart-item-title-wrap">
+                            <span class="cart-item-name">${item.name}</span>
                             ${item.isVariable ? '<span class="badge bg-info ms-1">Variable</span>' : ''}
-                            <br><small class="text-muted">${priceDisplay}</small>
                         </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart(${item.id})" title="Remove">
-                            <i class="bi bi-x"></i>
+                        <button type="button" class="cart-item-remove-btn" onclick="removeFromCart(${item.id})" title="Remove item">
+                            <i class="bi bi-trash3"></i>
                         </button>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mt-1">
+                    <div class="cart-item-meta">
+                        <span class="cart-item-unit-price">${priceDisplay}</span>
+                    </div>
+                    <div class="cart-item-actions">
                         ${item.isVariable ? 
-                            `<span class="text-muted small">${qtyDisplay}</span>` :
-                            `<div class="d-flex align-items-center gap-1">
-                                <button class="btn btn-xs btn-outline-secondary px-1 py-0" onclick="adjustQty(${item.id}, -1)"><i class="bi bi-dash"></i></button>
-                                <input type="number" class="form-control form-control-sm text-center" style="width:60px;"
+                            `<span class="text-muted small fw-semibold">${qtyDisplay}</span>` :
+                            `<div class="cart-stepper">
+                                <button type="button" class="stepper-btn stepper-minus" onclick="adjustQty(${item.id}, -1)" title="Decrease"><i class="bi bi-dash"></i></button>
+                                <input type="number" class="stepper-input"
                                        value="${item.quantity}" min="1" max="${item.availableStock}"
                                        onchange="updateQuantity(${item.id}, this.value)">
-                                <button class="btn btn-xs btn-outline-secondary px-1 py-0" onclick="adjustQty(${item.id}, 1)"><i class="bi bi-plus"></i></button>
+                                <button type="button" class="stepper-btn stepper-plus" onclick="adjustQty(${item.id}, 1)" title="Increase"><i class="bi bi-plus"></i></button>
                             </div>`
                         }
-                        <strong class="text-primary">KES ${itemTotal.toFixed(2)}</strong>
+                        <div class="cart-item-total">
+                            <span class="cart-total-currency">KES</span>
+                            <span class="cart-total-value">${itemTotal.toFixed(2)}</span>
+                        </div>
                     </div>
-                    <!-- Per-item discount + note (collapsible) -->
-                    <div class="d-flex gap-1 mt-1">
-                        <input type="number" class="form-control form-control-sm" style="width:90px;" 
-                                placeholder="Disc %" min="0" max="100" step="0.1"
-                                value="${itemDiscount > 0 ? itemDiscount : ''}"
-                                oninput="setItemDiscount(${item.id}, this.value)"
-                                title="Item discount %">
-                        <input type="text" class="form-control form-control-sm"
-                                placeholder="Item note..."
-                                value="${item.note || ''}"
-                                oninput="setItemNote(${item.id}, this.value)"
-                                title="Note for this item">
+                    <div class="cart-item-extra-row">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text py-0 px-2 text-muted" style="font-size:0.75rem;"><i class="bi bi-percent"></i></span>
+                            <input type="number" class="form-control form-control-sm py-0" style="max-width:80px; font-size:0.78rem;" 
+                                    placeholder="Disc %" min="0" max="100" step="0.1"
+                                    value="${itemDiscount > 0 ? itemDiscount : ''}"
+                                    oninput="setItemDiscount(${item.id}, this.value)"
+                                    title="Item discount %">
+                            <span class="input-group-text py-0 px-2 text-muted" style="font-size:0.75rem;"><i class="bi bi-chat-left-text"></i></span>
+                            <input type="text" class="form-control form-control-sm py-0" style="font-size:0.78rem;"
+                                    placeholder="Item note..."
+                                    value="${item.note || ''}"
+                                    oninput="setItemNote(${item.id}, this.value)"
+                                    title="Note for this item">
+                        </div>
                     </div>
                 </div>
             `;

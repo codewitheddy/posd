@@ -9,7 +9,7 @@ from . import (
     views, tenant_views, cash_float_views, user_management_views,
     support_access_views, zreport_views, sync_views, registration_admin_views,
     financial_views, crm_views, webhook_views, branch_views, promotion_views,
-    hscode_views, terminal_views, vatcode_views
+    hscode_views, terminal_views, vatcode_views, cashier_assignment_views
 )
 
 
@@ -442,6 +442,14 @@ business_urlpatterns = [
 
     # Multi-Branch
     path('branches/', branch_views.branch_list, name='branch_list'),
+    path('branches/assignments/', cashier_assignment_views.cashier_assignment_dashboard, name='cashier_assignment_dashboard'),
+    path('branches/assignments/request-transfer/', cashier_assignment_views.request_transfer_view, name='request_transfer_view'),
+    path('branches/assignments/transfers/<int:pk>/approve/', cashier_assignment_views.approve_transfer_view, name='approve_transfer_view'),
+    path('branches/assignments/transfers/<int:pk>/reject/', cashier_assignment_views.reject_transfer_view, name='reject_transfer_view'),
+    path('branches/assignments/transfers/<int:pk>/cancel/', cashier_assignment_views.cancel_transfer_view, name='cancel_transfer_view'),
+    path('branches/assignments/assign-till/', cashier_assignment_views.assign_till_view, name='assign_till_view'),
+    path('branches/assignments/tills/<int:pk>/activate/', cashier_assignment_views.activate_till_view, name='activate_till_view'),
+    path('branches/assignments/tills/<int:pk>/release/', cashier_assignment_views.release_till_view, name='release_till_view'),
     path('branches/<int:branch_id>/', branch_views.branch_detail, name='branch_detail'),
     path('branches/<int:branch_id>/stock/', branch_views.branch_stock, name='branch_stock'),
     path('branches/<int:branch_id>/transfers/', branch_views.transfer_list, name='transfer_list'),

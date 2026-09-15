@@ -13,7 +13,8 @@ from .models import (
     BusinessSettings, ActivityLog, LoyaltyTransaction,
     LoyaltyReward, LoyaltyRedemption, PaymentMethod, SalePayment, VATCode,
     Branch, BranchStock, StockMovement, StockRequisition, StockRequisitionItem,
-    StockTransferRequest, StockTransferItem, Dispatch, DispatchItem, POSTerminal
+    StockTransferRequest, StockTransferItem, Dispatch, DispatchItem, POSTerminal,
+    CashierTillAssignment, CashierTransferRequest, CashierAssignmentAuditLog
 )
 
 
@@ -566,9 +567,86 @@ class POSTerminalSerializer(serializers.ModelSerializer):
         model = POSTerminal
         fields = [
             'id', 'name', 'terminal_code', 'device_token', 'branch', 'branch_name',
-            'ip_address', 'is_active', 'last_active_at', 'last_sync_at', 'sync_status',
+            'ip_address', 'is_active', 'operational_status', 'last_active_at', 'last_sync_at', 'sync_status',
             'cu_number', 'cu_serial_number', 'tims_middleware_url', 'created_at'
         ]
         read_only_fields = ['id', 'device_token', 'last_active_at', 'last_sync_at', 'created_at']
+
+
+class CashierTillAssignmentSerializer(serializers.ModelSerializer):
+    cashier_name = serializers.SerializerMethodField()
+    terminal_code = serializers.CharField(source='terminal.terminal_code', read_only=True)
+    terminal_name = serializers.CharField(source='terminal.name', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+    assigned_by_name = serializers.CharField(source='assigned_by.username', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    hours_worked = serializers.DecimalField(max_digits=6, decimal_places=2, source='calculate_hours_worked', read_only=True)
+    labor_cost = serializers.DecimalField(max_digits=10, decimal_places=2, source='calculate_labor_cost', read_only=True)
+
+    class Meta:
+        model = CashierTillAssignment
+        fields = [
+            'id', 'cashier', 'cashier_name', 'terminal', 'terminal_code', 'terminal_name',
+            'branch', 'branch_name', 'shift_start', 'shift_end', 'actual_start', 'actual_end',
+            'status', 'status_display', 'hourly_rate', 'hours_worked', 'labor_cost',
+            'assigned_by', 'assigned_by_name', 'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'status', 'actual_start', 'actual_end', 'created_at', 'updated_at']
+
+    def get_cashier_name(self, obj):
+        return obj.cashier.get_full_name() or obj.cashier.username
+
+
+class CashierTransferRequestSerializer(serializers.ModelSerializer):
+    cashier_name = serializers.SerializerMethodField()
+    from_branch_name = serializers.CharField(source='from_branch.name', read_only=True)
+    from_branch_code = serializers.CharField(source='from_branch.code', read_only=True)
+    to_branch_name = serializers.CharField(source='to_branch.name', read_only=True)
+    to_branch_code = serializers.CharField(source='to_branch.code', read_only=True)
+    requested_by_name = serializers.CharField(source='requested_by.username', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    transfer_type_display = serializers.CharField(source='get_transfer_type_display', read_only=True)
+
+    class Meta:
+        model = CashierTransferRequest
+        fields = [
+            'id', 'cashier', 'cashier_name', 'from_branch', 'from_branch_name', 'from_branch_code',
+            'to_branch', 'to_branch_name', 'to_branch_code', 'transfer_type', 'transfer_type_display',
+            'start_date', 'end_date', 'status', 'status_display',
+            'requested_by', 'requested_by_name', 'approved_by', 'approved_by_name', 'action_date',
+            'reason', 'rejection_reason', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'status', 'requested_by', 'approved_by', 'action_date', 'rejection_reason', 'created_at', 'updated_at']
+
+    def get_cashier_name(self, obj):
+        return obj.cashier.get_full_name() or obj.cashier.username
+
+
+class CashierAssignmentAuditLogSerializer(serializers.ModelSerializer):
+    cashier_name = serializers.SerializerMethodField()
+    performed_by_name = serializers.CharField(source='performed_by.username', read_only=True)
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+    from_branch_name = serializers.CharField(source='from_branch.name', read_only=True)
+    to_branch_name = serializers.CharField(source='to_branch.name', read_only=True)
+    terminal_code = serializers.CharField(source='terminal.terminal_code', read_only=True)
+
+    class Meta:
+        model = CashierAssignmentAuditLog
+        fields = [
+            'id', 'cashier', 'cashier_name', 'action', 'action_display',
+            'performed_by', 'performed_by_name', 'from_branch', 'from_branch_name',
+            'to_branch', 'to_branch_name', 'terminal', 'terminal_code',
+            'assignment', 'transfer_request', 'reason', 'details', 'timestamp'
+        ]
+        read_only_fields = [
+            'id', 'cashier', 'cashier_name', 'action', 'action_display',
+            'performed_by', 'performed_by_name', 'from_branch', 'from_branch_name',
+            'to_branch', 'to_branch_name', 'terminal', 'terminal_code',
+            'assignment', 'transfer_request', 'reason', 'details', 'timestamp'
+        ]
+
+    def get_cashier_name(self, obj):
+        return obj.cashier.get_full_name() or obj.cashier.username
 
 

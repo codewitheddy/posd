@@ -1,0 +1,826 @@
+{% extends 'pos/base.html' %}
+{% load static %}
+
+{% block title %}Cashier Till Assignments & Cross-Branch Transfers — {{ business.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .assignment-card {
+    border-radius: 14px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .assignment-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  }
+  .till-badge-online {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+  }
+  .till-badge-available {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+  }
+  .till-badge-offline {
+    background: #6b7280;
+    color: white;
+  }
+  .nav-pills .nav-link {
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 10px 18px;
+    color: var(--bs-body-color);
+  }
+  .nav-pills .nav-link.active {
+    background-color: #0d6efd;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 px-md-4">
+  
+  <!-- Header & Branch Selector -->
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'branch_list' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+          <i class="bi bi-arrow-left"></i> Branches
+        </a>
+        <h2 class="mb-0 fw-bold">
+          <i class="bi bi-person-workspace text-primary me-2"></i>Cashier &amp; Till Management
+        </h2>
+      </div>
+      <p class="text-muted small mb-0 mt-1">
+        Manage live cashier-to-till allocations, cross-branch transfers, shift scheduling, and labor cost reporting across all locations.
+      </p>
+    </div>
+
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <!-- Branch Selector Dropdown -->
+      <form method="GET" class="d-flex align-items-center gap-2">
+        <label for="branchSelect" class="small fw-bold text-muted text-nowrap d-none d-sm-inline">Branch:</label>
+        <select id="branchSelect" name="branch_id" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width: 180px; font-weight: 600;">
+          {% for b in branches %}
+            <option value="{{ b.id }}" {% if current_branch and current_branch.id == b.id %}selected{% endif %}>
+              {{ b.name }} ({{ b.code }}) {% if b.is_hq %}[HQ]{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+
+      <!-- Action Buttons -->
+      <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#requestTransferModal">
+        <i class="bi bi-arrow-left-right me-1"></i> Request Transfer
+      </button>
+      <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#assignTillModal">
+        <i class="bi bi-plus-circle-fill me-1"></i> Schedule Till Assignment
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Summary Cards -->
+  {% if branch_status %}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm p-3 assignment-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(37, 99, 235, 0.02));">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Total Tills</div>
+            <div class="fs-3 fw-bold text-primary">{{ branch_status.total_tills }}</div>
+          </div>
+          <div class="p-2 rounded-circle bg-primary bg-opacity-10 text-primary fs-4">
+            <i class="bi bi-pc-display"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm p-3 assignment-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.02));">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">In-Use (Active)</div>
+            <div class="fs-3 fw-bold text-success">{{ branch_status.in_use_tills }}</div>
+          </div>
+          <div class="p-2 rounded-circle bg-success bg-opacity-10 text-success fs-4">
+            <i class="bi bi-person-check-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm p-3 assignment-card" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(2, 132, 199, 0.02));">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Available Tills</div>
+            <div class="fs-3 fw-bold text-info">{{ branch_status.available_tills }}</div>
+          </div>
+          <div class="p-2 rounded-circle bg-info bg-opacity-10 text-info fs-4">
+            <i class="bi bi-check2-circle"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm p-3 assignment-card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.02));">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Pending Approvals</div>
+            <div class="fs-3 fw-bold text-warning">{{ pending_incoming|length }}</div>
+          </div>
+          <div class="p-2 rounded-circle bg-warning bg-opacity-10 text-warning fs-4">
+            <i class="bi bi-clock-history"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Pending Transfers Alert Callout (if any for destination branch) -->
+  {% if pending_incoming %}
+  <div class="alert alert-warning border-0 shadow-sm rounded-4 p-3 mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="fs-2 text-warning"><i class="bi bi-exclamation-circle-fill"></i></div>
+      <div>
+        <h6 class="mb-1 fw-bold text-dark">Action Required: {{ pending_incoming|length }} Pending Cross-Branch Transfer Request(s)</h6>
+        <p class="small text-muted mb-0">
+          Cashiers have been requested to transfer to <strong>{{ current_branch.name }}</strong>. Your approval as receiving branch manager is required before they can be scheduled.
+        </p>
+      </div>
+    </div>
+    <a href="#tab-transfers" data-bs-toggle="pill" class="btn btn-warning btn-sm fw-bold px-3 py-2 text-nowrap">
+      Review Requests &rarr;
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- Main Navigation Tabs -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-transparent border-0 pt-3 px-4 pb-0">
+      <ul class="nav nav-pills gap-2 flex-nowrap overflow-x-auto pb-2" id="assignmentTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-tills-btn" data-bs-toggle="pill" data-bs-target="#tab-tills" type="button" role="tab">
+            <i class="bi bi-grid-fill me-1"></i> Live Till Map &amp; Status
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-transfers-btn" data-bs-toggle="pill" data-bs-target="#tab-transfers" type="button" role="tab">
+            <i class="bi bi-arrow-left-right me-1"></i> Cross-Branch Transfers
+            {% if pending_incoming %}<span class="badge bg-danger rounded-pill ms-1">{{ pending_incoming|length }}</span>{% endif %}
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-schedules-btn" data-bs-toggle="pill" data-bs-target="#tab-schedules" type="button" role="tab">
+            <i class="bi bi-calendar-check me-1"></i> Shift Schedule
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-labor-btn" data-bs-toggle="pill" data-bs-target="#tab-labor" type="button" role="tab">
+            <i class="bi bi-cash-coin me-1"></i> Labor &amp; Hours Report
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-audits-btn" data-bs-toggle="pill" data-bs-target="#tab-audits" type="button" role="tab">
+            <i class="bi bi-shield-check me-1"></i> Audit Trail Log
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <div class="card-body p-4">
+      <div class="tab-content" id="assignmentTabContent">
+        
+        <!-- ── TAB 1: LIVE TILL MAP ── -->
+        <div class="tab-pane fade show active" id="tab-tills" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">Registered Tills at {{ current_branch.name }}</h5>
+            <small class="text-muted">Updated in real-time as shifts are opened and closed</small>
+          </div>
+
+          <div class="row g-3">
+            {% for t_data in branch_status.tills %}
+            <div class="col-12 col-md-6 col-xl-4">
+              <div class="card h-100 border shadow-sm rounded-4 p-3 assignment-card">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <div>
+                    <h6 class="fw-bold mb-0">{{ t_data.terminal.name }}</h6>
+                    <span class="font-monospace small text-muted">{{ t_data.terminal.terminal_code }}</span>
+                  </div>
+                  <span class="badge {{ t_data.badge_class }} rounded-pill px-2.5 py-1">
+                    {{ t_data.status_label }}
+                  </span>
+                </div>
+
+                <div class="border-top my-2 pt-2">
+                  {% if t_data.active_assignment %}
+                  <div class="small mb-1">
+                    <span class="text-muted">Active Cashier:</span>
+                    <strong class="text-dark d-block">
+                      <i class="bi bi-person-fill text-success me-1"></i>
+                      {{ t_data.active_assignment.cashier.get_full_name|default:t_data.active_assignment.cashier.username }}
+                    </strong>
+                  </div>
+                  <div class="small text-muted mb-3">
+                    <i class="bi bi-clock me-1"></i> Shift: {{ t_data.active_assignment.shift_start|date:"H:i" }} &ndash; {{ t_data.active_assignment.shift_end|date:"H:i" }}
+                    {% if t_data.active_assignment.hourly_rate > 0 %}
+                    &nbsp;&bull;&nbsp; KES {{ t_data.active_assignment.hourly_rate }}/hr
+                    {% endif %}
+                  </div>
+                  <form method="POST" action="{% url 'release_till_view' pk=t_data.active_assignment.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm w-100 fw-bold" onclick="return confirm('Release till and close shift for {{ t_data.active_assignment.cashier.username }}?');">
+                      <i class="bi bi-box-arrow-right me-1"></i> Release Till
+                    </button>
+                  </form>
+                  {% else %}
+                  <div class="small text-muted mb-3 py-2">
+                    <i class="bi bi-check-circle me-1 text-primary"></i> Till is currently free and ready for allocation.
+                  </div>
+                  <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-bold" onclick="openAssignModalForTill('{{ t_data.terminal.id }}', '{{ t_data.terminal.name }} ({{ t_data.terminal.terminal_code }})')">
+                    <i class="bi bi-person-plus-fill me-1"></i> Allocate Cashier to Till
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% empty %}
+            <div class="col-12 py-5 text-center text-muted">
+              <i class="bi bi-pc-display fs-1 d-block mb-2 text-secondary"></i>
+              <h6>No POS terminals registered at this branch yet.</h6>
+              <a href="{% url 'terminal_register' %}" class="btn btn-primary btn-sm mt-2">
+                <i class="bi bi-plus-circle me-1"></i> Register a POS Terminal
+              </a>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- ── TAB 2: CROSS-BRANCH TRANSFERS ── -->
+        <div class="tab-pane fade" id="tab-transfers" role="tabpanel">
+          
+          <!-- Incoming Pending Requests (Require Approval) -->
+          <h5 class="fw-bold mb-3">
+            <i class="bi bi-arrow-down-left-circle-fill text-warning me-2"></i>Incoming Requests to {{ current_branch.name }}
+          </h5>
+
+          {% if pending_incoming %}
+          <div class="table-responsive mb-4">
+            <table class="table table-hover align-middle border">
+              <thead class="table-light small text-uppercase">
+                <tr>
+                  <th>Cashier</th>
+                  <th>Origin Branch</th>
+                  <th>Type</th>
+                  <th>Duration</th>
+                  <th>Requested By</th>
+                  <th>Reason</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for req in pending_incoming %}
+                <tr>
+                  <td>
+                    <strong>{{ req.cashier.get_full_name|default:req.cashier.username }}</strong>
+                    <div class="small text-muted font-monospace">{{ req.cashier.email|default:"" }}</div>
+                  </td>
+                  <td>
+                    <span class="badge bg-light text-dark border">{{ req.from_branch.name }}</span>
+                  </td>
+                  <td>
+                    {% if req.transfer_type == 'permanent' %}
+                      <span class="badge bg-danger">Permanent</span>
+                    {% else %}
+                      <span class="badge bg-info text-dark">Temporary</span>
+                    {% endif %}
+                  </td>
+                  <td class="small">
+                    <div><strong>Start:</strong> {{ req.start_date|date:"d M Y" }}</div>
+                    {% if req.end_date %}
+                    <div><strong>End:</strong> {{ req.end_date|date:"d M Y" }}</div>
+                    {% else %}
+                    <div class="text-muted">Ongoing</div>
+                    {% endif %}
+                  </td>
+                  <td class="small text-muted">{{ req.requested_by.username }}</td>
+                  <td class="small" style="max-width: 200px;">{{ req.reason }}</td>
+                  <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                      <form method="POST" action="{% url 'approve_transfer_view' pk=req.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success fw-bold" onclick="return confirm('Approve transfer of {{ req.cashier.username }} to {{ current_branch.name }}?');">
+                          <i class="bi bi-check-lg"></i> Approve
+                        </button>
+                      </form>
+                      <button type="button" class="btn btn-outline-danger" onclick="openRejectModal('{{ req.id }}', '{{ req.cashier.username }}')">
+                        <i class="bi bi-x-lg"></i> Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="alert alert-light border small text-muted mb-4">
+            <i class="bi bi-info-circle me-1"></i> No pending transfer requests requiring your approval for {{ current_branch.name }}.
+          </div>
+          {% endif %}
+
+          <!-- All Cross-Branch Transfer Records -->
+          <h5 class="fw-bold mb-3 mt-4">
+            <i class="bi bi-journal-text me-2"></i>All Cross-Branch Transfer Requests
+          </h5>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle border">
+              <thead class="table-light small text-uppercase">
+                <tr>
+                  <th>Cashier</th>
+                  <th>From &rarr; To</th>
+                  <th>Type</th>
+                  <th>Date Window</th>
+                  <th>Status</th>
+                  <th>Requested By</th>
+                  <th>Approved / Action By</th>
+                  <th>Date Requested</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for tr in all_transfers %}
+                <tr>
+                  <td><strong>{{ tr.cashier.get_full_name|default:tr.cashier.username }}</strong></td>
+                  <td>
+                    <span class="badge bg-secondary">{{ tr.from_branch.code }}</span> &rarr;
+                    <span class="badge bg-primary">{{ tr.to_branch.code }}</span>
+                  </td>
+                  <td>
+                    {% if tr.transfer_type == 'permanent' %}<span class="badge bg-danger">Permanent</span>{% else %}<span class="badge bg-info text-dark">Temporary</span>{% endif %}
+                  </td>
+                  <td class="small">
+                    {{ tr.start_date|date:"d M Y" }}{% if tr.end_date %} &ndash; {{ tr.end_date|date:"d M Y" }}{% endif %}
+                  </td>
+                  <td>
+                    {% if tr.status == 'approved' %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                    {% elif tr.status == 'rejected' %}
+                      <span class="badge bg-danger" title="{{ tr.rejection_reason }}"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                    {% elif tr.status == 'pending' %}
+                      <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pending</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ tr.status|title }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="small text-muted">{{ tr.requested_by.username }}</td>
+                  <td class="small text-muted">{{ tr.approved_by.username|default:"—" }}</td>
+                  <td class="small text-muted">{{ tr.created_at|date:"d M Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="8" class="text-center py-4 text-muted">No cross-branch transfer requests found.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── TAB 3: SHIFT SCHEDULE ── -->
+        <div class="tab-pane fade" id="tab-schedules" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">Scheduled &amp; Active Shifts</h5>
+            <div class="d-flex gap-2">
+              <a href="?branch_id={{ current_branch.id }}&status_filter=" class="btn btn-sm {% if not status_filter %}btn-dark{% else %}btn-outline-secondary{% endif %}">All</a>
+              <a href="?branch_id={{ current_branch.id }}&status_filter=active" class="btn btn-sm {% if status_filter == 'active' %}btn-success{% else %}btn-outline-success{% endif %}">Active</a>
+              <a href="?branch_id={{ current_branch.id }}&status_filter=scheduled" class="btn btn-sm {% if status_filter == 'scheduled' %}btn-primary{% else %}btn-outline-primary{% endif %}">Scheduled</a>
+              <a href="?branch_id={{ current_branch.id }}&status_filter=completed" class="btn btn-sm {% if status_filter == 'completed' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Completed</a>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle border">
+              <thead class="table-light small text-uppercase">
+                <tr>
+                  <th>Cashier</th>
+                  <th>Till / Terminal</th>
+                  <th>Shift Window</th>
+                  <th>Status</th>
+                  <th>Rate (KES/hr)</th>
+                  <th>Hours Worked</th>
+                  <th>Labor Cost</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in assignments %}
+                <tr>
+                  <td>
+                    <strong>{{ a.cashier.get_full_name|default:a.cashier.username }}</strong>
+                  </td>
+                  <td>
+                    <strong>{{ a.terminal.name }}</strong>
+                    <div class="small text-muted font-monospace">{{ a.terminal.terminal_code }}</div>
+                  </td>
+                  <td class="small">
+                    <div><strong>Start:</strong> {{ a.shift_start|date:"d M Y, H:i" }}</div>
+                    <div><strong>End:</strong> {{ a.shift_end|date:"d M Y, H:i" }}</div>
+                  </td>
+                  <td>
+                    {% if a.status == 'active' %}
+                      <span class="badge bg-success"><i class="bi bi-circle-fill me-1 small"></i>Active</span>
+                    {% elif a.status == 'scheduled' %}
+                      <span class="badge bg-primary">Scheduled</span>
+                    {% elif a.status == 'completed' %}
+                      <span class="badge bg-secondary">Completed</span>
+                    {% else %}
+                      <span class="badge bg-light text-dark">{{ a.status|title }}</span>
+                    {% endif %}
+                  </td>
+                  <td>KES {{ a.hourly_rate }}</td>
+                  <td>{{ a.calculate_hours_worked }} hrs</td>
+                  <td><strong>KES {{ a.calculate_labor_cost }}</strong></td>
+                  <td class="text-end">
+                    {% if a.status == 'scheduled' %}
+                    <form method="POST" action="{% url 'activate_till_view' pk=a.id %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-success fw-semibold">
+                        <i class="bi bi-play-fill"></i> Start Shift
+                      </button>
+                    </form>
+                    {% elif a.status == 'active' %}
+                    <form method="POST" action="{% url 'release_till_view' pk=a.id %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger fw-semibold" onclick="return confirm('Release till and mark shift completed?');">
+                        <i class="bi bi-stop-fill"></i> Release
+                      </button>
+                    </form>
+                    {% else %}
+                    <span class="text-muted small">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="8" class="text-center py-4 text-muted">No shift assignments found for this branch.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── TAB 4: LABOR & HOURS REPORT ── -->
+        <div class="tab-pane fade" id="tab-labor" role="tabpanel">
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <div>
+              <h5 class="fw-bold mb-0">Branch Labor Cost &amp; Hours Analysis</h5>
+              <small class="text-muted">Aggregated cashier work hours and labor expenses for {{ current_branch.name }}</small>
+            </div>
+
+            <!-- Date Range Filter -->
+            <form method="GET" class="d-flex align-items-center gap-2">
+              <input type="hidden" name="branch_id" value="{{ current_branch.id }}">
+              <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date_str }}" required>
+              <span class="text-muted small">to</span>
+              <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date_str }}" required>
+              <button type="submit" class="btn btn-sm btn-primary fw-semibold">Filter</button>
+            </form>
+          </div>
+
+          {% if labor_report %}
+          <!-- Metrics Overview -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <div class="card border p-3 rounded-4 shadow-sm bg-light">
+                <div class="text-muted small fw-bold text-uppercase">Total Shifts Completed / Active</div>
+                <div class="fs-3 fw-bold text-dark">{{ labor_report.total_shifts }}</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card border p-3 rounded-4 shadow-sm bg-light">
+                <div class="text-muted small fw-bold text-uppercase">Total Hours Worked</div>
+                <div class="fs-3 fw-bold text-primary">{{ labor_report.total_hours_worked }} hrs</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card border p-3 rounded-4 shadow-sm bg-light">
+                <div class="text-muted small fw-bold text-uppercase">Total Labor Expense</div>
+                <div class="fs-3 fw-bold text-success">KES {{ labor_report.total_labor_cost }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cashier Breakdown Table -->
+          <div class="table-responsive">
+            <table class="table table-hover align-middle border">
+              <thead class="table-light small text-uppercase">
+                <tr>
+                  <th>Cashier</th>
+                  <th class="text-center">Total Shifts</th>
+                  <th class="text-center">Hourly Rate</th>
+                  <th class="text-center">Total Hours</th>
+                  <th class="text-end">Total Labor Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c_stat in labor_report.cashiers %}
+                <tr>
+                  <td><strong>{{ c_stat.cashier_name }}</strong></td>
+                  <td class="text-center">{{ c_stat.shifts_count }}</td>
+                  <td class="text-center">KES {{ c_stat.hourly_rate }}</td>
+                  <td class="text-center"><strong>{{ c_stat.total_hours }} hrs</strong></td>
+                  <td class="text-end fw-bold text-success">KES {{ c_stat.total_cost }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center py-4 text-muted">No labor data recorded in this date range.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- ── TAB 5: AUDIT TRAIL LOG ── -->
+        <div class="tab-pane fade" id="tab-audits" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">Immutable Assignment &amp; Transfer Audit Trail</h5>
+            <small class="text-muted">Captures all allocations, approvals, and conflict preventions</small>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle border">
+              <thead class="table-light small text-uppercase">
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Cashier</th>
+                  <th>Performed By</th>
+                  <th>Branch / Till</th>
+                  <th>Reason / Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for log in audit_logs %}
+                <tr>
+                  <td class="small text-muted text-nowrap">{{ log.timestamp|date:"d M Y, H:i:s" }}</td>
+                  <td>
+                    {% if 'approved' in log.action or 'activated' in log.action %}
+                      <span class="badge bg-success">{{ log.get_action_display }}</span>
+                    {% elif 'rejected' in log.action or 'prevented' in log.action %}
+                      <span class="badge bg-danger">{{ log.get_action_display }}</span>
+                    {% elif 'requested' in log.action or 'assigned' in log.action %}
+                      <span class="badge bg-primary">{{ log.get_action_display }}</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ log.get_action_display }}</span>
+                    {% endif %}
+                  </td>
+                  <td><strong>{{ log.cashier.get_full_name|default:log.cashier.username }}</strong></td>
+                  <td class="small">{{ log.performed_by.username|default:"System" }}</td>
+                  <td class="small">
+                    {% if log.to_branch %}{{ log.to_branch.name }}{% endif %}
+                    {% if log.terminal %} (Till: {{ log.terminal.terminal_code }}){% endif %}
+                  </td>
+                  <td class="small text-muted" style="max-width: 250px;">{{ log.reason }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="6" class="text-center py-4 text-muted">No audit logs recorded yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── MODAL: SCHEDULE / ASSIGN CASHIER TO TILL ── -->
+<div class="modal fade" id="assignTillModal" tabindex="-1" aria-labelledby="assignTillModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <form method="POST" action="{% url 'assign_till_view' %}">
+        {% csrf_token %}
+        <input type="hidden" name="branch_id" value="{{ current_branch.id }}">
+        
+        <div class="modal-header bg-primary text-white rounded-top-4">
+          <h5 class="modal-title fw-bold" id="assignTillModalLabel">
+            <i class="bi bi-calendar-plus me-2"></i>Schedule Cashier to Till
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        
+        <div class="modal-body p-4">
+          <div class="alert alert-info py-2 px-3 small mb-3">
+            <i class="bi bi-info-circle-fill me-1"></i>
+            Assigning at <strong>{{ current_branch.name }}</strong>. The system automatically enforces 1 cashier per till and prevents cross-branch schedule overlaps.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Select Cashier *</label>
+            <select name="cashier_id" class="form-select" required>
+              <option value="">— Select cashier —</option>
+              {% for c in eligible_cashiers %}
+                <option value="{{ c.user.id }}">
+                  {{ c.name }} (Active: {{ c.active_branch.name|default:"Unassigned" }}{% if c.is_temporary %} [Temp Transfer]{% endif %})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Select Till / Terminal *</label>
+            <select name="terminal_id" id="modalTerminalSelect" class="form-select" required>
+              <option value="">— Select till —</option>
+              {% for t_data in branch_status.tills %}
+                <option value="{{ t_data.terminal.id }}" {% if t_data.status != 'available' %}disabled{% endif %}>
+                  {{ t_data.terminal.name }} ({{ t_data.terminal.terminal_code }}) &mdash; {{ t_data.status_label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold small">Shift Start *</label>
+              <input type="datetime-local" name="shift_start" class="form-control" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-bold small">Shift End *</label>
+              <input type="datetime-local" name="shift_end" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Hourly Rate (KES)</label>
+            <input type="number" step="0.01" name="hourly_rate" class="form-control" placeholder="0.00" value="0.00">
+            <small class="text-muted">Used for branch labor cost accounting</small>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-bold small">Notes / Instructions</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Optional shift remarks..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer border-0 pt-0 px-4 pb-4">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary fw-bold px-4">Confirm Assignment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: REQUEST CROSS-BRANCH TRANSFER ── -->
+<div class="modal fade" id="requestTransferModal" tabindex="-1" aria-labelledby="requestTransferModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <form method="POST" action="{% url 'request_transfer_view' %}">
+        {% csrf_token %}
+        <div class="modal-header bg-dark text-white rounded-top-4">
+          <h5 class="modal-title fw-bold" id="requestTransferModalLabel">
+            <i class="bi bi-arrow-left-right me-2 text-info"></i>Request Cross-Branch Transfer
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Cashier to Transfer *</label>
+            <select name="cashier_id" class="form-select" required>
+              <option value="">— Select cashier —</option>
+              {% for c in all_cashiers %}
+                <option value="{{ c.id }}">{{ c.get_full_name|default:c.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold small">Origin Branch *</label>
+              <select name="from_branch_id" class="form-select" required>
+                {% for b in branches %}
+                  <option value="{{ b.id }}" {% if current_branch and current_branch.id == b.id %}selected{% endif %}>
+                    {{ b.name }} ({{ b.code }})
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-bold small">Destination Branch *</label>
+              <select name="to_branch_id" class="form-select" required>
+                <option value="">— Select branch —</option>
+                {% for b in branches %}
+                  <option value="{{ b.id }}">{{ b.name }} ({{ b.code }})</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Transfer Type *</label>
+            <div class="d-flex gap-4">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="transfer_type" id="type_temp" value="temporary" checked onchange="toggleEndDate(true)">
+                <label class="form-check-label" for="type_temp">Temporary Transfer</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="transfer_type" id="type_perm" value="permanent" onchange="toggleEndDate(false)">
+                <label class="form-check-label" for="type_perm">Permanent Transfer</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold small">Start Date *</label>
+              <input type="date" name="start_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+            </div>
+            <div class="col-6" id="endDateWrapper">
+              <label class="form-label fw-bold small">End Date *</label>
+              <input type="date" name="end_date" id="inputEndDate" class="form-control">
+              <small class="text-muted">Auto-reverts to home branch after this date</small>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-bold small">Reason for Transfer *</label>
+            <textarea name="reason" class="form-control" rows="2" placeholder="e.g. Covering staff shortage, peak weekend rush..." required></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer border-0 pt-0 px-4 pb-4">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary fw-bold px-4">Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: REJECT TRANSFER ── -->
+<div class="modal fade" id="rejectTransferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow rounded-4">
+      <form method="POST" id="rejectForm" action="">
+        {% csrf_token %}
+        <div class="modal-header bg-danger text-white rounded-top-4">
+          <h6 class="modal-title fw-bold"><i class="bi bi-x-circle me-1"></i>Reject Transfer Request</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <p class="small text-muted mb-2">Provide a reason for rejecting the transfer for <strong id="rejectCashierName"></strong>:</p>
+          <textarea name="rejection_reason" class="form-control form-control-sm" rows="3" placeholder="Reason for rejection..." required></textarea>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-danger fw-bold">Reject Transfer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleEndDate(isTemporary) {
+    const wrapper = document.getElementById('endDateWrapper');
+    const input = document.getElementById('inputEndDate');
+    if (isTemporary) {
+      wrapper.style.display = 'block';
+      input.setAttribute('required', 'required');
+    } else {
+      wrapper.style.display = 'none';
+      input.removeAttribute('required');
+      input.value = '';
+    }
+  }
+
+  function openAssignModalForTill(terminalId, terminalLabel) {
+    const modal = new bootstrap.Modal(document.getElementById('assignTillModal'));
+    const select = document.getElementById('modalTerminalSelect');
+    if (select) {
+      select.value = terminalId;
+    }
+    modal.show();
+  }
+
+  function openRejectModal(transferId, cashierName) {
+    const modal = new bootstrap.Modal(document.getElementById('rejectTransferModal'));
+    document.getElementById('rejectCashierName').innerText = cashierName;
+    document.getElementById('rejectForm').action = `/branches/assignments/transfers/${transferId}/reject/`;
+    modal.show();
+  }
+</script>
+{% endblock %}

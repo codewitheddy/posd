@@ -360,6 +360,13 @@
             word-break: break-word;
         }
 
+        .r-item-code {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #4b5563;
+            letter-spacing: 0.3px;
+        }
+
         .r-item-calc {
             display: flex;
             justify-content: space-between;
@@ -615,6 +622,10 @@
                 background: #ffffff !important;
                 border: 1px dashed #000000 !important;
             }
+
+            .r-item-code {
+                color: #000000 !important;
+            }
         }
     </style>
 </head>
@@ -752,7 +763,14 @@
 
                 {% for item in sale.items.all %}
                 <div class="r-item">
-                    <div class="r-item-name">{{ item.product.name }}</div>
+                    <div class="r-item-name">
+                        {{ item.product.name }}
+                        {% if item.product.product_code %}
+                        <span class="r-item-code">[{{ item.product.product_code }}]</span>
+                        {% elif item.product.barcode %}
+                        <span class="r-item-code">[{{ item.product.barcode }}]</span>
+                        {% endif %}
+                    </div>
                     {% if item.note %}
                     <div class="r-item-note">↳ {{ item.note }}</div>
                     {% endif %}
@@ -1029,7 +1047,7 @@
             txt += `--------------------------------\n`;
             txt += `ITEMS:\n`;
             {% for item in sale.items.all %}
-            txt += `- {{ item.product.name }} (x{{ item.quantity }}) : KES {{ item.total_price|floatformat:2 }}\n`;
+            txt += `- {{ item.product.name }}{% if item.product.product_code %} [{{ item.product.product_code }}]{% elif item.product.barcode %} [{{ item.product.barcode }}]{% endif %} (x{{ item.quantity }}) : KES {{ item.total_price|floatformat:2 }}\n`;
             {% endfor %}
             txt += `--------------------------------\n`;
             txt += `Subtotal: KES {{ sale.subtotal|floatformat:2 }}\n`;

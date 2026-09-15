@@ -11,11 +11,16 @@
 .t-table tbody tr:hover{background:#f8f9fc}
 .t-table tbody td{padding:12px 16px;vertical-align:middle}
 .badge-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
-.badge-pending{background:#fef3c7;color:#92400e}
+.badge-draft{background:#f3f4f6;color:#374151}
+.badge-pending,.badge-pending_approval{background:#fef3c7;color:#92400e}
 .badge-approved{background:#dbeafe;color:#1e40af}
 .badge-dispatched{background:#e0e7ff;color:#4338ca}
+.badge-in_transit{background:#ede9fe;color:#5b21b6}
+.badge-receiving{background:#fef9c3;color:#854d0e}
 .badge-partially_fulfilled{background:#fed7aa;color:#9a3412}
-.badge-fulfilled{background:#dcfce7;color:#166534}
+.badge-fulfilled,.badge-completed{background:#dcfce7;color:#166534}
+.badge-discrepancy_flagged{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.badge-resolved{background:#f0fdf4;color:#166534;border:1px solid #86efac}
 .badge-rejected{background:#fee2e2;color:#991b1b}
 .badge-cancelled{background:#f3f4f6;color:#6b7280}
 .btn-primary-sm{background:#224195;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
@@ -24,6 +29,8 @@
 .btn-success-sm:hover{background:#14532d;color:#fff}
 .btn-danger-sm{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
 .btn-danger-sm:hover{background:#b91c1c;color:#fff}
+.btn-warning-sm{background:#d97706;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn-warning-sm:hover{background:#b45309;color:#fff}
 .btn-outline-sm{background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
 .btn-outline-sm:hover{border-color:#9ca3af;color:#111}
 .info-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:2px}
@@ -38,6 +45,9 @@
         <a href="{% url 'transfer_request_list' %}" class="btn-outline-sm" style="padding:4px 8px"><i class="bi bi-arrow-left"></i> Back</a>
         <h1 style="font-size:22px;font-weight:700;margin:0">Transfer Request {{ transfer_request.reference_number }}</h1>
         <span class="badge-status badge-{{ transfer_request.status }}">{{ transfer_request.get_status_display }}</span>
+        {% if transfer_request.auto_approved %}
+        <span class="badge bg-info text-dark" style="font-size:11px;border-radius:12px"><i class="bi bi-lightning-charge me-1"></i>Auto-Approved</span>
+        {% endif %}
       </div>
       <p style="font-size:13px;color:#6b7280;margin:0">Requested on {{ transfer_request.created_at|date:"d M Y H:i" }} by {{ transfer_request.requested_by.username }}</p>
     </div>
@@ -70,11 +80,19 @@
           <div class="info-val">
             {% if transfer_request.approved_by %}
               {{ transfer_request.approved_by.username }} <span style="font-size:11px;color:#6b7280">({{ transfer_request.approved_at|date:"d M Y" }})</span>
+            {% elif transfer_request.auto_approved %}
+              <span class="text-primary font-weight-bold">System (Policy Threshold)</span>
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
           </div>
         </div>
+        {% if transfer_request.total_estimated_value %}
+        <div class="col-6 col-md-3">
+          <div class="info-label">Total Estimated Value</div>
+          <div class="info-val">{{ transfer_request.total_estimated_value }}</div>
+        </div>
+        {% endif %}
         {% if transfer_request.reason %}
         <div class="col-12 mt-2">
           <div class="info-label">Transfer Reason</div>
@@ -91,8 +109,102 @@
     </div>
   </div>
 
+  <!-- Discrepancy Flagged Alert Banner & Resolution Section -->
+  {% if transfer_request.status == 'discrepancy_flagged' %}
+  <div class="int-card" style="border:1.5px solid #f87171">
+    <div class="int-card-header bg-danger text-white">
+      <span><i class="bi bi-exclamation-triangle-fill me-2"></i>Receiving Discrepancy Flagged</span>
+      <span class="badge bg-white text-danger">Supervisor Resolution Required</span>
+    </div>
+    <div class="int-card-body">
+      <p style="font-size:13px;color:#7f1d1d;margin-bottom:16px">
+        Goods arrived with a quantity shortfall or damage. Missing stock has <strong>not</strong> been added to destination branch inventory and is held in transit awaiting supervisor sign-off.
+      </p>
+
+      {% if can_resolve %}
+      <form method="POST" action="{% url 'transfer_request_resolve_discrepancy' pk=transfer_request.pk %}">
+        {% csrf_token %}
+        <div class="table-responsive mb-3">
+          <table class="t-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th class="text-center">Dispatched</th>
+                <th class="text-center">Received</th>
+                <th class="text-center text-danger">Discrepancy</th>
+                <th>Reported Reason</th>
+                <th style="width:240px">Resolution Action</th>
+                <th>Item Resolution Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in transfer_request.items.all %}
+              <tr>
+                <td style="font-weight:600">{{ item.product.name }}</td>
+                <td class="text-center">{{ item.dispatched_quantity }}</td>
+                <td class="text-center">{{ item.received_quantity }}</td>
+                <td class="text-center text-danger" style="font-weight:700">{{ item.discrepancy_quantity|default:"0" }}</td>
+                <td style="font-size:12px;color:#6b7280">{{ item.discrepancy_reason|default:"None specified" }}</td>
+                <td>
+                  <select name="resolution_{{ item.id }}" class="form-select form-select-sm" style="font-size:12px">
+                    <option value="writeoff_loss">Write-Off Loss (In-Transit Loss)</option>
+                    <option value="returned_to_source">Return to Source Branch Stock</option>
+                    <option value="accepted_variance">Accept Variance (No Ledger Adjustment)</option>
+                  </select>
+                </td>
+                <td>
+                  <input type="text" name="notes_{{ item.id }}" class="form-control form-control-sm" placeholder="Optional item note...">
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mb-3">
+          <label class="info-label">Supervisor Resolution Summary / Audit Notes</label>
+          <textarea name="resolution_notes" class="form-control" rows="2" placeholder="Explain the investigation and resolution decision..." required></textarea>
+        </div>
+
+        <div class="text-end">
+          <button type="submit" class="btn-warning-sm">
+            <i class="bi bi-shield-check me-1"></i> Confirm & Finalize Discrepancy Resolution
+          </button>
+        </div>
+      </form>
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:13px">
+        <i class="bi bi-lock-fill me-1"></i> You do not have permission to resolve discrepancies. An authorized manager or administrator must sign off on this discrepancy.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Discrepancy Resolved Summary Card -->
+  {% if transfer_request.status == 'resolved' %}
+  <div class="int-card" style="border:1.5px solid #86efac">
+    <div class="int-card-header" style="background:#f0fdf4;color:#166534">
+      <span><i class="bi bi-check2-all me-2"></i>Discrepancy Resolved</span>
+      <span style="font-size:12px;color:#166534">
+        Resolved by {{ transfer_request.discrepancy_resolved_by.username }} on {{ transfer_request.discrepancy_resolved_at|date:"d M Y H:i" }}
+      </span>
+    </div>
+    <div class="int-card-body">
+      {% if transfer_request.discrepancy_resolution_notes %}
+      <div class="mb-2">
+        <div class="info-label">Resolution Notes</div>
+        <div style="font-size:13px;background:#f9fafb;padding:10px 14px;border-radius:8px;border:1px solid #e5e7eb">
+          {{ transfer_request.discrepancy_resolution_notes }}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Items Table / Approval Form for Source Branch Manager or HQ -->
-  {% if can_approve and transfer_request.status == 'pending' %}
+  {% if can_approve and transfer_request.status == 'pending' or can_approve and transfer_request.status == 'pending_approval' %}
   <form method="POST" action="{% url 'transfer_request_approve' pk=transfer_request.pk %}">
     {% csrf_token %}
     <div class="int-card">
@@ -174,8 +286,13 @@
           <tr>
             <th>Product</th>
             <th>SKU</th>
+            <th class="text-center">Unit Cost</th>
             <th class="text-center">Requested Qty</th>
             <th class="text-center">Approved Qty</th>
+            <th class="text-center">Dispatched Qty</th>
+            <th class="text-center">Received Qty</th>
+            <th class="text-center">Discrepancy</th>
+            <th>Resolution</th>
           </tr>
         </thead>
         <tbody>
@@ -183,9 +300,18 @@
           <tr>
             <td style="font-weight:600">{{ item.product.name }}</td>
             <td style="font-family:monospace;color:#6b7280">{{ item.product.sku|default:"-" }}</td>
+            <td class="text-center" style="font-family:monospace;color:#6b7280">{{ item.unit_cost_at_dispatch|default:"-" }}</td>
             <td class="text-center" style="font-weight:600">{{ item.requested_quantity }}</td>
             <td class="text-center" style="font-weight:700;color:{% if item.approved_quantity %}#166534{% else %}#6b7280{% endif %}">
               {{ item.approved_quantity|default:"Pending" }}
+            </td>
+            <td class="text-center">{{ item.dispatched_quantity }}</td>
+            <td class="text-center">{{ item.received_quantity }}</td>
+            <td class="text-center {% if item.discrepancy_quantity %}text-danger font-weight-bold{% endif %}">
+              {{ item.discrepancy_quantity|default:"0" }}
+            </td>
+            <td style="font-size:12px;color:#6b7280">
+              {{ item.discrepancy_resolution|default:"—" }}
             </td>
           </tr>
           {% endfor %}
@@ -196,7 +322,7 @@
   {% endif %}
 
   <!-- Dispatch Action when Approved -->
-  {% if can_approve and transfer_request.status == 'approved' or can_approve and transfer_request.status == 'partially_fulfilled' %}
+  {% if can_dispatch and transfer_request.status == 'approved' or can_dispatch and transfer_request.status == 'partially_fulfilled' %}
   <div class="int-card">
     <div class="int-card-header">
       <span><i class="bi bi-truck me-2"></i>Dispatch Stock from {{ transfer_request.source_branch.name }}</span>
@@ -282,6 +408,43 @@
     </div>
   </div>
   {% endif %}
+
+  <!-- Audit Trail & Event Timeline -->
+  <div class="int-card">
+    <div class="int-card-header">
+      <span><i class="bi bi-clock-history me-2"></i>Audit Trail & State Machine Timeline</span>
+      <span class="badge bg-light text-dark border">{{ events|length }} Recorded Events</span>
+    </div>
+    <div class="int-card-body">
+      {% if events %}
+      <div class="timeline" style="position:relative;padding-left:24px;border-left:2px solid #e5e7eb;margin-left:8px">
+        {% for evt in events %}
+        <div class="timeline-item mb-4" style="position:relative">
+          <div style="position:absolute;left:-31px;top:2px;width:12px;height:12px;border-radius:50%;background:{% if 'discrepancy' in evt.event_type %}#ef4444{% elif 'resolved' in evt.event_type or 'completed' in evt.event_type or 'received' in evt.event_type %}#10b981{% elif 'approve' in evt.event_type %}#3b82f6{% elif 'reject' in evt.event_type %}#dc2626{% else %}#6b7280{% endif %};border:2px solid #fff;box-shadow:0 0 0 2px #e5e7eb"></div>
+          <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap">
+            <span style="font-weight:700;font-size:13px;color:#111827">
+              {{ evt.get_event_type_display }}
+            </span>
+            <span style="font-size:12px;color:#9ca3af">
+              <i class="bi bi-clock me-1"></i>{{ evt.created_at|date:"d M Y H:i:s" }}
+            </span>
+          </div>
+          <p style="font-size:13px;color:#4b5563;margin-bottom:4px">{{ evt.description }}</p>
+          <div style="font-size:11px;color:#6b7280">
+            {% if evt.performed_by %}
+              <i class="bi bi-person me-1"></i><strong>{{ evt.performed_by.username }}</strong>
+            {% else %}
+              <i class="bi bi-robot me-1"></i><strong>System / Auto</strong>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:13px">No audit events recorded for this transfer request yet.</p>
+      {% endif %}
+    </div>
+  </div>
 
 </div>
 {% endblock %}

@@ -1,10 +1,10 @@
-"""
-Branch management views for Marid POS multi-branch feature.
-"""
+import json
 from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Q, Sum, Value, DecimalField, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -14,13 +14,15 @@ from django.contrib.auth.models import User
 from .decorators import business_required
 from .models import (
     Branch, BranchMembership, BranchStock, BranchPriceOverride,
-    StockTransfer, Product, StockRequisition, StockRequisitionItem,
+    StockTransfer, Product, Category, SaleItem, StockRequisition, StockRequisitionItem,
     StockTransferRequest, StockTransferItem, Dispatch, DispatchItem,
-    StockMovement,
+    StockMovement, TransferEvent, TransferApprovalRule,
 )
 from .branch_services import (
     BranchStockService, StockTransferService, ConsolidatedReportService,
     DistributionService, is_owner_or_admin, is_branch_manager, get_user_branches,
+    can_user_request_transfer, can_user_approve_transfer, can_user_dispatch_transfer,
+    can_user_receive_transfer, can_user_resolve_discrepancy,
 )
 
 
@@ -139,15 +141,69 @@ def transfer_list(request, branch_id=None, *args, **kwargs):
             messages.error(request, 'Permission denied.')
             return redirect('branch_list')
 
-    transfers = StockTransfer.objects.filter(
+    direction = request.GET.get('direction', 'all').strip().lower()
+    status_filter = request.GET.get('status', 'all').strip().lower()
+    search_query = request.GET.get('q', '').strip()
+
+    qs = StockTransfer.objects.filter(business=request.business)
+
+    if direction == 'outgoing':
+        qs = qs.filter(source_branch=branch)
+    elif direction == 'incoming':
+        qs = qs.filter(destination_branch=branch)
+    else:
+        qs = qs.filter(Q(source_branch=branch) | Q(destination_branch=branch))
+
+    if status_filter and status_filter != 'all':
+        qs = qs.filter(status=status_filter)
+
+    if search_query:
+        qs = qs.filter(
+            Q(reference__icontains=search_query) |
+            Q(product__name__icontains=search_query) |
+            Q(product__product_code__icontains=search_query) |
+            Q(product__barcode__icontains=search_query) |
+            Q(note__icontains=search_query)
+        )
+
+    transfers = qs.select_related(
+        'product', 'product__category', 'product__unit', 'source_branch', 'destination_branch', 'initiated_by'
+    ).order_by('-created_at')[:100]
+
+    # Quick metrics for this branch
+    all_branch_transfers = StockTransfer.objects.filter(
         business=request.business
     ).filter(
         Q(source_branch=branch) | Q(destination_branch=branch)
-    ).select_related('product', 'source_branch', 'destination_branch').order_by('-created_at')[:50]
+    )
+
+    total_count = all_branch_transfers.count()
+    outbound_count = all_branch_transfers.filter(source_branch=branch).count()
+    inbound_count = all_branch_transfers.filter(destination_branch=branch).count()
+    completed_count = all_branch_transfers.filter(status='completed').count()
+
+    outbound_units = all_branch_transfers.filter(source_branch=branch, status='completed').aggregate(
+        total=Sum('quantity')
+    )['total'] or Decimal('0.000')
+
+    inbound_units = all_branch_transfers.filter(destination_branch=branch, status='completed').aggregate(
+        total=Sum('quantity')
+    )['total'] or Decimal('0.000')
 
     return render(request, 'pos/branches/transfer_list.html', {
         'branch': branch,
         'transfers': transfers,
+        'direction': direction,
+        'status_filter': status_filter,
+        'search_query': search_query,
+        'stats': {
+            'total_count': total_count,
+            'outbound_count': outbound_count,
+            'inbound_count': inbound_count,
+            'completed_count': completed_count,
+            'outbound_units': outbound_units,
+            'inbound_units': inbound_units,
+        },
     })
 
 
@@ -170,38 +226,154 @@ def transfer_create(request, branch_id=None, *args, **kwargs):
 
     if request.method == 'POST':
         dest_id = request.POST.get('destination_branch')
-        product_id = request.POST.get('product')
-        qty = request.POST.get('quantity', '0')
-        note = request.POST.get('note', '')
+        note = request.POST.get('note', '').strip()
+
+        if not dest_id:
+            messages.error(request, 'Please select a destination branch.')
+            return redirect('transfer_create', branch_id=branch_id)
 
         try:
-            destination = Branch.objects.get(pk=dest_id, business=request.business)
-            product = Product.objects.get(pk=product_id, business=request.business)
-            from decimal import Decimal
-            transfer = StockTransferService.create(
-                source=branch,
-                destination=destination,
-                product=product,
-                qty=Decimal(qty),
-                note=note,
-                initiated_by=request.user,
-            )
-            # Auto-confirm immediately
-            StockTransferService.confirm(transfer)
-            messages.success(
-                request,
-                f'Transferred {qty} × {product.name} to {destination.name}.'
-            )
+            destination = Branch.objects.get(pk=dest_id, business=request.business, is_active=True)
+        except Branch.DoesNotExist:
+            messages.error(request, 'Destination branch not found or inactive.')
+            return redirect('transfer_create', branch_id=branch_id)
+
+        if destination.pk == branch.pk:
+            messages.error(request, 'Source and destination branches must be different.')
+            return redirect('transfer_create', branch_id=branch_id)
+
+        items_to_transfer = []
+
+        # 1. Bulk transfer payload via JSON
+        items_json_str = request.POST.get('items_json')
+        if items_json_str:
+            try:
+                raw_items = json.loads(items_json_str)
+                for it in raw_items:
+                    p_id = it.get('product_id') or it.get('id')
+                    q_val = it.get('quantity') or it.get('qty')
+                    if p_id and q_val is not None:
+                        q_dec = Decimal(str(q_val))
+                        if q_dec > 0:
+                            items_to_transfer.append({'product_id': int(p_id), 'quantity': q_dec})
+            except Exception:
+                pass
+
+        # 2. Form array fallback (product_id[] / quantity[])
+        if not items_to_transfer:
+            product_ids = request.POST.getlist('product_id[]') or request.POST.getlist('product_id')
+            quantities = request.POST.getlist('quantity[]') or request.POST.getlist('quantity')
+            if product_ids and quantities:
+                for p_id, q_val in zip(product_ids, quantities):
+                    if p_id and q_val:
+                        try:
+                            q_dec = Decimal(str(q_val))
+                            if q_dec > 0:
+                                items_to_transfer.append({'product_id': int(p_id), 'quantity': q_dec})
+                        except Exception:
+                            pass
+
+        # 3. Single product fallback (product / quantity)
+        if not items_to_transfer:
+            single_p_id = request.POST.get('product')
+            single_qty = request.POST.get('quantity')
+            if single_p_id and single_qty:
+                try:
+                    q_dec = Decimal(str(single_qty))
+                    if q_dec > 0:
+                        items_to_transfer.append({'product_id': int(single_p_id), 'quantity': q_dec})
+                except Exception:
+                    pass
+
+        if not items_to_transfer:
+            messages.error(request, 'Please select at least one product with a transfer quantity greater than zero.')
+            return redirect('transfer_create', branch_id=branch_id)
+
+        try:
+            with transaction.atomic():
+                transferred_items = []
+                for item in items_to_transfer:
+                    product = Product.objects.get(pk=item['product_id'], business=request.business, is_active=True)
+                    transfer = StockTransferService.create(
+                        source=branch,
+                        destination=destination,
+                        product=product,
+                        qty=item['quantity'],
+                        note=note,
+                        initiated_by=request.user,
+                    )
+                    # Auto-confirm immediately
+                    StockTransferService.confirm(transfer)
+                    transferred_items.append((product.name, item['quantity']))
+
+                if len(transferred_items) == 1:
+                    messages.success(
+                        request,
+                        f'Transferred {transferred_items[0][1]} × {transferred_items[0][0]} to {destination.name}.'
+                    )
+                else:
+                    total_qty = sum(q for _, q in transferred_items)
+                    messages.success(
+                        request,
+                        f'Successfully transferred {len(transferred_items)} products (total {total_qty:g} units) to {destination.name}.'
+                    )
+                return redirect('transfer_list', branch_id=branch_id)
+
         except Exception as e:
-            messages.error(request, str(e))
+            messages.error(request, f'Transfer failed: {str(e)}')
+            return redirect('transfer_create', branch_id=branch_id)
 
-        return redirect('transfer_list', branch_id=branch_id)
+    # Subqueries for source branch stock and sales velocity
+    branch_stock_subquery = BranchStock.objects.filter(
+        branch=branch,
+        product=OuterRef('pk')
+    ).values('quantity')[:1]
 
-    products = Product.objects.filter(business=request.business, is_active=True).order_by('name')
+    branch_sales_subquery = SaleItem.objects.filter(
+        sale__branch=branch,
+        product=OuterRef('pk')
+    ).values('product').annotate(total=Sum('quantity')).values('total')[:1]
+
+    business_sales_subquery = SaleItem.objects.filter(
+        business=request.business,
+        product=OuterRef('pk')
+    ).values('product').annotate(total=Sum('quantity')).values('total')[:1]
+
+    products_qs = Product.objects.filter(
+        business=request.business,
+        is_active=True
+    ).select_related('category', 'unit').annotate(
+        branch_stock_qty=Coalesce(Subquery(branch_stock_subquery), Value(Decimal('0.000'), output_field=DecimalField(max_digits=10, decimal_places=3))),
+        branch_sold_qty=Coalesce(Subquery(branch_sales_subquery), Value(Decimal('0.000'), output_field=DecimalField(max_digits=10, decimal_places=3))),
+        business_sold_qty=Coalesce(Subquery(business_sales_subquery), Value(Decimal('0.000'), output_field=DecimalField(max_digits=10, decimal_places=3))),
+    ).order_by('name')
+
+    categories = Category.objects.filter(business=request.business).order_by('name')
+
+    products_data = []
+    for p in products_qs:
+        products_data.append({
+            'id': p.pk,
+            'name': p.name,
+            'code': p.product_code or '',
+            'barcode': p.barcode or '',
+            'category_id': p.category_id or 0,
+            'category_name': p.category.name if p.category else 'Uncategorized',
+            'unit': p.unit.name if p.unit else 'pcs',
+            'stock': float(p.branch_stock_qty),
+            'sold': float(p.branch_sold_qty),
+            'business_sold': float(p.business_sold_qty),
+            'created_at': p.created_at.isoformat() if p.created_at else '',
+            'created_at_display': p.created_at.strftime('%d %b %Y') if p.created_at else '',
+            'created_timestamp': p.created_at.timestamp() if p.created_at else 0,
+        })
+
     return render(request, 'pos/branches/transfer_form.html', {
         'branch': branch,
         'other_branches': other_branches,
-        'products': products,
+        'products': products_qs,
+        'products_json': json.dumps(products_data),
+        'categories': categories,
     })
 
 
@@ -212,14 +384,55 @@ def business_transfer_list(request, *args, **kwargs):
         messages.error(request, 'Permission denied.')
         return redirect('dashboard')
 
-    transfers = StockTransfer.objects.filter(
-        business=request.business
-    ).select_related(
-        'product', 'source_branch', 'destination_branch', 'initiated_by'
-    ).order_by('-created_at')[:100]
+    source_branch_id = request.GET.get('source_branch', 'all').strip()
+    dest_branch_id = request.GET.get('dest_branch', 'all').strip()
+    status_filter = request.GET.get('status', 'all').strip().lower()
+    search_query = request.GET.get('q', '').strip()
+
+    qs = StockTransfer.objects.filter(business=request.business)
+
+    if source_branch_id and source_branch_id != 'all' and source_branch_id.isdigit():
+        qs = qs.filter(source_branch_id=int(source_branch_id))
+
+    if dest_branch_id and dest_branch_id != 'all' and dest_branch_id.isdigit():
+        qs = qs.filter(destination_branch_id=int(dest_branch_id))
+
+    if status_filter and status_filter != 'all':
+        qs = qs.filter(status=status_filter)
+
+    if search_query:
+        qs = qs.filter(
+            Q(reference__icontains=search_query) |
+            Q(product__name__icontains=search_query) |
+            Q(product__product_code__icontains=search_query) |
+            Q(product__barcode__icontains=search_query) |
+            Q(note__icontains=search_query)
+        )
+
+    transfers = qs.select_related(
+        'product', 'product__category', 'product__unit', 'source_branch', 'destination_branch', 'initiated_by'
+    ).order_by('-created_at')[:200]
+
+    branches = Branch.objects.filter(business=request.business, is_active=True).order_by('name')
+
+    total_transfers = StockTransfer.objects.filter(business=request.business).count()
+    completed_transfers = StockTransfer.objects.filter(business=request.business, status='completed').count()
+    total_units_transferred = StockTransfer.objects.filter(
+        business=request.business, status='completed'
+    ).aggregate(total=Sum('quantity'))['total'] or Decimal('0.000')
 
     return render(request, 'pos/branches/business_transfer_list.html', {
         'transfers': transfers,
+        'branches': branches,
+        'source_branch_id': source_branch_id,
+        'dest_branch_id': dest_branch_id,
+        'status_filter': status_filter,
+        'search_query': search_query,
+        'stats': {
+            'total_transfers': total_transfers,
+            'completed_transfers': completed_transfers,
+            'total_units': total_units_transferred,
+        },
     })
 
 
@@ -759,19 +972,27 @@ def transfer_request_create(request, *args, **kwargs):
 
 @login_required
 @business_required
+@login_required
+@business_required
 def transfer_request_detail(request, pk=None, *args, **kwargs):
-    """View details of a transfer request."""
+    """View details of a transfer request with timeline history."""
     trf = get_object_or_404(
-        StockTransferRequest.objects.select_related('source_branch', 'destination_branch', 'requested_by', 'approved_by').prefetch_related('items__product'),
+        StockTransferRequest.objects.select_related('source_branch', 'destination_branch', 'requested_by', 'approved_by', 'discrepancy_resolved_by').prefetch_related('items__product'),
         pk=pk, business=request.business
     )
-    can_approve = is_owner_or_admin(request.user, request.business) or is_branch_manager(request.user, trf.source_branch)
+    can_approve = can_user_approve_transfer(request.user, request.business, trf.source_branch)
+    can_dispatch = can_user_dispatch_transfer(request.user, request.business, trf.source_branch)
+    can_resolve = can_user_resolve_discrepancy(request.user, request.business)
     dispatches = trf.dispatches.select_related('source_branch', 'destination_branch', 'dispatched_by', 'received_by').prefetch_related('items__product').all()
+    events = trf.events.select_related('performed_by').order_by('created_at')
 
     return render(request, 'pos/branches/transfer_request_detail.html', {
         'transfer_request': trf,
         'can_approve': can_approve,
+        'can_dispatch': can_dispatch,
+        'can_resolve': can_resolve,
         'dispatches': dispatches,
+        'events': events,
     })
 
 
@@ -780,7 +1001,7 @@ def transfer_request_detail(request, pk=None, *args, **kwargs):
 def transfer_request_approve(request, pk=None, *args, **kwargs):
     """Source branch manager or HQ admin approves transfer request."""
     trf = get_object_or_404(StockTransferRequest, pk=pk, business=request.business)
-    if not (is_owner_or_admin(request.user, request.business) or is_branch_manager(request.user, trf.source_branch)):
+    if not can_user_approve_transfer(request.user, request.business, trf.source_branch):
         messages.error(request, 'Permission denied. Only source branch managers or HQ Admins can approve.')
         return redirect('transfer_request_detail', pk=pk)
 
@@ -807,7 +1028,7 @@ def transfer_request_approve(request, pk=None, *args, **kwargs):
 def transfer_request_reject(request, pk=None, *args, **kwargs):
     """Reject transfer request."""
     trf = get_object_or_404(StockTransferRequest, pk=pk, business=request.business)
-    if not (is_owner_or_admin(request.user, request.business) or is_branch_manager(request.user, trf.source_branch)):
+    if not can_user_approve_transfer(request.user, request.business, trf.source_branch):
         messages.error(request, 'Permission denied.')
         return redirect('transfer_request_detail', pk=pk)
 
@@ -827,7 +1048,7 @@ def transfer_request_reject(request, pk=None, *args, **kwargs):
 def transfer_request_dispatch(request, pk=None, *args, **kwargs):
     """Dispatch stock for an approved transfer request."""
     trf = get_object_or_404(StockTransferRequest, pk=pk, business=request.business)
-    if not (is_owner_or_admin(request.user, request.business) or is_branch_manager(request.user, trf.source_branch)):
+    if not can_user_dispatch_transfer(request.user, request.business, trf.source_branch):
         messages.error(request, 'Permission denied.')
         return redirect('transfer_request_detail', pk=pk)
 
@@ -849,6 +1070,33 @@ def transfer_request_dispatch(request, pk=None, *args, **kwargs):
             return redirect('dispatch_detail', pk=dispatch_rec.pk)
         except Exception as e:
             messages.error(request, f'Error dispatching: {e}')
+
+    return redirect('transfer_request_detail', pk=pk)
+
+
+@login_required
+@business_required
+def transfer_request_resolve_discrepancy(request, pk=None, *args, **kwargs):
+    """Supervisor resolution of flagged transfer discrepancies."""
+    trf = get_object_or_404(StockTransferRequest, pk=pk, business=request.business)
+    if not can_user_resolve_discrepancy(request.user, request.business):
+        messages.error(request, 'Permission denied. Only authorized managers/admins can resolve discrepancies.')
+        return redirect('transfer_request_detail', pk=pk)
+
+    if request.method == 'POST':
+        resolutions = {}
+        for item in trf.items.all():
+            res_val = request.POST.get(f'resolution_{item.id}', 'accepted_variance')
+            item_notes = request.POST.get(f'notes_{item.id}', '')
+            resolutions[item.id] = {'resolution': res_val, 'notes': item_notes}
+
+        resolution_notes = request.POST.get('resolution_notes', '').strip()
+
+        try:
+            DistributionService.resolve_discrepancy(trf, resolutions, request.user, resolution_notes)
+            messages.success(request, f'Discrepancy for transfer {trf.reference_number} resolved successfully.')
+        except Exception as e:
+            messages.error(request, f'Error resolving discrepancy: {e}')
 
     return redirect('transfer_request_detail', pk=pk)
 
@@ -885,19 +1133,18 @@ def dispatch_list(request, *args, **kwargs):
 @login_required
 @business_required
 def dispatch_detail(request, pk=None, *args, **kwargs):
-    """View details of a dispatch."""
+    """View details of a dispatch with event audit timeline."""
     dispatch_rec = get_object_or_404(
-        Dispatch.objects.select_related('source_branch', 'destination_branch', 'dispatched_by', 'received_by').prefetch_related('items__product'),
+        Dispatch.objects.select_related('source_branch', 'destination_branch', 'dispatched_by', 'received_by', 'requisition', 'transfer_request').prefetch_related('items__product'),
         pk=pk, business=request.business
     )
-    can_receive = (
-        is_owner_or_admin(request.user, request.business)
-        or is_branch_manager(request.user, dispatch_rec.destination_branch)
-        or BranchMembership.objects.filter(user=request.user, branch=dispatch_rec.destination_branch, is_active=True).exists()
-    )
+    can_receive = can_user_receive_transfer(request.user, request.business, dispatch_rec.destination_branch)
+    events = dispatch_rec.events.select_related('performed_by').order_by('created_at')
+
     return render(request, 'pos/branches/dispatch_detail.html', {
         'dispatch': dispatch_rec,
         'can_receive': can_receive,
+        'events': events,
     })
 
 
@@ -906,7 +1153,7 @@ def dispatch_detail(request, pk=None, *args, **kwargs):
 def dispatch_receive(request, pk=None, *args, **kwargs):
     """Confirm receipt of goods at the destination branch (full or partial with discrepancy reason)."""
     dispatch_rec = get_object_or_404(Dispatch, pk=pk, business=request.business)
-    if not (is_owner_or_admin(request.user, request.business) or is_branch_manager(request.user, dispatch_rec.destination_branch) or BranchMembership.objects.filter(user=request.user, branch=dispatch_rec.destination_branch, is_active=True).exists()):
+    if not can_user_receive_transfer(request.user, request.business, dispatch_rec.destination_branch):
         messages.error(request, 'Permission denied. Only destination branch staff can confirm receipt.')
         return redirect('dispatch_detail', pk=pk)
 
@@ -934,6 +1181,58 @@ def dispatch_receive(request, pk=None, *args, **kwargs):
             messages.error(request, f'Error: {e}')
 
     return redirect('dispatch_detail', pk=pk)
+
+
+@login_required
+@business_required
+def transfer_approval_rules_list(request, *args, **kwargs):
+    """Configure business-wide stock transfer approval rules."""
+    if not _require_owner_admin(request):
+        messages.error(request, 'Permission denied. Only Owner/Admin can manage transfer policies.')
+        return redirect('dashboard')
+
+    rule = TransferApprovalRule.objects.filter(business=request.business).first()
+
+    if request.method == 'POST':
+        name = request.POST.get('name', 'Default Transfer Policy').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        auto_approve = request.POST.get('auto_approve_below_threshold') == 'on'
+        req_hq = request.POST.get('requires_hq_approval') == 'on'
+        min_val = request.POST.get('min_value_threshold', '0')
+        min_qty = request.POST.get('min_quantity_threshold', '0')
+
+        try:
+            val_dec = Decimal(str(min_val))
+            qty_dec = Decimal(str(min_qty))
+        except Exception:
+            val_dec = Decimal('0.00')
+            qty_dec = Decimal('0.000')
+
+        if not rule:
+            rule = TransferApprovalRule.objects.create(
+                business=request.business,
+                name=name,
+                is_active=is_active,
+                auto_approve_below_threshold=auto_approve,
+                min_value_threshold=val_dec,
+                min_quantity_threshold=qty_dec,
+                requires_hq_approval=req_hq,
+            )
+        else:
+            rule.name = name
+            rule.is_active = is_active
+            rule.auto_approve_below_threshold = auto_approve
+            rule.min_value_threshold = val_dec
+            rule.min_quantity_threshold = qty_dec
+            rule.requires_hq_approval = req_hq
+            rule.save()
+
+        messages.success(request, 'Stock transfer approval policy updated successfully.')
+        return redirect('transfer_approval_rules')
+
+    return render(request, 'pos/branches/transfer_approval_rules.html', {
+        'rule': rule,
+    })
 
 
 # ============================================================================

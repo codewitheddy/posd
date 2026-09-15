@@ -756,9 +756,13 @@ Thank you for using our Marid POS.
         # Build items table
         items_html = ""
         for item in sale.items.all():
+            code_str = ""
+            code = item.product.product_code or item.product.barcode
+            if code:
+                code_str = f" <span style='color: #6c757d; font-size: 0.85em;'>[{code}]</span>"
             items_html += f"""
             <tr>
-                <td>{item.product.name}</td>
+                <td>{item.product.name}{code_str}</td>
                 <td style="text-align: right;">{item.quantity}</td>
                 <td style="text-align: right;">KES {item.unit_price:,.2f}</td>
                 <td style="text-align: right;">KES {item.total_price:,.2f}</td>

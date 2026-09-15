@@ -27,7 +27,7 @@ def business_context(request):
     url_name = getattr(getattr(request, 'resolver_match', None), 'url_name', '') or ''
     path = getattr(request, 'path_info', '') or getattr(request, 'path', '') or ''
     front_office_url_names = {
-        'pos_screen', 'pos_pin_login', 'terminal_pin_login', 'terminal_lock',
+        'pos_screen', 'pos_pin_login', 'terminal_pin_login', 'front_office_login', 'terminal_lock',
         'terminal_register', 'terminal_session_open', 'terminal_session_close',
         'pos_session_open', 'pos_session_close', 'front_office_pos', 'front_office_zreport',
         'complete_sale', 'held_orders_list', 'held_order_save', 'held_order_delete'

@@ -14,12 +14,13 @@ from .models import (
     InsufficientStockError, BranchInactiveError, PlanLimitError,
     InvalidTransferStateError, StockRequisition, StockRequisitionItem,
     StockTransferRequest, StockTransferItem, Dispatch, DispatchItem, StockMovement,
+    TransferEvent, TransferApprovalRule,
 )
 from django.core.exceptions import ValidationError
 
 
 # ---------------------------------------------------------------------------
-# Access helpers
+# Access & Permission helpers
 # ---------------------------------------------------------------------------
 
 def is_owner_or_admin(user, business):
@@ -61,6 +62,72 @@ def get_user_branches(user, business):
     ).distinct()
 
 
+def can_user_request_transfer(user, business, branch=None):
+    """Check if user is authorized to raise a transfer request."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser or is_owner_or_admin(user, business):
+        return True
+    if user.has_perm('pos.add_stocktransferrequest'):
+        return True
+    if branch:
+        return BranchMembership.objects.filter(
+            user=user, branch=branch, is_active=True,
+            role__in=['manager', 'branch_manager', 'stock_manager', 'cashier'],
+        ).exists()
+    return False
+
+
+def can_user_approve_transfer(user, business, source_branch=None):
+    """Check if user is authorized to approve a transfer request."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser or is_owner_or_admin(user, business):
+        return True
+    if user.has_perm('pos.change_stocktransferrequest'):
+        return True
+    if source_branch:
+        return is_branch_manager(user, source_branch)
+    return False
+
+
+def can_user_dispatch_transfer(user, business, source_branch=None):
+    """Check if user is authorized to dispatch goods."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser or is_owner_or_admin(user, business):
+        return True
+    if user.has_perm('pos.add_dispatch'):
+        return True
+    if source_branch:
+        return is_branch_manager(user, source_branch)
+    return False
+
+
+def can_user_receive_transfer(user, business, dest_branch=None):
+    """Check if user is authorized to receive goods at destination."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser or is_owner_or_admin(user, business):
+        return True
+    if user.has_perm('pos.change_dispatch'):
+        return True
+    if dest_branch:
+        return BranchMembership.objects.filter(
+            user=user, branch=dest_branch, is_active=True,
+        ).exists()
+    return False
+
+
+def can_user_resolve_discrepancy(user, business):
+    """Check if user is authorized to resolve transfer discrepancies."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser or is_owner_or_admin(user, business):
+        return True
+    return user.has_perm('pos.change_stocktransferrequest')
+
+
 def branch_required(view_func):
     """View decorator — returns 403 if request.branch is None."""
     from functools import wraps
@@ -72,6 +139,96 @@ def branch_required(view_func):
             return HttpResponseForbidden('A branch context is required for this action.')
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+# ---------------------------------------------------------------------------
+# Transfer Audit & Rule Helpers
+# ---------------------------------------------------------------------------
+
+def log_transfer_event(business=None, parent_obj=None, from_status='', to_status='', event_type='note_added', user=None, notes='', metadata=None):
+    """Record an immutable TransferEvent row for audit history."""
+    if not business and parent_obj:
+        business = getattr(parent_obj, 'business', None)
+
+    req_obj = parent_obj if isinstance(parent_obj, StockRequisition) else None
+    trf_obj = parent_obj if isinstance(parent_obj, StockTransferRequest) else None
+    dsp_obj = parent_obj if isinstance(parent_obj, Dispatch) else None
+
+    if dsp_obj:
+        if dsp_obj.requisition:
+            req_obj = dsp_obj.requisition
+        if dsp_obj.transfer_request:
+            trf_obj = dsp_obj.transfer_request
+
+    return TransferEvent.objects.create(
+        business=business,
+        transfer_request=trf_obj,
+        requisition=req_obj,
+        dispatch=dsp_obj,
+        from_status=from_status or '',
+        to_status=to_status or getattr(parent_obj, 'status', ''),
+        event_type=event_type,
+        performed_by=user,
+        notes=notes or '',
+        metadata=metadata or {},
+    )
+
+
+def evaluate_transfer_approval_rules(business, source_branch, dest_branch, items_data, user=None):
+    """
+    Calculate estimated total monetary value and evaluate active TransferApprovalRules.
+    Returns: dict(total_estimated_value, total_quantity, requires_approval, auto_approved, rule_applied)
+    """
+    total_value = Decimal('0.00')
+    total_qty = Decimal('0.000')
+
+    for item in items_data:
+        p_val = item.get('product_id') if 'product_id' in item else item.get('product')
+        p_id = p_val.id if hasattr(p_val, 'id') else int(p_val)
+        q_val = item.get('quantity') if 'quantity' in item else item.get('requested_quantity', 0)
+        qty = Decimal(str(q_val))
+        if qty <= 0:
+            continue
+
+        total_qty += qty
+        src_stock = BranchStock.objects.filter(branch=source_branch, product_id=p_id).first()
+        if src_stock and src_stock.average_cost > 0:
+            unit_cost = src_stock.average_cost
+        else:
+            product = Product.objects.filter(pk=p_id).first()
+            unit_cost = product.cost_price if product else Decimal('0.00')
+
+        total_value += (qty * unit_cost).quantize(Decimal('0.01'))
+
+    rule = TransferApprovalRule.objects.filter(business=business, is_active=True).first()
+    if not rule:
+        return {
+            'total_estimated_value': total_value,
+            'total_quantity': total_qty,
+            'requires_approval': True,
+            'auto_approved': False,
+            'rule_applied': None,
+        }
+
+    if rule.auto_approve_below_threshold:
+        is_under_val = (rule.min_value_threshold <= 0) or (total_value <= rule.min_value_threshold)
+        is_under_qty = (rule.min_quantity_threshold <= 0) or (total_qty <= rule.min_quantity_threshold)
+        if is_under_val and is_under_qty and not rule.requires_hq_approval:
+            return {
+                'total_estimated_value': total_value,
+                'total_quantity': total_qty,
+                'requires_approval': False,
+                'auto_approved': True,
+                'rule_applied': rule.name,
+            }
+
+    return {
+        'total_estimated_value': total_value,
+        'total_quantity': total_qty,
+        'requires_approval': True,
+        'auto_approved': False,
+        'rule_applied': rule.name,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +352,16 @@ class DistributionService:
                     requested_quantity=qty,
                     notes=item.get('notes', ''),
                 )
+
+        log_transfer_event(
+            business=business,
+            parent_obj=requisition,
+            from_status='',
+            to_status='pending',
+            event_type='created',
+            user=user,
+            notes=f"Requisition {requisition.reference_number} raised by {user.username if user else 'System'}.",
+        )
         return requisition
 
     @staticmethod
@@ -202,9 +369,12 @@ class DistributionService:
     def approve_requisition(requisition=None, approved_items_data=None, user=None, approved_items_map=None):
         """Approve requisition by HQ Admin with optional quantity adjustments."""
         approved_items_data = approved_items_data if approved_items_data is not None else (approved_items_map or {})
+        requisition = StockRequisition.objects.select_for_update().get(pk=requisition.pk)
+
         if requisition.status not in ('pending', 'approved'):
             raise ValidationError(f"Cannot approve requisition in status '{requisition.status}'.")
 
+        old_status = requisition.status
         for item in requisition.items.all():
             if item.id in approved_items_data:
                 appr_qty = Decimal(str(approved_items_data[item.id]))
@@ -218,57 +388,125 @@ class DistributionService:
         requisition.approved_by = user
         requisition.approved_at = timezone.now()
         requisition.save(update_fields=['status', 'approved_by', 'approved_at', 'updated_at'])
+
+        log_transfer_event(
+            business=requisition.business,
+            parent_obj=requisition,
+            from_status=old_status,
+            to_status='approved',
+            event_type='approved',
+            user=user,
+            notes=f"Requisition approved by {user.username if user else 'HQ Admin'}.",
+        )
         return requisition
 
     @staticmethod
     @transaction.atomic
     def reject_requisition(requisition, user, reason=''):
         """Reject a requisition."""
+        requisition = StockRequisition.objects.select_for_update().get(pk=requisition.pk)
         if requisition.status not in ('pending', 'approved'):
             raise ValidationError(f"Cannot reject requisition in status '{requisition.status}'.")
+
+        old_status = requisition.status
         requisition.status = 'rejected'
         requisition.rejection_reason = reason
         requisition.save(update_fields=['status', 'rejection_reason', 'updated_at'])
+
+        log_transfer_event(
+            business=requisition.business,
+            parent_obj=requisition,
+            from_status=old_status,
+            to_status='rejected',
+            event_type='rejected',
+            user=user,
+            notes=f"Requisition rejected: {reason}",
+        )
         return requisition
 
     @staticmethod
     @transaction.atomic
-    def create_transfer_request(business, source_branch, dest_branch, items_data, user, reason=''):
-        """Create an inter-branch transfer request."""
+    def create_transfer_request(business, source_branch, dest_branch, items_data, user, reason='', draft=False):
+        """
+        Create an inter-branch transfer request with approval rule evaluation and cost snapshots.
+        """
         if source_branch.pk == dest_branch.pk:
             raise ValidationError("Source and destination branch must be different.")
+
+        eval_res = evaluate_transfer_approval_rules(business, source_branch, dest_branch, items_data, user)
+        auto_appr = eval_res['auto_approved'] and not draft
+
+        if draft:
+            initial_status = 'draft'
+            event_type = 'created'
+        elif auto_appr:
+            initial_status = 'approved'
+            event_type = 'auto_approved'
+        else:
+            initial_status = 'pending'
+            event_type = 'submitted'
 
         transfer_req = StockTransferRequest.objects.create(
             business=business,
             source_branch=source_branch,
             destination_branch=dest_branch,
             requested_by=user,
+            approved_by=user if auto_appr else None,
+            approved_at=timezone.now() if auto_appr else None,
             reason=reason,
-            status='pending',
+            status=initial_status,
+            total_estimated_value=eval_res['total_estimated_value'],
+            requires_approval=eval_res['requires_approval'],
+            auto_approved=auto_appr,
         )
+
         for item in items_data:
             p_val = item.get('product_id') if 'product_id' in item else item.get('product')
             p_id = p_val.id if hasattr(p_val, 'id') else int(p_val)
             q_val = item.get('quantity') if 'quantity' in item else item.get('requested_quantity', 0)
             qty = Decimal(str(q_val))
             if qty > 0:
+                # Capture current source moving average cost snapshot
+                src_stock = BranchStock.objects.filter(branch=source_branch, product_id=p_id).first()
+                cost_snap = src_stock.average_cost if src_stock else Decimal('0.00')
+
                 StockTransferItem.objects.create(
                     transfer_request=transfer_req,
                     product_id=p_id,
                     requested_quantity=qty,
+                    approved_quantity=qty if auto_appr else None,
+                    unit_cost_at_dispatch=cost_snap,
                     notes=item.get('notes', ''),
                 )
+
+        note_text = f"Transfer request {transfer_req.reference_number} created"
+        if auto_appr:
+            note_text += f" (Auto-approved via rule: {eval_res.get('rule_applied', 'Policy')})"
+
+        log_transfer_event(
+            business=business,
+            parent_obj=transfer_req,
+            from_status='',
+            to_status=initial_status,
+            event_type=event_type,
+            user=user,
+            notes=note_text,
+            metadata={'estimated_value': float(eval_res['total_estimated_value'])},
+        )
         return transfer_req
 
     @staticmethod
     @transaction.atomic
     def approve_transfer_request(transfer_req=None, approved_items_data=None, user=None, transfer_request=None, approved_items_map=None):
-        """Approve transfer request by source branch manager or HQ admin."""
+        """Approve transfer request by source branch manager or HQ admin with row-level locking."""
         transfer_req = transfer_req or transfer_request
         approved_items_data = approved_items_data if approved_items_data is not None else (approved_items_map or {})
-        if transfer_req.status not in ('pending', 'approved'):
+        transfer_req = StockTransferRequest.objects.select_for_update().get(pk=transfer_req.pk)
+
+        if transfer_req.status not in ('pending', 'pending_approval', 'approved', 'draft'):
             raise ValidationError(f"Cannot approve transfer request in status '{transfer_req.status}'.")
 
+        old_status = transfer_req.status
         for item in transfer_req.items.all():
             if item.id in approved_items_data:
                 appr_qty = Decimal(str(approved_items_data[item.id]))
@@ -282,26 +520,48 @@ class DistributionService:
         transfer_req.approved_by = user
         transfer_req.approved_at = timezone.now()
         transfer_req.save(update_fields=['status', 'approved_by', 'approved_at', 'updated_at'])
+
+        log_transfer_event(
+            business=transfer_req.business,
+            parent_obj=transfer_req,
+            from_status=old_status,
+            to_status='approved',
+            event_type='approved',
+            user=user,
+            notes=f"Transfer request approved by {user.username if user else 'Authorizer'}.",
+        )
         return transfer_req
 
     @staticmethod
     @transaction.atomic
     def reject_transfer_request(transfer_req, user, reason=''):
         """Reject a transfer request."""
-        if transfer_req.status not in ('pending', 'approved'):
+        transfer_req = StockTransferRequest.objects.select_for_update().get(pk=transfer_req.pk)
+        if transfer_req.status not in ('pending', 'pending_approval', 'approved', 'draft'):
             raise ValidationError(f"Cannot reject transfer request in status '{transfer_req.status}'.")
+
+        old_status = transfer_req.status
         transfer_req.status = 'rejected'
         transfer_req.rejection_reason = reason
         transfer_req.save(update_fields=['status', 'rejection_reason', 'updated_at'])
+
+        log_transfer_event(
+            business=transfer_req.business,
+            parent_obj=transfer_req,
+            from_status=old_status,
+            to_status='rejected',
+            event_type='rejected',
+            user=user,
+            notes=f"Transfer request rejected: {reason}",
+        )
         return transfer_req
 
     @staticmethod
     @transaction.atomic
     def dispatch(parent_obj=None, items_data=None, user=None, notes='', source_doc=None):
         """
-        Dispatch stock for an approved Requisition or Transfer Request.
-        Enforces: parent_obj.status == 'approved'.
-        Deducts from source branch, records Dispatch with unit_cost from source moving average.
+        Dispatch stock for an approved Requisition or Transfer Request with deadlock-free sorted locking.
+        Deducts from source branch with in_transit ledger recording.
         """
         parent_obj = parent_obj or source_doc
         items_data = items_data or []
@@ -310,6 +570,12 @@ class DistributionService:
 
         if not is_requisition and not is_transfer:
             raise ValidationError("Dispatch must be tied to a StockRequisition or StockTransferRequest.")
+
+        # Lock parent row
+        if is_requisition:
+            parent_obj = StockRequisition.objects.select_for_update().get(pk=parent_obj.pk)
+        else:
+            parent_obj = StockTransferRequest.objects.select_for_update().get(pk=parent_obj.pk)
 
         # STRICT MODEL-LAYER GUARD
         if parent_obj.status != 'approved':
@@ -320,7 +586,6 @@ class DistributionService:
 
         business = parent_obj.business
         if is_requisition:
-            # HQ is source
             hq_branch = Branch.objects.filter(business=business, is_hq=True, is_active=True).first()
             if not hq_branch:
                 hq_branch = Branch.objects.filter(business=business, is_active=True).first()
@@ -348,9 +613,15 @@ class DistributionService:
                 notes=notes,
                 status='in_transit',
             )
-            movement_type = 'transfer_out'
+            movement_type = 'in_transit_out'
 
-        for item_data in items_data:
+        # Sort items deterministically by product_id to avoid DB deadlocks on concurrent transfers
+        sorted_items = sorted(
+            items_data,
+            key=lambda x: int(x.get('product_id') or getattr(parent_obj.items.filter(pk=x.get('item_id')).first(), 'product_id', 0) or 0)
+        )
+
+        for item_data in sorted_items:
             line_item_id = item_data.get('item_id')
             qty_to_dispatch = Decimal(str(item_data.get('quantity', 0)))
             if qty_to_dispatch <= 0:
@@ -365,13 +636,21 @@ class DistributionService:
                 trf_item = parent_obj.items.get(pk=line_item_id)
                 product = trf_item.product
                 trf_item.dispatched_quantity += qty_to_dispatch
-                trf_item.save(update_fields=['dispatched_quantity'])
 
-            # Deduct from source branch with moving-average unit cost
+            # Lock and fetch source branch stock
             src_stock = BranchStockService.get_or_create(source_branch, product)
+            if src_stock.quantity < qty_to_dispatch:
+                raise ValidationError(
+                    f"Insufficient stock for product '{product.name}' at branch '{source_branch.name}'. "
+                    f"Available: {src_stock.quantity}, attempting to dispatch: {qty_to_dispatch}."
+                )
             unit_cost = src_stock.average_cost
 
-            # Deduct without blocking if negative stock
+            if not is_requisition:
+                trf_item.unit_cost_at_dispatch = unit_cost
+                trf_item.save(update_fields=['dispatched_quantity', 'unit_cost_at_dispatch'])
+
+            # Deduct with ledger movement
             src_stock.deduct(
                 qty=qty_to_dispatch,
                 movement_type=movement_type,
@@ -388,18 +667,30 @@ class DistributionService:
                 received_quantity=Decimal('0.000'),
             )
 
+        old_parent_status = parent_obj.status
         parent_obj.status = 'dispatched'
         parent_obj.save(update_fields=['status', 'updated_at'])
+
+        log_transfer_event(
+            business=business,
+            parent_obj=parent_obj,
+            from_status=old_parent_status,
+            to_status='dispatched',
+            event_type='dispatched',
+            user=user,
+            notes=f"Shipment {dispatch_rec.reference_number} dispatched from {source_branch.name} to {dest_branch.name}.",
+        )
         return dispatch_rec
 
     @staticmethod
     @transaction.atomic
     def confirm_receipt(dispatch, received_items_data, user):
         """
-        Confirm receipt at destination branch (full or partial).
+        Confirm receipt at destination branch (full or partial with discrepancy tracking).
         received_items_data: dict of {dispatch_item_id: {'received_qty': ..., 'discrepancy_reason': ...}}
         """
-        if dispatch.status not in ('in_transit', 'partially_received'):
+        dispatch = Dispatch.objects.select_for_update().get(pk=dispatch.pk)
+        if dispatch.status not in ('in_transit', 'partially_received', 'receiving'):
             raise ValidationError(f"Cannot confirm receipt for dispatch in status '{dispatch.status}'.")
 
         is_requisition = bool(dispatch.requisition)
@@ -407,7 +698,10 @@ class DistributionService:
         dest_branch = dispatch.destination_branch
         has_discrepancy = False
 
-        for d_item in dispatch.items.select_related('product').all():
+        # Deterministic sorting on items
+        d_items = list(dispatch.items.select_related('product').order_by('product_id'))
+
+        for d_item in d_items:
             recv_info = received_items_data.get(d_item.id, {})
             if isinstance(recv_info, (int, float, str, Decimal)):
                 recv_qty = Decimal(str(recv_info))
@@ -436,7 +730,9 @@ class DistributionService:
                 trf_item = dispatch.transfer_request.items.filter(product=d_item.product).first()
                 if trf_item:
                     trf_item.received_quantity += recv_qty
-                    trf_item.save(update_fields=['received_quantity'])
+                    trf_item.discrepancy_quantity = d_item.discrepancy_quantity
+                    trf_item.discrepancy_reason = disc_reason
+                    trf_item.save(update_fields=['received_quantity', 'discrepancy_quantity', 'discrepancy_reason'])
 
             # Receive stock into destination branch at shipped unit_cost
             if recv_qty > 0:
@@ -457,26 +753,133 @@ class DistributionService:
 
         # Update parent document status
         if dispatch.requisition:
-            req = dispatch.requisition
-            req.status = 'partially_fulfilled' if has_discrepancy else 'fulfilled'
+            req = StockRequisition.objects.select_for_update().get(pk=dispatch.requisition_id)
+            old_status = req.status
+            new_status = 'partially_fulfilled' if has_discrepancy else 'fulfilled'
+            req.status = new_status
             req.save(update_fields=['status', 'updated_at'])
+            event_type = 'received_partial' if has_discrepancy else 'received_full'
+            log_transfer_event(
+                business=req.business,
+                parent_obj=req,
+                from_status=old_status,
+                to_status=new_status,
+                event_type=event_type,
+                user=user,
+                notes=f"Goods received at {dest_branch.name}. Discrepancy flagged: {has_discrepancy}.",
+            )
         elif dispatch.transfer_request:
-            trf = dispatch.transfer_request
-            trf.status = 'partially_received' if has_discrepancy else 'completed'
+            trf = StockTransferRequest.objects.select_for_update().get(pk=dispatch.transfer_request_id)
+            old_status = trf.status
+            new_status = 'discrepancy_flagged' if has_discrepancy else 'completed'
+            trf.status = new_status
             trf.save(update_fields=['status', 'updated_at'])
+            event_type = 'received_partial' if has_discrepancy else 'received_full'
+            log_transfer_event(
+                business=trf.business,
+                parent_obj=trf,
+                from_status=old_status,
+                to_status=new_status,
+                event_type=event_type,
+                user=user,
+                notes=f"Receipt confirmed at {dest_branch.name}. Status: {new_status}.",
+            )
 
         return dispatch
 
+    @staticmethod
+    @transaction.atomic
+    def resolve_discrepancy(transfer_req, resolutions, user, notes='', resolution_notes=None):
+        """
+        Supervisor resolution of flagged transfer discrepancies.
+        resolutions: dict of {item_id: {'resolution': 'writeoff_loss'|'returned_to_source'|'accepted_variance', 'notes': ...}}
+        """
+        if resolution_notes:
+            notes = resolution_notes
+
+        transfer_req = StockTransferRequest.objects.select_for_update().get(pk=transfer_req.pk)
+        if transfer_req.status not in ('discrepancy_flagged', 'partially_received'):
+            raise ValidationError(f"Cannot resolve discrepancies on transfer with status '{transfer_req.status}'.")
+
+        old_status = transfer_req.status
+
+        for item in transfer_req.items.select_related('product').all():
+            res_data = resolutions.get(item.id) or resolutions.get(str(item.id))
+            if not res_data:
+                continue
+
+            res_type = res_data.get('resolution') if isinstance(res_data, dict) else str(res_data)
+            item_notes = res_data.get('notes', '') if isinstance(res_data, dict) else ''
+
+            if res_type not in ('writeoff_loss', 'returned_to_source', 'accepted_variance'):
+                continue
+
+            item.discrepancy_resolution = res_type
+            item.save(update_fields=['discrepancy_resolution'])
+
+            disc_qty = item.discrepancy_quantity
+            if disc_qty > 0:
+                cost = item.unit_cost_at_dispatch or item.product.cost_price
+
+                if res_type == 'writeoff_loss':
+                    # Record loss/shrinkage write-off movement on the ledger
+                    StockMovement.objects.create(
+                        business=transfer_req.business,
+                        branch=transfer_req.source_branch,
+                        product=item.product,
+                        quantity_delta=-disc_qty,
+                        unit_cost=cost,
+                        total_cost=(disc_qty * cost).quantize(Decimal('0.01')),
+                        movement_type='transit_loss_writeoff',
+                        content_type=None,
+                        object_id=str(transfer_req.pk),
+                        reference_number=transfer_req.reference_number,
+                        balance_after=None,
+                        performed_by=user,
+                        note=f"Transit Loss Write-off: {disc_qty:g} units lost/damaged. {item_notes}".strip(),
+                    )
+                elif res_type == 'returned_to_source':
+                    # Return missing units back to source branch inventory
+                    src_stock = BranchStockService.get_or_create(transfer_req.source_branch, item.product)
+                    src_stock.receive(
+                        qty=disc_qty,
+                        unit_cost=cost,
+                        movement_type='transit_return_in',
+                        reference_obj=transfer_req,
+                        user=user,
+                        note=f"Transit Return In: {disc_qty:g} units returned to source. {item_notes}".strip(),
+                    )
+
+        transfer_req.status = 'resolved'
+        transfer_req.discrepancy_resolved_by = user
+        transfer_req.discrepancy_resolved_at = timezone.now()
+        transfer_req.discrepancy_resolution_notes = notes
+        transfer_req.save(update_fields=[
+            'status', 'discrepancy_resolved_by', 'discrepancy_resolved_at',
+            'discrepancy_resolution_notes', 'updated_at'
+        ])
+
+        log_transfer_event(
+            business=transfer_req.business,
+            parent_obj=transfer_req,
+            from_status=old_status,
+            to_status='resolved',
+            event_type='discrepancy_resolved',
+            user=user,
+            notes=f"Discrepancy resolved by supervisor {user.username if user else 'Supervisor'}: {notes}",
+        )
+        return transfer_req
+
 
 # ---------------------------------------------------------------------------
-# StockTransferService (Legacy bridge)
+# StockTransferService (Direct Stock Movement Engine)
 # ---------------------------------------------------------------------------
 
 class StockTransferService:
 
     @staticmethod
     def create(source, destination, product, qty, note, initiated_by):
-        """Legacy direct transfer bridge."""
+        """Direct transfer helper."""
         if source.pk == destination.pk:
             raise ValueError('Source and destination branches must be different.')
         if source.business_id != destination.business_id:
@@ -503,7 +906,7 @@ class StockTransferService:
     @staticmethod
     @transaction.atomic
     def confirm(transfer):
-        """Atomically move stock from source to destination via BranchStock."""
+        """Atomically move stock from source to destination via BranchStock with row locking."""
         if transfer.status not in ('pending', 'in_transit'):
             raise InvalidTransferStateError(
                 f"Cannot confirm a transfer with status '{transfer.status}'."

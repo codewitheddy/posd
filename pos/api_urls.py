@@ -23,6 +23,11 @@ from .integration_api_views import (
     VerifySignatureView, APIKeyListCreateView, APIKeyRevokeView,
 )
 
+from .api_cashier_assignment_views import (
+    CashierTransferRequestViewSet, CashierTillAssignmentViewSet,
+    CashierAssignmentAuditLogViewSet, BranchTillStatusView, BranchLaborReportView
+)
+
 # Create router and register viewsets
 router = DefaultRouter()
 router.register(r'products', ProductViewSet, basename='product')
@@ -44,11 +49,18 @@ router.register(r'dispatches', DispatchViewSet, basename='dispatch')
 router.register(r'branch-stocks', BranchStockViewSet, basename='branchstock')
 router.register(r'stock-movements', StockMovementViewSet, basename='stockmovement')
 router.register(r'terminals', POSTerminalViewSet, basename='posterminal')
+router.register(r'cashier-transfers', CashierTransferRequestViewSet, basename='cashiertransfer')
+router.register(r'till-assignments', CashierTillAssignmentViewSet, basename='tillassignment')
+router.register(r'cashier-assignment-audits', CashierAssignmentAuditLogViewSet, basename='cashierassignmentaudit')
 
 urlpatterns = [
     # Terminal Sync endpoints
     path('terminals/sync/', POSTerminalSyncView.as_view(), name='terminal_sync_root'),
     path('terminals/<int:pk>/sync/', POSTerminalSyncView.as_view(), name='terminal_sync_pk'),
+
+    # Branch Till Status & Labor Analytics
+    path('branches/<int:branch_id>/till-status/', BranchTillStatusView.as_view(), name='api_branch_till_status'),
+    path('branches/<int:branch_id>/labor-report/', BranchLaborReportView.as_view(), name='api_branch_labor_report'),
 
     # Authentication endpoints with rate limiting
     path('auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
