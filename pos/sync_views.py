@@ -3,10 +3,14 @@ Real-Time Sync Engine for Front Office (POS) and Back Office Synchronization.
 Provides Server-Sent Events (SSE) streaming, polling fallback, fast product catalog caching,
 and offline checkout synchronization.
 """
+import logging
 import time
 import json
 import uuid
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
 
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET, require_POST
@@ -248,9 +252,10 @@ def sync_offline_sales_view(request):
     # Check permission to create sales
     membership = getattr(request, 'business_membership', None)
     if not membership:
-        return JsonResponse({'success': False, 'error': 'No business membership found'}, status=403)
+        from pos.models import BusinessMembership
+        membership = BusinessMembership.objects.filter(user=user, business=business, is_active=True).first()
     
-    if not membership.has_permission('can_create_sale'):
+    if membership and not membership.has_permission('can_create_sale') and not user.is_superuser:
         return JsonResponse({'success': False, 'error': 'You do not have permission to create sales'}, status=403)
 
     try:
@@ -258,8 +263,21 @@ def sync_offline_sales_view(request):
     except Exception:
         return JsonResponse({'success': False, 'error': 'Invalid JSON body'}, status=400)
 
-    sales_payload = data.get('sales', [])
-    if not isinstance(sales_payload, list) or not sales_payload:
+    # Extract sales list from various payload formats
+    sales_payload = []
+    if isinstance(data, list):
+        sales_payload = data
+    elif isinstance(data, dict):
+        if 'sales' in data and isinstance(data['sales'], list):
+            sales_payload = data['sales']
+        elif 'outbox' in data and isinstance(data['outbox'], list):
+            sales_payload = data['outbox']
+        elif 'sale_data' in data and isinstance(data['sale_data'], dict):
+            sales_payload = [data['sale_data']]
+        elif 'items' in data or 'total' in data:
+            sales_payload = [data]
+
+    if not sales_payload:
         return JsonResponse({'success': False, 'error': 'No sales payload provided'}, status=400)
 
     synced_ids = []
@@ -267,12 +285,16 @@ def sync_offline_sales_view(request):
 
     default_cash = PaymentMethod.objects.filter(business=business, is_active=True).first() or PaymentMethod.objects.filter(is_active=True).first()
 
-    for item in sales_payload:
-        client_uuid = item.get('client_uuid') or item.get('idempotency_key') or str(uuid.uuid4())
+    for raw_item in sales_payload:
+        item = raw_item.get('data', raw_item) if isinstance(raw_item, dict) else raw_item
+        if not isinstance(item, dict):
+            continue
+
+        client_uuid = str(item.get('client_uuid') or item.get('idempotency_key') or raw_item.get('id') or uuid.uuid4())
         
+        # Idempotency check: if sale already created with this key, acknowledge without re-deducting stock
         existing = Sale.objects.filter(business=business, idempotency_key=client_uuid).first()
         if not existing:
-            # Check backward-compatible legacy key
             existing = Sale.objects.filter(business=business, tims_invoice_number=f"OFFLINE-{client_uuid}").first()
 
         if existing:
@@ -288,8 +310,20 @@ def sync_offline_sales_view(request):
             with transaction.atomic():
                 total_amount = Decimal(str(item.get('total', '0')))
                 subtotal = Decimal(str(item.get('subtotal', total_amount)))
-                tax_amount = Decimal(str(item.get('tax', '0')))
-                discount_amount = Decimal(str(item.get('discount', '0')))
+                tax_amount = Decimal(str(item.get('tax') or item.get('vat_amount') or '0'))
+                discount_amount = Decimal(str(item.get('discount') or item.get('discount_amount') or '0'))
+                discount_type = item.get('discount_type', 'percentage')
+                discount_value = Decimal(str(item.get('discount_value', '0')))
+                amount_paid = Decimal(str(item.get('amount_paid', total_amount)))
+                change_given = Decimal(str(item.get('change_given', '0.00')))
+                order_notes = item.get('notes') or item.get('order_notes') or ''
+
+                # Resolve customer
+                customer = None
+                cust_data = item.get('customer')
+                cust_id = item.get('customer_id') or (cust_data.get('id') if isinstance(cust_data, dict) else None)
+                if cust_id:
+                    customer = Customer.objects.filter(business=business, pk=cust_id).first()
 
                 count = Sale.objects.filter(business=business).count() + 1
                 invoice_number = f"INV-{timezone.now().strftime('%Y%m%d')}-{count:04d}"
@@ -308,20 +342,24 @@ def sync_offline_sales_view(request):
                     idempotency_key=client_uuid,
                     is_offline_sync=True,
                     cashier=user,
-                    customer=None,
+                    customer=customer,
                     subtotal=subtotal,
                     vat_amount=tax_amount,
+                    discount_type=discount_type,
+                    discount_value=discount_value,
                     discount_amount=discount_amount,
                     total=total_amount,
-                    amount_paid=total_amount,
-                    change_given=Decimal('0.00'),
+                    amount_paid=amount_paid,
+                    change_given=change_given,
                 )
 
+                # Line items
                 for line in item.get('items', []):
-                    prod_id = line.get('product_id')
+                    prod_id = line.get('product_id') or line.get('id')
                     qty = Decimal(str(line.get('quantity', 1)))
-                    unit_price = Decimal(str(line.get('unit_price', '0')))
+                    unit_price = Decimal(str(line.get('unit_price') or line.get('price') or '0'))
                     item_total = Decimal(str(line.get('total', unit_price * qty)))
+                    item_note = line.get('note', '')
 
                     prod = Product.objects.select_for_update().filter(pk=prod_id, business=business).first()
                     if prod:
@@ -333,6 +371,7 @@ def sync_offline_sales_view(request):
                             unit_price=unit_price,
                             total_price=item_total,
                             cost_price_at_sale=prod.cost_price,
+                            note=item_note,
                         )
                         prev_qty = prod.stock_quantity
                         prod.deduct_stock(qty)
@@ -355,13 +394,59 @@ def sync_offline_sales_view(request):
                             reason=f'Offline Sync Sale: {sale.invoice_number}'
                         )
 
-                if default_cash:
+                # Tender / Payment records
+                payments_list = item.get('payments', [])
+                if payments_list and isinstance(payments_list, list):
+                    for pay in payments_list:
+                        pm_id = pay.get('payment_method_id') or pay.get('id')
+                        pay_amount = Decimal(str(pay.get('amount', total_amount)))
+                        pay_ref = pay.get('reference', '')
+                        pm = PaymentMethod.objects.filter(pk=pm_id, business=business).first() if pm_id else default_cash
+                        if not pm:
+                            pm = default_cash
+                        if pm:
+                            SalePayment.objects.create(
+                                business=business,
+                                sale=sale,
+                                payment_method=pm,
+                                amount=pay_amount,
+                                reference=pay_ref,
+                            )
+                elif default_cash:
                     SalePayment.objects.create(
                         business=business,
                         sale=sale,
                         payment_method=default_cash,
-                        amount=total_amount,
+                        amount=amount_paid,
                     )
+
+                # Customer Loyalty points
+                if customer and total_amount > 0:
+                    try:
+                        from .loyalty_service import LoyaltyService
+                        LoyaltyService.award_points_for_sale(sale)
+                    except Exception:
+                        pass
+
+                # Append to EventLog if app available
+                try:
+                    from events.models import EventLog
+                    EventLog.objects.create(
+                        uuid=uuid.uuid4(),
+                        tenant=business,
+                        event_type=EventLog.EVENT_TYPE_SALE_CREATED,
+                        payload={
+                            'sale_id': sale.id,
+                            'invoice_number': sale.invoice_number,
+                            'idempotency_key': client_uuid,
+                            'total': str(sale.total),
+                            'items_count': len(item.get('items', [])),
+                        },
+                        device_id='offline_sync',
+                        sync_status=EventLog.SYNC_STATUS_SYNCED,
+                    )
+                except Exception:
+                    pass
 
                 emit_sync_event('sale_completed', {
                     'sale_id': sale.id,
@@ -381,12 +466,14 @@ def sync_offline_sales_view(request):
                 })
 
         except Exception as e:
+            logger.error("Failed to sync offline sale %s: %s", client_uuid, e, exc_info=True)
             errors.append({'client_uuid': client_uuid, 'error': str(e)})
 
     return JsonResponse({
         'success': True,
         'synced_count': len(synced_ids),
         'synced': synced_ids,
+        'results': synced_ids,
         'errors': errors,
     })
 

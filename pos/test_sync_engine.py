@@ -338,4 +338,107 @@ class FrontBackOfficeSeparationAndSyncTests(TestCase):
         self.assertIn("itax.kra.go.ke", sale.tims_verification_url)
         self.assertIn("P059999999X", sale.tims_qr_code)
 
+    def test_offline_sale_sync_ingestion_and_stock_deduction(self):
+        """Offline checkout sync endpoint correctly ingests sales, creates records, and deducts branch stock."""
+        import uuid
+        self.client.force_login(self.cashier_user)
+
+        initial_stock = BranchStock.objects.get(branch=self.branch, product=self.product1).quantity
+        idempotency_key = str(uuid.uuid4())
+
+        payload = {
+            "sales": [
+                {
+                    "idempotency_key": idempotency_key,
+                    "receipt_number": "OFFLINE-TEST-001",
+                    "subtotal": 300.0,
+                    "tax_amount": 0.0,
+                    "discount_amount": 0.0,
+                    "total": 300.0,
+                    "payment_method": "Cash",
+                    "amount_tendered": 500.0,
+                    "change_due": 200.0,
+                    "created_at": "2026-09-15T12:00:00Z",
+                    "items": [
+                        {
+                            "product_id": self.product1.id,
+                            "quantity": 2,
+                            "unit_price": 150.0,
+                            "discount": 0.0,
+                            "tax": 0.0,
+                            "total": 300.0
+                        }
+                    ]
+                }
+            ]
+        }
+
+        response = self.client.post(
+            reverse('pos_sync_offline_sales'),
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('success'))
+        self.assertEqual(data.get('synced_count'), 1)
+
+        # Verify sale in DB
+        created_sale = Sale.objects.get(idempotency_key=idempotency_key)
+        self.assertEqual(created_sale.total, Decimal("300.00"))
+        self.assertEqual(created_sale.items.count(), 1)
+        self.assertEqual(created_sale.items.first().quantity, Decimal("2"))
+
+        # Verify stock deduction
+        updated_stock = BranchStock.objects.get(branch=self.branch, product=self.product1).quantity
+        self.assertEqual(updated_stock, initial_stock - Decimal("2"))
+
+    def test_offline_sale_sync_idempotency_prevents_duplicate_sales(self):
+        """Duplicate submissions with same idempotency_key must not create duplicate sales or double-deduct stock."""
+        import uuid
+        self.client.force_login(self.cashier_user)
+
+        initial_stock = BranchStock.objects.get(branch=self.branch, product=self.product1).quantity
+        idempotency_key = str(uuid.uuid4())
+
+        payload = {
+            "sales": [
+                {
+                    "idempotency_key": idempotency_key,
+                    "receipt_number": "OFFLINE-TEST-002",
+                    "subtotal": 150.0,
+                    "tax_amount": 0.0,
+                    "discount_amount": 0.0,
+                    "total": 150.0,
+                    "payment_method": "Cash",
+                    "created_at": "2026-09-15T12:05:00Z",
+                    "items": [
+                        {
+                            "product_id": self.product1.id,
+                            "quantity": 1,
+                            "unit_price": 150.0,
+                            "total": 150.0
+                        }
+                    ]
+                }
+            ]
+        }
+
+        # First sync
+        res1 = self.client.post(reverse('pos_sync_offline_sales'), data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.json().get('synced_count'), 1)
+
+        # Second sync (duplicate replay)
+        res2 = self.client.post(reverse('pos_sync_offline_sales'), data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(res2.status_code, 200)
+        results = res2.json().get('results', [])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].get('status'), 'already_synced')
+
+        # Stock should only be deducted once (by 1)
+        updated_stock = BranchStock.objects.get(branch=self.branch, product=self.product1).quantity
+        self.assertEqual(updated_stock, initial_stock - Decimal("1"))
+
+
 

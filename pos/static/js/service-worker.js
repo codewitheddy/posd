@@ -1,26 +1,48 @@
 // Service Worker for POS System PWA
-const CACHE_NAME = 'pos-cache-v1';
+const CACHE_NAME = 'pos-cache-v2';
 const OFFLINE_URL = '/offline/';
 
-// Files to cache for offline use
+// Core static assets for POS offline app shell
 const STATIC_CACHE_URLS = [
     '/',
-    '/static/css/pos-mobile.css',
+    '/offline/',
     '/static/css/mobile-first.css',
-    '/static/js/bootstrap.bundle.min.js',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css',
+    '/static/css/mobile-enhancements.css',
+    '/static/css/pos-mobile.css',
+    '/static/css/pos-desktop-optimized.css',
+    '/static/css/pwa.css',
+    '/static/css/custom-theme.css',
+    '/static/css/pos-ui.css',
+    '/static/css/button-checkbox-fixes.css',
+    '/static/css/checkbox-override.css',
+    '/static/css/calculator_widget.css',
+    '/static/js/pwa-install.js',
+    '/static/js/offline-db.js',
+    '/static/js/sync-manager.js',
+    '/static/js/calculator_widget.js',
+    '/static/js/pos-keyboard-shortcuts.js',
+    '/static/images/icon-192.png',
+    '/static/images/icon-512.png',
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
     'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css',
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
-// Install event - cache static assets
+// Install event - pre-cache critical assets
 self.addEventListener('install', (event) => {
-    console.log('[Service Worker] Installing...');
+    console.log('[Service Worker] Installing POS Cache v2...');
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            console.log('[Service Worker] Caching static assets');
-            return cache.addAll(STATIC_CACHE_URLS).catch((error) => {
-                console.error('[Service Worker] Cache addAll error:', error);
-            });
+        caches.open(CACHE_NAME).then(async (cache) => {
+            console.log('[Service Worker] Pre-caching app shell assets');
+            // Cache items individually so one failure does not break the entire cache
+            for (const url of STATIC_CACHE_URLS) {
+                try {
+                    await cache.add(url);
+                } catch (err) {
+                    console.warn('[Service Worker] Failed to cache:', url, err);
+                }
+            }
         })
     );
     self.skipWaiting();
@@ -28,13 +50,13 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-    console.log('[Service Worker] Activating...');
+    console.log('[Service Worker] Activating POS Cache v2...');
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
                     if (cacheName !== CACHE_NAME) {
-                        console.log('[Service Worker] Deleting old cache:', cacheName);
+                        console.log('[Service Worker] Deleting outdated cache:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
@@ -44,133 +66,102 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - smart routing (Network-First for HTML navigation, Stale-While-Revalidate for static assets)
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') {
         return;
     }
 
+    const requestUrl = new URL(event.request.url);
+
+    // Skip chrome-extension / non-http URLs
     if (!event.request.url.startsWith('http')) {
         return;
     }
 
-    const requestUrl = new URL(event.request.url);
-    const isSameOrigin = requestUrl.origin === self.location.origin;
-    const isStaticAsset = requestUrl.pathname.startsWith('/static/') || requestUrl.pathname.startsWith('/media/') || requestUrl.pathname.endsWith('.js') || requestUrl.pathname.endsWith('.css') || requestUrl.pathname.endsWith('.png') || requestUrl.pathname.endsWith('.jpg') || requestUrl.pathname.endsWith('.jpeg') || requestUrl.pathname.endsWith('.svg') || requestUrl.pathname.endsWith('.woff2') || requestUrl.pathname.endsWith('.woff') || requestUrl.pathname.endsWith('.ttf');
-    const isDynamicAPI = requestUrl.pathname.includes('/api/') || requestUrl.searchParams.has('load_products') || requestUrl.searchParams.has('get_prices') || requestUrl.pathname.includes('/ping/') || requestUrl.pathname.endsWith('/sw.js');
+    // Dynamic APIs and endpoints that should always hit network
+    const isDynamicAPI = requestUrl.pathname.startsWith('/api/') || 
+                         requestUrl.pathname.includes('/sync/') || 
+                         requestUrl.pathname.includes('/ping/') || 
+                         requestUrl.searchParams.has('load_products') || 
+                         requestUrl.searchParams.has('get_prices');
 
-    // Serve dynamic requests directly from network
-    if (!isStaticAsset || isDynamicAPI) {
-        if (event.request.mode === 'navigate' || event.request.destination === 'document') {
-            event.respondWith(
-                fetch(event.request).catch(() => caches.match(OFFLINE_URL))
-            );
-        } else {
-            event.respondWith(fetch(event.request));
-        }
+    if (isDynamicAPI) {
+        event.respondWith(
+            fetch(event.request).catch(() => {
+                return new Response(JSON.stringify({ 
+                    offline: true, 
+                    error: 'Network unreachable. Utilizing local offline storage.' 
+                }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            })
+        );
         return;
     }
 
-    // Static asset request - serve from cache, cache new responses
+    // 1. Navigation requests (HTML pages) -> Network-first with cached shell fallback
+    if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+        event.respondWith(
+            fetch(event.request)
+                .then((response) => {
+                    if (response && response.status === 200) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, copy);
+                        });
+                    }
+                    return response;
+                })
+                .catch(async () => {
+                    const cachedResponse = await caches.match(event.request);
+                    if (cachedResponse) {
+                        return cachedResponse;
+                    }
+                    // Fallback to POS home shell or offline page
+                    const posShell = await caches.match('/');
+                    if (posShell) return posShell;
+                    return caches.match(OFFLINE_URL);
+                })
+        );
+        return;
+    }
+
+    // 2. Static Assets (CSS, JS, Images, Fonts) -> Stale-While-Revalidate
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            return fetch(event.request).then((response) => {
-                if (!response || response.status !== 200 || response.type === 'error') {
-                    return response;
+            const fetchPromise = fetch(event.request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const copy = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, copy);
+                    });
                 }
-                const responseToCache = response.clone();
-                caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(event.request, responseToCache);
-                });
-                return response;
+                return networkResponse;
+            }).catch(() => {
+                // If offline and not in cache, return empty/cached asset if available
+                return cachedResponse;
             });
+
+            return cachedResponse || fetchPromise;
         })
     );
 });
 
-// Background sync for offline sales
+// Background Sync Listener
 self.addEventListener('sync', (event) => {
-    console.log('[Service Worker] Background sync:', event.tag);
-    
-    if (event.tag === 'sync-sales') {
-        event.waitUntil(syncOfflineSales());
+    console.log('[Service Worker] Background sync event triggered:', event.tag);
+    if (event.tag === 'sync-sales' || event.tag === 'sync-all') {
+        event.waitUntil(notifyClientsToSync());
     }
 });
 
-// Sync offline sales when back online
-async function syncOfflineSales() {
-    try {
-        // Get offline sales from IndexedDB
-        const offlineSales = await getOfflineSales();
-        
-        if (offlineSales.length === 0) {
-            console.log('[Service Worker] No offline sales to sync');
-            return;
-        }
-
-        console.log(`[Service Worker] Syncing ${offlineSales.length} offline sales`);
-
-        // Send each sale to server
-        for (const sale of offlineSales) {
-            try {
-                const response = await fetch('/api/sales/sync/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(sale),
-                });
-
-                if (response.ok) {
-                    // Remove from offline storage
-                    await removeOfflineSale(sale.id);
-                    console.log('[Service Worker] Sale synced:', sale.id);
-                }
-            } catch (error) {
-                console.error('[Service Worker] Failed to sync sale:', error);
-            }
-        }
-
-        // Notify all clients that sync is complete
-        const clients = await self.clients.matchAll();
-        clients.forEach((client) => {
-            client.postMessage({
-                type: 'SYNC_COMPLETE',
-                count: offlineSales.length,
-            });
+async function notifyClientsToSync() {
+    const clients = await self.clients.matchAll();
+    clients.forEach((client) => {
+        client.postMessage({
+            type: 'TRIGGER_SYNC_NOW',
+            timestamp: Date.now()
         });
-    } catch (error) {
-        console.error('[Service Worker] Sync error:', error);
-    }
+    });
 }
-
-// Helper functions for IndexedDB (simplified)
-async function getOfflineSales() {
-    // This would interact with IndexedDB
-    // For now, return empty array
-    return [];
-}
-
-async function removeOfflineSale(id) {
-    // This would remove from IndexedDB
-    console.log('[Service Worker] Removing offline sale:', id);
-}
-
-// Push notification support (for future use)
-self.addEventListener('push', (event) => {
-    console.log('[Service Worker] Push received');
-    
-    const options = {
-        body: event.data ? event.data.text() : 'New notification',
-        icon: '/static/images/icon-192.png',
-        badge: '/static/images/icon-192.png',
-        vibrate: [200, 100, 200],
-    };
-
-    event.waitUntil(
-        self.registration.showNotification('POS System', options)
-    );
-});

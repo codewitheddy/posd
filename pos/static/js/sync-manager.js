@@ -7,6 +7,8 @@ class SyncManager {
         this.syncInProgress = false;
         this.autoSyncEnabled = true;
         this.syncInterval = null;
+        this.pingInterval = null;
+        this.isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     }
 
     // Initialize sync manager
@@ -14,7 +16,9 @@ class SyncManager {
         console.log('[SyncManager] Initializing...');
         
         // Initialize offline database
-        await offlineDB.init();
+        if (window.offlineDB) {
+            await window.offlineDB.init();
+        }
         
         // Update UI with pending count
         await this.updatePendingCount();
@@ -22,87 +26,135 @@ class SyncManager {
         // Setup event listeners
         this.setupEventListeners();
         
-        // Setup auto-sync on connection restore
+        // Setup auto-sync and connectivity heartbeats
         this.setupAutoSync();
+        this.setupConnectivityCheck();
         
-        // Periodic cleanup
-        this.setupCleanup();
+        // Service Worker message listener
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'TRIGGER_SYNC_NOW') {
+                    console.log('[SyncManager] SW triggered sync event received');
+                    this.sync();
+                }
+            });
+        }
+
+        // Listen for locally saved offline sales
+        window.addEventListener('offlinesale:saved', () => {
+            this.updatePendingCount();
+            if (this.isOnline && !this.syncInProgress) {
+                // Opportunistic sync attempt
+                setTimeout(() => this.sync(), 1500);
+            }
+        });
         
-        console.log('[SyncManager] Initialized');
+        console.log('[SyncManager] Initialized successfully');
     }
 
     // Setup event listeners
     setupEventListeners() {
-        // Sync button click
-        const syncButton = document.getElementById('syncButton');
-        if (syncButton) {
-            syncButton.addEventListener('click', () => this.manualSync());
-            console.log('[SyncManager] Sync button event listener attached');
-        } else {
-            console.warn('[SyncManager] Sync button not found in DOM');
-        }
+        // Sync buttons click
+        document.querySelectorAll('#syncButton, .btn-trigger-sync, [data-action="sync-now"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.manualSync();
+            });
+        });
 
         // Online/offline events
         window.addEventListener('online', () => this.onConnectionRestore());
         window.addEventListener('offline', () => this.onConnectionLost());
-        console.log('[SyncManager] Online/offline event listeners attached');
+    }
+
+    // Setup connectivity heartbeat pinging
+    setupConnectivityCheck() {
+        const checkPing = async () => {
+            if (!navigator.onLine) {
+                this.setConnectionState(false);
+                return;
+            }
+            try {
+                const res = await fetch('/ping/?_=' + Date.now(), { method: 'GET', cache: 'no-store' });
+                this.setConnectionState(res.ok);
+            } catch (err) {
+                this.setConnectionState(false);
+            }
+        };
+
+        this.pingInterval = setInterval(checkPing, 20000); // every 20s
+        checkPing();
+    }
+
+    // Set connection state and notify UI
+    setConnectionState(online) {
+        const changed = this.isOnline !== online;
+        this.isOnline = online;
+
+        // Update indicator
+        const el = document.getElementById('connection-status');
+        if (el) {
+            el.className = 'connection-status ' + (online ? 'online' : 'offline');
+            el.innerHTML = online ? '<i class="bi bi-wifi"></i> Online' : '<i class="bi bi-wifi-off"></i> Offline Mode';
+        }
+
+        // Update all POS badges
+        document.querySelectorAll('.pos-sync-status-badge').forEach(badge => {
+            if (online) {
+                badge.className = 'badge bg-success-subtle text-success border border-success-subtle pos-sync-status-badge';
+                badge.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Online (Synced)';
+            } else {
+                badge.className = 'badge bg-warning-subtle text-warning border border-warning-subtle pos-sync-status-badge';
+                badge.innerHTML = '<i class="bi bi-cloud-slash-fill me-1"></i> Offline Mode';
+            }
+        });
+
+        if (changed) {
+            window.dispatchEvent(new CustomEvent('connectivity:change', { detail: { online } }));
+        }
     }
 
     // Setup auto-sync
     setupAutoSync() {
-        // Check for pending items every 30 seconds when online
         this.syncInterval = setInterval(async () => {
-            const isOnline = window._realOnline !== undefined ? window._realOnline : navigator.onLine;
-            if (isOnline && this.autoSyncEnabled && !this.syncInProgress) {
-                const count = await offlineDB.getPendingCount();
+            if (this.isOnline && this.autoSyncEnabled && !this.syncInProgress) {
+                const count = await window.offlineDB.getPendingCount();
                 if (count > 0) {
-                    console.log('[SyncManager] Auto-sync triggered');
+                    console.log('[SyncManager] Auto-sync triggered for', count, 'pending sales');
                     await this.sync();
                 }
             }
         }, 30000); // 30 seconds
     }
 
-    // Setup periodic cleanup
-    setupCleanup() {
-        // Cleanup old data once per day
-        setInterval(async () => {
-            await offlineDB.cleanup(7); // Delete synced items older than 7 days
-        }, 24 * 60 * 60 * 1000); // 24 hours
-    }
-
     // Manual sync triggered by user
     async manualSync() {
-        const isOnline = window._realOnline !== undefined ? window._realOnline : navigator.onLine;
-
-        if (!isOnline) {
-            this.showNotification('Cannot sync while offline', 'warning');
+        if (!this.isOnline) {
+            this.showNotification('Cannot sync while offline. System will auto-sync when internet is back.', 'warning');
             return;
         }
 
         if (this.syncInProgress) {
-            this.showNotification('Sync already in progress', 'info');
+            this.showNotification('Sync already in progress...', 'info');
             return;
         }
 
-        const count = await offlineDB.getPendingCount();
+        const count = await window.offlineDB.getPendingCount();
         if (count === 0) {
-            this.showNotification('No pending offline sales to sync', 'info');
-            return;
-        }
-
-        // Show confirmation
-        if (!confirm(`Sync ${count} pending sale(s) to server?`)) {
+            this.showNotification('All transactions are up to date. No pending offline sales.', 'info');
             return;
         }
 
         await this.sync();
     }
 
-    // Main sync function
+    // Main sync function (batches pending sales)
     async sync() {
         if (this.syncInProgress) {
-            console.log('[SyncManager] Sync already in progress');
+            return;
+        }
+
+        if (!this.isOnline && !navigator.onLine) {
             return;
         }
 
@@ -110,64 +162,22 @@ class SyncManager {
         this.showSyncProgress(true);
 
         try {
-            const pendingSales = await offlineDB.getPendingSales();
-            console.log(`[SyncManager] Syncing ${pendingSales.length} sales`);
-
-            let successCount = 0;
-            let failCount = 0;
-
-            for (let i = 0; i < pendingSales.length; i++) {
-                const sale = pendingSales[i];
-                this.updateSyncProgress(i + 1, pendingSales.length);
-
-                try {
-                    await this.syncSale(sale);
-                    successCount++;
-                } catch (error) {
-                    console.error('[SyncManager] Failed to sync sale:', sale.id, error);
-                    failCount++;
-                }
+            const pendingRecords = await window.offlineDB.getPendingSales();
+            if (!pendingRecords || pendingRecords.length === 0) {
+                this.updatePendingCount();
+                return;
             }
 
-            // Log sync result
-            await offlineDB.logSync('manual_sync', {
-                total: pendingSales.length,
-                success: successCount,
-                failed: failCount
-            });
+            console.log(`[SyncManager] Syncing ${pendingRecords.length} pending sales batch`);
 
-            // Show result
-            if (failCount === 0) {
-                this.showNotification(`Successfully synced ${successCount} sale(s)`, 'success');
-            } else {
-                this.showNotification(
-                    `Synced ${successCount} sale(s), ${failCount} failed`,
-                    'warning'
-                );
-            }
+            // Extract sales payload
+            const salesPayload = pendingRecords.map(r => r.data || r);
 
-            // Update pending count
-            await this.updatePendingCount();
+            // Get CSRF Token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                              this.getCookie('csrftoken') || '';
 
-        } catch (error) {
-            console.error('[SyncManager] Sync error:', error);
-            this.showNotification('Sync failed: ' + error.message, 'danger');
-        } finally {
-            this.syncInProgress = false;
-            this.showSyncProgress(false);
-        }
-    }
-
-    // Sync individual sale
-    async syncSale(sale) {
-        try {
-            // Update status to syncing
-            await offlineDB.updateSaleStatus(sale.id, 'syncing');
-
-            // Get CSRF token
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-
-            // Send to server
+            // Send batch to backend sync endpoint
             const response = await fetch('/api/sales/sync/', {
                 method: 'POST',
                 headers: {
@@ -175,170 +185,153 @@ class SyncManager {
                     'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({
-                    temp_id: sale.id,
-                    sale_data: sale.data
+                    sales: salesPayload
                 })
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Sync failed');
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `Server responded with ${response.status}`);
             }
 
             const result = await response.json();
+            console.log('[SyncManager] Batch sync server response:', result);
 
-            // Mark as synced and delete
-            await offlineDB.updateSaleStatus(sale.id, 'synced');
-            await offlineDB.deleteSale(sale.id);
+            let successCount = 0;
+            if (result.synced && Array.isArray(result.synced)) {
+                for (const item of result.synced) {
+                    const clientUuid = item.client_uuid;
+                    // Find matching local record
+                    const matching = pendingRecords.find(r => 
+                        (r.data && (r.data.client_uuid === clientUuid || r.data.idempotency_key === clientUuid)) ||
+                        r.idempotency_key === clientUuid || r.id === clientUuid
+                    );
+                    if (matching) {
+                        await window.offlineDB.markSaleSynced(matching.id);
+                        successCount++;
+                    }
+                }
+            } else if (result.success) {
+                // If synced without itemized breakdown, clean all
+                for (const r of pendingRecords) {
+                    await window.offlineDB.markSaleSynced(r.id);
+                    successCount++;
+                }
+            }
 
-            console.log('[SyncManager] Sale synced successfully:', sale.id, '→', result.sale_id);
-            return result;
+            // Log sync result
+            await window.offlineDB.logSync('batch_sync', {
+                total: pendingRecords.length,
+                synced: successCount,
+                errors: result.errors || []
+            });
+
+            if (successCount > 0) {
+                this.showNotification(`Successfully synchronized ${successCount} offline sale(s) to server!`, 'success');
+            }
+
+            // Update UI count
+            await this.updatePendingCount();
 
         } catch (error) {
-            // Mark as failed
-            await offlineDB.updateSaleStatus(sale.id, 'failed', error.message);
-            throw error;
+            console.warn('[SyncManager] Sync failed:', error);
+            this.showNotification('Sync deferred: ' + error.message, 'warning');
+        } finally {
+            this.syncInProgress = false;
+            this.showSyncProgress(false);
         }
     }
 
     // Connection restored
     async onConnectionRestore() {
-        console.log('[SyncManager] Connection restored');
-        this.showNotification('Connection restored', 'success');
+        console.log('[SyncManager] Network online event received');
+        this.setConnectionState(true);
+        this.showNotification('Internet connection restored.', 'success');
 
-        // Auto-sync if enabled
         if (this.autoSyncEnabled) {
-            const count = await offlineDB.getPendingCount();
+            const count = await window.offlineDB.getPendingCount();
             if (count > 0) {
-                setTimeout(() => this.sync(), 2000); // Wait 2 seconds then sync
+                setTimeout(() => this.sync(), 1200);
             }
         }
     }
 
     // Connection lost
     onConnectionLost() {
-        console.log('[SyncManager] Connection lost');
-        this.showNotification('Working offline - sales will be synced later', 'warning');
+        console.log('[SyncManager] Network offline event received');
+        this.setConnectionState(false);
+        this.showNotification('Internet disconnected. Working in Offline Mode — sales will be saved locally.', 'warning');
     }
 
     // Update pending count badge
     async updatePendingCount() {
-        const count = await offlineDB.getPendingCount();
-        const badge = document.getElementById('pendingCount');
-        const syncButton = document.getElementById('syncButton');
+        if (!window.offlineDB) return;
+        const count = await window.offlineDB.getPendingCount();
 
-        if (badge) {
+        document.querySelectorAll('#pendingCount, .pending-sync-count').forEach(badge => {
             badge.textContent = count;
             badge.style.display = count > 0 ? 'inline-block' : 'none';
-        }
+        });
 
-        if (syncButton) {
+        document.querySelectorAll('#syncButton, .btn-trigger-sync').forEach(syncButton => {
             if (count > 0) {
                 syncButton.classList.add('btn-warning');
-                syncButton.classList.remove('btn-secondary');
+                syncButton.classList.remove('btn-secondary', 'btn-outline-secondary');
+                syncButton.title = `${count} pending sale(s) waiting to sync`;
             } else {
-                syncButton.classList.add('btn-secondary');
                 syncButton.classList.remove('btn-warning');
+                syncButton.classList.add('btn-outline-secondary');
+                syncButton.title = 'No pending sales to sync';
             }
-        }
+        });
+
+        // Broadcast count update
+        window.dispatchEvent(new CustomEvent('sync:pending-count', { detail: { count } }));
     }
 
-    // Show sync progress modal
+    // Show sync progress spinner / modal
     showSyncProgress(show) {
-        let modal = document.getElementById('syncProgressModal');
-        
-        if (show && !modal) {
-            // Create modal
-            modal = document.createElement('div');
-            modal.id = 'syncProgressModal';
-            modal.className = 'modal fade';
-            modal.innerHTML = `
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">
-                                <i class="fas fa-sync fa-spin"></i> Syncing Data
-                            </h5>
-                        </div>
-                        <div class="modal-body">
-                            <div class="progress mb-3" style="height: 25px;">
-                                <div id="syncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                                     role="progressbar" style="width: 0%">
-                                    <span id="syncProgressText">0/0</span>
-                                </div>
-                            </div>
-                            <p class="text-center text-muted mb-0">
-                                <small>Please wait while we upload your sales...</small>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-
-        if (modal) {
-            if (show) {
-                $(modal).modal('show');
-            } else {
-                $(modal).modal('hide');
-            }
-        }
+        document.querySelectorAll('.sync-spinner').forEach(s => {
+            s.style.display = show ? 'inline-block' : 'none';
+        });
     }
 
-    // Update sync progress
-    updateSyncProgress(current, total) {
-        const progressBar = document.getElementById('syncProgressBar');
-        const progressText = document.getElementById('syncProgressText');
-
-        if (progressBar && progressText) {
-            const percentage = (current / total) * 100;
-            progressBar.style.width = percentage + '%';
-            progressText.textContent = `${current}/${total}`;
-        }
-    }
-
-    // Show notification
+    // Helper: Show toast notification
     showNotification(message, type = 'info') {
-        // Check if body exists
-        if (!document.body) {
-            console.warn('[SyncManager] Cannot show notification - document.body not ready');
-            return;
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(message, type);
+        } else {
+            console.log(`[Notification ${type}]: ${message}`);
         }
-        
-        // Create toast notification
-        const toast = document.createElement('div');
-        toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 300px;';
-        toast.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.appendChild(toast);
+    }
 
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.remove();
+    // Helper: Cookie extraction
+    getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
             }
-        }, 5000);
+        }
+        return cookieValue;
     }
 }
 
-// Export singleton instance
+// Create singleton instance
 const syncManager = new SyncManager();
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('[SyncManager] DOM loaded, initializing...');
-        syncManager.init().catch(err => {
-            console.error('[SyncManager] Initialization failed:', err);
+if (typeof window !== 'undefined') {
+    window.syncManager = syncManager;
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            syncManager.init().catch(err => console.error('[SyncManager] Init failed:', err));
         });
-    });
-} else {
-    console.log('[SyncManager] DOM already loaded, initializing...');
-    syncManager.init().catch(err => {
-        console.error('[SyncManager] Initialization failed:', err);
-    });
+    } else {
+        syncManager.init().catch(err => console.error('[SyncManager] Init failed:', err));
+    }
 }

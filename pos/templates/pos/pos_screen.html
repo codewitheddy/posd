@@ -531,6 +531,16 @@
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
                               id="held-orders-badge" style="display: none;">0</span>
                     </button>
+
+                    <!-- Offline Sync Status & Manual Sync Button -->
+                    <button class="btn btn-outline-secondary btn-sm px-2 position-relative flex-shrink-0 fw-semibold btn-trigger-sync" id="syncButton" title="Sync Offline Sales">
+                        <i class="bi bi-arrow-repeat sync-icon"></i>
+                        <span class="d-none d-xl-inline ms-1">Sync</span>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger pending-sync-count" id="pendingCount" style="display: none;">0</span>
+                    </button>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle pos-sync-status-badge d-none d-md-inline-flex align-items-center" style="font-size:0.75rem; padding: 5px 8px;">
+                        <i class="bi bi-check-circle-fill me-1"></i> Online (Synced)
+                    </span>
                 </div>
 
                 <!-- Attached Customer Info Banner (Shown when customer attached) -->
@@ -1057,7 +1067,39 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Offline Transaction Receipt Modal -->
+<div class="modal fade" id="offlineReceiptModal" tabindex="-1" aria-labelledby="offlineReceiptModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white py-2 px-3">
+                <h6 class="modal-title mb-0 d-flex align-items-center" id="offlineReceiptModalLabel">
+                    <i class="bi bi-receipt text-warning me-2"></i>
+                    <span>Offline Sale Receipt</span>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3 bg-light">
+                <div class="alert alert-warning py-1 px-2 mb-2 d-flex align-items-center" style="font-size: 0.78rem;">
+                    <i class="bi bi-cloud-arrow-up-fill fs-5 me-2 text-warning"></i>
+                    <div>
+                        <strong>Saved Offline</strong> — Stored locally in Outbox. Will auto-sync when internet is restored.
+                    </div>
+                </div>
+                <div id="offline-receipt-content" class="bg-white p-2 rounded shadow-sm">
+                    <!-- Dynamic receipt HTML inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="bi bi-check-lg me-1"></i> Done / Next Sale
+                </button>
+                <button type="button" class="btn btn-primary btn-sm px-3 fw-bold" onclick="printOfflineReceipt()">
+                    <i class="bi bi-printer-fill me-1"></i> Print Receipt
+                </button>
             </div>
         </div>
     </div>
@@ -1957,6 +1999,41 @@ function fastTenderCash() {
         changeFormatted: `KES ${change.toFixed(2)}`
     });
     
+    // Offline detection & execution
+    const isOffline = !navigator.onLine || (window.syncManager && !window.syncManager.isOnline);
+    if (isOffline && window.offlineDB) {
+        const offlineReceiptNo = 'OFFLINE-' + new Date().toISOString().slice(0,10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+        const saleData = {
+            idempotency_key: window.offlineDB.generateUUID(),
+            invoice_number: offlineReceiptNo,
+            items: cart.map(item => ({
+                product_id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                unit_price: item.price,
+                total: item.price * item.quantity,
+                note: item.note || ''
+            })),
+            payments: [{
+                payment_method_id: cashMethodId,
+                method_name: 'Cash (Fast-Tender)',
+                amount: tenderAmount,
+                reference: 'Cash Fast-Tender'
+            }],
+            subtotal: currentTotal,
+            total: currentTotal,
+            amount_paid: tenderAmount,
+            change_given: change,
+            customer: selectedCustomer,
+            client_created_at: new Date().toISOString(),
+            notes: document.getElementById('order-notes')?.value || '',
+            cashier_name: '{{ request.user.get_full_name|default:request.user.username }}'
+        };
+
+        processOfflineSale(saleData);
+        return;
+    }
+
     localStorage.setItem('pos_sale_completing', 'true');
     // Clear storage for active tab
     delete multiCarts[activeCartId];
@@ -2130,6 +2207,11 @@ function loadProducts(reset = false) {
             productsOffset += data.products.length;
             productsHasMore = data.has_more;
             
+            // Auto-cache catalog in local IndexedDB for offline operation
+            if (data.products && window.offlineDB) {
+                window.offlineDB.cacheCatalog({ products: data.products }).catch(e => console.warn('Cache error:', e));
+            }
+            
             if (loadingEl) loadingEl.style.display = 'none';
             setProductView(currentProductView);
             
@@ -2146,8 +2228,43 @@ function loadProducts(reset = false) {
     })
     .catch(error => {
         clearTimeout(timeoutId);
-        console.error('Error loading products:', error);
-        if (loadingEl) {
+        console.warn('Network load failed, checking offline IndexedDB cache:', error);
+        
+        if (window.offlineDB) {
+            window.offlineDB.searchLocalProducts(currentSearchQuery, currentCategoryFilter).then(localProducts => {
+                if (localProducts && localProducts.length > 0) {
+                    renderProducts(localProducts);
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    setProductView(currentProductView);
+                    const emptyEl = document.getElementById('products-empty');
+                    if (emptyEl) emptyEl.style.display = 'none';
+                    const loadMoreContainer = document.getElementById('load-more-container');
+                    if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+                    return;
+                }
+                if (loadingEl) {
+                    loadingEl.innerHTML = `
+                        <div class="alert alert-warning m-3 text-center">
+                            <h5><i class="bi bi-cloud-slash me-1"></i> Working in Offline Mode</h5>
+                            <p class="mb-2">No local products found matching your search. Products loaded while online are cached automatically.</p>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="loadProducts(true)">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Retry
+                            </button>
+                        </div>
+                    `;
+                }
+            }).catch(() => {
+                if (loadingEl) {
+                    loadingEl.innerHTML = `
+                        <div class="alert alert-danger m-3">
+                            <h5><i class="bi bi-exclamation-triangle"></i> Error Loading Products</h5>
+                            <p><strong>Error:</strong> ${error.message}</p>
+                            <button class="btn btn-secondary btn-sm" onclick="loadProducts(true)">Retry</button>
+                        </div>
+                    `;
+                }
+            });
+        } else if (loadingEl) {
             loadingEl.innerHTML = `
                 <div class="alert alert-danger m-3">
                     <h5><i class="bi bi-exclamation-triangle"></i> Error Loading Products</h5>
@@ -2445,6 +2562,57 @@ function searchProducts() {
     console.log('Category filter:', currentCategoryFilter);
     console.log('=========================');
     
+    loadProducts(true);
+}
+
+// Rapid Barcode Scanner Search with Offline Cache Fallback
+async function searchByBarcode() {
+    const input = document.getElementById('barcode-input');
+    if (!input) return;
+    const barcode = input.value.trim();
+    if (!barcode) return;
+
+    input.value = '';
+    
+    // 1. Check in-memory productData
+    let found = Object.values(productData || {}).find(p => 
+        (p.barcode && p.barcode.trim() === barcode) || 
+        (p.product_code && p.product_code.trim() === barcode)
+    );
+
+    if (found) {
+        playScanBeep();
+        if (found.has_bulk) {
+            showUnitPickerModal(found);
+        } else {
+            addToCart(found.id, found.name, found.unit_price, found.stock_quantity, found.tax_class || 'standard');
+        }
+        showNotification(`Scanned "${found.name}"`, 'success');
+        return;
+    }
+
+    // 2. Check offline IndexedDB cache
+    if (window.offlineDB) {
+        try {
+            const localMatch = await window.offlineDB.findLocalProductByBarcode(barcode);
+            if (localMatch) {
+                playScanBeep();
+                const prodId = Number(localMatch.id);
+                productData[prodId] = localMatch;
+                productStock[prodId] = localMatch.stock_quantity;
+                addToCart(prodId, localMatch.name, localMatch.unit_price, localMatch.stock_quantity, localMatch.tax_class || 'standard');
+                showNotification(`Scanned "${localMatch.name}" (Offline Cache)`, 'success');
+                return;
+            }
+        } catch (err) {
+            console.warn('[Barcode Scanner] Local search error:', err);
+        }
+    }
+
+    // 3. Fallback: Query search
+    currentSearchQuery = barcode;
+    const si = document.getElementById('search-input');
+    if (si) si.value = barcode;
     loadProducts(true);
 }
 
@@ -4545,6 +4713,46 @@ function confirmPaymentAndComplete() {
         }
     }
     
+    // Offline detection & execution
+    const isOffline = !navigator.onLine || (window.syncManager && !window.syncManager.isOnline);
+    if (isOffline && window.offlineDB) {
+        const offlineReceiptNo = 'OFFLINE-' + new Date().toISOString().slice(0,10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+        const saleData = {
+            idempotency_key: window.offlineDB.generateUUID(),
+            invoice_number: offlineReceiptNo,
+            items: cart.map(item => ({
+                product_id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                unit_price: item.price,
+                total: item.price * item.quantity,
+                note: item.note || ''
+            })),
+            payments: paymentMethods.map(pm => ({
+                payment_method_id: pm.id,
+                method_name: pm.name,
+                amount: pm.amount,
+                reference: pm.reference || ''
+            })),
+            subtotal: totalDue,
+            vat_rate: typeof VAT_RATE !== 'undefined' ? VAT_RATE : 16.0,
+            vat_amount: (totalDue * (typeof VAT_RATE !== 'undefined' ? VAT_RATE : 16.0)) / (100 + (typeof VAT_RATE !== 'undefined' ? VAT_RATE : 16.0)),
+            discount_type: document.getElementById('discount-type')?.value || 'percentage',
+            discount_value: parseFloat(document.getElementById('discount-value')?.value || 0),
+            discount_amount: parseFloat(document.getElementById('form-discount-value')?.value || 0),
+            total: totalDue,
+            amount_paid: totalPaid,
+            change_given: change,
+            customer: selectedCustomer,
+            client_created_at: new Date().toISOString(),
+            notes: document.getElementById('order-notes')?.value || '',
+            cashier_name: '{{ request.user.get_full_name|default:request.user.username }}'
+        };
+
+        processOfflineSale(saleData);
+        return;
+    }
+
     // Show loading state
     const completeBtn = document.getElementById('complete-btn');
     if (completeBtn) {
@@ -4561,6 +4769,175 @@ function confirmPaymentAndComplete() {
     // Submit form - the backend will redirect to thermal receipt
     saleForm.submit();
     console.log('Form submitted');
+}
+
+// ==================== OFFLINE SALE PROCESSING & RECEIPT ====================
+
+async function processOfflineSale(saleData) {
+    try {
+        console.log('[POS Offline] Processing offline transaction:', saleData);
+        
+        // Save into IndexedDB outbox
+        await window.offlineDB.savePendingSale(saleData);
+
+        // Render receipt
+        renderOfflineReceipt(saleData);
+
+        // Play chime & notify CFD
+        if (typeof playSuccessChime === 'function') playSuccessChime();
+        if (typeof broadcastToCfd === 'function') {
+            broadcastToCfd('SALE_COMPLETED', {
+                paidFormatted: `KES ${parseFloat(saleData.amount_paid).toFixed(2)}`,
+                changeFormatted: `KES ${parseFloat(saleData.change_given).toFixed(2)}`
+            });
+        }
+
+        // Clear cart and local storage
+        cart = [];
+        updateCart();
+        clearCartStorage();
+        if (typeof multiCarts !== 'undefined' && typeof activeCartId !== 'undefined') {
+            delete multiCarts[activeCartId];
+            if (Object.keys(multiCarts).length === 0) {
+                multiCarts = { 'cart_1': { id: 'cart_1', name: 'Cart 1', items: [] } };
+            }
+            localStorage.setItem('pos_multi_carts', JSON.stringify(multiCarts));
+        }
+
+        // Show offline receipt modal
+        const receiptModalEl = document.getElementById('offlineReceiptModal');
+        if (receiptModalEl) {
+            const receiptModal = new bootstrap.Modal(receiptModalEl);
+            receiptModal.show();
+        }
+
+        if (typeof showNotification === 'function') {
+            showNotification(`Offline Sale (${saleData.invoice_number}) saved locally. It will auto-sync when online.`, 'success');
+        }
+
+        // Update sync badge
+        if (window.syncManager) {
+            window.syncManager.updatePendingCount();
+        }
+    } catch (err) {
+        console.error('[POS Offline] Error saving offline sale:', err);
+        alert('Error recording offline transaction: ' + err.message);
+    }
+}
+
+function renderOfflineReceipt(saleData) {
+    const storeName = document.getElementById('posStoreName')?.innerText.trim() || 'Marid POS';
+    const container = document.getElementById('offline-receipt-content');
+    if (!container) return;
+
+    let itemsHtml = '';
+    (saleData.items || []).forEach(item => {
+        const lineTotal = (parseFloat(item.unit_price) * parseFloat(item.quantity)).toFixed(2);
+        itemsHtml += `
+            <tr>
+                <td style="text-align:left; padding:4px 0;">${escapeHtml(item.name || 'Item')}</td>
+                <td style="text-align:center; padding:4px 0;">${item.quantity}</td>
+                <td style="text-align:right; padding:4px 0;">${parseFloat(item.unit_price).toFixed(2)}</td>
+                <td style="text-align:right; padding:4px 0;">${lineTotal}</td>
+            </tr>
+        `;
+    });
+
+    let paymentsHtml = '';
+    (saleData.payments || []).forEach(p => {
+        paymentsHtml += `
+            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                <span>${escapeHtml(p.method_name || 'Cash')}:</span>
+                <strong>KES ${parseFloat(p.amount).toFixed(2)}</strong>
+            </div>
+        `;
+    });
+
+    const nowStr = new Date(saleData.client_created_at || Date.now()).toLocaleString();
+
+    container.innerHTML = `
+        <div style="font-family:'Courier New', Courier, monospace; max-width:320px; margin:0 auto; padding:15px; background:#fff; color:#000; font-size:12px; border:1px dashed #ccc;">
+            <div style="text-align:center; margin-bottom:10px;">
+                <h4 style="margin:0; font-weight:bold; font-size:16px;">${escapeHtml(storeName)}</h4>
+                <div style="font-size:11px; margin-top:3px; background:#fff3cd; color:#856404; padding:3px; border-radius:3px; font-weight:bold;">
+                    ⚡ OFFLINE TRANSACTION RECEIPT
+                </div>
+            </div>
+            <div style="border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px; font-size:11px;">
+                <div><strong>Receipt #:</strong> ${saleData.invoice_number}</div>
+                <div><strong>Date:</strong> ${nowStr}</div>
+                <div><strong>Cashier:</strong> ${escapeHtml(saleData.cashier_name || 'POS Cashier')}</div>
+                ${saleData.customer ? `<div><strong>Customer:</strong> ${escapeHtml(saleData.customer.name || '')}</div>` : ''}
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:8px;">
+                <thead>
+                    <tr style="border-bottom:1px solid #000;">
+                        <th style="text-align:left; padding-bottom:4px;">Item</th>
+                        <th style="text-align:center; padding-bottom:4px;">Qty</th>
+                        <th style="text-align:right; padding-bottom:4px;">Price</th>
+                        <th style="text-align:right; padding-bottom:4px;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+            <div style="border-top:1px dashed #000; padding-top:6px; font-size:12px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <span>Subtotal:</span>
+                    <span>KES ${parseFloat(saleData.subtotal).toFixed(2)}</span>
+                </div>
+                ${parseFloat(saleData.discount_amount || 0) > 0 ? `
+                <div style="display:flex; justify-content:space-between; margin-bottom:2px; color:#d9534f;">
+                    <span>Discount:</span>
+                    <span>- KES ${parseFloat(saleData.discount_amount).toFixed(2)}</span>
+                </div>` : ''}
+                <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <span>VAT (16% Incl):</span>
+                    <span>KES ${parseFloat(saleData.vat_amount || 0).toFixed(2)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:bold; border-top:1px solid #000; border-bottom:1px solid #000; padding:4px 0; margin:4px 0;">
+                    <span>TOTAL:</span>
+                    <span>KES ${parseFloat(saleData.total).toFixed(2)}</span>
+                </div>
+                ${paymentsHtml}
+                <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <span>Amount Paid:</span>
+                    <span>KES ${parseFloat(saleData.amount_paid).toFixed(2)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:2px; font-weight:bold;">
+                    <span>Change:</span>
+                    <span>KES ${parseFloat(saleData.change_given).toFixed(2)}</span>
+                </div>
+            </div>
+            <div style="text-align:center; margin-top:12px; font-size:11px; border-top:1px dashed #000; padding-top:6px;">
+                <p style="margin:0;">Thank you for shopping with us!</p>
+                <p style="margin:2px 0 0; font-size:10px; color:#666;">Offline Mode — Queued for Cloud Sync</p>
+            </div>
+        </div>
+    `;
+}
+
+function printOfflineReceipt() {
+    const printContent = document.getElementById('offline-receipt-content');
+    if (!printContent) return;
+    const printWindow = window.open('', '', 'width=400,height=600');
+    printWindow.document.write('<html><head><title>Offline Receipt</title><style>body{margin:0;padding:10px;font-family:monospace;}@media print{@page{margin:0;}}</style></head><body>');
+    printWindow.document.write(printContent.innerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 250);
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ==================== MOBILE CART FUNCTIONS ====================
