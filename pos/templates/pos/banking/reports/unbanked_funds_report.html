@@ -1,0 +1,128 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Un-Banked Funds Report — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1"><i class="bi bi-safe me-2 text-warning"></i>Un-Banked Funds Report</h3>
+            <p class="text-muted small mb-0">Audit of physical cash collected at registers and stored in safes awaiting commercial deposit.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Audit
+            </button>
+            <a href="{% url 'banking_record_create' slug=request.business.slug %}" class="btn btn-success btn-sm fw-bold">
+                <i class="bi bi-plus-circle me-1"></i> Record Banking Now
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Balance Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-dark text-white">
+                <div class="text-white-50 small fw-semibold text-uppercase">Cumulative Cash Collections</div>
+                <h3 class="fw-bold mb-0 mt-1">KES {{ overall_collected|floatformat:2 }}</h3>
+                <small class="text-white-50">Total POS cash sales to date</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-success text-white">
+                <div class="text-white-50 small fw-semibold text-uppercase">Cumulative Banked Cash</div>
+                <h3 class="fw-bold mb-0 mt-1">KES {{ overall_banked|floatformat:2 }}</h3>
+                <small class="text-white-50">Total deposits verified</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 {% if overall_unbanked > 0 %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">
+                <div class="{% if overall_unbanked > 0 %}text-dark opacity-75{% else %}text-muted{% endif %} small fw-semibold text-uppercase">
+                    Total Un-Banked Cash (In Safe / Tills)
+                </div>
+                <h3 class="fw-bold mb-0 mt-1 text-dark">KES {{ overall_unbanked|floatformat:2 }}</h3>
+                <small class="{% if overall_unbanked > 0 %}text-dark opacity-75{% else %}text-muted{% endif %}">Cash float &amp; collected currency</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Branch Breakdown Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-light py-3 px-4">
+            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-buildings me-2 text-primary"></i>Un-Banked Cash by Store Location / Branch</h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Branch Location</th>
+                        <th class="text-end">Total Cash Collected (KES)</th>
+                        <th class="text-end">Total Physically Banked (KES)</th>
+                        <th class="text-end">Cash in Safe / Drawer (KES)</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in branch_summaries %}
+                    <tr>
+                        <td class="ps-4 fw-bold">
+                            <i class="bi bi-building me-2 text-muted"></i>{{ item.branch.name }}
+                            <small class="text-muted d-block">{{ item.branch.code }} &bull; {{ item.branch.address|truncatechars:35 }}</small>
+                        </td>
+                        <td class="text-end fw-semibold">KES {{ item.collected|floatformat:2 }}</td>
+                        <td class="text-end fw-semibold text-success">KES {{ item.banked|floatformat:2 }}</td>
+                        <td class="text-end fw-bold fs-6 {% if item.unbanked > 0 %}text-warning text-dark{% else %}text-muted{% endif %}">
+                            KES {{ item.unbanked|floatformat:2 }}
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'banking_record_create' slug=request.business.slug %}?branch={{ item.branch.id }}" class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-cash me-1"></i> Bank Location Cash
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">No branch locations found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- In-Transit Deposits -->
+    {% if in_transit_records %}
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-header bg-light py-3 px-4">
+            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-truck me-2 text-warning"></i>Deposits Currently in Transit (En Route to Bank)</h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light text-muted small">
+                    <tr>
+                        <th class="ps-4">Record Ref</th>
+                        <th>Deposit Date</th>
+                        <th>Destination Bank</th>
+                        <th>Deposited By</th>
+                        <th class="text-end pe-4">Amount (KES)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in in_transit_records %}
+                    <tr>
+                        <td class="ps-4 font-monospace fw-bold">{{ rec.record_number }}</td>
+                        <td>{{ rec.deposit_date|date:"d M Y" }}</td>
+                        <td>{{ rec.bank_account.bank_name }}</td>
+                        <td>{{ rec.deposited_by.get_full_name|default:rec.deposited_by.username }}</td>
+                        <td class="text-end pe-4 fw-bold text-success">KES {{ rec.deposited_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

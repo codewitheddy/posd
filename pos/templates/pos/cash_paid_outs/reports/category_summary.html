@@ -1,0 +1,120 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Expense Category Summary | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 text-muted">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Finances</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'cash_paid_out_list' %}">Cash Paid-Outs</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Category Summary</li>
+                </ol>
+            </nav>
+            <h2 class="h3 fw-bold mb-0 text-white"><i class="bi bi-pie-chart text-info me-2"></i> Expense Category Summary</h2>
+            <p class="text-muted small mb-0">Period spend breakdown by chart of accounts category and monthly budget cap compliance.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-outline-secondary">
+                <i class="bi bi-printer me-1"></i> Print Summary
+            </button>
+            <a href="{% url 'cash_paid_out_list' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-left me-1"></i> Back to Ledger
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card bg-dark border-secondary mb-4 shadow-sm">
+        <div class="card-body py-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-12 col-md-5">
+                    <label class="small text-muted d-block">Start Date</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm bg-dark text-white border-secondary" value="{{ start_date }}">
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="small text-muted d-block">End Date</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm bg-dark text-white border-secondary" value="{{ end_date }}">
+                </div>
+                <div class="col-12 col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-funnel"></i> Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Box -->
+    <div class="alert alert-dark border-secondary d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <span class="text-muted small">Period: </span>
+            <span class="fw-bold text-white">{{ start_date }} to {{ end_date }}</span>
+        </div>
+        <div>
+            <span class="text-muted small">Total Cash Expense: </span>
+            <span class="fs-4 fw-bold text-warning">KES {{ total_spend|floatformat:2 }}</span>
+        </div>
+    </div>
+
+    <!-- Category Summary Cards / Table -->
+    <div class="card bg-dark border-secondary shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+                <thead class="table-secondary text-uppercase small text-muted">
+                    <tr>
+                        <th class="ps-3">Expense Category</th>
+                        <th>GL Code</th>
+                        <th class="text-center">Count</th>
+                        <th class="text-end">Total Spent</th>
+                        <th>Monthly Budget Cap</th>
+                        <th>Budget Utilization</th>
+                        <th class="text-center pe-3">Receipts Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in category_summary %}
+                    <tr>
+                        <td class="ps-3 fw-bold text-white">{{ c.category.name }}</td>
+                        <td class="small text-muted">{{ c.category.chart_of_accounts_code|default:"-" }}</td>
+                        <td class="text-center">{{ c.payout_count }}</td>
+                        <td class="text-end fw-bold text-warning text-nowrap">KES {{ c.total_spent|floatformat:2 }}</td>
+                        <td class="small text-muted text-nowrap">
+                            {% if c.budget_cap %}
+                            KES {{ c.budget_cap|floatformat:2 }}
+                            {% else %}
+                            <span class="text-white-50">No Cap Set</span>
+                            {% endif %}
+                        </td>
+                        <td style="min-width: 180px;">
+                            {% if c.budget_cap %}
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1 bg-black border border-secondary" style="height: 8px;">
+                                    <div class="progress-bar {% if c.is_over_budget %}bg-danger{% elif c.budget_utilization_pct > 80 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ c.budget_utilization_pct }}%;"></div>
+                                </div>
+                                <span class="small fw-semibold {% if c.is_over_budget %}text-danger{% else %}text-white-50{% endif %}">{{ c.budget_utilization_pct }}%</span>
+                            </div>
+                            {% else %}
+                            <span class="text-white-50 small">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center pe-3 text-nowrap">
+                            <span class="badge bg-success-subtle text-success border border-success">{{ c.confirmed_count }} Confirmed</span>
+                            {% if c.pending_receipt_count > 0 %}
+                            <span class="badge bg-warning text-dark ms-1">{{ c.pending_receipt_count }} Pending</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">No expense records found for selected period.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

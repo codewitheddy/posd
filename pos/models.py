@@ -337,6 +337,17 @@ PERMISSION_CODES = [
     'can_manage_users',
     'can_view_reports',
     'can_manage_stock',
+    'can_record_banking',
+    'can_reconcile_banking',
+    'can_request_cash_pickup',
+    'can_authorize_cash_pickup',
+    'can_request_cash_paid_out',
+    'can_authorize_cash_paid_out',
+    'can_manage_paid_out_receipts',
+    'can_manage_supplier_invoices',
+    'can_create_supplier_payment',
+    'can_authorize_supplier_payment',
+    'can_manage_supplier_credits',
 ]
 
 DEFAULT_PERMISSIONS = {
@@ -344,10 +355,14 @@ DEFAULT_PERMISSIONS = {
     'admin':         list(PERMISSION_CODES),
     'manager':       ['can_create_sale', 'can_print_receipt', 'can_refund_sale', 'can_void_sale', 'can_edit_price',
                       'can_view_cost_price', 'can_apply_discount',
-                      'can_exceed_max_discount', 'can_view_reports', 'can_manage_stock'],
-    'stock_manager': ['can_manage_stock', 'can_view_reports', 'can_view_cost_price'],
-    'cashier':       ['can_create_sale', 'can_print_receipt', 'can_view_reports', 'can_apply_discount', 'can_refund_sale'],
-    'sales':         ['can_create_sale', 'can_print_receipt', 'can_view_reports', 'can_apply_discount'],
+                      'can_exceed_max_discount', 'can_view_reports', 'can_manage_stock',
+                      'can_record_banking', 'can_reconcile_banking',
+                      'can_request_cash_pickup', 'can_authorize_cash_pickup',
+                      'can_request_cash_paid_out', 'can_authorize_cash_paid_out', 'can_manage_paid_out_receipts',
+                      'can_manage_supplier_invoices', 'can_create_supplier_payment', 'can_authorize_supplier_payment', 'can_manage_supplier_credits'],
+    'stock_manager': ['can_manage_stock', 'can_view_reports', 'can_view_cost_price', 'can_manage_supplier_invoices', 'can_create_supplier_payment', 'can_manage_supplier_credits'],
+    'cashier':       ['can_create_sale', 'can_print_receipt', 'can_view_reports', 'can_apply_discount', 'can_refund_sale', 'can_record_banking', 'can_request_cash_pickup', 'can_request_cash_paid_out', 'can_manage_paid_out_receipts'],
+    'sales':         ['can_create_sale', 'can_print_receipt', 'can_view_reports', 'can_apply_discount', 'can_request_cash_paid_out'],
     'viewer':        ['can_view_reports'],
 }
 
@@ -374,6 +389,17 @@ PERMISSION_LABELS = {
     'can_manage_users': 'Manage Team Members',
     'can_view_reports': 'View Reports',
     'can_manage_stock': 'Manage Stock & Purchases',
+    'can_record_banking': 'Record Cash Banking & Slips',
+    'can_reconcile_banking': 'Reconcile Bank Statements',
+    'can_request_cash_pickup': 'Request Till Cash Pickup',
+    'can_authorize_cash_pickup': 'Authorize Dual-Custody Cash Pickup',
+    'can_request_cash_paid_out': 'Request Till Cash Paid-Out (Petty Expense)',
+    'can_authorize_cash_paid_out': 'Authorize Cash Paid-Out (Over-Threshold Approval)',
+    'can_manage_paid_out_receipts': 'Attach Paid-Out Receipts & Exceptions',
+    'can_manage_supplier_invoices': 'Manage Supplier Invoices (AP Bills)',
+    'can_create_supplier_payment': 'Record Supplier Payments',
+    'can_authorize_supplier_payment': 'Authorize Supplier Payments (Threshold Sign-off)',
+    'can_manage_supplier_credits': 'Manage Supplier Credits & Claims',
 }
 
 
@@ -1761,17 +1787,146 @@ class PurchaseItem(models.Model):
         return delta.days
 
 
+# ==================== ACCOUNTS PAYABLE & SUPPLIER INVOICES ====================
+
+class SupplierInvoice(models.Model):
+    """
+    Accounts Payable invoice received from a supplier.
+    Represents accrual-based recognition of goods/services expenses before payment.
+    """
+    STATUS_CHOICES = [
+        ('unpaid', 'Unpaid'),
+        ('partially_paid', 'Partially Paid'),
+        ('paid', 'Paid'),
+        ('disputed', 'Disputed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='supplier_invoices')
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='invoices')
+    invoice_number = models.CharField(max_length=60, db_index=True, help_text="Supplier's original invoice number or internal reference")
+    invoice_date = models.DateField(default=timezone.now, db_index=True, help_text="Date invoice was issued by supplier")
+    due_date = models.DateField(db_index=True, help_text="Payment due date")
+    
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unpaid', db_index=True)
+    purchase = models.ForeignKey(Purchase, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    goods_received_note = models.ForeignKey('GoodsReceivedNote', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    
+    attachment = models.FileField(upload_to='supplier_invoices/%Y/%m/', null=True, blank=True, help_text="PDF / scan of supplier bill")
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_invoices_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-invoice_date', '-created_at']
+        unique_together = [['business', 'supplier', 'invoice_number']]
+        indexes = [
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['supplier', 'status']),
+            models.Index(fields=['due_date', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.invoice_number} ({self.supplier.name}) - KES {self.amount:,.2f}"
+
+    def total_paid(self):
+        """Sum of payment allocations made to this invoice"""
+        return self.payment_allocations.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+
+    def total_credited(self):
+        """Sum of supplier credit note applications applied to this invoice"""
+        return self.credit_applications.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+
+    def remaining_balance(self):
+        """Returns unpaid remaining balance taking both payments and credits into account"""
+        rem = self.amount - self.total_paid() - self.total_credited()
+        return max(Decimal('0.00'), rem)
+
+    def is_overdue(self):
+        """Check if invoice is past due date with an outstanding balance"""
+        if self.status in ('paid', 'cancelled'):
+            return False
+        return self.due_date < timezone.now().date() and self.remaining_balance() > Decimal('0.00')
+
+    def days_overdue(self):
+        """Calculate overdue days"""
+        if not self.is_overdue():
+            return 0
+        return (timezone.now().date() - self.due_date).days
+
+    def recalculate_status(self):
+        """Updates status based on remaining balance"""
+        if self.status in ('cancelled', 'disputed'):
+            return self.status
+        rem = self.remaining_balance()
+        if rem <= Decimal('0.00'):
+            self.status = 'paid'
+        elif self.total_paid() > Decimal('0.00') or self.total_credited() > Decimal('0.00'):
+            self.status = 'partially_paid'
+        else:
+            self.status = 'unpaid'
+        self.save(update_fields=['status', 'updated_at'])
+        return self.status
+
+
 # ==================== SUPPLIER PAYMENTS ====================
 
 class SupplierPayment(models.Model):
-    """Records payments made to suppliers"""
+    """Records outgoing disbursements and payments made to suppliers"""
+    SOURCE_TYPE_CHOICES = [
+        ('bank_account', 'Bank Account / Transfer'),
+        ('cash_drawer', 'Cash Drawer (Till)'),
+        ('petty_cash', 'Petty Cash Fund'),
+        ('direct', 'Direct / Other'),
+    ]
+
+    PAYMENT_METHOD_TYPE_CHOICES = [
+        ('bank_transfer', 'Bank Transfer / EFT'),
+        ('cheque', 'Cheque'),
+        ('cash', 'Cash'),
+        ('mobile_money', 'Mobile Money'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval / Transit'),
+        ('sent', 'Sent / Outstanding'),
+        ('cleared', 'Cleared on Bank Statement'),
+        ('reversed', 'Reversed'),
+    ]
+
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='supplier_payments')
-    payment_number = models.CharField(max_length=20, editable=False)
+    payment_number = models.CharField(max_length=30, editable=False)
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='payments')
-    payment_date = models.DateField(default=timezone.now)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    payment_method = models.ForeignKey('PaymentMethod', on_delete=models.PROTECT)
-    reference_number = models.CharField(max_length=100, blank=True)
+    payment_date = models.DateField(default=timezone.now, db_index=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    
+    payment_method_type = models.CharField(max_length=20, choices=PAYMENT_METHOD_TYPE_CHOICES, default='bank_transfer')
+    payment_method = models.ForeignKey('PaymentMethod', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES, default='bank_account')
+    
+    bank_account = models.ForeignKey('BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_payments')
+    cash_paid_out = models.ForeignKey('CashPaidOut', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_payments')
+    reference_number = models.CharField(max_length=100, blank=True, help_text="EFT reference, Cheque #, Mobile Money Tx ID")
+    
+    bank_statement_line = models.ForeignKey('BankStatementLine', on_delete=models.SET_NULL, null=True, blank=True, related_name='matched_payments')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='sent', db_index=True)
+    authorized_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_payments_authorized')
+    
+    is_reversed = models.BooleanField(default=False)
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    reversal_reason = models.TextField(blank=True)
+    
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='supplier_payments_created')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1782,11 +1937,12 @@ class SupplierPayment(models.Model):
         unique_together = [['business', 'payment_number']]
         indexes = [
             models.Index(fields=['supplier', 'payment_date']),
+            models.Index(fields=['business', 'status']),
             models.Index(fields=['payment_date']),
         ]
     
     def __str__(self):
-        return f"{self.payment_number} - {self.supplier.name} - KES {self.amount}"
+        return f"{self.payment_number} - {self.supplier.name} - KES {self.amount:,.2f}"
     
     def save(self, *args, **kwargs):
         # Auto-populate business from supplier
@@ -1810,55 +1966,231 @@ class SupplierPayment(models.Model):
         super().save(*args, **kwargs)
     
     def total_allocated(self):
-        """Returns the total amount allocated to purchases"""
+        """Returns the total amount allocated to invoices and purchases"""
         return self.allocations.aggregate(
             total=models.Sum('amount')
         )['total'] or Decimal('0.00')
     
     def unallocated_amount(self):
-        """Returns the amount not yet allocated to specific purchases"""
-        return self.amount - self.total_allocated()
+        """Returns the amount not yet allocated to specific bills"""
+        return max(Decimal('0.00'), self.amount - self.total_allocated())
 
 
 class PaymentAllocation(models.Model):
-    """Tracks allocation of payments to specific purchases"""
+    """Tracks allocation of payments to specific supplier invoices or legacy purchases"""
     payment = models.ForeignKey(SupplierPayment, on_delete=models.CASCADE, related_name='allocations')
-    purchase = models.ForeignKey(Purchase, on_delete=models.PROTECT, related_name='payment_allocations')
-    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    invoice = models.ForeignKey(SupplierInvoice, on_delete=models.SET_NULL, null=True, blank=True, related_name='payment_allocations')
+    purchase = models.ForeignKey(Purchase, on_delete=models.SET_NULL, null=True, blank=True, related_name='payment_allocations')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['payment']),
+            models.Index(fields=['invoice']),
             models.Index(fields=['purchase']),
         ]
     
     def __str__(self):
-        return f"{self.payment.payment_number} -> {self.purchase.purchase_number}: KES {self.amount}"
+        target = self.invoice.invoice_number if self.invoice else (self.purchase.purchase_number if self.purchase else "Unlinked")
+        return f"{self.payment.payment_number} -> {target}: KES {self.amount:,.2f}"
+
+
+# ==================== SUPPLIER CREDITS / DEBIT NOTES ====================
+
+class SupplierCredit(models.Model):
+    """
+    Claims raised against a supplier (e.g. goods returns, damaged goods, overcharges, rebates).
+    Can be resolved by offsetting against future invoices or receiving a cash/bank refund.
+    """
+    STATUS_CHOICES = [
+        ('pending_approval', 'Pending Approval'),
+        ('approved_by_supplier', 'Approved by Supplier'),
+        ('applied_to_invoice', 'Applied to Invoice'),
+        ('refunded', 'Refunded by Supplier'),
+        ('partially_resolved', 'Partially Resolved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    REASON_CHOICES = [
+        ('return', 'Goods Returned'),
+        ('damaged_goods', 'Damaged Goods on Delivery'),
+        ('overcharge', 'Invoice Overcharge'),
+        ('discount', 'Discount / Price Rebate'),
+        ('other', 'Other Claim Reason'),
+    ]
+
+    RESOLUTION_CHOICES = [
+        ('offset_invoice', 'Offset Future Invoice'),
+        ('cash_refund', 'Cash Refund'),
+        ('bank_refund', 'Bank Refund'),
+        ('mixed', 'Mixed Offset & Refund'),
+        ('unresolved', 'Unresolved'),
+    ]
+
+    credit_number = models.CharField(max_length=30, unique=True, editable=False, db_index=True)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='supplier_credits')
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='credits')
     
-    def clean(self):
-        from django.core.exceptions import ValidationError
+    related_invoice = models.ForeignKey(SupplierInvoice, on_delete=models.SET_NULL, null=True, blank=True, related_name='credit_notes')
+    related_purchase = models.ForeignKey(Purchase, on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_credits')
+    related_grn = models.ForeignKey('GoodsReturnedNote', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_credits')
+    
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    allocated_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES, default='return')
+    date_raised = models.DateField(default=timezone.now, db_index=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending_approval', db_index=True)
+    resolution_type = models.CharField(max_length=30, choices=RESOLUTION_CHOICES, default='unresolved')
+    resolution_invoice = models.ForeignKey(SupplierInvoice, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_credits')
+    
+    notes = models.TextField(blank=True)
+    attachment = models.FileField(upload_to='supplier_credits/%Y/%m/', null=True, blank=True)
+    authorized_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_credits_authorized')
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='supplier_credits_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date_raised', '-created_at']
+        unique_together = [['business', 'credit_number']]
+        indexes = [
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['supplier', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.credit_number} ({self.supplier.name}) - KES {self.amount:,.2f}"
+
+    def save(self, *args, **kwargs):
+        if not self.credit_number:
+            today = timezone.now()
+            date_str = today.strftime('%Y%m%d')
+            last_credit = SupplierCredit.objects.filter(
+                business=self.business,
+                credit_number__startswith=f'SCR-{date_str}'
+            ).order_by('-credit_number').first()
+            if last_credit:
+                last_num = int(last_credit.credit_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            self.credit_number = f'SCR-{date_str}-{new_num:04d}'
+        super().save(*args, **kwargs)
+
+    def remaining_credit(self):
+        """Unused credit balance remaining for future invoices or refunds"""
+        return max(Decimal('0.00'), self.amount - self.allocated_amount)
+
+    def is_fully_resolved(self):
+        return self.remaining_credit() <= Decimal('0.00')
+
+    def recalculate_resolution(self):
+        """Recalculates allocated amount and updates status"""
+        applied_total = self.applications.aggregate(t=models.Sum('amount'))['t'] or Decimal('0.00')
+        refunded_total = self.refunds.aggregate(t=models.Sum('amount'))['t'] or Decimal('0.00')
+        self.allocated_amount = applied_total + refunded_total
         
-        # Validate allocation amount doesn't exceed payment amount
-        if self.amount > self.payment.amount:
-            raise ValidationError("Allocation amount cannot exceed payment amount")
+        if self.allocated_amount >= self.amount:
+            if applied_total > 0 and refunded_total > 0:
+                self.resolution_type = 'mixed'
+                self.status = 'applied_to_invoice'
+            elif refunded_total > 0:
+                self.resolution_type = 'bank_refund' if self.refunds.filter(received_via='bank_transfer').exists() else 'cash_refund'
+                self.status = 'refunded'
+            else:
+                self.resolution_type = 'offset_invoice'
+                self.status = 'applied_to_invoice'
+        elif self.allocated_amount > Decimal('0.00'):
+            self.status = 'partially_resolved'
         
-        # Validate total allocations for this payment don't exceed payment amount
-        existing_allocations = PaymentAllocation.objects.filter(
-            payment=self.payment
-        ).exclude(pk=self.pk).aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
-        
-        if existing_allocations + self.amount > self.payment.amount:
-            raise ValidationError("Total allocations exceed payment amount")
-        
-        # Validate total allocations for this purchase don't exceed purchase total
-        existing_purchase_allocations = PaymentAllocation.objects.filter(
-            purchase=self.purchase
-        ).exclude(pk=self.pk).aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
-        
-        if existing_purchase_allocations + self.amount > self.purchase.total_amount:
-            raise ValidationError("Total allocations exceed purchase amount")
+        self.save(update_fields=['allocated_amount', 'resolution_type', 'status', 'updated_at'])
+
+
+class SupplierCreditApplication(models.Model):
+    """Junction applying a supplier credit to reduce/offset a specific supplier invoice"""
+    credit = models.ForeignKey(SupplierCredit, on_delete=models.CASCADE, related_name='applications')
+    invoice = models.ForeignKey(SupplierInvoice, on_delete=models.CASCADE, related_name='credit_applications')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    applied_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='+')
+    applied_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['applied_at']
+        indexes = [
+            models.Index(fields=['credit']),
+            models.Index(fields=['invoice']),
+        ]
+
+    def __str__(self):
+        return f"{self.credit.credit_number} applied to {self.invoice.invoice_number}: KES {self.amount:,.2f}"
+
+
+class SupplierRefund(models.Model):
+    """
+    Incoming funds returned by a supplier to settle a supplier credit.
+    Reconciled against bank statement credits or cash register counts.
+    """
+    VIA_CHOICES = [
+        ('bank_transfer', 'Bank Transfer / EFT'),
+        ('cash', 'Cash (Drawer / Safe)'),
+        ('mobile_money', 'Mobile Money'),
+    ]
+
+    DEST_CHOICES = [
+        ('bank_account', 'Bank Account'),
+        ('cash_drawer', 'Till Cash Drawer'),
+        ('petty_cash', 'Petty Cash Fund'),
+    ]
+
+    refund_number = models.CharField(max_length=30, unique=True, editable=False, db_index=True)
+    business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='supplier_refunds')
+    supplier_credit = models.ForeignKey(SupplierCredit, on_delete=models.PROTECT, related_name='refunds')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    received_date = models.DateField(default=timezone.now, db_index=True)
+    
+    received_via = models.CharField(max_length=20, choices=VIA_CHOICES, default='bank_transfer')
+    destination_account = models.ForeignKey('BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_refunds')
+    destination_type = models.CharField(max_length=20, choices=DEST_CHOICES, default='bank_account')
+    reference = models.CharField(max_length=100, blank=True)
+    
+    bank_statement_line = models.ForeignKey('BankStatementLine', on_delete=models.SET_NULL, null=True, blank=True, related_name='matched_refunds')
+    status = models.CharField(max_length=20, choices=[('pending', 'Pending Statement Match'), ('matched', 'Matched & Reconciled')], default='pending', db_index=True)
+    
+    received_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='supplier_refunds_received')
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-received_date', '-created_at']
+        unique_together = [['business', 'refund_number']]
+        indexes = [
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['received_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.refund_number} ({self.supplier_credit.supplier.name}) - KES {self.amount:,.2f}"
+
+    def save(self, *args, **kwargs):
+        if not self.refund_number:
+            today = timezone.now()
+            date_str = today.strftime('%Y%m%d')
+            last_ref = SupplierRefund.objects.filter(
+                business=self.business,
+                refund_number__startswith=f'SRF-{date_str}'
+            ).order_by('-refund_number').first()
+            if last_ref:
+                last_num = int(last_ref.refund_number.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+            self.refund_number = f'SRF-{date_str}-{new_num:04d}'
+        super().save(*args, **kwargs)
 
 
 
@@ -3562,12 +3894,21 @@ class ExpenseCategory(models.Model):
     """Categories for business expenses — per-business"""
     PREDEFINED = [
         'Rent', 'Salaries/Wages', 'Utilities', 'Marketing',
-        'Maintenance', 'Packaging', 'Transport', 'Miscellaneous',
+        'Maintenance', 'Packaging', 'Transport', 'Fuel', 'Stationery', 'Staff Welfare', 'Repairs', 'Miscellaneous',
     ]
 
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='expense_categories', null=True, blank=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    chart_of_accounts_code = models.CharField(max_length=50, blank=True, default='', help_text="Accounting code e.g. 5100, 5200")
+    requires_manager_approval_above = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('1000.00'),
+        help_text="Payout amount above which manager approval PIN/password is mandatory"
+    )
+    monthly_budget_cap = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Optional monthly expenditure ceiling for this category"
+    )
     is_predefined = models.BooleanField(default=False)
 
     class Meta:
@@ -5990,4 +6331,739 @@ class CashierAssignmentAuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.get_action_display()}] {self.cashier.username} by {self.performed_by.username if self.performed_by else 'System'} ({self.timestamp:%Y-%m-%d %H:%M})"
+
+
+# ==================== BANK ACCOUNTS & RECONCILIATION ====================
+
+class BankAccount(CacheInvalidationMixin, AuditModelMixin, models.Model):
+    """
+    Commercial bank accounts or digital treasury accounts belonging to a business.
+    """
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='bank_accounts'
+    )
+    bank_name = models.CharField(
+        max_length=100,
+        help_text="e.g. KCB Bank, Equity Bank, Co-operative Bank, Absa, MPESA Paybill/Till"
+    )
+    account_name = models.CharField(
+        max_length=150,
+        help_text="e.g. Main Operations Account, CBD Collection Till Account"
+    )
+    account_number = models.CharField(
+        max_length=60,
+        help_text="Bank Account Number or Paybill/Till Number"
+    )
+    branch_name = models.CharField(max_length=100, blank=True, help_text="Bank branch / location")
+    currency = models.CharField(max_length=10, default='KES')
+    opening_balance = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal('0.00'),
+        help_text="Initial ledger balance before tracking in system"
+    )
+    current_balance = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal('0.00'),
+        help_text="Current calculated book balance"
+    )
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Default bank account pre-selected for physical deposits"
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_default', 'bank_name', 'account_name']
+        unique_together = [['business', 'account_number']]
+        indexes = [
+            models.Index(fields=['business', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_name} ({self.account_number})"
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            BankAccount.objects.filter(
+                business=self.business, is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+
+class BankingRecord(models.Model):
+    """
+    Physical cash/cheque deposit record created by a cashier/supervisor
+    documenting cash taken from POS registers and deposited into the bank.
+    """
+    PAYMENT_TYPE_CHOICES = [
+        ('cash', 'Cash Deposit'),
+        ('cheque', 'Cheque Deposit'),
+        ('mixed', 'Mixed (Cash & Cheque)'),
+        ('card_settlement', 'Card Batch Settlement (PDQ)'),
+        ('mobile_money', 'Mobile Money Sweeping / Till Bank Transfer'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending / In Transit'),
+        ('banked', 'Banked (Awaiting Statement Match)'),
+        ('matched', 'Matched & Reconciled'),
+        ('discrepancy', 'Discrepancy Flagged'),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='banking_records'
+    )
+    record_number = models.CharField(max_length=30, unique=True, editable=False, db_index=True)
+    branch = models.ForeignKey(
+        Branch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='banking_records',
+        help_text="Specific branch source (leave blank for central consolidated banking)"
+    )
+    terminal = models.ForeignKey(
+        POSTerminal, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='banking_records',
+        help_text="Specific till / register if banked by terminal"
+    )
+    bank_account = models.ForeignKey(
+        BankAccount, on_delete=models.PROTECT, related_name='banking_records'
+    )
+    period_start = models.DateField(help_text="Collection period start date")
+    period_end = models.DateField(help_text="Collection period end date")
+    
+    # Financial fields
+    expected_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal('0.00'),
+        help_text="System-calculated collections due to be banked"
+    )
+    deposited_amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        help_text="Actual physical amount on the bank deposit slip"
+    )
+    variance_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal('0.00'),
+        help_text="deposited_amount - expected_amount (Negative = Short-banked, Positive = Over-banked)"
+    )
+    
+    payment_type = models.CharField(max_length=25, choices=PAYMENT_TYPE_CHOICES, default='cash')
+    deposit_reference = models.CharField(
+        max_length=100,
+        help_text="Bank deposit slip number, transaction reference, or teller code"
+    )
+    deposit_date = models.DateField(help_text="Date physically banked at the bank", db_index=True)
+    deposited_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='banking_deposits_made',
+        help_text="Cashier or supervisor who performed the bank run"
+    )
+    slip_image = models.FileField(
+        upload_to='banking/slips/%Y/%m/', null=True, blank=True,
+        help_text="Photo / scan of bank deposit slip or confirmation receipt"
+    )
+    
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='banked', db_index=True
+    )
+    variance_reason = models.TextField(blank=True, help_text="Mandatory explanation if variance exceeds threshold")
+    notes = models.TextField(blank=True)
+    
+    # Audit & Reconciled By
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    reconciled_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='banking_records_reconciled'
+    )
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-deposit_date', '-created_at']
+        indexes = [
+            models.Index(fields=['business', '-deposit_date']),
+            models.Index(fields=['business', 'status']),
+            models.Index(fields=['bank_account', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.record_number} — {self.bank_account.bank_name} ({self.deposit_date}): KES {self.deposited_amount:,.2f}"
+
+    def clean(self):
+        super().clean()
+        if self.deposited_amount is not None and self.expected_amount is not None:
+            self.variance_amount = self.deposited_amount - self.expected_amount
+
+    def save(self, *args, **kwargs):
+        if self.deposited_amount is not None and self.expected_amount is not None:
+            self.variance_amount = self.deposited_amount - self.expected_amount
+            
+        if not self.record_number:
+            from django.utils import timezone as tz
+            today_str = tz.now().strftime('%Y%m%d')
+            count = BankingRecord.objects.filter(business=self.business).count() + 1
+            ref = f"BNK-{today_str}-{count:04d}"
+            while BankingRecord.objects.filter(business=self.business, record_number=ref).exists():
+                count += 1
+                ref = f"BNK-{today_str}-{count:04d}"
+            self.record_number = ref
+        super().save(*args, **kwargs)
+
+
+class BankStatementImportBatch(models.Model):
+    """
+    Tracks an imported bank statement file or manual entry batch.
+    """
+    FORMAT_CHOICES = [
+        ('csv', 'CSV Spreadsheet'),
+        ('ofx', 'OFX / QBO File'),
+        ('manual', 'Manual Entry Batch'),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='statement_import_batches'
+    )
+    bank_account = models.ForeignKey(
+        BankAccount, on_delete=models.CASCADE, related_name='statement_batches'
+    )
+    batch_number = models.CharField(max_length=30, unique=True, editable=False)
+    import_file = models.FileField(upload_to='banking/statements/%Y/%m/', null=True, blank=True)
+    file_format = models.CharField(max_length=15, choices=FORMAT_CHOICES, default='csv')
+    
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    closing_balance = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    statement_start_date = models.DateField(null=True, blank=True)
+    statement_end_date = models.DateField(null=True, blank=True)
+    
+    total_lines = models.IntegerField(default=0)
+    matched_lines = models.IntegerField(default=0)
+    total_credits = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    total_debits = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    
+    imported_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='statement_imports'
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.batch_number} — {self.bank_account.bank_name} ({self.created_at:%Y-%m-%d})"
+
+    def save(self, *args, **kwargs):
+        if not self.batch_number:
+            from django.utils import timezone as tz
+            today_str = tz.now().strftime('%Y%m%d')
+            count = BankStatementImportBatch.objects.filter(business=self.business).count() + 1
+            ref = f"STMT-{today_str}-{count:04d}"
+            while BankStatementImportBatch.objects.filter(business=self.business, batch_number=ref).exists():
+                count += 1
+                ref = f"STMT-{today_str}-{count:04d}"
+            self.batch_number = ref
+        super().save(*args, **kwargs)
+
+
+class BankStatementLine(models.Model):
+    """
+    Individual transaction line extracted from an official bank statement.
+    """
+    LINE_TYPE_CHOICES = [
+        ('credit', 'Deposit / Credit (+)'),
+        ('debit', 'Withdrawal / Fee / Debit (-)'),
+    ]
+
+    STATUS_CHOICES = [
+        ('unmatched', 'Unmatched'),
+        ('matched', 'Matched & Reconciled'),
+        ('ignored', 'Ignored / Non-POS Item'),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='statement_lines'
+    )
+    bank_account = models.ForeignKey(
+        BankAccount, on_delete=models.CASCADE, related_name='statement_lines'
+    )
+    batch = models.ForeignKey(
+        BankStatementImportBatch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='lines'
+    )
+    transaction_date = models.DateField(db_index=True)
+    value_date = models.DateField(null=True, blank=True)
+    line_type = models.CharField(max_length=10, choices=LINE_TYPE_CHOICES, default='credit')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    reference = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='unmatched', db_index=True)
+    matched_banking_record = models.ForeignKey(
+        BankingRecord, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='matched_statement_lines'
+    )
+    matched_supplier_payment = models.ForeignKey(
+        'SupplierPayment', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='matched_statement_lines'
+    )
+    matched_supplier_refund = models.ForeignKey(
+        'SupplierRefund', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='matched_statement_lines'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-transaction_date', '-id']
+        indexes = [
+            models.Index(fields=['business', 'bank_account', 'status']),
+            models.Index(fields=['transaction_date', 'status']),
+        ]
+
+    def __str__(self):
+        sign = "+" if self.line_type == 'credit' else "-"
+        return f"[{self.transaction_date}] {sign}KES {self.amount:,.2f} — {self.description[:40]}"
+
+
+class ReconciliationMatch(models.Model):
+    """
+    Formal reconciliation junction linking one or more physical banking records,
+    supplier payments, or supplier refunds to one or more bank statement lines.
+    """
+    MATCH_TYPE_CHOICES = [
+        ('one_to_one', '1-to-1 Match'),
+        ('many_to_one', 'Combined Records to 1 Statement Line'),
+        ('one_to_many', '1 Record Split to Multiple Statement Lines'),
+        ('with_fee', 'Match with Bank Fee / Charge Deduction'),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='reconciliation_matches'
+    )
+    match_number = models.CharField(max_length=30, unique=True, editable=False)
+    match_type = models.CharField(max_length=20, choices=MATCH_TYPE_CHOICES, default='one_to_one')
+    
+    banking_records = models.ManyToManyField(
+        BankingRecord, blank=True, related_name='reconciliation_matches'
+    )
+    supplier_payments = models.ManyToManyField(
+        'SupplierPayment', blank=True, related_name='reconciliation_matches'
+    )
+    supplier_refunds = models.ManyToManyField(
+        'SupplierRefund', blank=True, related_name='reconciliation_matches'
+    )
+    statement_lines = models.ManyToManyField(
+        BankStatementLine, related_name='reconciliation_matches'
+    )
+    
+    total_banked_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    total_statement_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    bank_charge_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal('0.00'),
+        help_text="Bank transaction fees or excise deducted from deposit"
+    )
+    variance_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal('0.00')
+    )
+    
+    matched_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='reconciliations_performed'
+    )
+    matched_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-matched_at']
+
+    def __str__(self):
+        return f"{self.match_number} ({self.get_match_type_display()}): Banked KES {self.total_banked_amount:,.2f} = Statement KES {self.total_statement_amount:,.2f}"
+
+    def save(self, *args, **kwargs):
+        if not self.match_number:
+            from django.utils import timezone as tz
+            today_str = tz.now().strftime('%Y%m%d')
+            count = ReconciliationMatch.objects.filter(business=self.business).count() + 1
+            ref = f"REC-{today_str}-{count:04d}"
+            while ReconciliationMatch.objects.filter(business=self.business, match_number=ref).exists():
+                count += 1
+                ref = f"REC-{today_str}-{count:04d}"
+            self.match_number = ref
+        super().save(*args, **kwargs)
+
+
+class BankingAuditLog(models.Model):
+    """
+    Immutable audit log recording every creation, edit, status change, and reconciliation event.
+    """
+    ACTION_CHOICES = [
+        ('record_created', 'Banking Record Created'),
+        ('record_updated', 'Banking Record Details Updated'),
+        ('slip_uploaded', 'Deposit Slip Uploaded'),
+        ('statement_imported', 'Bank Statement Imported'),
+        ('manual_line_added', 'Manual Statement Line Added'),
+        ('auto_matched', 'Auto-Matched to Statement Line'),
+        ('manual_matched', 'Manually Reconciled'),
+        ('unmatched', 'Reconciliation Unmatched / Reverted'),
+        ('line_ignored', 'Statement Line Marked as Ignored'),
+        ('discrepancy_flagged', 'Variance Discrepancy Flagged'),
+        ('discrepancy_resolved', 'Discrepancy Resolved with Note'),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='banking_audit_logs'
+    )
+    banking_record = models.ForeignKey(
+        BankingRecord, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='audit_logs'
+    )
+    statement_line = models.ForeignKey(
+        BankStatementLine, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='audit_logs'
+    )
+    reconciliation_match = models.ForeignKey(
+        ReconciliationMatch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='audit_logs'
+    )
+    action = models.CharField(max_length=40, choices=ACTION_CHOICES, db_index=True)
+    performed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['business', '-timestamp']),
+            models.Index(fields=['action', '-timestamp']),
+        ]
+
+    def __str__(self):
+        user_str = self.performed_by.username if self.performed_by else 'System'
+        return f"[{self.get_action_display()}] by {user_str} ({self.timestamp:%Y-%m-%d %H:%M})"
+
+
+# ==================== CASH PICKUP / TILL DROP ====================
+
+class CashPickup(models.Model):
+    """
+    Cash Pickup / Till Drop / Safe Drop / Cash Lift entity.
+    Enforces dual-custody cash removal from active POS registers during shifts,
+    reducing robbery exposure and creating an immutable custody trail
+    from Till -> Safe -> Bank Deposit -> Bank Statement Match.
+    """
+    REASON_CHOICES = [
+        ('threshold_exceeded', 'Drawer Threshold Exceeded'),
+        ('scheduled', 'Scheduled Cash Lift'),
+        ('end_of_shift', 'End of Shift Drop'),
+        ('count_dispute', 'Count Dispute / Safety Lift'),
+        ('other', 'Other Reason'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending Confirmation'),
+        ('confirmed', 'Confirmed & Locked'),
+        ('in_safe', 'Transferred to Safe'),
+        ('banked', 'Banked in Deposit'),
+        ('disputed', 'Disputed Count'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    WITNESS_CHOICES = [
+        ('supervisor', 'Supervisor / Manager'),
+        ('peer_cashier', 'Peer Cashier (Witness Fallback)'),
+    ]
+
+    TENDER_CHOICES = [
+        ('cash', 'Cash (Banknotes/Coins)'),
+        ('cheque', 'Cheques'),
+        ('foreign_currency', 'Foreign Currency'),
+        ('mixed', 'Mixed Tenders'),
+    ]
+
+    pickup_number = models.CharField(
+        max_length=30, unique=True, editable=False, db_index=True,
+        help_text="Format: PKU-YYYYMMDD-XXXX"
+    )
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='cash_pickups'
+    )
+    branch = models.ForeignKey(
+        'Branch', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_pickups'
+    )
+    terminal = models.ForeignKey(
+        'POSTerminal', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_pickups'
+    )
+    session = models.ForeignKey(
+        'POSSession', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_pickups'
+    )
+    shift = models.ForeignKey(
+        'Shift', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_pickups'
+    )
+
+    # Dual Custody Actors
+    cashier = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='initiated_cash_pickups',
+        help_text="Cashier operating the till"
+    )
+    supervisor = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='authorized_cash_pickups',
+        help_text="Supervisor / manager who witnessed and authorized count"
+    )
+    witness_type = models.CharField(
+        max_length=20, choices=WITNESS_CHOICES, default='supervisor'
+    )
+
+    # Financials
+    tender_type = models.CharField(
+        max_length=20, choices=TENDER_CHOICES, default='cash'
+    )
+    currency = models.CharField(max_length=10, default='KES')
+    amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    pickup_reference = models.CharField(
+        max_length=100,
+        help_text="Bag number, tamper envelope barcode, or slip ID"
+    )
+    pickup_time = models.DateTimeField(default=timezone.now, db_index=True)
+    reason = models.CharField(
+        max_length=30, choices=REASON_CHOICES, default='threshold_exceeded'
+    )
+
+    # Authentication Timestamps
+    cashier_confirmed_at = models.DateTimeField(null=True, blank=True)
+    supervisor_confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    # Lifecycle & Linking
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='confirmed', db_index=True
+    )
+    banking_record = models.ForeignKey(
+        BankingRecord, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_pickups',
+        help_text="Physical bank deposit record this pickup was rolled into"
+    )
+
+    # Immutability & Audit
+    is_locked = models.BooleanField(
+        default=True,
+        help_text="Locked after confirmation; amendments require manager override"
+    )
+    override_reason = models.TextField(blank=True)
+    override_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pickup_overrides'
+    )
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-pickup_time', '-created_at']
+        indexes = [
+            models.Index(fields=['business', 'status', '-pickup_time']),
+            models.Index(fields=['business', 'branch', '-pickup_time']),
+            models.Index(fields=['session', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.pickup_number} - {self.currency} {self.amount} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.pickup_number:
+            today = timezone.localdate()
+            prefix = f"PKU-{today.strftime('%Y%m%d')}"
+            last = CashPickup.objects.filter(
+                business=self.business,
+                pickup_number__startswith=prefix
+            ).order_by('-pickup_number').first()
+            if last:
+                try:
+                    last_seq = int(last.pickup_number.split('-')[-1])
+                    seq = last_seq + 1
+                except (ValueError, IndexError):
+                    seq = 1
+            else:
+                seq = 1
+            self.pickup_number = f"{prefix}-{seq:04d}"
+
+        if not self.cashier_confirmed_at:
+            self.cashier_confirmed_at = timezone.now()
+        if not self.supervisor_confirmed_at:
+            self.supervisor_confirmed_at = timezone.now()
+
+        super().save(*args, **kwargs)
+
+
+# ==================== CASH PAID-OUT / TILL EXPENSES ====================
+
+class CashPaidOut(CacheInvalidationMixin, AuditModelMixin, models.Model):
+    """
+    Cash Paid-Out / Till Expenses / Petty Cash Out.
+    Tracks cash disbursed directly from the till drawer (or petty cash fund) for immediate
+    operational expenses (fuel, stationery, courier, repairs, staff welfare).
+    Enforces category thresholds, dual custody, post-payout receipt tracking, informal vendor
+    exception sign-offs, and reversal audit trails.
+    """
+    STATUS_CHOICES = [
+        ('pending_approval', 'Pending Approval'),
+        ('paid_pending_receipt', 'Paid - Pending Receipt'),
+        ('confirmed', 'Confirmed (Receipt Attached / Exception Signed)'),
+        ('rejected', 'Rejected'),
+        ('reversed', 'Reversed (Cash Returned)'),
+        ('written_off', 'Written Off (Lost Receipt Loss)'),
+    ]
+
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='cash_paid_outs'
+    )
+    paid_out_number = models.CharField(
+        max_length=30, editable=False, db_index=True,
+        help_text="Format: POUT-YYYYMMDD-XXXX"
+    )
+
+    # Location & Register Origin
+    branch = models.ForeignKey(
+        'Branch', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_paid_outs'
+    )
+    terminal = models.ForeignKey(
+        'POSTerminal', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_paid_outs'
+    )
+    session = models.ForeignKey(
+        'POSSession', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_paid_outs'
+    )
+    shift = models.ForeignKey(
+        'Shift', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_paid_outs'
+    )
+    is_petty_cash_fund = models.BooleanField(
+        default=False,
+        help_text="True if disbursed from a standalone petty cash float instead of active till register"
+    )
+
+    # Actors
+    requested_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='requested_paid_outs',
+        help_text="Staff member or cashier who requested the cash"
+    )
+    authorized_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='authorized_paid_outs',
+        help_text="Supervisor/Manager who approved the payout"
+    )
+
+    # Financials & Categorization
+    amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    currency = models.CharField(max_length=10, default='KES')
+    category = models.ForeignKey(
+        'ExpenseCategory', on_delete=models.PROTECT, related_name='paid_outs',
+        help_text="Expense category linking to chart of accounts"
+    )
+    payee = models.CharField(
+        max_length=200,
+        help_text="Vendor, courier, or individual the cash was given to"
+    )
+    description = models.TextField(
+        help_text="Purpose of expense / goods or services acquired"
+    )
+
+    # Receipt Workflow
+    receipt_reference = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text="Invoice / receipt / slip number once collected"
+    )
+    receipt_attachment = models.FileField(
+        upload_to='paid_outs/receipts/%Y/%m/', blank=True, null=True,
+        help_text="Photo or scan of vendor receipt"
+    )
+    receipt_due_by = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Deadline for returning receipt (defaults to shift close / end of day)"
+    )
+    receipt_received_at = models.DateTimeField(null=True, blank=True)
+
+    # Informal Vendor Exception Note
+    has_receipt_exception = models.BooleanField(
+        default=False,
+        help_text="True if manager signed an exception note for informal vendor with no receipt"
+    )
+    exception_reason = models.TextField(blank=True, default='')
+    exception_approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='approved_receipt_exceptions'
+    )
+
+    # Status & General Ledger Linkage
+    status = models.CharField(
+        max_length=30, choices=STATUS_CHOICES, default='paid_pending_receipt', db_index=True
+    )
+    paid_out_time = models.DateTimeField(default=timezone.now, db_index=True)
+    expense_entry = models.ForeignKey(
+        'Expense', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='paid_out_source',
+        help_text="Linked General Ledger Expense entry created upon receipt/exception confirmation"
+    )
+
+    # Reversal Handling
+    is_reversed = models.BooleanField(default=False)
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reversed_paid_outs'
+    )
+    reversal_reason = models.TextField(blank=True, default='')
+
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-paid_out_time', '-created_at']
+        indexes = [
+            models.Index(fields=['business', 'status', '-paid_out_time']),
+            models.Index(fields=['business', 'branch', '-paid_out_time']),
+            models.Index(fields=['session', 'status']),
+            models.Index(fields=['category', '-paid_out_time']),
+        ]
+
+    def __str__(self):
+        return f"{self.paid_out_number} - {self.currency} {self.amount:.2f} ({self.category.name}) - {self.get_status_display()}"
+
+    def save(self, *args, **kwargs):
+        if not self.paid_out_number:
+            today = timezone.localdate()
+            prefix = f"POUT-{today.strftime('%Y%m%d')}"
+            last = CashPaidOut.objects.filter(
+                business=self.business,
+                paid_out_number__startswith=prefix
+            ).order_by('-paid_out_number').first()
+            if last:
+                try:
+                    last_seq = int(last.paid_out_number.split('-')[-1])
+                    seq = last_seq + 1
+                except (ValueError, IndexError):
+                    seq = 1
+            else:
+                seq = 1
+            self.paid_out_number = f"{prefix}-{seq:04d}"
+
+        if not self.receipt_due_by and self.paid_out_time:
+            local_dt = timezone.localtime(self.paid_out_time)
+            self.receipt_due_by = local_dt.replace(hour=23, minute=59, second=59)
+
+        super().save(*args, **kwargs)
+
+
 

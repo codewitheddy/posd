@@ -1,0 +1,112 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Banking Variance &amp; Discrepancy Report — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Banking Variance &amp; Discrepancy Audit</h3>
+            <p class="text-muted small mb-0">Detailed log of all cash deposits where physical banked amount differed from POS register collections.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Audit Log
+            </button>
+            <a href="{% url 'banking_record_list' slug=request.business.slug %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-cash-coin me-1"></i> View All Deposits
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-danger text-white">
+                <div class="text-white-50 small fw-semibold text-uppercase">Cumulative Cash Shortages</div>
+                <h3 class="fw-bold mb-0 mt-1">KES {{ total_short|floatformat:2 }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-warning text-dark">
+                <div class="opacity-75 small fw-semibold text-uppercase">Cumulative Cash Overages</div>
+                <h3 class="fw-bold mb-0 mt-1 text-dark">+KES {{ total_over|floatformat:2 }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-dark text-white">
+                <div class="text-white-50 small fw-semibold text-uppercase">Flagged Deposit Slips</div>
+                <h3 class="fw-bold mb-0 mt-1">{{ discrepancies.count }} records</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Record Ref</th>
+                        <th>Deposit Date</th>
+                        <th>Location</th>
+                        <th>Bank &amp; Slip Ref</th>
+                        <th class="text-end">Deposited</th>
+                        <th class="text-end">Expected</th>
+                        <th class="text-end">Variance</th>
+                        <th>Explanation / Reason</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in discrepancies %}
+                    <tr>
+                        <td class="ps-4">
+                            <a href="{% url 'banking_record_detail' slug=request.business.slug pk=rec.pk %}" class="fw-bold font-monospace text-decoration-none">
+                                {{ rec.record_number }}
+                            </a>
+                        </td>
+                        <td>{{ rec.deposit_date|date:"d M Y" }}</td>
+                        <td>{{ rec.branch.name|default:"Central" }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ rec.bank_account.bank_name }}</div>
+                            <small class="text-muted font-monospace">Slip: {{ rec.deposit_reference }}</small>
+                        </td>
+                        <td class="text-end fw-semibold">KES {{ rec.deposited_amount|floatformat:2 }}</td>
+                        <td class="text-end text-muted">KES {{ rec.expected_amount|floatformat:2 }}</td>
+                        <td class="text-end fw-bold">
+                            {% if rec.variance_amount < 0 %}
+                            <span class="badge bg-danger">Short KES {{ rec.variance_amount|floatformat:2 }}</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">Over +KES {{ rec.variance_amount|floatformat:2 }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rec.variance_reason %}
+                            <span class="small text-dark">{{ rec.variance_reason }}</span>
+                            {% else %}
+                            <span class="badge bg-light text-danger border border-danger">No explanation provided</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'banking_record_detail' slug=request.business.slug pk=rec.pk %}" class="btn btn-sm btn-outline-primary">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-check2-circle display-6 d-block mb-2 text-success"></i>
+                            No banking variances or discrepancies found! All deposits match register collections.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

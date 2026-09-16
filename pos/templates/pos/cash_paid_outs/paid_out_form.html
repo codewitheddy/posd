@@ -1,0 +1,122 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}New Cash Paid-Out | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+            <!-- Header -->
+            <div class="mb-4">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1 text-muted">
+                        <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Finances</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'cash_paid_out_list' %}">Cash Paid-Outs</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">New Paid-Out</li>
+                    </ol>
+                </nav>
+                <h2 class="h3 fw-bold mb-0 text-white"><i class="bi bi-wallet2 text-warning me-2"></i> Record Cash Paid-Out</h2>
+                <p class="text-muted small mb-0">Disburse petty cash directly from register drawer for immediate operational expenses.</p>
+            </div>
+
+            <div class="card bg-dark border-secondary shadow-sm">
+                <form method="post" action="{% url 'cash_paid_out_create' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="card-body p-4">
+                        <!-- Drawer Status Preview -->
+                        <div class="p-3 bg-black rounded border border-secondary mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-muted small">Current Drawer Cash Available:</span>
+                                <span class="fw-bold text-success fs-5">KES {{ drawer_status.current_drawer_cash|floatformat:2 }}</span>
+                            </div>
+                            <div class="small text-muted">Disbursing cash immediately reduces drawer balance and records audit timestamp.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted">Expense Category <span class="text-danger">*</span></label>
+                            <select name="category" id="paidOutCategorySelect" class="form-select bg-dark text-white border-secondary" required onchange="checkThresholdNotice()">
+                                <option value="">Select Expense Category...</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.id }}" data-threshold="{{ cat.requires_manager_approval_above|default:'1000.00' }}">
+                                    {{ cat.name }} (Approval limit: KES {{ cat.requires_manager_approval_above|default:'1000.00'|floatformat:0 }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Payout Amount (KES) <span class="text-danger">*</span></label>
+                                <input type="number" step="0.01" name="amount" id="paidOutAmountInput" class="form-control bg-dark text-white border-secondary fs-5 fw-bold" placeholder="0.00" required oninput="checkThresholdNotice()">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Payee / Recipient <span class="text-danger">*</span></label>
+                                <input type="text" name="payee" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Courier Service / Stationer" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted">Purpose / Detailed Description <span class="text-danger">*</span></label>
+                            <textarea name="description" rows="3" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Urgent repair parts for receipt printer and power adapter" required></textarea>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Receipt / Invoice # (if available right now)</label>
+                                <input type="text" name="receipt_reference" class="form-control bg-dark text-white border-secondary" placeholder="e.g. INV-9021">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Attach Receipt Photo (Optional)</label>
+                                <input type="file" name="receipt_attachment" class="form-control bg-dark text-white border-secondary" accept="image/*,.pdf">
+                            </div>
+                        </div>
+
+                        <!-- Supervisor PIN Box -->
+                        <div id="supervisorAuthBox" class="p-3 bg-secondary-subtle border border-warning rounded mb-4">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-shield-lock text-warning fs-5 me-2"></i>
+                                <div>
+                                    <div class="fw-bold text-warning small">Supervisor Authorization</div>
+                                    <div class="text-muted small">Required when payout exceeds the category threshold.</div>
+                                </div>
+                            </div>
+                            <input type="password" name="supervisor_credential" id="supervisorCredentialInput" class="form-control bg-dark text-white border-warning" placeholder="Enter Supervisor PIN or Password">
+                        </div>
+
+                        <div class="form-check form-switch mb-4">
+                            <input class="form-check-input" type="checkbox" name="is_petty_cash_fund" value="true" id="isPettyFundCheck">
+                            <label class="form-check-label small text-muted" for="isPettyFundCheck">Paid from separate Petty Cash Fund (do not deduct from till drawer)</label>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'cash_paid_out_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-warning fw-bold text-dark px-4"><i class="bi bi-check-circle me-1"></i> Disburse Cash &amp; Record</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function checkThresholdNotice() {
+    const catSelect = document.getElementById('paidOutCategorySelect');
+    const amountInput = document.getElementById('paidOutAmountInput');
+    const credInput = document.getElementById('supervisorCredentialInput');
+
+    if (!catSelect || !amountInput) return;
+
+    const selectedOption = catSelect.options[catSelect.selectedIndex];
+    const threshold = selectedOption ? parseFloat(selectedOption.dataset.threshold || '1000.00') : 1000.00;
+    const amount = parseFloat(amountInput.value || '0');
+
+    if (amount > threshold) {
+        credInput.required = true;
+    } else {
+        credInput.required = false;
+    }
+}
+</script>
+{% endblock %}

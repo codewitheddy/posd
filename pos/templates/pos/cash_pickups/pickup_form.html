@@ -1,0 +1,142 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Record Cash Pickup — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3" style="max-width: 900px;">
+    <!-- Header -->
+    <div class="d-flex align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a href="{% url 'cash_pickup_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Back to Ledger
+                </a>
+                <h3 class="fw-bold mb-0">Record Cash Pickup (Till Drop)</h3>
+            </div>
+            <p class="text-muted small mb-0">Dual-custody cash removal from active till registers into tamper-evident bags.</p>
+        </div>
+    </div>
+
+    <!-- Live Drawer Telemetry Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-primary text-white p-4">
+        <div class="row align-items-center g-3">
+            <div class="col-md-4">
+                <div class="text-white-50 small">Current Drawer Cash</div>
+                <h3 class="fw-bold mb-0 mt-1">KES {{ drawer_status.current_drawer_cash|floatformat:2 }}</h3>
+            </div>
+            <div class="col-md-4">
+                <div class="text-white-50 small">Target Till Float</div>
+                <h4 class="fw-bold mb-0 mt-1 opacity-75">KES {{ drawer_status.target_float|floatformat:2 }}</h4>
+            </div>
+            <div class="col-md-4">
+                <div class="text-white-50 small">Suggested Drop Amount</div>
+                <h3 class="fw-bold mb-0 mt-1 text-warning">KES {{ drawer_status.suggested_pickup|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+        <form method="POST" action="{% url 'cash_pickup_create' slug=request.business.slug %}">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Pickup Amount (KES) *</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light fw-bold">KES</span>
+                        <input type="number" step="0.01" name="amount" class="form-control form-control-lg font-monospace fw-bold" value="{{ drawer_status.suggested_pickup|floatformat:2 }}" required>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Bag / Envelope Barcode / Slip # *</label>
+                    <input type="text" name="pickup_reference" class="form-control form-control-lg font-monospace" placeholder="e.g. BAG-90214" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Tender Type</label>
+                    <select name="tender_type" class="form-select">
+                        <option value="cash" selected>Cash (Banknotes / Coins)</option>
+                        <option value="cheque">Cheques</option>
+                        <option value="foreign_currency">Foreign Currency</option>
+                        <option value="mixed">Mixed Tenders</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Reason for Drop</label>
+                    <select name="reason" class="form-select">
+                        <option value="threshold_exceeded" selected>Drawer Threshold Exceeded</option>
+                        <option value="scheduled">Scheduled Cash Lift</option>
+                        <option value="end_of_shift">End of Shift Drop</option>
+                        <option value="count_dispute">Count Dispute</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <!-- Dual Custody Authorization Section -->
+                <div class="col-12">
+                    <div class="card border-primary border-opacity-50 rounded-3 p-3 bg-primary bg-opacity-10 mt-2">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-shield-lock-fill text-primary fs-5"></i>
+                            <span class="fw-bold text-primary">Supervisor Dual-Custody Verification *</span>
+                        </div>
+                        <p class="text-muted small mb-3">
+                            The chief cashier, store supervisor, or manager must witness the joint count and authenticate with their PIN or password.
+                        </p>
+                        
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Supervisor PIN / Password *</label>
+                                <input type="password" name="supervisor_credential" class="form-control font-monospace" placeholder="Enter PIN / Password" required autocomplete="off">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted">Witness Mode</label>
+                                <select name="witness_type" class="form-select" id="witnessTypeSelect" onchange="togglePeerWitness(this.value)">
+                                    <option value="supervisor" selected>Authorized Supervisor / Manager</option>
+                                    <option value="peer_cashier">Peer Cashier Fallback (Supervisor Unavailable)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="peerWitnessBox" class="mt-2 d-none">
+                            <label class="form-label small fw-semibold text-warning">Select Peer Cashier Witness</label>
+                            <select name="peer_witness_user_id" class="form-select">
+                                <option value="">-- Choose Peer Cashier --</option>
+                                {% for u in peer_cashiers %}
+                                <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }} ({{ u.username }})</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Note: Peer witness transactions are flagged for prioritized management audit.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-bold small text-muted">Notes / Explanation</label>
+                    <textarea name="notes" class="form-control" rows="2" placeholder="Optional audit memo..."></textarea>
+                </div>
+
+                <div class="col-12 d-flex justify-content-end gap-2 mt-4">
+                    <a href="{% url 'cash_pickup_list' slug=request.business.slug %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <i class="bi bi-check-circle me-1"></i> Authorize &amp; Lock Pickup
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function togglePeerWitness(val) {
+    const box = document.getElementById('peerWitnessBox');
+    if (val === 'peer_cashier') {
+        box.classList.remove('d-none');
+    } else {
+        box.classList.add('d-none');
+    }
+}
+</script>
+{% endblock %}

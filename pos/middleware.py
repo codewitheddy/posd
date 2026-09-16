@@ -446,6 +446,8 @@ class RoleAccessControlMiddleware:
                 or '/api/' in clean_path
                 or '/z-reports/' in clean_path
                 or '/zreport/' in clean_path
+                or '/finances/pickups/' in clean_path  # Allow cashiers to create pickups and view pickup slips
+                or '/finances/paid-outs/' in clean_path  # Allow cashiers to create paid-outs and attach receipts
                 or clean_path.startswith('/invoice/')  # Allow cashiers to view/print receipts
                 or '/invoice/' in clean_path
                 or clean_path.startswith('/sales/')     # Allow cashiers to view sales

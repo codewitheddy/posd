@@ -1,0 +1,296 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Record Supplier Payment | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-10">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'ap_payment_list' %}" class="text-decoration-none">Supplier Payments</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Record Outgoing Payment</li>
+                </ol>
+            </nav>
+
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title fw-bold text-dark mb-1">
+                            <i class="bi bi-cash-stack text-success me-2"></i>Record Outgoing Supplier Payment
+                        </h4>
+                        <p class="text-secondary small mb-0">
+                            Select funding source (Bank Transfer, Cheque, Till Cash Drawer, Petty Cash) and allocate funds to open bills.
+                        </p>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Dynamic Supplier Credit Available Alert -->
+                    <div id="supplierCreditAlert" class="alert alert-warning border-0 shadow-sm rounded-3 d-none mb-4">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-lightbulb-fill text-warning fs-3 me-3"></i>
+                                <div>
+                                    <h6 class="fw-bold mb-1 text-dark">Available Supplier Credits Detected!</h6>
+                                    <span class="small text-dark" id="supplierCreditAlertText">
+                                        This supplier has available credit notes that can offset bills before making a bank or cash payout.
+                                    </span>
+                                </div>
+                            </div>
+                            <a href="{% url 'supplier_credit_list' %}" target="_blank" class="btn btn-sm btn-warning text-dark fw-semibold">
+                                <i class="bi bi-arrow-return-left me-1"></i> View Credit Claims
+                            </a>
+                        </div>
+                    </div>
+
+                    <form method="post" id="paymentForm">
+                        {% csrf_token %}
+
+                        <div class="row g-3 mb-4">
+                            <!-- Supplier Selection -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Supplier <span class="text-danger">*</span>
+                                </label>
+                                <select name="supplier_id" id="supplierSelect" class="form-select" required onchange="loadSupplierInvoices(this.value)">
+                                    <option value="">-- Select Supplier --</option>
+                                    {% for s in suppliers %}
+                                    <option value="{{ s.id }}" {% if preselect_supplier_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Payment Date -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Payment Date <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" name="payment_date" value="{{ today }}" class="form-control" required>
+                            </div>
+
+                            <!-- Total Amount -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Total Payment Amount (KES) <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light fw-bold text-secondary">KES</span>
+                                    <input type="number" step="0.01" min="0.01" name="amount" id="paymentAmountInput" class="form-control fw-bold text-dark fs-5" placeholder="0.00" required>
+                                </div>
+                            </div>
+
+                            <!-- Funding Source Type -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Funding Source <span class="text-danger">*</span>
+                                </label>
+                                <select name="source_type" id="sourceTypeSelect" class="form-select" required onchange="toggleSourceFields(this.value)">
+                                    <option value="bank_account">Bank Account / Transfer (EFT / RTGS)</option>
+                                    <option value="cash_drawer">Till Cash Drawer (Direct Register Payout)</option>
+                                    <option value="petty_cash">Petty Cash Office Fund</option>
+                                    <option value="direct">Direct / Other Account</option>
+                                </select>
+                                <div class="form-text small" id="sourceHelperText">Funds deducted from commercial bank account</div>
+                            </div>
+
+                            <!-- Bank Account (Conditional) -->
+                            <div class="col-12 col-md-6" id="bankAccountGroup">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Disbursing Bank Account <span class="text-danger">*</span>
+                                </label>
+                                <select name="bank_account_id" class="form-select">
+                                    {% for b in bank_accounts %}
+                                    <option value="{{ b.id }}">{{ b.bank_name }} - {{ b.account_name }} ({{ b.account_number }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Payment Method Type -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Payment Method <span class="text-danger">*</span>
+                                </label>
+                                <select name="payment_method_type" class="form-select" required>
+                                    <option value="bank_transfer">Bank Transfer / EFT / RTGS</option>
+                                    <option value="cheque">Cheque (Unpresented / In-Transit)</option>
+                                    <option value="cash">Cash Settlement</option>
+                                    <option value="mobile_money">Mobile Money (Paybill / Till Sweep)</option>
+                                </select>
+                            </div>
+
+                            <!-- Reference Number -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Reference / Cheque / Transaction Number
+                                </label>
+                                <input type="text" name="reference_number" class="form-control" placeholder="e.g. EFT-98124, Chq #004312, MPESA Ref">
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Notes &amp; Remittance Memo
+                                </label>
+                                <input type="text" name="notes" class="form-control" placeholder="Optional notes for statement reconciliation...">
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Invoices Allocation Table -->
+                        <div class="card border rounded-3 mb-4 bg-light">
+                            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
+                                <span class="fw-bold text-dark small text-uppercase">
+                                    <i class="bi bi-list-check me-1 text-primary"></i> Invoice Allocations (Optional Specific Allocation)
+                                </span>
+                                <span class="text-muted small">
+                                    Leave blank for automatic oldest-first (FIFO) allocation
+                                </span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover table-sm align-middle mb-0 bg-white" id="invoicesTable">
+                                    <thead class="table-light text-muted small text-uppercase">
+                                        <tr>
+                                            <th class="ps-3 py-2">Invoice #</th>
+                                            <th class="py-2">Invoice Date</th>
+                                            <th class="py-2">Due Date</th>
+                                            <th class="text-end py-2">Total Bill</th>
+                                            <th class="text-end py-2">Remaining Balance</th>
+                                            <th class="text-end pe-3 py-2" style="width: 240px;">Allocate Amount (KES)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoicesTableBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-4 text-muted">
+                                                Select a supplier above to view open unpaid bills.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <a href="{% url 'ap_payment_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success px-4 fw-semibold">
+                                <i class="bi bi-check-circle me-1"></i> Record &amp; Disburse Payment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSourceFields(val) {
+    const bankGroup = document.getElementById('bankAccountGroup');
+    const helperText = document.getElementById('sourceHelperText');
+    if (val === 'bank_account') {
+        bankGroup.style.display = 'block';
+        helperText.textContent = 'Funds deducted from commercial bank account.';
+    } else if (val === 'cash_drawer') {
+        bankGroup.style.display = 'none';
+        helperText.textContent = 'Creates an automated Cash Paid-Out directly deducting register drawer cash in real time.';
+    } else if (val === 'petty_cash') {
+        bankGroup.style.display = 'none';
+        helperText.textContent = 'Funds deducted from petty cash office fund.';
+    } else {
+        bankGroup.style.display = 'none';
+        helperText.textContent = 'Direct or alternative external settlement.';
+    }
+}
+
+function loadSupplierInvoices(supplierId) {
+    const tbody = document.getElementById('invoicesTableBody');
+    const alertBox = document.getElementById('supplierCreditAlert');
+    const alertText = document.getElementById('supplierCreditAlertText');
+
+    if (!supplierId) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Select a supplier above to view open unpaid bills.</td></tr>';
+        alertBox.classList.add('d-none');
+        return;
+    }
+
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2 text-primary"></span>Loading open invoices...</td></tr>';
+
+    fetch(`{% url 'api_supplier_unpaid_invoices' %}?supplier_id=${supplierId}`)
+        .then(res => res.json())
+        .then(data => {
+            // Check for available credit notes
+            if (data.total_available_credits && data.total_available_credits > 0) {
+                alertText.innerHTML = `This supplier has <strong>KES ${data.total_available_credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong> in available credit claims. You can apply credits before making cash/bank payouts.`;
+                alertBox.classList.remove('d-none');
+            } else {
+                alertBox.classList.add('d-none');
+            }
+
+            if (!data.invoices || data.invoices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No open unpaid invoices found for this supplier (Payment will be recorded as unallocated advance credit).</td></tr>';
+                return;
+            }
+
+            let html = '';
+            data.invoices.forEach(inv => {
+                html += `
+                    <tr>
+                        <td class="ps-3 fw-bold text-primary">${inv.invoice_number}</td>
+                        <td class="text-secondary">${inv.invoice_date}</td>
+                        <td>
+                            <span class="${inv.is_overdue ? 'text-danger fw-bold' : 'text-dark'}">${inv.due_date}</span>
+                            ${inv.is_overdue ? `<span class="badge bg-danger text-white ms-1">${inv.days_overdue}d overdue</span>` : ''}
+                        </td>
+                        <td class="text-end text-dark">KES ${inv.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="text-end fw-bold text-warning">KES ${inv.remaining_balance.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="text-end pe-3">
+                            <div class="input-group input-group-sm">
+                                <input type="number" step="0.01" min="0" max="${inv.remaining_balance}" 
+                                       name="alloc_invoice_${inv.id}" 
+                                       id="alloc_input_${inv.id}"
+                                       class="form-control text-end alloc-input fw-semibold" 
+                                       placeholder="0.00" 
+                                       onchange="updateTotalAllocated()">
+                                <button type="button" class="btn btn-outline-secondary" onclick="allocateFull(${inv.id}, ${inv.remaining_balance})">Full</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(err => {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-danger">Error loading supplier invoices.</td></tr>';
+        });
+}
+
+function allocateFull(invId, maxBal) {
+    const inp = document.getElementById(`alloc_input_${invId}`);
+    if (inp) {
+        inp.value = maxBal.toFixed(2);
+        updateTotalAllocated();
+    }
+}
+
+function updateTotalAllocated() {
+    let sum = 0;
+    document.querySelectorAll('.alloc-input').forEach(inp => {
+        const v = parseFloat(inp.value) || 0;
+        sum += v;
+    });
+    if (sum > 0) {
+        document.getElementById('paymentAmountInput').value = sum.toFixed(2);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sId = document.getElementById('supplierSelect').value;
+    if (sId) {
+        loadSupplierInvoices(sId);
+    }
+    toggleSourceFields(document.getElementById('sourceTypeSelect').value);
+});
+</script>
+{% endblock %}

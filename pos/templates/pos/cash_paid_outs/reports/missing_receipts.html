@@ -1,0 +1,136 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Missing / Overdue Receipts Report | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 text-muted">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Finances</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'cash_paid_out_list' %}">Cash Paid-Outs</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Missing Receipts Report</li>
+                </ol>
+            </nav>
+            <h2 class="h3 fw-bold mb-0 text-white"><i class="bi bi-receipt-cutoff text-warning me-2"></i> Missing &amp; Overdue Receipts</h2>
+            <p class="text-muted small mb-0">Daily chase-up schedule of all cash payouts currently in 'Pending Receipt' status.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-outline-secondary">
+                <i class="bi bi-printer me-1"></i> Print Schedule
+            </button>
+            <a href="{% url 'cash_paid_out_list' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-left me-1"></i> Back to Ledger
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-4">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-body">
+                    <span class="text-muted small text-uppercase fw-semibold">Total Pending Collection</span>
+                    <h3 class="fw-bold mb-0 text-warning">{{ missing_receipts|length }}</h3>
+                    <span class="text-muted small">Awaiting receipt or manager exception</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-body">
+                    <span class="text-muted small text-uppercase fw-semibold">Total Pending Cash Value</span>
+                    <h3 class="fw-bold mb-0 text-white">KES {{ total_pending|floatformat:2 }}</h3>
+                    <span class="text-muted small">At risk of becoming unaccounted loss</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-body">
+                    <span class="text-muted small text-uppercase fw-semibold">Overdue Receipts</span>
+                    <h3 class="fw-bold mb-0 text-danger">{{ overdue_count }}</h3>
+                    <span class="text-danger small">Past shift / day close deadline</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Missing Receipts Table -->
+    <div class="card bg-dark border-secondary shadow-sm">
+        <div class="card-header bg-dark border-secondary py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-white">Open Receipt Resolution Queue</h5>
+            <span class="badge bg-warning text-dark">{{ missing_receipts|length }} Open Items</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+                <thead class="table-secondary text-uppercase small text-muted">
+                    <tr>
+                        <th class="ps-3">Voucher #</th>
+                        <th>Disbursed Time</th>
+                        <th>Staff Responsible</th>
+                        <th>Category &amp; Payee</th>
+                        <th class="text-end">Amount</th>
+                        <th>Receipt Due By</th>
+                        <th class="text-center">Aging</th>
+                        <th class="text-end pe-3">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in missing_receipts %}
+                    <tr>
+                        <td class="ps-3 fw-bold text-nowrap">
+                            <a href="{% url 'cash_paid_out_detail' paid_out_id=m.paid_out.id %}" class="text-info text-decoration-none">
+                                {{ m.paid_out.paid_out_number }}
+                            </a>
+                        </td>
+                        <td class="text-nowrap small text-muted">{{ m.paid_out.paid_out_time|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <div class="fw-semibold text-white"><i class="bi bi-person me-1"></i>{{ m.paid_out.requested_by.username }}</div>
+                            <span class="small text-muted">{{ m.paid_out.terminal.name|default:"Till" }}</span>
+                        </td>
+                        <td>
+                            <div class="text-white">{{ m.paid_out.payee }}</div>
+                            <span class="badge bg-secondary-subtle text-light border border-secondary">{{ m.paid_out.category.name }}</span>
+                        </td>
+                        <td class="text-end fw-bold text-warning text-nowrap">
+                            KES {{ m.paid_out.amount|floatformat:2 }}
+                        </td>
+                        <td class="text-nowrap small">
+                            {% if m.is_overdue %}
+                            <span class="text-danger fw-bold"><i class="bi bi-exclamation-circle-fill me-1"></i>{{ m.due_by|date:"Y-m-d H:i" }}</span>
+                            {% else %}
+                            <span class="text-white-50">{{ m.due_by|date:"Y-m-d H:i"|default:"End of Shift" }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center text-nowrap">
+                            {% if m.is_overdue %}
+                            <span class="badge bg-danger">{{ m.hours_open }} hrs overdue</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ m.hours_open }} hrs ago</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3 text-nowrap">
+                            <a href="{% url 'cash_paid_out_detail' paid_out_id=m.paid_out.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-paperclip me-1"></i> Resolve
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-check-circle-fill fs-1 text-success d-block mb-3"></i>
+                            <h5 class="fw-bold text-white">All Receipts Accounted For!</h5>
+                            <p class="small mb-0">There are no outstanding cash paid-out disbursements awaiting vendor receipts.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

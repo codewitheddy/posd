@@ -1,0 +1,208 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Record Supplier Invoice (AP) | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-9">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_invoice_list' %}" class="text-decoration-none">Supplier Invoices</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">New Bill</li>
+                </ol>
+            </nav>
+
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title fw-bold text-dark mb-1">
+                            <i class="bi bi-receipt text-primary me-2"></i>Record Supplier Invoice (AP Bill)
+                        </h4>
+                        <p class="text-secondary small mb-0">
+                            Enter invoice details to recognize purchase liability and COGS under accrual accounting on invoice date.
+                        </p>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" enctype="multipart/form-data" id="invoiceForm">
+                        {% csrf_token %}
+
+                        <div class="row g-3 mb-4">
+                            <!-- Supplier Selection -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Supplier <span class="text-danger">*</span>
+                                </label>
+                                <select name="supplier_id" id="supplierSelect" class="form-select" required>
+                                    <option value="">-- Select Supplier --</option>
+                                    {% for s in suppliers %}
+                                    <option value="{{ s.id }}">{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Invoice Number -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Invoice / Bill Number <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" name="invoice_number" class="form-control" placeholder="e.g. INV-2026-9812" required>
+                                <div class="form-text small">Supplier's invoice number on the physical or electronic bill</div>
+                            </div>
+
+                            <!-- Invoice Date (Accrual) -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Invoice Date (Accrual Recognition) <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" name="invoice_date" id="invoiceDateInput" value="{{ today }}" class="form-control" required onchange="applyPaymentTerms()">
+                                <div class="form-text small">Date expenses/COGS are recognized in financial books</div>
+                            </div>
+
+                            <!-- Payment Terms Preset & Due Date -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Payment Terms &amp; Due Date <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" name="due_date" id="dueDateInput" value="{{ default_due }}" class="form-control mb-2" required>
+                                
+                                <!-- Quick Term Buttons -->
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                    <span class="text-muted small me-1">Terms:</span>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary term-btn py-0 px-2 small" onclick="setPaymentTerm(0, this)">Due on Receipt</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary term-btn py-0 px-2 small" onclick="setPaymentTerm(7, this)">Net 7</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary term-btn py-0 px-2 small" onclick="setPaymentTerm(15, this)">Net 15</button>
+                                    <button type="button" class="btn btn-xs btn-primary term-btn py-0 px-2 small active" onclick="setPaymentTerm(30, this)">Net 30</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary term-btn py-0 px-2 small" onclick="setPaymentTerm(45, this)">Net 45</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary term-btn py-0 px-2 small" onclick="setPaymentTerm(60, this)">Net 60</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary term-btn py-0 px-2 small" onclick="setPaymentTerm(90, this)">Net 90</button>
+                                </div>
+                            </div>
+
+                            <!-- Total Gross Amount -->
+                            <div class="col-12 col-md-4">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Gross Total Amount (KES) <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light fw-bold text-secondary">KES</span>
+                                    <input type="number" step="0.01" min="0.01" name="amount" id="totalAmount" class="form-control fw-bold text-dark fs-5" placeholder="0.00" required>
+                                </div>
+                            </div>
+
+                            <!-- Subtotal (Optional) -->
+                            <div class="col-12 col-md-4">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Net Subtotal (Before Tax)
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-secondary">KES</span>
+                                    <input type="number" step="0.01" min="0" name="subtotal" id="subtotalAmount" class="form-control" placeholder="0.00">
+                                </div>
+                            </div>
+
+                            <!-- Tax / VAT Amount (Optional) -->
+                            <div class="col-12 col-md-4">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    VAT / Tax Amount
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-secondary">KES</span>
+                                    <input type="number" step="0.01" min="0" name="tax_amount" id="taxAmount" class="form-control" placeholder="0.00">
+                                </div>
+                            </div>
+
+                            <!-- Purchase Order Link -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Link to Purchase Order (Optional)
+                                </label>
+                                <select name="purchase_id" class="form-select">
+                                    <option value="">-- None / Standalone Direct Bill --</option>
+                                    {% for p in purchases %}
+                                    <option value="{{ p.id }}">{{ p.purchase_number }} - {{ p.supplier.name }} (KES {{ p.total_amount|floatformat:2 }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Invoice Document Attachment -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Bill Attachment (PDF / Scan / Image)
+                                </label>
+                                <input type="file" name="attachment" class="form-control" accept=".pdf,.png,.jpg,.jpeg">
+                                <div class="form-text small">Upload invoice PDF or photo receipt for audit records</div>
+                            </div>
+
+                            <!-- Notes / Description -->
+                            <div class="col-12">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Notes &amp; Line Item Summary
+                                </label>
+                                <textarea name="notes" class="form-control" rows="3" placeholder="Enter purchase bill summary, delivered items list, payment instructions, delivery note references..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <a href="{% url 'supplier_invoice_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                <i class="bi bi-check-circle me-1"></i> Save Supplier Invoice
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTermDays = 30;
+
+function setPaymentTerm(days, btnElement) {
+    currentTermDays = days;
+    document.querySelectorAll('.term-btn').forEach(btn => {
+        btn.classList.remove('btn-primary', 'active');
+        btn.classList.add('btn-outline-secondary');
+    });
+    if (btnElement) {
+        btnElement.classList.remove('btn-outline-secondary');
+        btnElement.classList.add('btn-primary', 'active');
+    }
+    applyPaymentTerms();
+}
+
+function applyPaymentTerms() {
+    const invDateStr = document.getElementById('invoiceDateInput').value;
+    if (!invDateStr) return;
+
+    const parts = invDateStr.split('-');
+    const invDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    invDate.setDate(invDate.getDate() + currentTermDays);
+
+    const y = invDate.getFullYear();
+    const m = String(invDate.getMonth() + 1).padStart(2, '0');
+    const d = String(invDate.getDate()).padStart(2, '0');
+    document.getElementById('dueDateInput').value = `${y}-${m}-${d}`;
+}
+
+// Auto calculate gross amount if subtotal & tax filled
+document.getElementById('subtotalAmount').addEventListener('input', updateGrossCalc);
+document.getElementById('taxAmount').addEventListener('input', updateGrossCalc);
+
+function updateGrossCalc() {
+    const sub = parseFloat(document.getElementById('subtotalAmount').value) || 0;
+    const tax = parseFloat(document.getElementById('taxAmount').value) || 0;
+    if (sub > 0 || tax > 0) {
+        const total = sub + tax;
+        document.getElementById('totalAmount').value = total.toFixed(2);
+    }
+}
+</script>
+{% endblock %}

@@ -9,7 +9,8 @@ from . import (
     views, tenant_views, cash_float_views, user_management_views,
     support_access_views, zreport_views, sync_views, registration_admin_views,
     financial_views, crm_views, webhook_views, branch_views, promotion_views,
-    hscode_views, terminal_views, vatcode_views, cashier_assignment_views
+    hscode_views, terminal_views, vatcode_views, cashier_assignment_views,
+    banking_views, cash_pickup_views, cash_paid_out_views, supplier_ap_views
 )
 
 
@@ -214,7 +215,37 @@ business_urlpatterns = [
     path('payments/<int:payment_id>/delete/', views.delete_payment, name='delete_payment'),
     path('supplier-balances/', views.supplier_balances, name='supplier_balances'),
     path('aging-analysis/', views.aging_analysis, name='aging_analysis'),
-    
+
+    # Accounts Payable Invoices & Bills
+    path('purchasing/invoices/', supplier_ap_views.supplier_invoice_list, name='supplier_invoice_list'),
+    path('purchasing/invoices/create/', supplier_ap_views.supplier_invoice_create, name='supplier_invoice_create'),
+    path('purchasing/invoices/<int:invoice_id>/', supplier_ap_views.supplier_invoice_detail, name='supplier_invoice_detail'),
+
+    # Multi-Source Supplier Payments
+    path('purchasing/payments/', supplier_ap_views.supplier_payment_list, name='ap_payment_list'),
+    path('purchasing/payments/list/', supplier_ap_views.supplier_payment_list, name='supplier_payment_list'),
+    path('purchasing/payments/create/', supplier_ap_views.supplier_payment_create, name='ap_payment_create'),
+    path('purchasing/payments/new/', supplier_ap_views.supplier_payment_create, name='supplier_payment_create'),
+    path('purchasing/payments/<int:payment_id>/', supplier_ap_views.supplier_payment_detail, name='ap_payment_detail'),
+    path('purchasing/payments/<int:payment_id>/view/', supplier_ap_views.supplier_payment_detail, name='supplier_payment_detail'),
+    path('purchasing/payments/<int:payment_id>/reverse/', supplier_ap_views.supplier_payment_reverse, name='ap_payment_reverse'),
+    path('purchasing/payments/<int:payment_id>/do-reverse/', supplier_ap_views.supplier_payment_reverse, name='supplier_payment_reverse'),
+    path('api/purchasing/unpaid-invoices/', supplier_ap_views.supplier_unpaid_invoices_api, name='api_supplier_unpaid_invoices'),
+
+    # Supplier Credits (Debit Notes / Claims) & Refunds
+    path('purchasing/credits/', supplier_ap_views.supplier_credit_list, name='supplier_credit_list'),
+    path('purchasing/credits/create/', supplier_ap_views.supplier_credit_create, name='supplier_credit_create'),
+    path('purchasing/credits/<int:credit_id>/', supplier_ap_views.supplier_credit_detail, name='supplier_credit_detail'),
+    path('purchasing/credits/<int:credit_id>/apply/', supplier_ap_views.supplier_credit_apply, name='supplier_credit_apply'),
+    path('purchasing/credits/<int:credit_id>/refund/', supplier_ap_views.supplier_credit_refund, name='supplier_credit_refund'),
+
+    # AP & Outflow Reports
+    path('purchasing/reports/aging/', supplier_ap_views.report_ap_aging, name='report_ap_aging'),
+    path('purchasing/reports/statement/', supplier_ap_views.report_supplier_statement, name='report_supplier_statement'),
+    path('purchasing/reports/outstanding-credits/', supplier_ap_views.report_outstanding_credits, name='report_outstanding_credits'),
+    path('purchasing/reports/outstanding-cheques/', supplier_ap_views.report_outstanding_cheques, name='report_outstanding_cheques'),
+    path('purchasing/reports/unmatched-statements/', supplier_ap_views.report_unmatched_statement_lines, name='report_unmatched_statement_lines'),
+
     # Purchases
     path('purchases/', views.purchase_list, name='purchase_list'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),

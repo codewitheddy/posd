@@ -1,0 +1,332 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Credit Claim {{ credit.credit_number }} | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_credit_list' %}" class="text-decoration-none">Credit Claims</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ credit.credit_number }}</li>
+                </ol>
+            </nav>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <h3 class="fw-bold text-dark mb-0">{{ credit.credit_number }}</h3>
+                {% if credit.status == 'applied_to_invoice' or credit.status == 'refunded' %}
+                <span class="badge bg-success text-white px-3 py-2 fs-6"><i class="bi bi-check-circle me-1"></i> Fully Resolved</span>
+                {% elif credit.status == 'partially_resolved' %}
+                <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-pie-chart me-1"></i> Partially Resolved</span>
+                {% elif credit.status == 'approved_by_supplier' %}
+                <span class="badge bg-info text-dark px-3 py-2 fs-6"><i class="bi bi-check2 me-1"></i> Approved / Open Claim</span>
+                {% else %}
+                <span class="badge bg-secondary text-white px-3 py-2 fs-6">{{ credit.get_status_display }}</span>
+                {% endif %}
+            </div>
+            <p class="text-secondary small mb-0 mt-1">
+                Supplier: <strong class="text-dark">{{ credit.supplier.name }}</strong> | 
+                Claim Date: {{ credit.date_raised|date:"M d, Y" }} | 
+                Reason: <span class="badge bg-light text-dark border">{{ credit.get_reason_display }}</span>
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if credit.remaining_credit > 0 and credit.status != 'draft' %}
+            <button class="btn btn-warning text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#offsetInvoiceModal">
+                <i class="bi bi-arrow-return-left me-1"></i> Apply to Invoice
+            </button>
+            <button class="btn btn-success fw-semibold" data-bs-toggle="modal" data-bs-target="#recordRefundModal">
+                <i class="bi bi-cash-stack me-1"></i> Record Bank / Cash Refund
+            </button>
+            {% endif %}
+            <a href="{% url 'supplier_credit_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Back to Claims
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-primary border-4">
+                <span class="text-muted small text-uppercase fw-bold">Total Claim Value</span>
+                <h4 class="fw-bold text-dark mb-0 mt-1">KES {{ credit.amount|floatformat:2 }}</h4>
+                <div class="text-secondary small">Original credit amount</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-info border-4">
+                <span class="text-muted small text-uppercase fw-bold">Offset Against Invoices</span>
+                <h4 class="fw-bold text-info mb-0 mt-1">KES {{ credit.total_applied|floatformat:2 }}</h4>
+                <div class="text-secondary small">{{ applications.count }} bill offset(s)</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-success border-4">
+                <span class="text-muted small text-uppercase fw-bold">Refunded to Business</span>
+                <h4 class="fw-bold text-success mb-0 mt-1">KES {{ credit.total_refunded|floatformat:2 }}</h4>
+                <div class="text-secondary small">{{ refunds.count }} incoming refund(s)</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start {% if credit.remaining_credit > 0 %}border-warning{% else %}border-success{% endif %} border-4">
+                <span class="text-muted small text-uppercase fw-bold">Remaining Claim</span>
+                <h4 class="fw-bold {% if credit.remaining_credit > 0 %}text-warning{% else %}text-success{% endif %} mb-0 mt-1">
+                    KES {{ credit.remaining_credit|floatformat:2 }}
+                </h4>
+                <div class="text-secondary small">
+                    {% if credit.remaining_credit == 0 %}
+                    <span class="text-success fw-semibold"><i class="bi bi-check-all"></i> Fully Resolved</span>
+                    {% else %}
+                    <span class="text-warning fw-semibold">Pending Recovery</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Ledgers -->
+        <div class="col-12 col-lg-8">
+            <!-- Invoice Offsets -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-receipt me-2 text-primary"></i> Invoice Offset Allocations
+                    </h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Invoice #</th>
+                                <th class="py-3">Applied Date</th>
+                                <th class="py-3">Applied By</th>
+                                <th class="text-end pe-3 py-3">Offset Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for app in applications %}
+                            <tr>
+                                <td class="ps-3 fw-bold">
+                                    <a href="{% url 'supplier_invoice_detail' slug=business.slug invoice_id=app.invoice.id %}" class="text-primary text-decoration-none">
+                                        {{ app.invoice.invoice_number }}
+                                    </a>
+                                </td>
+                                <td class="text-secondary">{{ app.applied_at|date:"M d, Y" }}</td>
+                                <td class="text-secondary">{{ app.applied_by.get_full_name|default:app.applied_by.username }}</td>
+                                <td class="text-end pe-3 fw-bold text-info">KES {{ app.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    No invoices have been offset with this credit claim yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Cash / Bank Refunds Received -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-bank me-2 text-success"></i> Incoming Cash / Bank Refunds Received
+                    </h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Refund #</th>
+                                <th class="py-3">Date Received</th>
+                                <th class="py-3">Destination</th>
+                                <th class="py-3">Reference</th>
+                                <th class="text-end pe-3 py-3">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ref in refunds %}
+                            <tr>
+                                <td class="ps-3 fw-bold text-success">{{ ref.refund_number }}</td>
+                                <td class="text-secondary">{{ ref.received_date|date:"M d, Y" }}</td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">{{ ref.get_destination_type_display }}</span>
+                                    {% if ref.destination_account %}
+                                    <small class="text-muted d-block">{{ ref.destination_account.bank_name }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-secondary">{{ ref.reference|default:"-" }}</td>
+                                <td class="text-end pe-3 fw-bold text-success">KES {{ ref.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    No cash or bank refunds recorded for this claim.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Sidebar -->
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-info-circle me-2 text-primary"></i> Claim Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Supplier</span>
+                            <span class="fw-semibold text-dark">{{ credit.supplier.name }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Claim Reason</span>
+                            <span class="text-dark">{{ credit.get_reason_display }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Supplier Credit #</span>
+                            <span class="text-dark">{{ credit.supplier_credit_note_number|default:"-" }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Resolution Type</span>
+                            <span class="text-dark">{{ credit.get_resolution_type_display }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Created By</span>
+                            <span class="text-secondary">{{ credit.created_by.get_full_name|default:credit.created_by.username|default:"System" }}</span>
+                        </li>
+                    </ul>
+
+                    {% if credit.notes %}
+                    <div class="mt-3 pt-3 border-top">
+                        <span class="text-muted small text-uppercase fw-semibold d-block mb-1">Notes:</span>
+                        <div class="small text-dark p-2 bg-light rounded border">{{ credit.notes|linebreaksbr }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Offset Open Invoice -->
+{% if credit.remaining_credit > 0 and open_invoices %}
+<div class="modal fade" id="offsetInvoiceModal" tabindex="-1" aria-labelledby="offsetInvoiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-white border-0 shadow rounded-3">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold text-dark" id="offsetInvoiceModalLabel">
+                    <i class="bi bi-arrow-return-left text-warning me-2"></i> Apply Credit to Open Supplier Bill
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{% url 'supplier_credit_apply' slug=business.slug credit_id=credit.id %}" method="post">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Select Open Invoice</label>
+                        <select name="invoice_id" class="form-select" required id="invoiceSelectForOffset" onchange="updateOffsetMax(this)">
+                            {% for inv in open_invoices %}
+                            <option value="{{ inv.id }}" data-rem="{{ inv.remaining_balance }}">
+                                {{ inv.invoice_number }} — Due: {{ inv.due_date|date:"M d, Y" }} (Balance: KES {{ inv.remaining_balance|floatformat:2 }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Offset Amount (KES)</label>
+                        <input type="number" step="0.01" min="0.01" max="{{ credit.remaining_credit }}" name="amount" id="offsetAmountInput" value="{{ credit.remaining_credit }}" class="form-control fw-bold text-dark fs-5" required>
+                        <div class="form-text small">Max available credit: KES {{ credit.remaining_credit|floatformat:2 }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Remarks / Notes</label>
+                        <input type="text" name="notes" class="form-control" placeholder="Optional notes for audit records...">
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold"><i class="bi bi-check-circle me-1"></i> Apply Offset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal: Record Supplier Refund -->
+{% if credit.remaining_credit > 0 %}
+<div class="modal fade" id="recordRefundModal" tabindex="-1" aria-labelledby="recordRefundModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-white border-0 shadow rounded-3">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold text-success" id="recordRefundModalLabel">
+                    <i class="bi bi-cash-stack me-2"></i> Record Incoming Supplier Refund
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{% url 'supplier_credit_refund' slug=business.slug credit_id=credit.id %}" method="post">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Refund Amount (KES)</label>
+                        <input type="number" step="0.01" min="0.01" max="{{ credit.remaining_credit }}" name="amount" value="{{ credit.remaining_credit }}" class="form-control fw-bold text-dark fs-5" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Date Received</label>
+                        <input type="date" name="received_date" value="{{ today }}" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Destination Account Type</label>
+                        <select name="destination_type" class="form-select" required>
+                            <option value="bank_account">Commercial Bank Account</option>
+                            <option value="cash">Petty Cash / Till Safe</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Receiving Bank Account</label>
+                        <select name="destination_account_id" class="form-select">
+                            <option value="">-- None / Cash --</option>
+                            {% for b in bank_accounts %}
+                            <option value="{{ b.id }}">{{ b.bank_name }} - {{ b.account_name }} ({{ b.account_number }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Bank Reference / MPESA Ref</label>
+                        <input type="text" name="reference" class="form-control" placeholder="e.g. REF-29814, MPESA code">
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success fw-bold"><i class="bi bi-check-circle me-1"></i> Record Refund</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function updateOffsetMax(selectEl) {
+    const opt = selectEl.options[selectEl.selectedIndex];
+    const invRem = parseFloat(opt.getAttribute('data-rem')) || 0;
+    const credRem = {{ credit.remaining_credit }};
+    const maxVal = Math.min(invRem, credRem);
+    const inp = document.getElementById('offsetAmountInput');
+    inp.max = maxVal.toFixed(2);
+    inp.value = maxVal.toFixed(2);
+}
+</script>
+{% endblock %}

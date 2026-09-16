@@ -1,0 +1,124 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Raise Supplier Credit Claim | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-8">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_credit_list' %}" class="text-decoration-none">Credit Claims</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Raise Claim</li>
+                </ol>
+            </nav>
+
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title fw-bold text-dark mb-1">
+                            <i class="bi bi-arrow-return-left text-warning me-2"></i>Raise Supplier Credit Claim / Debit Note
+                        </h4>
+                        <p class="text-secondary small mb-0">
+                            Claim funds back from suppliers for damaged stock, returns, short shipments, or pricing adjustments.
+                        </p>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="row g-3 mb-4">
+                            <!-- Supplier Selection -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Supplier <span class="text-danger">*</span>
+                                </label>
+                                <select name="supplier_id" class="form-select" required>
+                                    <option value="">-- Select Supplier --</option>
+                                    {% for s in suppliers %}
+                                    <option value="{{ s.id }}">{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Claim Date -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Claim Date <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" name="date_raised" value="{{ today }}" class="form-control" required>
+                            </div>
+
+                            <!-- Total Claim Amount -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Claim Amount (KES) <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light fw-bold text-secondary">KES</span>
+                                    <input type="number" step="0.01" min="0.01" name="amount" class="form-control fw-bold text-dark fs-5" placeholder="0.00" required>
+                                </div>
+                            </div>
+
+                            <!-- Claim Reason -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Claim Reason <span class="text-danger">*</span>
+                                </label>
+                                <select name="reason" class="form-select" required>
+                                    <option value="goods_returned">Goods Returned (RTV)</option>
+                                    <option value="damaged_delivery">Damaged Delivery / Breakage</option>
+                                    <option value="short_delivery">Short Delivery / Missing Quantity</option>
+                                    <option value="overcharge_price_correction">Overcharge / Price Correction</option>
+                                    <option value="volume_rebate">Volume Rebate / Supplier Discount</option>
+                                    <option value="cancelled_order">Cancelled Purchase Order</option>
+                                    <option value="other">Other Claim</option>
+                                </select>
+                            </div>
+
+                            <!-- Supplier's Credit Note Number -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Supplier's Credit Note Reference #
+                                </label>
+                                <input type="text" name="supplier_credit_note_number" class="form-control" placeholder="e.g. S-CRN-98124">
+                            </div>
+
+                            <!-- Initial Status -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Approval Status <span class="text-danger">*</span>
+                                </label>
+                                <select name="status" class="form-select" required>
+                                    <option value="approved_by_supplier" selected>Approved by Supplier (Ready for Offset / Refund)</option>
+                                    <option value="draft">Draft (Pending Supplier Confirmation)</option>
+                                </select>
+                            </div>
+
+                            <!-- Description / Notes -->
+                            <div class="col-12">
+                                <label class="form-label text-dark fw-semibold small text-uppercase">
+                                    Claim Details &amp; Notes
+                                </label>
+                                <textarea name="notes" class="form-control" rows="3" placeholder="Describe damaged items, return reason, GRN references, or credit terms agreement..."></textarea>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <a href="{% url 'supplier_credit_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                <i class="bi bi-check-circle me-1"></i> Raise Credit Claim
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

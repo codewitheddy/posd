@@ -1,0 +1,135 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Supplier Credits & Claims | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header & Action Row -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Supplier Credits &amp; Claims</li>
+                </ol>
+            </nav>
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="bi bi-arrow-return-left text-warning me-2"></i>Supplier Credits &amp; Debit Notes
+            </h3>
+            <p class="text-secondary small mb-0">
+                Manage claims against suppliers for returns, damaged deliveries, and overcharges, offset future bills, or track cash/bank refunds.
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'report_outstanding_credits' %}" class="btn btn-outline-warning">
+                <i class="bi bi-hourglass-split me-1"></i> Outstanding Claims Report
+            </a>
+            <a href="{% url 'supplier_invoice_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-receipt me-1"></i> Supplier Invoices
+            </a>
+            <a href="{% url 'supplier_credit_create' %}" class="btn btn-primary fw-semibold">
+                <i class="bi bi-plus-circle me-1"></i> Raise Credit Claim
+            </a>
+        </div>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-primary border-4">
+                <span class="text-muted small text-uppercase fw-bold">Total Claims Raised</span>
+                <h4 class="fw-bold text-dark mb-0 mt-1">KES {{ total_credits|floatformat:2 }}</h4>
+                <div class="text-secondary small">Cumulative value of all credit claims</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-warning border-4">
+                <span class="text-muted small text-uppercase fw-bold">Unresolved Claims</span>
+                <h4 class="fw-bold text-warning mb-0 mt-1">KES {{ unresolved_credits|floatformat:2 }}</h4>
+                <div class="text-secondary small">Pending invoice offset or bank refund</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-success border-4">
+                <span class="text-muted small text-uppercase fw-bold">Resolved / Recovered</span>
+                <h4 class="fw-bold text-success mb-0 mt-1">KES {{ total_credits|add:"-"|add:unresolved_credits|floatformat:2 }}</h4>
+                <div class="text-secondary small">Offset against invoices or refunded to bank</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credits Table -->
+    <div class="card border-0 shadow-sm rounded-3 bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-3 py-3">Credit #</th>
+                        <th class="py-3">Supplier</th>
+                        <th class="py-3">Date Raised</th>
+                        <th class="py-3">Claim Reason</th>
+                        <th class="text-end py-3">Total Claim</th>
+                        <th class="text-end py-3">Remaining Claim</th>
+                        <th class="text-center py-3">Resolution Status</th>
+                        <th class="text-center py-3">Resolution Type</th>
+                        <th class="text-end pe-3 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cr in credits %}
+                    <tr>
+                        <td class="ps-3 fw-bold">
+                            <a href="{% url 'supplier_credit_detail' slug=business.slug credit_id=cr.id %}" class="text-primary text-decoration-none">
+                                {{ cr.credit_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ cr.supplier.name }}</div>
+                        </td>
+                        <td class="text-secondary">{{ cr.date_raised|date:"M d, Y" }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ cr.get_reason_display }}</span></td>
+                        <td class="text-end fw-semibold text-dark">KES {{ cr.amount|floatformat:2 }}</td>
+                        <td class="text-end fw-bold {% if cr.remaining_credit > 0 %}text-warning{% else %}text-success{% endif %}">
+                            KES {{ cr.remaining_credit|floatformat:2 }}
+                        </td>
+                        <td class="text-center">
+                            {% if cr.status == 'applied_to_invoice' or cr.status == 'refunded' %}
+                            <span class="badge bg-success text-white"><i class="bi bi-check-circle me-1"></i> Resolved</span>
+                            {% elif cr.status == 'partially_resolved' %}
+                            <span class="badge bg-warning text-dark">Partially Resolved</span>
+                            {% elif cr.status == 'approved_by_supplier' %}
+                            <span class="badge bg-info text-dark">Approved / Open</span>
+                            {% elif cr.status == 'draft' %}
+                            <span class="badge bg-secondary text-white">Draft</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark border">{{ cr.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-secondary border">{{ cr.get_resolution_type_display }}</span>
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="{% url 'supplier_credit_detail' slug=business.slug credit_id=cr.id %}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-arrow-return-left display-4 d-block mb-3 opacity-50"></i>
+                            <h5 class="fw-semibold text-dark">No credit notes or claims found</h5>
+                            <p class="text-secondary mb-3">Raise claims against suppliers for returns, delivery damages, and pricing adjustments.</p>
+                            <a href="{% url 'supplier_credit_create' %}" class="btn btn-primary">
+                                <i class="bi bi-plus-circle me-1"></i> Raise First Credit Claim
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

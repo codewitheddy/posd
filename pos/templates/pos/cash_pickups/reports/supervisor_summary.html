@@ -1,0 +1,134 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Supervisor Cash Custody Summary — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a href="{% url 'cash_pickup_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Pickups
+                </a>
+                <h3 class="fw-bold mb-0"><i class="bi bi-person-check me-2 text-primary"></i>Supervisor Pickup Accountability Summary</h3>
+            </div>
+            <p class="text-muted small mb-0">Total cash custody witnessed and authorized per supervisor across stores and shifts.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Summary
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Summary Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-primary text-white">
+                <div class="text-white-50 small fw-semibold">Grand Total Custody Authorized</div>
+                <h4 class="fw-bold mb-0 mt-1">KES {{ grand_total|floatformat:2 }}</h4>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-dark text-white">
+                <div class="text-white-50 small fw-semibold">Total Pickups Authorized</div>
+                <h4 class="fw-bold mb-0 mt-1">{{ grand_count }} Joint Counts</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <select name="branch" class="form-select form-select-sm">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}" title="From Date">
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}" title="To Date">
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-filter me-1"></i>Filter</button>
+                    <a href="{% url 'report_supervisor_pickup_summary' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Supervisor / Witness</th>
+                        <th>Branches Covered</th>
+                        <th class="text-center">Total Pickups</th>
+                        <th class="text-end">Cash (KES)</th>
+                        <th class="text-end">Cheques (KES)</th>
+                        <th class="text-end">Other Tenders (KES)</th>
+                        <th class="text-end pe-4">Total Amount (KES)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in summary %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-primary bg-opacity-10 text-primary p-2 rounded-circle fs-5 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                                    <i class="bi bi-person-badge"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">{{ item.name }}</div>
+                                    <small class="text-muted">{{ item.supervisor.username }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% for br in item.branches %}
+                            <span class="badge bg-light text-dark border me-1">{{ br }}</span>
+                            {% empty %}
+                            <span class="text-muted small">All Locations</span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1">
+                                {{ item.pickups_count }} joint count{{ item.pickups_count|pluralize }}
+                            </span>
+                        </td>
+                        <td class="text-end font-monospace text-dark">
+                            KES {{ item.cash_amount|floatformat:2 }}
+                        </td>
+                        <td class="text-end font-monospace text-muted">
+                            KES {{ item.cheque_amount|floatformat:2 }}
+                        </td>
+                        <td class="text-end font-monospace text-muted">
+                            KES {{ item.other_amount|floatformat:2 }}
+                        </td>
+                        <td class="text-end pe-4 font-monospace fw-bold fs-6 text-primary">
+                            KES {{ item.total_amount|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="p-5 text-center text-muted">
+                            No supervisor pickups recorded in this period.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

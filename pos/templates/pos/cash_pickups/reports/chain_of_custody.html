@@ -1,0 +1,197 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Chain of Custody Trace — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a href="{% url 'cash_pickup_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Pickups
+                </a>
+                <h3 class="fw-bold mb-0"><i class="bi bi-link-45deg me-2 text-info"></i>Chain of Custody Trace Report</h3>
+            </div>
+            <p class="text-muted small mb-0">Trace a specific cash pickup bag or slip number end-to-end from register drawer to bank statement line.</p>
+        </div>
+    </div>
+
+    <!-- Search Box -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <form method="GET" class="row g-2">
+                <div class="col-md-9">
+                    <label class="form-label small fw-bold text-muted">Enter Pickup Number (PKU-...) or Bag Reference (BAG-...)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                        <input type="text" name="q" class="form-control form-control-lg font-monospace" placeholder="e.g. PKU-20260916-0001 or BAG-99201" value="{{ query }}" required>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">
+                        <i class="bi bi-diagram-3 me-1"></i> Trace Custody
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if selected_pickup and chain %}
+    <!-- Detailed Stepper / Results -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+        <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
+            <div>
+                <span class="text-white-50 small">Traced Record:</span>
+                <span class="fw-bold font-monospace fs-5 text-primary ms-2">{{ selected_pickup.pickup_number }}</span>
+            </div>
+            <div>
+                <span class="badge {% if selected_pickup.status == 'banked' %}bg-success{% elif selected_pickup.status == 'in_safe' %}bg-warning text-dark{% else %}bg-primary{% endif %} fs-6">
+                    {{ selected_pickup.get_status_display }}
+                </span>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <!-- Step 1: Till Register -->
+                <div class="col-md-6 col-lg">
+                    <div class="card border-0 shadow-sm rounded-3 p-3 h-100 border-start border-4 border-primary bg-light">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-primary rounded-circle">1</span>
+                            <span class="fw-bold text-dark small text-uppercase">1. Till Removal</span>
+                        </div>
+                        <h4 class="fw-bold text-primary mb-1">KES {{ chain.step1_till.amount|floatformat:2 }}</h4>
+                        <div class="small text-muted">{{ chain.step1_till.terminal }} ({{ chain.step1_till.terminal_code }})</div>
+                        <div class="small text-muted">{{ chain.step1_till.branch }}</div>
+                        <div class="small text-muted font-monospace mt-1">{{ chain.step1_till.timestamp|date:"d M Y, H:i" }}</div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Dual Count & Bag Sealing -->
+                <div class="col-md-6 col-lg">
+                    <div class="card border-0 shadow-sm rounded-3 p-3 h-100 border-start border-4 border-info bg-light">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-info text-dark rounded-circle">2</span>
+                            <span class="fw-bold text-dark small text-uppercase">2. Dual Count</span>
+                        </div>
+                        <div class="fw-bold text-dark mb-1">
+                            <span class="badge bg-white text-dark border font-monospace">{{ chain.step2_dual_custody.bag_reference }}</span>
+                        </div>
+                        <div class="small text-muted">Cashier: <strong>{{ chain.step2_dual_custody.cashier }}</strong></div>
+                        <div class="small text-muted">Supervisor: <strong>{{ chain.step2_dual_custody.supervisor }}</strong></div>
+                        <div class="small text-success mt-1"><i class="bi bi-shield-check me-1"></i>Joint Count Locked</div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Vault / Safe -->
+                <div class="col-md-6 col-lg">
+                    <div class="card border-0 shadow-sm rounded-3 p-3 h-100 border-start border-4 {% if chain.step3_safe.completed %}border-warning{% else %}border-secondary{% endif %} bg-light">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge {% if chain.step3_safe.completed %}bg-warning text-dark{% else %}bg-secondary{% endif %} rounded-circle">3</span>
+                            <span class="fw-bold text-dark small text-uppercase">3. Safe Custody</span>
+                        </div>
+                        <div class="fw-bold text-dark mb-1">
+                            {% if chain.step3_safe.completed %}
+                            <span class="text-success"><i class="bi bi-check2-circle me-1"></i>Stored in Safe</span>
+                            {% else %}
+                            <span class="text-muted"><i class="bi bi-clock me-1"></i>Pending Transfer</span>
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted">{{ chain.step3_safe.status }}</div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Physical Bank Deposit -->
+                <div class="col-md-6 col-lg">
+                    <div class="card border-0 shadow-sm rounded-3 p-3 h-100 border-start border-4 {% if chain.step4_banking.completed %}border-success{% else %}border-secondary{% endif %} bg-light">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge {% if chain.step4_banking.completed %}bg-success{% else %}bg-secondary{% endif %} rounded-circle">4</span>
+                            <span class="fw-bold text-dark small text-uppercase">4. Bank Deposit</span>
+                        </div>
+                        {% if chain.step4_banking.completed %}
+                        <div class="fw-bold text-dark mb-1 font-monospace">{{ chain.step4_banking.record_number }}</div>
+                        <div class="small text-muted">Slip: {{ chain.step4_banking.deposit_slip }}</div>
+                        <div class="small text-muted">{{ chain.step4_banking.bank_account }}</div>
+                        {% else %}
+                        <div class="text-muted small py-2"><i class="bi bi-hourglass-split me-1"></i>Not Yet Deposited</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Step 5: Bank Statement Line Match -->
+                <div class="col-md-6 col-lg">
+                    <div class="card border-0 shadow-sm rounded-3 p-3 h-100 border-start border-4 {% if chain.step5_statement.completed %}border-success{% else %}border-secondary{% endif %} bg-light">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge {% if chain.step5_statement.completed %}bg-success{% else %}bg-secondary{% endif %} rounded-circle">5</span>
+                            <span class="fw-bold text-dark small text-uppercase">5. Statement Line</span>
+                        </div>
+                        {% if chain.step5_statement.completed %}
+                        <div class="fw-bold text-success mb-1">KES {{ chain.step5_statement.credit_amount|floatformat:2 }}</div>
+                        <div class="small text-muted">Cleared: {{ chain.step5_statement.cleared_date|date:"d M Y" }}</div>
+                        <div class="small text-muted">{{ chain.step5_statement.match_type }}</div>
+                        {% else %}
+                        <div class="text-muted small py-2"><i class="bi bi-clock-history me-1"></i>Pending Statement</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif query %}
+    <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-light">
+        <i class="bi bi-search text-muted display-4 mb-3"></i>
+        <h5 class="fw-bold">No Record Found for "{{ query }}"</h5>
+        <p class="text-muted small">Please verify the pickup reference number or bag barcode and try again.</p>
+    </div>
+    {% endif %}
+
+    <!-- Quick Lookup Table of Recent Pickups -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-header bg-white py-3 px-4 border-bottom">
+            <h5 class="fw-bold mb-0 text-dark">Recent Pickups for Reference</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Pickup Number</th>
+                        <th>Bag / Slip Reference</th>
+                        <th>Till &amp; Branch</th>
+                        <th>Cashier &amp; Supervisor</th>
+                        <th class="text-end">Amount (KES)</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in recent_pickups %}
+                    <tr>
+                        <td class="ps-4 font-monospace fw-bold">{{ p.pickup_number }}</td>
+                        <td><span class="badge bg-light text-dark border font-monospace">{{ p.pickup_reference }}</span></td>
+                        <td>{{ p.terminal.name|default:"Main Register" }} &bull; <small class="text-muted">{{ p.branch.name|default:"HQ" }}</small></td>
+                        <td>{{ p.cashier.username }} &bull; {{ p.supervisor.username }}</td>
+                        <td class="text-end font-monospace fw-bold">KES {{ p.amount|floatformat:2 }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if p.status == 'banked' %}bg-success{% elif p.status == 'in_safe' %}bg-warning text-dark{% else %}bg-primary{% endif %}">
+                                {{ p.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="?q={{ p.pickup_number }}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-diagram-3 me-1"></i> Trace
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center p-4 text-muted">No pickups recorded yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,416 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Cash Pickups &amp; Till Drops — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1"><i class="bi bi-box-arrow-in-down-right me-2 text-primary"></i>Cash Pickups / Till Drops</h3>
+            <p class="text-muted small mb-0">Dual-custody cash removals from till drawers to vault &amp; bank deposits.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'report_cash_pickup_log' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-journal-text me-1"></i> Pickup Log
+            </a>
+            <a href="{% url 'report_chain_of_custody' slug=request.business.slug %}" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-link-45deg me-1"></i> Chain of Custody
+            </a>
+            <a href="{% url 'banking_record_list' slug=request.business.slug %}" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-bank me-1"></i> Cash Banking
+            </a>
+            <button type="button" class="btn btn-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#pickupModal" onclick="fetchDrawerStatus()">
+                <i class="bi bi-plus-circle me-1"></i> Record Till Drop
+            </button>
+        </div>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-primary text-white">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-white-50 small fw-semibold">Today's Pickups</div>
+                        <h4 class="fw-bold mb-0 mt-1">KES {{ metrics.total_today|floatformat:2 }}</h4>
+                        <div class="small text-white-50 mt-1">{{ metrics.count_today }} till drop(s)</div>
+                    </div>
+                    <div class="bg-white bg-opacity-25 p-3 rounded-circle">
+                        <i class="bi bi-cash-stack fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-warning text-dark">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-dark-50 small fw-bold">In Safe (Ready to Bank)</div>
+                        <h4 class="fw-bold mb-0 mt-1">KES {{ metrics.total_in_safe|floatformat:2 }}</h4>
+                        <div class="small text-dark-50 mt-1">{{ metrics.count_in_safe }} bag(s) in vault</div>
+                    </div>
+                    <div class="bg-white bg-opacity-50 p-3 rounded-circle text-dark">
+                        <i class="bi bi-safe fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-light">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold">Pending Safe Transfer</div>
+                        <h4 class="fw-bold mb-0 mt-1 text-dark">KES {{ metrics.total_confirmed_pending|floatformat:2 }}</h4>
+                        <div class="small text-muted mt-1">{{ metrics.count_confirmed_pending }} in transit</div>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                        <i class="bi bi-arrow-right-circle fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-success text-white">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-white-50 small fw-semibold">Total Banked</div>
+                        <h4 class="fw-bold mb-0 mt-1">KES {{ metrics.total_banked|floatformat:2 }}</h4>
+                        <div class="small text-white-50 mt-1">Cleared to deposit slips</div>
+                    </div>
+                    <div class="bg-white bg-opacity-25 p-3 rounded-circle">
+                        <i class="bi bi-check-circle-fill fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Toolbar -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <input type="text" name="q" class="form-control form-control-sm" placeholder="Search ref, number, cashier..." value="{{ search_query }}">
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">All Statuses</option>
+                        <option value="confirmed" {% if status_filter == 'confirmed' %}selected{% endif %}>Confirmed (In Transit)</option>
+                        <option value="in_safe" {% if status_filter == 'in_safe' %}selected{% endif %}>In Safe (Vault)</option>
+                        <option value="banked" {% if status_filter == 'banked' %}selected{% endif %}>Banked</option>
+                        <option value="disputed" {% if status_filter == 'disputed' %}selected{% endif %}>Disputed Count</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="branch" class="form-select form-select-sm">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_filter == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}" title="From Date">
+                </div>
+                <div class="col-md-2">
+                    <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}" title="To Date">
+                </div>
+                <div class="col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-filter"></i></button>
+                    <a href="{% url 'cash_pickup_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm" title="Clear"><i class="bi bi-x"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Pickups List Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="fw-bold mb-0 text-dark">Cash Pickups Ledger</h5>
+                <span class="badge bg-secondary rounded-pill">{{ page_obj.paginator.count }}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-warning btn-sm fw-semibold" onclick="submitBulkTransferSafe()">
+                    <i class="bi bi-safe me-1"></i> Transfer Selected to Safe
+                </button>
+            </div>
+        </div>
+
+        <form id="bulkSafeForm" method="POST" action="{% url 'cash_pickup_transfer_safe' slug=request.business.slug %}">
+            {% csrf_token %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4" style="width: 48px;">
+                                <input type="checkbox" class="form-check-input ms-1" id="selectAllCheckbox" onclick="toggleSelectAllPickups(this)">
+                            </th>
+                            <th>Pickup Number &amp; Time</th>
+                            <th>Bag / Ref #</th>
+                            <th>Till &amp; Branch</th>
+                            <th>Dual Custody (Cashier &bull; Supervisor)</th>
+                            <th>Reason</th>
+                            <th class="text-end">Amount (KES)</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end pe-4" style="min-width: 140px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pickups %}
+                        <tr>
+                            <td class="ps-4">
+                                {% if p.status == 'confirmed' %}
+                                <input type="checkbox" name="pickup_ids" value="{{ p.id }}" class="form-check-input pickup-check ms-1">
+                                {% else %}
+                                <input type="checkbox" class="form-check-input ms-1" disabled>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'cash_pickup_detail' slug=request.business.slug pickup_id=p.id %}" class="fw-bold font-monospace text-primary text-decoration-none">
+                                    {{ p.pickup_number }}
+                                </a>
+                                <div class="text-muted small">{{ p.pickup_time|date:"d M Y, H:i" }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border font-monospace px-2 py-1">
+                                    <i class="bi bi-tag me-1 text-muted"></i>{{ p.pickup_reference }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-dark">{{ p.terminal.name|default:"Main Register" }}</div>
+                                <div class="text-muted small">{{ p.branch.name|default:"Consolidated" }}</div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 small">
+                                        <i class="bi bi-person me-1"></i>{{ p.cashier.username }}
+                                    </span>
+                                    <i class="bi bi-arrow-right text-muted small"></i>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 small">
+                                        <i class="bi bi-shield-check me-1"></i>{{ p.supervisor.username }}
+                                    </span>
+                                </div>
+                                {% if p.witness_type == 'peer_cashier' %}
+                                <span class="badge bg-warning bg-opacity-20 text-dark small" style="font-size: 0.65rem;">Peer Witness Fallback</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="small text-muted">{{ p.get_reason_display }}</span>
+                            </td>
+                            <td class="text-end font-monospace fw-bold fs-6 text-dark">
+                                KES {{ p.amount|floatformat:2 }}
+                            </td>
+                            <td class="text-center">
+                                {% if p.status == 'confirmed' %}
+                                <span class="badge bg-primary bg-opacity-20 text-primary border border-primary border-opacity-30">Confirmed</span>
+                                {% elif p.status == 'in_safe' %}
+                                <span class="badge bg-warning text-dark border border-warning">In Safe</span>
+                                {% elif p.status == 'banked' %}
+                                <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30">Banked</span>
+                                {% elif p.status == 'disputed' %}
+                                <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-30">Disputed</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ p.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'cash_pickup_detail' slug=request.business.slug pickup_id=p.id %}" class="btn btn-outline-secondary" title="View Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'cash_pickup_slip_print' slug=request.business.slug pickup_id=p.id %}" class="btn btn-outline-secondary" target="_blank" title="Print Slip">
+                                        <i class="bi bi-printer"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="p-5 text-center bg-light">
+                                <i class="bi bi-box-arrow-in-down-right text-muted display-4 mb-3 d-block"></i>
+                                <h5 class="fw-bold">No Cash Pickups Recorded</h5>
+                                <p class="text-muted small mb-3">Record a cash pickup when drawer cash exceeds safety thresholds to maintain dual-custody audit trails.</p>
+                                <button type="button" class="btn btn-primary btn-sm px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#pickupModal" onclick="fetchDrawerStatus()">
+                                    <i class="bi bi-plus-circle me-1"></i> Record Till Drop
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white py-2 px-4 border-top d-flex justify-content-between align-items-center">
+            <small class="text-muted">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} pickups</small>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal: Record Cash Pickup -->
+<div class="modal fade" id="pickupModal" tabindex="-1" aria-labelledby="pickupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form id="pickupForm" onsubmit="submitPickupForm(event)">
+                {% csrf_token %}
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="pickupModalLabel">
+                        <i class="bi bi-box-arrow-in-down-right me-2 text-primary"></i>Record Cash Pickup (Till Drop)
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-3">
+                    <!-- Drawer Live Telemetry Box -->
+                    <div class="bg-light p-3 rounded-3 mb-3 border">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Current Drawer Cash:</span>
+                            <span class="fw-bold font-monospace fs-6" id="modalCurrentDrawerCash">KES ...</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Target Float:</span>
+                            <span class="font-monospace text-muted small" id="modalTargetFloat">KES ...</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center pt-1 border-top">
+                            <span class="text-primary small fw-semibold">Suggested Drop Amount:</span>
+                            <span class="fw-bold font-monospace text-primary fs-6" id="modalSuggestedPickup">KES ...</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Pickup Amount (KES) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light fw-bold">KES</span>
+                            <input type="number" step="0.01" name="amount" id="modalPickupAmount" class="form-control form-control-lg font-monospace fw-bold" placeholder="0.00" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Bag / Envelope Ref # *</label>
+                            <input type="text" name="pickup_reference" id="modalPickupRef" class="form-control" placeholder="e.g. BAG-99201" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Reason</label>
+                            <select name="reason" class="form-select">
+                                <option value="threshold_exceeded">Threshold Exceeded</option>
+                                <option value="scheduled">Scheduled Lift</option>
+                                <option value="end_of_shift">End of Shift</option>
+                                <option value="count_dispute">Count Dispute</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Dual Custody Authorization Box -->
+                    <div class="card border-primary border-opacity-50 rounded-3 p-3 bg-primary bg-opacity-10 mb-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-shield-lock-fill text-primary"></i>
+                            <span class="fw-bold small text-primary">Supervisor Dual-Custody Verification *</span>
+                        </div>
+                        <p class="text-muted small mb-2" style="font-size: 0.8rem;">
+                            Supervisor or manager must enter their 4-6 digit PIN or password to authorize joint count.
+                        </p>
+                        <input type="password" name="supervisor_credential" id="modalSupervisorCred" class="form-control font-monospace text-center fs-5" placeholder="Enter Supervisor PIN / Password" required autocomplete="off">
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label small text-muted">Notes / Memo (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+                    </div>
+
+                    <div id="pickupErrorAlert" class="alert alert-danger py-2 mt-3 small d-none"></div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold" id="btnSubmitPickup">
+                        <i class="bi bi-check-circle me-1"></i> Authorize &amp; Lock Pickup
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSelectAllPickups(source) {
+    const checkboxes = document.querySelectorAll('.pickup-check');
+    checkboxes.forEach(cb => cb.checked = source.checked);
+}
+
+function submitBulkTransferSafe() {
+    const selected = document.querySelectorAll('.pickup-check:checked');
+    if (selected.length === 0) {
+        alert('Please select at least one pickup to transfer to safe.');
+        return;
+    }
+    if (confirm(`Transfer ${selected.length} selected pickup(s) into the store central safe?`)) {
+        document.getElementById('bulkSafeForm').submit();
+    }
+}
+
+function fetchDrawerStatus() {
+    fetch("{% url 'cash_pickup_drawer_status' slug=request.business.slug %}")
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('modalCurrentDrawerCash').innerText = 'KES ' + Number(data.current_drawer_cash).toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('modalTargetFloat').innerText = 'KES ' + Number(data.target_float).toLocaleString(undefined, {minimumFractionDigits: 2});
+                document.getElementById('modalSuggestedPickup').innerText = 'KES ' + Number(data.suggested_pickup).toLocaleString(undefined, {minimumFractionDigits: 2});
+                if (data.suggested_pickup > 0) {
+                    document.getElementById('modalPickupAmount').value = data.suggested_pickup.toFixed(2);
+                }
+            }
+        })
+        .catch(e => console.error('Error fetching drawer status:', e));
+}
+
+function submitPickupForm(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitPickup');
+    const errAlert = document.getElementById('pickupErrorAlert');
+    btn.disabled = true;
+    errAlert.classList.add('d-none');
+
+    const form = document.getElementById('pickupForm');
+    const formData = new FormData(form);
+
+    fetch("{% url 'cash_pickup_create' slug=request.business.slug %}", {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+            window.location.reload();
+        } else {
+            errAlert.innerText = data.error || 'Failed to record pickup.';
+            errAlert.classList.remove('d-none');
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        errAlert.innerText = 'Network error or server exception.';
+        errAlert.classList.remove('d-none');
+    });
+}
+</script>
+{% endblock %}

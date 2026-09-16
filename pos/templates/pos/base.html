@@ -553,10 +553,25 @@
             {% endif %}
 
             {% if user_permissions.can_manage_suppliers or user_permissions.is_stock_manager %}
-            <li class="nav-section">Purchasing</li>
+            <li class="nav-section">Purchasing &amp; AP</li>
             <li>
-                <a href="{% url 'supplier_list' %}" class="{% if 'supplier' in request.path %}active{% endif %}">
+                <a href="{% url 'supplier_list' %}" class="{% if 'supplier' in request.path and 'purchasing/' not in request.path %}active{% endif %}">
                     <i class="bi bi-truck"></i> Suppliers
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'supplier_invoice_list' %}" class="{% if 'purchasing/invoices' in request.path %}active{% endif %}">
+                    <i class="bi bi-receipt"></i> Supplier Invoices (AP)
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'ap_payment_list' %}" class="{% if 'purchasing/payments' in request.path %}active{% endif %}">
+                    <i class="bi bi-credit-card"></i> Supplier Payments
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'supplier_credit_list' %}" class="{% if 'purchasing/credits' in request.path %}active{% endif %}">
+                    <i class="bi bi-file-earmark-diff"></i> Credits &amp; Claims
                 </a>
             </li>
             <li>
@@ -682,8 +697,8 @@
             </li>
             {% endif %}
 
-            {% if user_permissions.is_manager %}
-            <li class="nav-section">Finances</li>
+            {% if user_permissions.is_manager or user_permissions.can_view_reports %}
+            <li class="nav-section">Finances &amp; Banking</li>
             <li>
                 <a href="{% url 'expense_list' %}" class="{% if 'finances/expenses' in request.path %}active{% endif %}">
                     <i class="bi bi-wallet2"></i> Expenses
@@ -697,6 +712,54 @@
             <li>
                 <a href="{% url 'pl_statement' %}" class="{% if 'finances/pl' in request.path %}active{% endif %}">
                     <i class="bi bi-file-earmark-bar-graph"></i> P&amp;L Statement
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'cash_pickup_list' %}" class="{% if 'finances/pickups' in request.path %}active{% endif %}">
+                    <i class="bi bi-box-arrow-in-down-right"></i> Cash Pickups / Drops
+                    <span class="badge bg-primary">Till Drop</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'cash_paid_out_list' %}" class="{% if 'finances/paid-outs' in request.path %}active{% endif %}">
+                    <i class="bi bi-wallet2"></i> Till Paid-Outs
+                    <span class="badge bg-warning text-dark">Petty Exp</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'banking_record_list' %}" class="{% if 'finances/banking/records' in request.path %}active{% endif %}">
+                    <i class="bi bi-cash-coin"></i> Cash Banking
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'bank_statement_list' %}" class="{% if 'finances/banking/statements' in request.path %}active{% endif %}">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Bank Statements
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'bank_reconciliation_workspace' %}" class="{% if 'finances/banking/reconciliation' in request.path %}active{% endif %}">
+                    <i class="bi bi-check2-all"></i> Bank Reconciliation
+                    <span class="badge bg-success">Recon</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'bank_account_list' %}" class="{% if 'finances/banking/accounts' in request.path %}active{% endif %}">
+                    <i class="bi bi-bank"></i> Bank Accounts
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'report_ap_aging' %}" class="{% if 'purchasing/reports/aging' in request.path %}active{% endif %}">
+                    <i class="bi bi-hourglass-split"></i> AP Aging Schedule
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'report_outstanding_cheques' %}" class="{% if 'purchasing/reports/outstanding-cheques' in request.path %}active{% endif %}">
+                    <i class="bi bi-clock-history"></i> Payments-in-Transit
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'report_unmatched_statement_lines' %}" class="{% if 'purchasing/reports/unmatched-statements' in request.path %}active{% endif %}">
+                    <i class="bi bi-search"></i> Unmatched Bank Lines
                 </a>
             </li>
             {% endif %}

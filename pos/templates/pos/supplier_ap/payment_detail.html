@@ -1,0 +1,233 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Payment {{ payment.payment_number }} | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'ap_payment_list' %}" class="text-decoration-none">Supplier Payments</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ payment.payment_number }}</li>
+                </ol>
+            </nav>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <h3 class="fw-bold text-dark mb-0">{{ payment.payment_number }}</h3>
+                {% if payment.is_reversed %}
+                <span class="badge bg-danger text-white px-3 py-2 fs-6"><i class="bi bi-arrow-counterclockwise me-1"></i> Reversed / Void</span>
+                {% elif payment.status == 'cleared' %}
+                <span class="badge bg-success text-white px-3 py-2 fs-6"><i class="bi bi-check2-all me-1"></i> Bank Cleared</span>
+                {% elif payment.status == 'sent' %}
+                <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-clock-history me-1"></i> In Transit</span>
+                {% else %}
+                <span class="badge bg-secondary text-white px-3 py-2 fs-6">{{ payment.get_status_display }}</span>
+                {% endif %}
+            </div>
+            <p class="text-secondary small mb-0 mt-1">
+                Supplier: <strong class="text-dark">{{ payment.supplier.name }}</strong> | 
+                Disbursed: {{ payment.payment_date|date:"M d, Y" }} | 
+                Source: <span class="badge bg-light text-dark border">{{ payment.get_source_type_display }}</span>
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if not payment.is_reversed and not is_reconciled %}
+            <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#reversePaymentModal">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Reverse Payment
+            </button>
+            {% elif is_reconciled %}
+            <button class="btn btn-outline-secondary" disabled title="Cannot reverse payment that has been matched on a bank statement. Unmatch in Reconciliation Workspace first.">
+                <i class="bi bi-lock me-1"></i> Reconciled (Locked)
+            </button>
+            {% endif %}
+            <a href="{% url 'ap_payment_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Back to Payments
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-success border-4">
+                <span class="text-muted small text-uppercase fw-bold">Total Payment</span>
+                <h4 class="fw-bold text-success mb-0 mt-1">KES {{ payment.amount|floatformat:2 }}</h4>
+                <div class="text-secondary small">Total Disbursed</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-primary border-4">
+                <span class="text-muted small text-uppercase fw-bold">Allocated to Invoices</span>
+                <h4 class="fw-bold text-primary mb-0 mt-1">
+                    KES {{ payment.allocations.all|length|default:0|floatformat:2 }}
+                </h4>
+                <div class="text-secondary small">{{ allocations.count }} bill(s) settled</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-warning border-4">
+                <span class="text-muted small text-uppercase fw-bold">Unallocated Residual</span>
+                <h4 class="fw-bold text-warning mb-0 mt-1">KES {{ payment.unallocated_amount|floatformat:2 }}</h4>
+                <div class="text-secondary small">Available credit balance</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-info border-4">
+                <span class="text-muted small text-uppercase fw-bold">Funding Method</span>
+                <h5 class="fw-bold text-dark mb-0 mt-1">{{ payment.get_payment_method_type_display }}</h5>
+                <div class="text-secondary small">{{ payment.reference_number|default:"No reference" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Allocations Ledger -->
+        <div class="col-12 col-lg-8">
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-list-check me-2 text-primary"></i> Invoice Allocations
+                    </h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Invoice #</th>
+                                <th class="py-3">Invoice Date</th>
+                                <th class="py-3">Due Date</th>
+                                <th class="text-end py-3">Total Invoiced</th>
+                                <th class="text-end pe-3 py-3">Allocated Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alloc in allocations %}
+                            <tr>
+                                <td class="ps-3 fw-bold">
+                                    <a href="{% url 'supplier_invoice_detail' slug=business.slug invoice_id=alloc.invoice.id %}" class="text-primary text-decoration-none">
+                                        {{ alloc.invoice.invoice_number }}
+                                    </a>
+                                </td>
+                                <td class="text-secondary">{{ alloc.invoice.invoice_date|date:"M d, Y" }}</td>
+                                <td class="text-secondary">{{ alloc.invoice.due_date|date:"M d, Y" }}</td>
+                                <td class="text-end text-dark">KES {{ alloc.invoice.amount|floatformat:2 }}</td>
+                                <td class="text-end pe-3 fw-bold text-success">KES {{ alloc.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    This payment was recorded as unallocated advance credit without specific invoice allocation.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if payment.linked_cash_paid_out %}
+            <!-- Linked Cash Paid Out Card -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4 border-start border-warning border-4">
+                <div class="card-body">
+                    <h6 class="fw-bold text-dark mb-1"><i class="bi bi-box-arrow-right text-warning me-2"></i>Linked Register Cash Drawer Payout</h6>
+                    <p class="text-secondary small mb-2">This payment automatically generated a Cash Paid-Out on the active register session to ensure live cash drawer balance accuracy.</p>
+                    <div class="small">
+                        <strong>Payee:</strong> {{ payment.linked_cash_paid_out.payee }} | 
+                        <strong>Amount:</strong> KES {{ payment.linked_cash_paid_out.amount|floatformat:2 }} | 
+                        <strong>Category:</strong> {{ payment.linked_cash_paid_out.category.name|default:"Supplier Payment" }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Details Sidebar -->
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-info-circle me-2 text-primary"></i> Payment Audit Trail
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Supplier</span>
+                            <span class="fw-semibold text-dark">{{ payment.supplier.name }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Payment Date</span>
+                            <span class="text-dark">{{ payment.payment_date|date:"M d, Y" }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Funding Source</span>
+                            <span class="text-dark">{{ payment.get_source_type_display }}</span>
+                        </li>
+                        {% if payment.bank_account %}
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Bank Account</span>
+                            <span class="text-dark">{{ payment.bank_account.bank_name }} ({{ payment.bank_account.account_number }})</span>
+                        </li>
+                        {% endif %}
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Payment Method</span>
+                            <span class="text-dark">{{ payment.get_payment_method_type_display }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Reference #</span>
+                            <span class="text-dark">{{ payment.reference_number|default:"-" }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Created By</span>
+                            <span class="text-secondary">{{ payment.created_by.get_full_name|default:payment.created_by.username|default:"System" }}</span>
+                        </li>
+                    </ul>
+
+                    {% if payment.notes %}
+                    <div class="mt-3 pt-3 border-top">
+                        <span class="text-muted small text-uppercase fw-semibold d-block mb-1">Notes:</span>
+                        <div class="small text-dark p-2 bg-light rounded border">{{ payment.notes|linebreaksbr }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reversal Modal -->
+{% if not payment.is_reversed and not is_reconciled %}
+<div class="modal fade" id="reversePaymentModal" tabindex="-1" aria-labelledby="reversePaymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-white border-0 shadow rounded-3">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold text-danger" id="reversePaymentModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Reverse Supplier Payment
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{% url 'ap_payment_reverse' slug=business.slug payment_id=payment.id %}" method="post">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <p class="text-dark">Are you sure you want to reverse payment <strong>{{ payment.payment_number }}</strong> of <strong>KES {{ payment.amount|floatformat:2 }}</strong>?</p>
+                    <div class="alert alert-warning border-0 small rounded-2">
+                        Reversing this payment will reopen all allocated supplier invoices and void any linked register cash drawer paid-out transaction.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Reason for Reversal <span class="text-danger">*</span></label>
+                        <input type="text" name="reversal_reason" class="form-control" placeholder="e.g. Bounced cheque, incorrect amount, double entry" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger fw-bold"><i class="bi bi-arrow-counterclockwise me-1"></i> Confirm Reversal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

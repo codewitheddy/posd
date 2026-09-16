@@ -1,0 +1,155 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Z-Report Till Variance Analysis — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a href="{% url 'cash_pickup_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Pickups
+                </a>
+                <h3 class="fw-bold mb-0"><i class="bi bi-calculator me-2 text-danger"></i>Z-Report Till Variance Report</h3>
+            </div>
+            <p class="text-muted small mb-0">Analyzes register closing cash declarations vs expected drawer cash after factoring in all cash pickups / drops.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Report
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Summary Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-dark text-white">
+                <div class="text-white-50 small fw-semibold">Expected In Drawers</div>
+                <h4 class="fw-bold mb-0 mt-1">KES {{ total_expected|floatformat:2 }}</h4>
+                <div class="small text-white-50 mt-1">Float + Sales − Pickups</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-primary text-white">
+                <div class="text-white-50 small fw-semibold">Actual Counted At Close</div>
+                <h4 class="fw-bold mb-0 mt-1">KES {{ total_counted|floatformat:2 }}</h4>
+                <div class="small text-white-50 mt-1">Physical count declared</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 {% if net_variance < 0 %}bg-danger text-white{% elif net_variance > 0 %}bg-warning text-dark{% else %}bg-success text-white{% endif %}">
+                <div class="{% if net_variance == 0 %}text-white-50{% else %}opacity-75{% endif %} small fw-semibold">Net Closing Variance</div>
+                <h4 class="fw-bold mb-0 mt-1">
+                    {% if net_variance > 0 %}+{% endif %}KES {{ net_variance|floatformat:2 }}
+                </h4>
+                <div class="small {% if net_variance == 0 %}text-white-50{% else %}opacity-75{% endif %} mt-1">
+                    {% if net_variance == 0 %}All Drawers Balanced{% elif net_variance < 0 %}Shortfall Identified{% else %}Overage Identified{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-light">
+                <div class="text-muted small fw-semibold">Flagged Sessions</div>
+                <h4 class="fw-bold mb-0 mt-1 {% if discrepant_sessions > 0 %}text-danger{% else %}text-success{% endif %}">
+                    {{ discrepant_sessions }} Session(s)
+                </h4>
+                <div class="small text-muted mt-1">With closing variance</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <select name="branch" class="form-select form-select-sm">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}" title="From Date">
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}" title="To Date">
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-filter me-1"></i>Filter</button>
+                    <a href="{% url 'report_zreport_variance' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Variance Analysis Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Session &amp; Date</th>
+                        <th>Register &amp; Branch</th>
+                        <th>Cashier</th>
+                        <th class="text-end">Opening Float</th>
+                        <th class="text-end">Cash Sales</th>
+                        <th class="text-end">Pickups Deducted</th>
+                        <th class="text-end">Expected In Drawer</th>
+                        <th class="text-end">Counted At Close</th>
+                        <th class="text-end pe-4">Variance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in analysis %}
+                    <tr class="{% if item.is_short %}table-danger bg-opacity-25{% elif item.is_over %}table-warning bg-opacity-25{% endif %}">
+                        <td class="ps-4">
+                            <span class="fw-bold font-monospace text-primary">Session #{{ item.session_number }}</span>
+                            <div class="text-muted small">{{ item.date|date:"d M Y" }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-semibold">{{ item.terminal }}</div>
+                            <small class="text-muted">{{ item.branch }}</small>
+                        </td>
+                        <td>{{ item.cashier }}</td>
+                        <td class="text-end font-monospace">KES {{ item.opening_float|floatformat:2 }}</td>
+                        <td class="text-end font-monospace text-success">+ KES {{ item.cash_sales|floatformat:2 }}</td>
+                        <td class="text-end font-monospace text-danger">
+                            - KES {{ item.pickups_total|floatformat:2 }}
+                            <div class="small text-muted" style="font-size: 0.75rem;">({{ item.pickups_count }} drop{{ item.pickups_count|pluralize }})</div>
+                        </td>
+                        <td class="text-end font-monospace fw-bold">KES {{ item.expected_drawer|floatformat:2 }}</td>
+                        <td class="text-end font-monospace fw-bold text-dark">KES {{ item.counted_closing|floatformat:2 }}</td>
+                        <td class="text-end pe-4 font-monospace fw-bold">
+                            {% if item.is_balanced %}
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
+                                <i class="bi bi-check-circle me-1"></i>BALANCED
+                            </span>
+                            {% elif item.is_short %}
+                            <span class="badge bg-danger text-white px-2 py-1">
+                                <i class="bi bi-dash-circle me-1"></i>SHORT KES {{ item.variance|floatformat:2 }}
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark px-2 py-1">
+                                <i class="bi bi-plus-circle me-1"></i>OVER +KES {{ item.variance|floatformat:2 }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="p-5 text-center text-muted">
+                            No closed POS sessions found in the selected period.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

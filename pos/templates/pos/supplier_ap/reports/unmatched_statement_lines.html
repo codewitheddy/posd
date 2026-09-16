@@ -1,0 +1,185 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Unmatched Bank Statement Lines Audit | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_invoice_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Unmatched Bank Lines Audit</li>
+                </ol>
+            </nav>
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="bi bi-bank text-primary me-2"></i>Unmatched Bank Statement Lines Audit
+            </h3>
+            <p class="text-secondary small mb-0">
+                Two-way audit breakdown of imported bank debits (supplier payments) and credits (POS cash deposits / supplier refunds) pending reconciliation.
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'bank_reconciliation_workspace' slug=business.slug %}" class="btn btn-primary">
+                <i class="bi bi-check2-all me-1"></i> Open Reconciliation Workspace
+            </a>
+            <button class="btn btn-outline-secondary" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Audit
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4 bg-white d-print-none">
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-12 col-md-4">
+                    <label class="form-label text-dark small text-uppercase fw-semibold mb-1">Filter by Bank Account</label>
+                    <select name="bank_account_id" class="form-select form-select-sm">
+                        <option value="">All Bank Accounts</option>
+                        {% for b in bank_accounts %}
+                        <option value="{{ b.id }}" {% if selected_bank_account_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.bank_name }} - {{ b.account_name }} ({{ b.account_number }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label text-dark small text-uppercase fw-semibold mb-1">From Date</label>
+                    <input type="date" name="start_date" value="{{ start_date }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label text-dark small text-uppercase fw-semibold mb-1">To Date</label>
+                    <input type="date" name="end_date" value="{{ end_date }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-12 col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-filter me-1"></i> Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-6">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-danger border-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small text-uppercase fw-bold">Unmatched Outflows (Bank Debits)</span>
+                        <h4 class="fw-bold text-danger mb-0 mt-1">KES {{ report.total_debits|floatformat:2 }}</h4>
+                        <div class="text-secondary small">Supplier payments / charges on bank statement not in POS ledger</div>
+                    </div>
+                    <span class="badge bg-danger text-white px-3 py-2 fs-6">{{ report.count_debits }} debit line(s)</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-success border-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small text-uppercase fw-bold">Unmatched Inflows (Bank Credits)</span>
+                        <h4 class="fw-bold text-success mb-0 mt-1">KES {{ report.total_credits|floatformat:2 }}</h4>
+                        <div class="text-secondary small">Deposits / supplier refunds on bank statement not in POS ledger</div>
+                    </div>
+                    <span class="badge bg-success text-white px-3 py-2 fs-6">{{ report.count_credits }} credit line(s)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabbed Tables -->
+    <div class="card border-0 shadow-sm rounded-3 bg-white">
+        <div class="card-header bg-white border-bottom p-0">
+            <ul class="nav nav-tabs card-header-tabs mx-3 mt-2" id="unmatchedTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active fw-semibold text-danger" id="debits-tab" data-bs-toggle="tab" data-bs-target="#debits-pane" type="button" role="tab">
+                        <i class="bi bi-arrow-up-right-circle me-1"></i> Unmatched Debits ({{ report.count_debits }})
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link fw-semibold text-success" id="credits-tab" data-bs-toggle="tab" data-bs-target="#credits-pane" type="button" role="tab">
+                        <i class="bi bi-arrow-down-left-circle me-1"></i> Unmatched Credits ({{ report.count_credits }})
+                    </button>
+                </li>
+            </ul>
+        </div>
+        <div class="tab-content" id="unmatchedTabContent">
+            <!-- Debits Pane -->
+            <div class="tab-pane fade show active" id="debits-pane" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Post Date</th>
+                                <th class="py-3">Bank Account</th>
+                                <th class="py-3">Bank Description / Narration</th>
+                                <th class="py-3">Bank Reference</th>
+                                <th class="text-end pe-3 py-3">Debit Amount (Outflow)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in report.unmatched_debits %}
+                            <tr>
+                                <td class="ps-3 text-secondary">{{ line.post_date|date:"M d, Y" }}</td>
+                                <td>
+                                    <div class="fw-semibold text-dark">{{ line.import_batch.bank_account.bank_name }}</div>
+                                    <small class="text-muted">{{ line.import_batch.bank_account.account_number }}</small>
+                                </td>
+                                <td class="text-dark">{{ line.description }}</td>
+                                <td class="text-secondary">{{ line.reference|default:"-" }}</td>
+                                <td class="text-end pe-3 fw-bold text-danger fs-6">KES {{ line.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-check2-all display-4 text-success opacity-50 d-block mb-2"></i>
+                                    All bank statement debit entries are reconciled.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Credits Pane -->
+            <div class="tab-pane fade" id="credits-pane" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Post Date</th>
+                                <th class="py-3">Bank Account</th>
+                                <th class="py-3">Bank Description / Narration</th>
+                                <th class="py-3">Bank Reference</th>
+                                <th class="text-end pe-3 py-3">Credit Amount (Inflow)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in report.unmatched_credits %}
+                            <tr>
+                                <td class="ps-3 text-secondary">{{ line.post_date|date:"M d, Y" }}</td>
+                                <td>
+                                    <div class="fw-semibold text-dark">{{ line.import_batch.bank_account.bank_name }}</div>
+                                    <small class="text-muted">{{ line.import_batch.bank_account.account_number }}</small>
+                                </td>
+                                <td class="text-dark">{{ line.description }}</td>
+                                <td class="text-secondary">{{ line.reference|default:"-" }}</td>
+                                <td class="text-end pe-3 fw-bold text-success fs-6">KES {{ line.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-check2-all display-4 text-success opacity-50 d-block mb-2"></i>
+                                    All bank statement credit entries are reconciled.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

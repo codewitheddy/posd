@@ -1,0 +1,229 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Aging of Unmatched Deposits — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Aging of Unmatched Deposits</h3>
+            <p class="text-muted small mb-0">Track deposits banked but not yet credited on official bank statements by clearing age.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Aging Report
+            </button>
+            <a href="{% url 'bank_reconciliation_workspace' slug=request.business.slug %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-check2-all me-1"></i> Reconcile Now
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-dark text-white">
+                <div class="text-white-50 small fw-semibold text-uppercase">Total In-Transit Deposits</div>
+                <h3 class="fw-bold mb-0 mt-1">KES {{ total_unmatched_amount|default:0|floatformat:2 }}</h3>
+                <small class="text-white-50">{{ total_unmatched_count }} deposit slips awaiting clearing</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-light">
+                <div class="text-muted small fw-semibold text-uppercase">0 &ndash; 3 Days (Normal)</div>
+                <h4 class="fw-bold mb-0 mt-1 text-success">{{ aging_buckets.0_to_3|length }} slips</h4>
+                <small class="text-muted">Standard processing window</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-light">
+                <div class="text-muted small fw-semibold text-uppercase">4 &ndash; 7 Days (Delayed)</div>
+                <h4 class="fw-bold mb-0 mt-1 text-warning">{{ aging_buckets.4_to_7|length }} slips</h4>
+                <small class="text-muted">Potential bank delay / weekend</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 {% if aging_buckets.15_plus|length > 0 %}bg-danger text-white{% else %}bg-light text-dark{% endif %}">
+                <div class="{% if aging_buckets.15_plus|length > 0 %}text-white-50{% else %}text-muted{% endif %} small fw-semibold text-uppercase">15+ Days (Critical)</div>
+                <h4 class="fw-bold mb-0 mt-1">{{ aging_buckets.15_plus|length }} slips</h4>
+                <small class="{% if aging_buckets.15_plus|length > 0 %}text-white-50{% else %}text-muted{% endif %}">Requires immediate bank investigation</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aging Breakdown Sections -->
+    {% for bucket_key, bucket_title, badge_class in aging_buckets_info %}
+    {% endfor %}
+
+    <!-- 15+ Days -->
+    {% if aging_buckets.15_plus %}
+    <div class="card border-danger border-2 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-danger text-white py-3 px-4 d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0"><i class="bi bi-exclamation-octagon-fill me-2"></i>Critical Age: Over 15 Days Without Bank Credit ({{ aging_buckets.15_plus|length }} slips)</h6>
+            <span class="badge bg-white text-danger fw-bold">Urgent Follow-Up</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th class="ps-4">Record Ref</th>
+                        <th>Deposit Date</th>
+                        <th>Age</th>
+                        <th>Bank &amp; Account</th>
+                        <th>Slip Reference</th>
+                        <th>Deposited By</th>
+                        <th class="text-end pe-4">Amount (KES)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in aging_buckets.15_plus %}
+                    <tr>
+                        <td class="ps-4 font-monospace fw-bold">
+                            <a href="{% url 'banking_record_detail' slug=request.business.slug pk=item.record.pk %}" class="text-danger">
+                                {{ item.record.record_number }}
+                            </a>
+                        </td>
+                        <td>{{ item.record.deposit_date|date:"d M Y" }}</td>
+                        <td><span class="badge bg-danger">{{ item.age_days }} days</span></td>
+                        <td>{{ item.record.bank_account.bank_name }}</td>
+                        <td class="font-monospace">{{ item.record.deposit_reference }}</td>
+                        <td>{{ item.record.deposited_by.get_full_name|default:item.record.deposited_by.username }}</td>
+                        <td class="text-end pe-4 fw-bold text-danger fs-6">KES {{ item.record.deposited_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 8 to 14 Days -->
+    {% if aging_buckets.8_to_14 %}
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-warning bg-opacity-10 text-dark py-3 px-4 d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>8 &ndash; 14 Days Age ({{ aging_buckets.8_to_14|length }} slips)</h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th class="ps-4">Record Ref</th>
+                        <th>Deposit Date</th>
+                        <th>Age</th>
+                        <th>Bank &amp; Account</th>
+                        <th>Slip Reference</th>
+                        <th>Deposited By</th>
+                        <th class="text-end pe-4">Amount (KES)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in aging_buckets.8_to_14 %}
+                    <tr>
+                        <td class="ps-4 font-monospace fw-bold">
+                            <a href="{% url 'banking_record_detail' slug=request.business.slug pk=item.record.pk %}">
+                                {{ item.record.record_number }}
+                            </a>
+                        </td>
+                        <td>{{ item.record.deposit_date|date:"d M Y" }}</td>
+                        <td><span class="badge bg-warning text-dark">{{ item.age_days }} days</span></td>
+                        <td>{{ item.record.bank_account.bank_name }}</td>
+                        <td class="font-monospace">{{ item.record.deposit_reference }}</td>
+                        <td>{{ item.record.deposited_by.get_full_name|default:item.record.deposited_by.username }}</td>
+                        <td class="text-end pe-4 fw-bold text-dark fs-6">KES {{ item.record.deposited_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 4 to 7 Days -->
+    {% if aging_buckets.4_to_7 %}
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-light py-3 px-4">
+            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-clock me-2 text-secondary"></i>4 &ndash; 7 Days Age ({{ aging_buckets.4_to_7|length }} slips)</h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th class="ps-4">Record Ref</th>
+                        <th>Deposit Date</th>
+                        <th>Age</th>
+                        <th>Bank &amp; Account</th>
+                        <th>Slip Reference</th>
+                        <th class="text-end pe-4">Amount (KES)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in aging_buckets.4_to_7 %}
+                    <tr>
+                        <td class="ps-4 font-monospace fw-bold">
+                            <a href="{% url 'banking_record_detail' slug=request.business.slug pk=item.record.pk %}">
+                                {{ item.record.record_number }}
+                            </a>
+                        </td>
+                        <td>{{ item.record.deposit_date|date:"d M Y" }}</td>
+                        <td><span class="badge bg-secondary">{{ item.age_days }} days</span></td>
+                        <td>{{ item.record.bank_account.bank_name }}</td>
+                        <td class="font-monospace">{{ item.record.deposit_reference }}</td>
+                        <td class="text-end pe-4 fw-semibold">KES {{ item.record.deposited_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 0 to 3 Days -->
+    {% if aging_buckets.0_to_3 %}
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-header bg-light py-3 px-4">
+            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-check-circle me-2 text-success"></i>0 &ndash; 3 Days Age (Normal Clearing Window &bull; {{ aging_buckets.0_to_3|length }} slips)</h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th class="ps-4">Record Ref</th>
+                        <th>Deposit Date</th>
+                        <th>Age</th>
+                        <th>Bank &amp; Account</th>
+                        <th>Slip Reference</th>
+                        <th class="text-end pe-4">Amount (KES)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in aging_buckets.0_to_3 %}
+                    <tr>
+                        <td class="ps-4 font-monospace fw-bold">
+                            <a href="{% url 'banking_record_detail' slug=request.business.slug pk=item.record.pk %}">
+                                {{ item.record.record_number }}
+                            </a>
+                        </td>
+                        <td>{{ item.record.deposit_date|date:"d M Y" }}</td>
+                        <td><span class="badge bg-success bg-opacity-10 text-success">{{ item.age_days }} days</span></td>
+                        <td>{{ item.record.bank_account.bank_name }}</td>
+                        <td class="font-monospace">{{ item.record.deposit_reference }}</td>
+                        <td class="text-end pe-4 fw-semibold text-success">KES {{ item.record.deposited_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not total_unmatched_count %}
+    <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-light">
+        <i class="bi bi-check2-all text-success display-4 mb-3"></i>
+        <h5 class="fw-bold text-success">All Deposits Fully Cleared &amp; Reconciled</h5>
+        <p class="text-muted small mb-0">There are no outstanding in-transit physical deposits in the system.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

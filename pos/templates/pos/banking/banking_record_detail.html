@@ -1,0 +1,203 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Banking Record {{ record.record_number }} — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 1000px;">
+    <!-- Top Action Bar -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{% url 'banking_record_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h3 class="fw-bold mb-0 font-monospace">{{ record.record_number }}</h3>
+                {% if record.status == 'matched' %}
+                <span class="badge bg-success bg-opacity-20 text-success border border-success px-2 py-1"><i class="bi bi-check2-circle me-1"></i>Reconciled</span>
+                {% elif record.status == 'discrepancy' %}
+                <span class="badge bg-danger bg-opacity-20 text-danger border border-danger px-2 py-1"><i class="bi bi-exclamation-triangle me-1"></i>Discrepancy</span>
+                {% else %}
+                <span class="badge bg-warning bg-opacity-20 text-warning border border-warning px-2 py-1 text-dark"><i class="bi bi-clock me-1"></i>Awaiting Statement Match</span>
+                {% endif %}
+            </div>
+            <p class="text-muted small mb-0 mt-1">Bank deposit recorded on {{ record.created_at|date:"d M Y, H:i" }} by {{ record.deposited_by.get_full_name|default:record.deposited_by.username }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Print Voucher
+            </button>
+            <a href="{% url 'bank_reconciliation_workspace' slug=request.business.slug %}?bank_account={{ record.bank_account.id }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-check2-all me-1"></i> Reconciliation Workspace
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-dark text-white p-4">
+            <div class="row align-items-center g-3">
+                <div class="col-md-6">
+                    <span class="text-white-50 small text-uppercase fw-semibold">Destination Bank</span>
+                    <h4 class="fw-bold mb-0 text-white">{{ record.bank_account.bank_name }}</h4>
+                    <div class="text-white-50 small">{{ record.bank_account.account_name }} &bull; <span class="font-monospace text-white">{{ record.bank_account.account_number }}</span></div>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <span class="text-white-50 small text-uppercase fw-semibold">Actual Banked Amount</span>
+                    <h2 class="fw-bold mb-0 text-success">KES {{ record.deposited_amount|floatformat:2 }}</h2>
+                    <div class="text-white-50 small">Deposit Slip Reference: <strong class="text-white font-monospace">{{ record.deposit_reference }}</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <h6 class="fw-bold text-muted small text-uppercase mb-3">Deposit Breakdown</h6>
+                    <table class="table table-sm border-0 mb-0">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted ps-0">Deposit Date:</td>
+                                <td class="fw-semibold text-end">{{ record.deposit_date|date:"d M Y" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted ps-0">Collection Period:</td>
+                                <td class="fw-semibold text-end">{{ record.period_start|date:"d M Y" }} &ndash; {{ record.period_end|date:"d M Y" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted ps-0">Branch / Location:</td>
+                                <td class="fw-semibold text-end">{{ record.branch.name|default:"Central / All Branches" }}</td>
+                            </tr>
+                            {% if record.terminal %}
+                            <tr>
+                                <td class="text-muted ps-0">Register / Till:</td>
+                                <td class="fw-semibold text-end font-monospace">{{ record.terminal.name }} ({{ record.terminal.terminal_code }})</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td class="text-muted ps-0">Tender Type:</td>
+                                <td class="fw-semibold text-end">{{ record.get_payment_type_display }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted ps-0">System Expected Cash:</td>
+                                <td class="fw-semibold text-end">KES {{ record.expected_amount|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td class="fw-bold ps-0">Calculated Variance:</td>
+                                <td class="text-end fw-bold">
+                                    {% if record.variance_amount == 0 %}
+                                    <span class="text-success">KES 0.00 (Balanced)</span>
+                                    {% elif record.variance_amount < 0 %}
+                                    <span class="text-danger">Short by KES {{ record.variance_amount|floatformat:2 }}</span>
+                                    {% else %}
+                                    <span class="text-warning text-dark">Over by +KES {{ record.variance_amount|floatformat:2 }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    {% if record.variance_reason %}
+                    <div class="alert alert-warning py-2 mt-3 mb-0" style="font-size: 0.85rem;">
+                        <strong><i class="bi bi-info-circle me-1"></i> Variance Justification:</strong>
+                        <p class="mb-0 mt-1">{{ record.variance_reason }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if record.notes %}
+                    <div class="mt-3">
+                        <small class="text-muted fw-bold">Notes:</small>
+                        <p class="small text-muted mb-0">{{ record.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Slip Image Preview -->
+                <div class="col-md-6">
+                    <h6 class="fw-bold text-muted small text-uppercase mb-3">Stamped Deposit Slip</h6>
+                    {% if record.slip_image %}
+                    <div class="card border rounded-3 p-2 text-center bg-light">
+                        <a href="{{ record.slip_image.url }}" target="_blank">
+                            <img src="{{ record.slip_image.url }}" alt="Deposit Slip Photo" class="img-fluid rounded shadow-sm" style="max-height: 260px; object-fit: contain;">
+                        </a>
+                        <div class="mt-2 small text-muted">
+                            <i class="bi bi-zoom-in me-1"></i> Click to open full-resolution slip in new tab
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="card border-dashed rounded-3 p-4 text-center bg-light text-muted">
+                        <i class="bi bi-image display-6 d-block mb-2 text-muted opacity-50"></i>
+                        <p class="small mb-0">No slip photo attached to this deposit record.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if reconciliation_matches %}
+        <div class="card-footer bg-light p-4 border-top">
+            <h6 class="fw-bold text-muted small text-uppercase mb-3">
+                <i class="bi bi-link-45deg me-1 text-success"></i> Linked Bank Reconciliation
+            </h6>
+            {% for match in reconciliation_matches %}
+            <div class="card border-0 shadow-sm rounded-3 p-3 mb-2 bg-white">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="badge bg-success bg-opacity-10 text-success fw-bold font-monospace">{{ match.match_number }}</span>
+                        <span class="small fw-semibold ms-2">{{ match.get_match_type_display }}</span>
+                        <span class="small text-muted ms-2">&bull; Reconciled by {{ match.matched_by.username }} on {{ match.matched_at|date:"d M Y, H:i" }}</span>
+                    </div>
+                    <div class="fw-bold text-success">
+                        Statement Amount: KES {{ match.total_statement_amount|floatformat:2 }}
+                    </div>
+                </div>
+                {% if match.statement_lines.all %}
+                <div class="mt-2 pt-2 border-top small text-muted">
+                    <strong>Matched Statement Lines:</strong>
+                    <ul class="mb-0 ps-3 mt-1">
+                        {% for line in match.statement_lines.all %}
+                        <li>{{ line.transaction_date|date:"d M Y" }} &ndash; KES {{ line.amount|floatformat:2 }}: <em>{{ line.description }}</em> (Ref: {{ line.reference }})</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Audit Log -->
+    <div class="card border-0 shadow-sm rounded-4 p-4">
+        <h6 class="fw-bold text-muted small text-uppercase mb-3">
+            <i class="bi bi-clock-history me-1 text-primary"></i> Activity &amp; Audit Trail
+        </h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                <thead>
+                    <tr class="text-muted">
+                        <th>Timestamp</th>
+                        <th>Action</th>
+                        <th>User</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in audit_logs %}
+                    <tr>
+                        <td class="text-muted">{{ log.timestamp|date:"d M Y, H:i" }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ log.get_action_display }}</span></td>
+                        <td class="fw-semibold">{{ log.performed_by.username|default:"System" }}</td>
+                        <td class="text-muted font-monospace small">{{ log.details }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-muted text-center py-2">No activity recorded.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -276,7 +276,7 @@ class ZReportService:
             action='created',
             performed_by=user,
             ip_address=ip_address,
-            user_agent=user_agent,
+            user_agent=user_agent or '',
             details={
                 'closing_cash': str(closing_cash),
                 'session_number': session.session_number,
@@ -340,13 +340,61 @@ class ZReportService:
                 'amount': float(pm['total_amount'] or 0)
             })
         
-        # Cash management
+        # Cash management & Till Drops / Cash Pickups
         cash_payments = payments.filter(
             Q(payment_method__name__iexact='CASH') | Q(payment_method__code__iexact='CASH')
         ).aggregate(total=Sum('amount'))
         
         cash_sales = cash_payments['total'] or Decimal('0.00')
-        expected_cash = session.opening_cash + cash_sales
+
+        # Query all confirmed cash pickups for this session
+        from pos.models import CashPickup, CashPaidOut
+        pickups_qs = CashPickup.objects.filter(
+            session=session,
+            status__in=['confirmed', 'in_safe', 'banked']
+        ).select_related('cashier', 'supervisor')
+
+        total_pickups = pickups_qs.aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
+        pickups_list = []
+        for p in pickups_qs.order_by('pickup_time'):
+            pickups_list.append({
+                'pickup_number': p.pickup_number,
+                'time': p.pickup_time.isoformat(),
+                'amount': float(p.amount),
+                'reference': p.pickup_reference,
+                'cashier': p.cashier.username,
+                'supervisor': p.supervisor.username,
+                'witness_type': p.get_witness_type_display(),
+                'reason': p.get_reason_display(),
+                'status': p.status,
+            })
+
+        # Query all active cash paid-outs (till expenses) for this session
+        paid_outs_qs = CashPaidOut.objects.filter(
+            session=session,
+            is_petty_cash_fund=False,
+            status__in=['paid_pending_receipt', 'confirmed', 'written_off']
+        ).select_related('category', 'requested_by', 'authorized_by')
+
+        total_paid_outs = paid_outs_qs.aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
+        pending_receipts_count = paid_outs_qs.filter(status='paid_pending_receipt').count()
+        paid_outs_list = []
+        for po in paid_outs_qs.order_by('paid_out_time'):
+            paid_outs_list.append({
+                'paid_out_number': po.paid_out_number,
+                'time': po.paid_out_time.isoformat(),
+                'amount': float(po.amount),
+                'category': po.category.name,
+                'payee': po.payee,
+                'description': po.description,
+                'receipt_reference': po.receipt_reference,
+                'status': po.status,
+                'has_receipt_exception': po.has_receipt_exception,
+                'requested_by': po.requested_by.username,
+                'authorized_by': po.authorized_by.username,
+            })
+
+        expected_cash = session.opening_cash + cash_sales - total_pickups - total_paid_outs - total_refunds
         cash_difference = closing_cash - expected_cash
         
         # Calculate difference percentage
@@ -370,7 +418,6 @@ class ZReportService:
             transaction_metrics = {
                 'first_transaction': None,
                 'last_transaction': None,
-                'average_value': Decimal('0.00'),
                 'largest_transaction': Decimal('0.00'),
                 'smallest_transaction': Decimal('0.00'),
             }
@@ -390,38 +437,34 @@ class ZReportService:
                 'tax_amount': float(rate['tax_amount'] or 0)
             })
         
-        # Top products
-        from .models import SaleItem
-        top_products_data = SaleItem.objects.filter(
+        # Top selling products
+        from pos.models import SaleItem
+        top_items = SaleItem.objects.filter(
             sale__in=sales
-        ).values('product__name').annotate(
+        ).values(
+            'product__id', 'product__name', 'product__product_code'
+        ).annotate(
             quantity=Sum('quantity'),
             revenue=Sum('total_price')
         ).order_by('-revenue')[:10]
         
         top_products = [
             {
-                'name': item['product__name'],
-                'quantity': float(item['quantity'] or 0),
-                'revenue': float(item['revenue'] or 0)
+                'product_id': item['product__id'],
+                'product_name': item['product__name'],
+                'sku': item['product__product_code'],
+                'quantity_sold': float(item['quantity']),
+                'total_revenue': float(item['revenue'])
             }
-            for item in top_products_data
+            for item in top_items
         ]
         
-        # Transaction IDs
-        transaction_ids = list(sales.values_list('id', flat=True))
+        # List of transaction IDs for verification
+        transaction_ids = list(sales.values_list('invoice_number', flat=True))
         
-        # Build complete report data
+        # Build complete snapshot dictionary
         report_data = {
-            'session': {
-                'session_number': session.session_number,
-                'opened_at': session.opened_at.isoformat(),
-                'closed_at': timezone.now().isoformat(),
-                'opened_by': session.opened_by.get_full_name() or session.opened_by.username,
-                'closed_by': user.get_full_name() or user.username,
-            },
-            'sales_summary': {
-                'total_transactions': total_transactions,
+            'summary': {
                 'gross_sales': float(gross_sales),
                 'net_sales': float(net_sales),
                 'total_tax': float(total_tax),
@@ -434,11 +477,17 @@ class ZReportService:
             'cash_management': {
                 'opening_float': float(session.opening_cash),
                 'cash_sales': float(cash_sales),
+                'total_cash_pickups': float(total_pickups),
+                'total_cash_paid_outs': float(total_paid_outs),
+                'pending_receipts_count': pending_receipts_count,
+                'total_refunds': float(total_refunds),
                 'expected_cash': float(expected_cash),
                 'actual_cash_counted': float(closing_cash),
                 'difference': float(cash_difference),
                 'difference_percentage': round(difference_percentage, 2),
             },
+            'cash_pickups': pickups_list,
+            'cash_paid_outs': paid_outs_list,
             'transaction_metrics': {
                 'first_transaction': transaction_metrics['first_transaction'].isoformat() if transaction_metrics['first_transaction'] else None,
                 'last_transaction': transaction_metrics['last_transaction'].isoformat() if transaction_metrics['last_transaction'] else None,
@@ -522,7 +571,7 @@ class ZReportService:
             action=action,
             performed_by=user,
             ip_address=ip_address,
-            user_agent=user_agent,
+            user_agent=user_agent or '',
             details={
                 'computed_hash': computed_hash,
                 'stored_hash': zreport.data_hash,
@@ -586,7 +635,7 @@ class ZReportService:
             action='voided',
             performed_by=user,
             ip_address=ip_address,
-            user_agent=user_agent,
+            user_agent=user_agent or '',
             details={
                 'reason': reason,
                 'voided_at': now.isoformat(),
@@ -619,7 +668,7 @@ class ZReportService:
             action=action,
             performed_by=user,
             ip_address=ip_address,
-            user_agent=user_agent,
+            user_agent=user_agent or '',
             details=details or {}
         )
     

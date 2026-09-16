@@ -1,0 +1,371 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Paid-Out {{ paid_out.paid_out_number }} | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 text-muted">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Finances</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'cash_paid_out_list' %}">Cash Paid-Outs</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ paid_out.paid_out_number }}</li>
+                </ol>
+            </nav>
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="h3 fw-bold mb-0 text-white">{{ paid_out.paid_out_number }}</h2>
+                {% if paid_out.status == 'confirmed' %}
+                    {% if paid_out.has_receipt_exception %}
+                    <span class="badge bg-info-subtle text-info border border-info fs-6"><i class="bi bi-file-earmark-check"></i> Exception Signed</span>
+                    {% else %}
+                    <span class="badge bg-success-subtle text-success border border-success fs-6"><i class="bi bi-check-circle"></i> Confirmed</span>
+                    {% endif %}
+                {% elif paid_out.status == 'paid_pending_receipt' %}
+                    {% if is_overdue %}
+                    <span class="badge bg-danger fs-6"><i class="bi bi-clock-history"></i> Overdue Receipt</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split"></i> Pending Receipt</span>
+                    {% endif %}
+                {% elif paid_out.status == 'reversed' %}
+                <span class="badge bg-secondary fs-6"><i class="bi bi-arrow-counterclockwise"></i> Reversed</span>
+                {% elif paid_out.status == 'written_off' %}
+                <span class="badge bg-danger-subtle text-danger border border-danger fs-6"><i class="bi bi-x-circle"></i> Written Off</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'cash_paid_out_slip_print' paid_out_id=paid_out.id %}" target="_blank" class="btn btn-outline-secondary">
+                <i class="bi bi-printer me-1"></i> Print 80mm Voucher
+            </a>
+            {% if paid_out.status == 'paid_pending_receipt' %}
+                {% if can_manage_receipts %}
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#attachReceiptModal">
+                    <i class="bi bi-paperclip me-1"></i> Attach Receipt
+                </button>
+                {% endif %}
+                {% if can_authorize %}
+                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#signExceptionModal">
+                    <i class="bi bi-file-earmark-text me-1"></i> Sign Informal Exception
+                </button>
+                {% endif %}
+            {% endif %}
+            {% if paid_out.status != 'reversed' and can_authorize %}
+            <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#reversePaidOutModal">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Reverse Payout
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Alert for Overdue Receipt -->
+    {% if is_overdue %}
+    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+        <div>
+            <div class="fw-bold">Vendor Receipt is Past Due!</div>
+            <div class="small">This payout was disbursed on {{ paid_out.paid_out_time|date:"M d, Y H:i" }} with a receipt due deadline of {{ paid_out.receipt_due_by|date:"M d, Y H:i" }}. Please collect the receipt from {{ paid_out.requested_by.username }} or document a manager exception note.</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Content Grid -->
+    <div class="row g-4">
+        <!-- Left Column: Details & Stepper -->
+        <div class="col-12 col-lg-8">
+            <!-- Payout Details Card -->
+            <div class="card bg-dark border-secondary mb-4 shadow-sm">
+                <div class="card-header bg-dark border-secondary py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-white"><i class="bi bi-info-circle text-info me-2"></i> Disbursement Details</h5>
+                    <span class="fs-4 fw-bold {% if paid_out.status == 'reversed' %}text-decoration-line-through text-muted{% else %}text-warning{% endif %}">
+                        {{ paid_out.currency }} {{ paid_out.amount|floatformat:2 }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted small d-block">Expense Category</span>
+                            <span class="badge bg-secondary-subtle text-light border border-secondary fs-6">{{ paid_out.category.name }}</span>
+                            {% if paid_out.category.chart_of_accounts_code %}
+                            <span class="text-muted small d-block mt-1">GL Code: {{ paid_out.category.chart_of_accounts_code }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted small d-block">Payee (Recipient)</span>
+                            <span class="fw-semibold text-white fs-6">{{ paid_out.payee }}</span>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted small d-block">Fund Origin</span>
+                            <span class="text-white">
+                                {% if paid_out.is_petty_cash_fund %}
+                                <i class="bi bi-safe text-info me-1"></i> Standalone Petty Cash Float
+                                {% else %}
+                                <i class="bi bi-cash-stack text-success me-1"></i> Till Register Drawer
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <span class="text-muted small d-block">Purpose / Description</span>
+                        <div class="p-3 bg-black rounded border border-secondary text-white">{{ paid_out.description }}</div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted small d-block">Location / Store</span>
+                            <span class="text-white">{{ paid_out.branch.name|default:"Main Store / HQ" }}</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted small d-block">Terminal Till</span>
+                            <span class="text-white">{{ paid_out.terminal.name|default:"Main Till" }}</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted small d-block">Requested By</span>
+                            <span class="text-white"><i class="bi bi-person me-1"></i>{{ paid_out.requested_by.username }}</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted small d-block">Authorized By</span>
+                            <span class="text-white"><i class="bi bi-shield-check text-success me-1"></i>{{ paid_out.authorized_by.username }}</span>
+                        </div>
+                    </div>
+
+                    {% if paid_out.notes %}
+                    <div class="mt-3">
+                        <span class="text-muted small d-block">Audit Notes</span>
+                        <pre class="p-2 bg-black rounded border border-secondary text-white-50 small mb-0 font-monospace">{{ paid_out.notes }}</pre>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Workflow Stepper Card -->
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-header bg-dark border-secondary py-3">
+                    <h5 class="fw-bold mb-0 text-white"><i class="bi bi-diagram-3 text-primary me-2"></i> Payout Audit Lifecycle</h5>
+                </div>
+                <div class="card-body">
+                    <div class="position-relative ps-4 ms-2 border-start border-2 border-secondary py-2">
+                        <!-- Step 1: Disbursed -->
+                        <div class="mb-4 position-relative">
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-success rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-white">1. Cash Disbursed from Drawer</div>
+                            <div class="text-muted small">Disbursed on {{ paid_out.paid_out_time|date:"Y-m-d H:i:s" }} by {{ paid_out.requested_by.username }}. Drawer cash deducted immediately.</div>
+                        </div>
+
+                        <!-- Step 2: Authorization -->
+                        <div class="mb-4 position-relative">
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-success rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-white">2. Dual Custody / Threshold Authorization</div>
+                            <div class="text-muted small">Approved by {{ paid_out.authorized_by.username }} (Category limit: KES {{ paid_out.category.requires_manager_approval_above|default:'1000.00'|floatformat:2 }}).</div>
+                        </div>
+
+                        <!-- Step 3: Receipt Attachment -->
+                        <div class="mb-4 position-relative">
+                            {% if paid_out.status == 'confirmed' %}
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-success rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-white">3. Vendor Receipt / Exception Confirmed</div>
+                            <div class="text-muted small">
+                                {% if paid_out.has_receipt_exception %}
+                                Exception signed by {{ paid_out.exception_approved_by.username }} on {{ paid_out.receipt_received_at|date:"Y-m-d H:i" }}. Reason: {{ paid_out.exception_reason }}
+                                {% else %}
+                                Receipt #{{ paid_out.receipt_reference }} verified and attached on {{ paid_out.receipt_received_at|date:"Y-m-d H:i" }}.
+                                {% endif %}
+                            </div>
+                            {% elif paid_out.status == 'reversed' %}
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-secondary rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-muted">3. Payout Cancelled &amp; Reversed</div>
+                            <div class="text-muted small">Reversed by {{ paid_out.reversed_by.username }} on {{ paid_out.reversed_at|date:"Y-m-d H:i" }}. Cash returned to drawer. Reason: {{ paid_out.reversal_reason }}</div>
+                            {% else %}
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 {% if is_overdue %}bg-danger{% else %}bg-warning{% endif %} rounded-circle border border-dark"></span>
+                            <div class="fw-bold {% if is_overdue %}text-danger{% else %}text-warning{% endif %}">3. Awaiting Vendor Receipt</div>
+                            <div class="text-muted small">Receipt due by {{ paid_out.receipt_due_by|date:"Y-m-d H:i" }}. Awaiting staff submission.</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Step 4: General Ledger Expense -->
+                        <div class="position-relative">
+                            {% if paid_out.expense_entry %}
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-success rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-white">4. Posted to General Ledger Expense</div>
+                            <div class="text-muted small">GL Expense Voucher #{{ paid_out.expense_entry.expense_number }} active in P&amp;L under {{ paid_out.category.name }}.</div>
+                            {% elif paid_out.status == 'reversed' %}
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-secondary rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-muted">4. Expense Voided</div>
+                            <div class="text-muted small">No active expense entries in General Ledger.</div>
+                            {% else %}
+                            <span class="position-absolute top-0 start-0 translate-middle p-2 bg-secondary rounded-circle border border-dark"></span>
+                            <div class="fw-bold text-muted">4. Pending General Ledger Posting</div>
+                            <div class="text-muted small">Will automatically post to P&amp;L upon receipt attachment or approved exception.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Receipt Image & Quick Actions -->
+        <div class="col-12 col-lg-4">
+            <!-- Receipt Attachment Card -->
+            <div class="card bg-dark border-secondary mb-4 shadow-sm">
+                <div class="card-header bg-dark border-secondary py-3">
+                    <h5 class="fw-bold mb-0 text-white"><i class="bi bi-receipt text-warning me-2"></i> Attached Receipt</h5>
+                </div>
+                <div class="card-body text-center">
+                    {% if paid_out.receipt_attachment %}
+                    <div class="mb-3">
+                        <img src="{{ paid_out.receipt_attachment.url }}" alt="Receipt Photo" class="img-fluid rounded border border-secondary shadow-sm" style="max-height: 280px; object-fit: contain;">
+                    </div>
+                    <a href="{{ paid_out.receipt_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Open Full Image
+                    </a>
+                    {% elif paid_out.has_receipt_exception %}
+                    <div class="py-4 text-center">
+                        <i class="bi bi-file-earmark-check fs-1 text-info d-block mb-2"></i>
+                        <h6 class="fw-bold text-white">Manager Exception Note</h6>
+                        <p class="small text-muted mb-2">Informal vendor unable to provide tax receipt.</p>
+                        <div class="p-2 bg-black rounded border border-secondary text-start small text-white-50">
+                            <strong>Reason:</strong> {{ paid_out.exception_reason }}<br>
+                            <strong>Approved by:</strong> {{ paid_out.exception_approved_by.username }}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="py-4 text-center">
+                        <i class="bi bi-receipt-cutoff fs-1 text-muted d-block mb-2"></i>
+                        <h6 class="fw-bold text-white">No Receipt Attached Yet</h6>
+                        <p class="small text-muted mb-3">Receipt is pending collection from staff.</p>
+                        {% if can_manage_receipts and paid_out.status == 'paid_pending_receipt' %}
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#attachReceiptModal">
+                            <i class="bi bi-upload me-1"></i> Upload Receipt Now
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- General Ledger Linkage Card -->
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-header bg-dark border-secondary py-3">
+                    <h5 class="fw-bold mb-0 text-white"><i class="bi bi-book text-success me-2"></i> Accounting Link</h5>
+                </div>
+                <div class="card-body">
+                    {% if paid_out.expense_entry %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small">GL Expense Ref:</span>
+                        <span class="badge bg-success-subtle text-success border border-success">{{ paid_out.expense_entry.expense_number }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small">Expense Date:</span>
+                        <span class="text-white small">{{ paid_out.expense_entry.expense_date }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small">Amount Posted:</span>
+                        <span class="text-success fw-bold">KES {{ paid_out.expense_entry.amount|floatformat:2 }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-muted small">P&amp;L Status:</span>
+                        <span class="text-white small">Included in Financial Reports</span>
+                    </div>
+                    {% else %}
+                    <p class="small text-muted mb-0">No General Ledger expense has been posted yet. Posting occurs automatically when a receipt is attached or manager exception is granted.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Attach Receipt -->
+<div class="modal fade" id="attachReceiptModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-secondary shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold"><i class="bi bi-paperclip text-success me-2"></i> Attach Vendor Receipt</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'cash_paid_out_attach_receipt' paid_out_id=paid_out.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Receipt / Invoice Reference Number <span class="text-danger">*</span></label>
+                        <input type="text" name="receipt_reference" class="form-control bg-dark text-white border-secondary" placeholder="e.g. REC-88019" value="{{ paid_out.receipt_reference }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Upload Receipt Photo / Scan</label>
+                        <input type="file" name="receipt_attachment" class="form-control bg-dark text-white border-secondary" accept="image/*,.pdf">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Verification Notes</label>
+                        <textarea name="notes" rows="2" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Checked goods received and matches invoice amount"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success fw-bold"><i class="bi bi-check-circle me-1"></i> Confirm &amp; Post to GL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Sign Manager Exception Note -->
+<div class="modal fade" id="signExceptionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-secondary shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-check text-info me-2"></i> Manager Receipt Exception</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'cash_paid_out_receipt_exception' paid_out_id=paid_out.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="small text-muted">For informal suppliers (e.g. roadside tea kiosk, casual repairman, local market vendor) where no formal printed receipt is available. Your sign-off certifies this expenditure.</p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Exception Justification &amp; Details <span class="text-danger">*</span></label>
+                        <textarea name="exception_reason" rows="3" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Purchased local fruit for staff welfare from casual roadside vendor. Cash payment verified." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info fw-bold"><i class="bi bi-shield-check me-1"></i> Approve Exception</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Reverse Paid-Out -->
+<div class="modal fade" id="reversePaidOutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-secondary shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-arrow-counterclockwise me-2"></i> Reverse Cash Paid-Out</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'cash_paid_out_reverse' paid_out_id=paid_out.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-warning small">
+                        <strong>Warning:</strong> Reversing this transaction will return <strong>KES {{ paid_out.amount|floatformat:2 }}</strong> back to the active till register cash balance and void any linked General Ledger expense entry.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Reason for Reversal <span class="text-danger">*</span></label>
+                        <textarea name="reversal_reason" rows="2" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Purchase cancelled, cash returned to drawer" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Supervisor PIN / Password <span class="text-danger">*</span></label>
+                        <input type="password" name="supervisor_credential" class="form-control bg-dark text-white border-secondary" placeholder="Enter supervisor PIN or password" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger fw-bold"><i class="bi bi-arrow-counterclockwise me-1"></i> Confirm Reversal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

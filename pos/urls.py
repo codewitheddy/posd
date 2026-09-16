@@ -9,7 +9,8 @@ from . import (
     views, tenant_views, cash_float_views, user_management_views,
     support_access_views, zreport_views, sync_views, financial_views,
     crm_views, webhook_views, branch_views, promotion_views, hscode_views,
-    front_office_views, terminal_views, vatcode_views, cashier_assignment_views
+    front_office_views, terminal_views, vatcode_views, cashier_assignment_views,
+    banking_views, cash_pickup_views, cash_paid_out_views, supplier_ap_views
 )
 
 
@@ -273,7 +274,7 @@ urlpatterns = [
     path('dispatches/<int:pk>/', branch_views.dispatch_detail, name='dispatch_detail'),
     path('dispatches/<int:pk>/receive/', branch_views.dispatch_receive, name='dispatch_receive'),
 
-    # Suppliers & Payments
+    # Suppliers & Payments (Legacy & Unified)
     path('suppliers/', views.supplier_list, name='supplier_list'),
     path('suppliers/create/', views.supplier_create, name='supplier_create'),
     path('suppliers/<int:pk>/edit/', views.supplier_edit, name='supplier_edit'),
@@ -285,6 +286,36 @@ urlpatterns = [
     path('payments/<int:payment_id>/delete/', views.delete_payment, name='delete_payment'),
     path('supplier-balances/', views.supplier_balances, name='supplier_balances'),
     path('aging-analysis/', views.aging_analysis, name='aging_analysis'),
+
+    # Accounts Payable Invoices & Bills
+    path('purchasing/invoices/', supplier_ap_views.supplier_invoice_list, name='supplier_invoice_list'),
+    path('purchasing/invoices/create/', supplier_ap_views.supplier_invoice_create, name='supplier_invoice_create'),
+    path('purchasing/invoices/<int:invoice_id>/', supplier_ap_views.supplier_invoice_detail, name='supplier_invoice_detail'),
+
+    # Multi-Source Supplier Payments
+    path('purchasing/payments/', supplier_ap_views.supplier_payment_list, name='ap_payment_list'),
+    path('purchasing/payments/list/', supplier_ap_views.supplier_payment_list, name='supplier_payment_list'),
+    path('purchasing/payments/create/', supplier_ap_views.supplier_payment_create, name='ap_payment_create'),
+    path('purchasing/payments/new/', supplier_ap_views.supplier_payment_create, name='supplier_payment_create'),
+    path('purchasing/payments/<int:payment_id>/', supplier_ap_views.supplier_payment_detail, name='ap_payment_detail'),
+    path('purchasing/payments/<int:payment_id>/view/', supplier_ap_views.supplier_payment_detail, name='supplier_payment_detail'),
+    path('purchasing/payments/<int:payment_id>/reverse/', supplier_ap_views.supplier_payment_reverse, name='ap_payment_reverse'),
+    path('purchasing/payments/<int:payment_id>/do-reverse/', supplier_ap_views.supplier_payment_reverse, name='supplier_payment_reverse'),
+    path('api/purchasing/unpaid-invoices/', supplier_ap_views.supplier_unpaid_invoices_api, name='api_supplier_unpaid_invoices'),
+
+    # Supplier Credits (Debit Notes / Claims) & Refunds
+    path('purchasing/credits/', supplier_ap_views.supplier_credit_list, name='supplier_credit_list'),
+    path('purchasing/credits/create/', supplier_ap_views.supplier_credit_create, name='supplier_credit_create'),
+    path('purchasing/credits/<int:credit_id>/', supplier_ap_views.supplier_credit_detail, name='supplier_credit_detail'),
+    path('purchasing/credits/<int:credit_id>/apply/', supplier_ap_views.supplier_credit_apply, name='supplier_credit_apply'),
+    path('purchasing/credits/<int:credit_id>/refund/', supplier_ap_views.supplier_credit_refund, name='supplier_credit_refund'),
+
+    # AP & Outflow Reports
+    path('purchasing/reports/aging/', supplier_ap_views.report_ap_aging, name='report_ap_aging'),
+    path('purchasing/reports/statement/', supplier_ap_views.report_supplier_statement, name='report_supplier_statement'),
+    path('purchasing/reports/outstanding-credits/', supplier_ap_views.report_outstanding_credits, name='report_outstanding_credits'),
+    path('purchasing/reports/outstanding-cheques/', supplier_ap_views.report_outstanding_cheques, name='report_outstanding_cheques'),
+    path('purchasing/reports/unmatched-statements/', supplier_ap_views.report_unmatched_statement_lines, name='report_unmatched_statement_lines'),
 
     # Purchases & GRN
     path('purchases/', views.purchase_list, name='purchase_list'),
@@ -381,6 +412,54 @@ urlpatterns = [
     path('finances/expenses/export/', financial_views.expense_export_csv, name='expense_export_csv'),
     path('finances/profit/', financial_views.profit_dashboard, name='profit_dashboard'),
     path('finances/pl/', financial_views.pl_statement, name='pl_statement'),
+
+    # Banking & Reconciliation Suite
+    path('finances/banking/accounts/', banking_views.bank_account_list, name='bank_account_list'),
+    path('finances/banking/accounts/save/', banking_views.bank_account_create_edit, name='bank_account_create_edit'),
+    path('finances/banking/accounts/<int:account_id>/toggle/', banking_views.bank_account_toggle_active, name='bank_account_toggle_active'),
+    path('finances/banking/records/', banking_views.banking_record_list, name='banking_record_list'),
+    path('finances/banking/records/new/', banking_views.banking_record_create, name='banking_record_create'),
+    path('finances/banking/records/<int:pk>/', banking_views.banking_record_detail, name='banking_record_detail'),
+    path('finances/banking/api/expected-cash/', banking_views.api_get_expected_cash, name='api_get_expected_cash'),
+    path('finances/banking/statements/', banking_views.bank_statement_list, name='bank_statement_list'),
+    path('finances/banking/statements/import/', banking_views.bank_statement_import, name='bank_statement_import'),
+    path('finances/banking/statements/manual-line/', banking_views.bank_statement_manual_line, name='bank_statement_manual_line'),
+    path('finances/banking/statements/lines/<int:line_id>/toggle-ignore/', banking_views.api_ignore_statement_line, name='api_ignore_statement_line'),
+    path('finances/banking/reconciliation/', banking_views.bank_reconciliation_workspace, name='bank_reconciliation_workspace'),
+    path('finances/banking/reconciliation/auto-match/', banking_views.api_auto_match, name='api_auto_match'),
+    path('finances/banking/reconciliation/manual-match/', banking_views.api_manual_match, name='api_manual_match'),
+    path('finances/banking/reconciliation/matches/<int:match_id>/unmatch/', banking_views.api_unmatch, name='api_unmatch'),
+    path('finances/banking/reports/daily-summary/', banking_views.report_daily_banking_summary, name='report_daily_banking_summary'),
+    path('finances/banking/reports/unbanked-funds/', banking_views.report_unbanked_funds, name='report_unbanked_funds'),
+    path('finances/banking/reports/reconciliation-statement/', banking_views.report_bank_reconciliation_statement, name='report_bank_reconciliation_statement'),
+    path('finances/banking/reports/variances/', banking_views.report_variance_discrepancy, name='report_variance_discrepancy'),
+    path('finances/banking/reports/aging/', banking_views.report_aging_unmatched, name='report_aging_unmatched'),
+
+    # Cash Pickups / Till Drops (Safe Drops) Suite
+    path('finances/pickups/', cash_pickup_views.cash_pickup_list, name='cash_pickup_list'),
+    path('finances/pickups/new/', cash_pickup_views.cash_pickup_create, name='cash_pickup_create'),
+    path('finances/pickups/<int:pickup_id>/', cash_pickup_views.cash_pickup_detail, name='cash_pickup_detail'),
+    path('finances/pickups/<int:pickup_id>/print-slip/', cash_pickup_views.cash_pickup_slip_print, name='cash_pickup_slip_print'),
+    path('finances/pickups/transfer-safe/', cash_pickup_views.cash_pickup_transfer_safe, name='cash_pickup_transfer_safe'),
+    path('finances/pickups/api/drawer-status/', cash_pickup_views.cash_pickup_drawer_status, name='cash_pickup_drawer_status'),
+    path('finances/pickups/reports/log/', cash_pickup_views.report_cash_pickup_log, name='report_cash_pickup_log'),
+    path('finances/pickups/reports/chain-of-custody/', cash_pickup_views.report_chain_of_custody, name='report_chain_of_custody'),
+    path('finances/pickups/reports/zreport-variance/', cash_pickup_views.report_zreport_variance, name='report_zreport_variance'),
+    path('finances/pickups/reports/supervisor-summary/', cash_pickup_views.report_supervisor_pickup_summary, name='report_supervisor_pickup_summary'),
+
+    # Cash Paid-Outs / Till Expenses Suite
+    path('finances/paid-outs/', cash_paid_out_views.cash_paid_out_list, name='cash_paid_out_list'),
+    path('finances/paid-outs/new/', cash_paid_out_views.cash_paid_out_create, name='cash_paid_out_create'),
+    path('finances/paid-outs/<int:paid_out_id>/', cash_paid_out_views.cash_paid_out_detail, name='cash_paid_out_detail'),
+    path('finances/paid-outs/<int:paid_out_id>/print-slip/', cash_paid_out_views.cash_paid_out_slip_print, name='cash_paid_out_slip_print'),
+    path('finances/paid-outs/<int:paid_out_id>/attach-receipt/', cash_paid_out_views.cash_paid_out_attach_receipt, name='cash_paid_out_attach_receipt'),
+    path('finances/paid-outs/<int:paid_out_id>/receipt-exception/', cash_paid_out_views.cash_paid_out_receipt_exception, name='cash_paid_out_receipt_exception'),
+    path('finances/paid-outs/<int:paid_out_id>/reverse/', cash_paid_out_views.cash_paid_out_reverse, name='cash_paid_out_reverse'),
+    path('finances/paid-outs/api/drawer-status/', cash_paid_out_views.cash_paid_out_drawer_status, name='cash_paid_out_drawer_status'),
+    path('finances/paid-outs/reports/log/', cash_paid_out_views.report_paid_outs_log, name='report_paid_outs_log'),
+    path('finances/paid-outs/reports/missing-receipts/', cash_paid_out_views.report_missing_receipts, name='report_missing_receipts'),
+    path('finances/paid-outs/reports/category-summary/', cash_paid_out_views.report_expense_category_summary, name='report_expense_category_summary'),
+    path('finances/paid-outs/reports/approval-audit/', cash_paid_out_views.report_paid_out_approval_audit, name='report_paid_out_approval_audit'),
 
     # User Management & HR Hub
     path('users/', include([

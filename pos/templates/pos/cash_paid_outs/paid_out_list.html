@@ -1,0 +1,394 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Cash Paid-Outs (Till Expenses) | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 text-muted">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Finances</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Cash Paid-Outs (Till Expenses)</li>
+                </ol>
+            </nav>
+            <h2 class="h3 fw-bold mb-0 text-white">Cash Paid-Outs (Till Expenses)</h2>
+            <p class="text-muted small mb-0">Disburse, authorize, and track direct petty cash expenses from register drawers with mandatory receipt controls.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-file-earmark-bar-graph me-1"></i> Expense Reports
+                </button>
+                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow">
+                    <li><a class="dropdown-item py-2" href="{% url 'report_paid_outs_log' %}"><i class="bi bi-journal-text me-2"></i> Itemized Paid-Outs Log</a></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'report_missing_receipts' %}"><i class="bi bi-receipt-cutoff me-2 text-warning"></i> Missing / Overdue Receipts</a></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'report_expense_category_summary' %}"><i class="bi bi-pie-chart me-2 text-info"></i> Category Summary &amp; Budgets</a></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'report_paid_out_approval_audit' %}"><i class="bi bi-shield-check me-2 text-success"></i> High-Value Authorization Audit</a></li>
+                </ul>
+            </div>
+            {% if can_request %}
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newPaidOutModal">
+                <i class="bi bi-plus-circle me-1"></i> New Paid-Out
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Live Telemetry & Summary Metric Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-3">
+            <div class="card bg-dark border-secondary h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small text-uppercase fw-semibold">Current Drawer Cash</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary"><i class="bi bi-cash-stack"></i> Live</span>
+                    </div>
+                    <h3 class="fw-bold mb-1 text-white">KES {{ drawer_status.current_drawer_cash|floatformat:2 }}</h3>
+                    <div class="d-flex justify-content-between text-muted small">
+                        <span>Float: KES {{ drawer_status.opening_float|floatformat:0 }}</span>
+                        <span>Sales: KES {{ drawer_status.total_cash_sales|floatformat:0 }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="card bg-dark border-secondary h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small text-uppercase fw-semibold">Paid Out Today</span>
+                        <span class="badge bg-warning-subtle text-warning border border-warning"><i class="bi bi-wallet2"></i> Today</span>
+                    </div>
+                    <h3 class="fw-bold mb-1 text-warning">KES {{ metrics.today_total|floatformat:2 }}</h3>
+                    <span class="text-muted small">{{ metrics.today_count }} disbursement{{ metrics.today_count|pluralize }} today</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="card bg-dark border-secondary h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small text-uppercase fw-semibold">Pending Receipts</span>
+                        {% if metrics.overdue_count > 0 %}
+                        <span class="badge bg-danger text-white"><i class="bi bi-exclamation-triangle-fill"></i> {{ metrics.overdue_count }} Overdue</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Awaiting</span>
+                        {% endif %}
+                    </div>
+                    <h3 class="fw-bold mb-1 {% if metrics.overdue_count > 0 %}text-danger{% else %}text-white{% endif %}">
+                        {{ metrics.pending_count }} <span class="fs-6 fw-normal text-muted">(KES {{ metrics.pending_amount|floatformat:2 }})</span>
+                    </h3>
+                    <span class="text-muted small">Receipts due back from staff</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="card bg-dark border-secondary h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small text-uppercase fw-semibold">Confirmed to GL</span>
+                        <span class="badge bg-success-subtle text-success border border-success"><i class="bi bi-check-all"></i> Verified</span>
+                    </div>
+                    <h3 class="fw-bold mb-1 text-success">{{ metrics.confirmed_count }}</h3>
+                    <span class="text-muted small">Receipt attached / exception approved</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Card -->
+    <div class="card bg-dark border-secondary mb-4 shadow-sm">
+        <div class="card-body py-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-12 col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-secondary border-secondary text-white"><i class="bi bi-search"></i></span>
+                        <input type="text" name="q" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Search voucher #, payee, desc..." value="{{ search_query }}">
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <select name="status" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">All Statuses</option>
+                        <option value="paid_pending_receipt" {% if status_filter == 'paid_pending_receipt' %}selected{% endif %}>Pending Receipt</option>
+                        <option value="confirmed" {% if status_filter == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                        <option value="reversed" {% if status_filter == 'reversed' %}selected{% endif %}>Reversed</option>
+                        <option value="written_off" {% if status_filter == 'written_off' %}selected{% endif %}>Written Off</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <select name="category" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" {% if category_id == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <select name="branch" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_filter == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <input type="date" name="date_from" class="form-control form-control-sm bg-dark text-white border-secondary" value="{{ date_from }}" title="From Date">
+                </div>
+                <div class="col-12 col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-funnel"></i></button>
+                    {% if status_filter or category_id or branch_filter or date_from or date_to or search_query %}
+                    <a href="{% url 'cash_paid_out_list' %}" class="btn btn-sm btn-outline-secondary" title="Reset Filters"><i class="bi bi-x"></i></a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Paid-Outs Ledger Table -->
+    <div class="card bg-dark border-secondary shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+                <thead class="table-secondary text-uppercase small text-muted">
+                    <tr>
+                        <th class="ps-3">Voucher #</th>
+                        <th>Time &amp; Date</th>
+                        <th>Category</th>
+                        <th>Payee &amp; Description</th>
+                        <th>Location / Till</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-center">Receipt Status</th>
+                        <th>Authorized By</th>
+                        <th class="text-end pe-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in paid_outs %}
+                    <tr>
+                        <td class="ps-3 fw-bold text-nowrap">
+                            <a href="{% url 'cash_paid_out_detail' paid_out_id=p.id %}" class="text-info text-decoration-none">
+                                {{ p.paid_out_number }}
+                            </a>
+                        </td>
+                        <td class="text-nowrap small text-muted">
+                            <div>{{ p.paid_out_time|date:"Y-m-d" }}</div>
+                            <span class="text-white-50">{{ p.paid_out_time|time:"H:i" }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary-subtle text-light border border-secondary">{{ p.category.name }}</span>
+                            {% if p.is_petty_cash_fund %}
+                            <span class="badge bg-info-subtle text-info border border-info ms-1">Petty Fund</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-white">{{ p.payee }}</div>
+                            <div class="small text-muted text-truncate" style="max-width: 260px;">{{ p.description }}</div>
+                        </td>
+                        <td class="small text-muted">
+                            <div>{{ p.branch.name|default:"Consolidated HQ" }}</div>
+                            <span class="text-white-50">{{ p.terminal.name|default:"Main Till" }}</span>
+                        </td>
+                        <td class="text-end fw-bold text-nowrap {% if p.status == 'reversed' %}text-decoration-line-through text-muted{% else %}text-warning{% endif %}">
+                            {{ p.currency }} {{ p.amount|floatformat:2 }}
+                        </td>
+                        <td class="text-center">
+                            {% if p.status == 'confirmed' %}
+                                {% if p.has_receipt_exception %}
+                                <span class="badge bg-info-subtle text-info border border-info" title="Manager Exception Note Signed">
+                                    <i class="bi bi-file-earmark-check"></i> Exception Signed
+                                </span>
+                                {% else %}
+                                <span class="badge bg-success-subtle text-success border border-success" title="Receipt Verified &amp; Attached">
+                                    <i class="bi bi-check-circle"></i> Confirmed
+                                </span>
+                                {% endif %}
+                            {% elif p.status == 'paid_pending_receipt' %}
+                                {% if p.receipt_due_by and p.receipt_due_by < now %}
+                                <span class="badge bg-danger" title="Receipt Overdue">
+                                    <i class="bi bi-clock-history"></i> Overdue Receipt
+                                </span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark" title="Receipt Pending Collection">
+                                    <i class="bi bi-hourglass-split"></i> Pending Receipt
+                                </span>
+                                {% endif %}
+                            {% elif p.status == 'reversed' %}
+                            <span class="badge bg-secondary" title="Cash returned to till">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reversed
+                            </span>
+                            {% elif p.status == 'written_off' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger">
+                                <i class="bi bi-x-circle"></i> Written Off
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ p.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">
+                            <div><i class="bi bi-person me-1"></i>{{ p.requested_by.username }}</div>
+                            <span class="text-white-50"><i class="bi bi-shield-check me-1"></i>{{ p.authorized_by.username }}</span>
+                        </td>
+                        <td class="text-end pe-3 text-nowrap">
+                            <a href="{% url 'cash_paid_out_detail' paid_out_id=p.id %}" class="btn btn-sm btn-outline-info me-1" title="View Audit Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'cash_paid_out_slip_print' paid_out_id=p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Print 80mm Voucher">
+                                <i class="bi bi-printer"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-wallet2 fs-1 d-block mb-3 text-secondary"></i>
+                            <h5 class="fw-semibold text-white">No Cash Paid-Outs Recorded</h5>
+                            <p class="small mb-3">No petty cash disbursements matching your filter criteria were found.</p>
+                            {% if can_request %}
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newPaidOutModal">
+                                <i class="bi bi-plus-circle me-1"></i> Record First Paid-Out
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-dark border-secondary d-flex justify-content-between align-items-center py-3">
+            <span class="text-muted small">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} paid-outs</span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if category_id %}&category={{ category_id }}{% endif %}">&laquo;</a></li>
+                    {% endif %}
+                    {% for num in page_obj.paginator.page_range %}
+                    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                        <a class="page-link {% if page_obj.number == num %}bg-primary border-primary{% else %}bg-dark border-secondary text-white{% endif %}" href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if category_id %}&category={{ category_id }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endfor %}
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link bg-dark border-secondary text-white" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if category_id %}&category={{ category_id }}{% endif %}">&raquo;</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal: New Cash Paid-Out -->
+<div class="modal fade" id="newPaidOutModal" tabindex="-1" aria-labelledby="newPaidOutModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-secondary shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold" id="newPaidOutModalLabel">
+                    <i class="bi bi-wallet2 text-warning me-2"></i> Record Cash Paid-Out
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'cash_paid_out_create' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body py-3">
+                    <div class="p-3 bg-black rounded border border-secondary mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Current Drawer Cash:</span>
+                            <span class="fw-bold text-success fs-5">KES {{ drawer_status.current_drawer_cash|floatformat:2 }}</span>
+                        </div>
+                        <div class="small text-muted">Disbursing cash decreases drawer balance immediately.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Expense Category <span class="text-danger">*</span></label>
+                        <select name="category" id="modalPaidOutCategory" class="form-select bg-dark text-white border-secondary" required onchange="updateCategoryThreshold()">
+                            <option value="">Select Category...</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}" data-threshold="{{ cat.requires_manager_approval_above|default:'1000.00' }}">
+                                {{ cat.name }} (Approval limit: KES {{ cat.requires_manager_approval_above|default:'1000.00'|floatformat:0 }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Payout Amount (KES) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" name="amount" id="modalPaidOutAmount" class="form-control bg-dark text-white border-secondary fs-5 fw-bold" placeholder="0.00" required oninput="checkThresholdNotice()">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted">Payee (Recipient) <span class="text-danger">*</span></label>
+                            <input type="text" name="payee" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Total Petrol Station" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Purpose / Description <span class="text-danger">*</span></label>
+                        <textarea name="description" rows="2" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Fuel for delivery van KDC 440X" required></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Receipt / Invoice # (if available right now)</label>
+                        <input type="text" name="receipt_reference" class="form-control bg-dark text-white border-secondary" placeholder="e.g. INV-9901 (optional)">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Attach Receipt Photo / Scan</label>
+                        <input type="file" name="receipt_attachment" class="form-control bg-dark text-white border-secondary" accept="image/*,.pdf">
+                    </div>
+
+                    <!-- Dynamic Supervisor Authorization Box -->
+                    <div id="modalSupervisorAuthBox" class="p-3 bg-secondary-subtle border border-warning rounded mb-2">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-shield-lock text-warning fs-5 me-2"></i>
+                            <div>
+                                <div class="fw-bold text-warning small">Supervisor Authorization Required</div>
+                                <div class="text-muted small">Amount exceeds auto-approval threshold. Enter Supervisor PIN or Password.</div>
+                            </div>
+                        </div>
+                        <input type="password" name="supervisor_credential" id="modalSupervisorCredential" class="form-control bg-dark text-white border-warning" placeholder="Enter Supervisor PIN or Password">
+                    </div>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="is_petty_cash_fund" value="true" id="isPettyFundCheck">
+                        <label class="form-check-label small text-muted" for="isPettyFundCheck">Paid from separate Petty Cash Fund (do not deduct from till drawer)</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark"><i class="bi bi-check-lg me-1"></i> Disburse Cash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateCategoryThreshold() {
+    checkThresholdNotice();
+}
+
+function checkThresholdNotice() {
+    const catSelect = document.getElementById('modalPaidOutCategory');
+    const amountInput = document.getElementById('modalPaidOutAmount');
+    const authBox = document.getElementById('modalSupervisorAuthBox');
+    const credInput = document.getElementById('modalSupervisorCredential');
+
+    if (!catSelect || !amountInput) return;
+
+    const selectedOption = catSelect.options[catSelect.selectedIndex];
+    const threshold = selectedOption ? parseFloat(selectedOption.dataset.threshold || '1000.00') : 1000.00;
+    const amount = parseFloat(amountInput.value || '0');
+
+    if (amount > threshold) {
+        authBox.style.display = 'block';
+        credInput.required = true;
+    } else {
+        authBox.style.display = 'block'; // Keep visible for optional PIN
+        credInput.required = false;
+    }
+}
+</script>
+{% endblock %}

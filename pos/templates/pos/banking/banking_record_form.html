@@ -1,0 +1,236 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Record Cash Banking — {{ request.business.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 900px;">
+    <!-- Header -->
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h3 class="fw-bold mb-1"><i class="bi bi-cash-coin me-2 text-success"></i>Record Cash Banking</h3>
+            <p class="text-muted small mb-0">Record physical cash/cheques deposited into the bank with deposit slip verification.</p>
+        </div>
+        <a href="{% url 'banking_record_list' slug=request.business.slug %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Back to Deposits
+        </a>
+    </div>
+
+    <!-- Form Card -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <form method="POST" enctype="multipart/form-data" id="bankingForm">
+            {% csrf_token %}
+            <div class="card-body p-4">
+                
+                <!-- Section 1: Scope & Collection Period -->
+                <h6 class="fw-bold text-uppercase text-muted small mb-3">
+                    <i class="bi bi-geo-alt me-1 text-primary"></i> 1. Location &amp; Collection Period
+                </h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Branch / Location</label>
+                        <select name="branch" id="branchSelect" class="form-select" onchange="fetchExpectedCollections()">
+                            <option value="">Central / All Branches (Consolidated Banking)</option>
+                            {% for b in branches %}
+                            <option value="{{ b.id }}" {% if form_data.branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text small">Select branch or leave blank for centralized multi-branch banking.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Specific Till / Terminal (Optional)</label>
+                        <select name="terminal" id="terminalSelect" class="form-select" onchange="fetchExpectedCollections()">
+                            <option value="">All Tills / Entire Branch</option>
+                            {% for t in terminals %}
+                            <option value="{{ t.id }}" {% if form_data.terminal == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }} ({{ t.terminal_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Collection Period Start *</label>
+                        <input type="date" name="period_start" id="periodStart" class="form-control" value="{{ form_data.period_start|default:today_str }}" onchange="fetchExpectedCollections()" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Collection Period End *</label>
+                        <input type="date" name="period_end" id="periodEnd" class="form-control" value="{{ form_data.period_end|default:today_str }}" onchange="fetchExpectedCollections()" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Tender Type</label>
+                        <select name="payment_type" id="paymentType" class="form-select" onchange="fetchExpectedCollections()">
+                            <option value="cash">Cash Collections</option>
+                            <option value="cheque">Cheque Collections</option>
+                            <option value="mixed">Mixed (Cash &amp; Cheque)</option>
+                            <option value="card_settlement">Card Batch Settlement (PDQ)</option>
+                            <option value="mobile_money">Mobile Money Sweeping / Till Transfer</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Expected Cash Calculation Card -->
+                <div class="card bg-light border-0 rounded-3 p-3 mb-4">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div>
+                            <div class="text-muted small fw-semibold text-uppercase">System Expected Collections</div>
+                            <div class="d-flex align-items-baseline gap-2 mt-1">
+                                <h3 class="fw-bold text-dark mb-0" id="expectedCashDisplay">KES 0.00</h3>
+                                <span class="badge bg-secondary" id="salesCountDisplay">0 sales</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="fetchExpectedCollections()">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Refresh System Figures
+                        </button>
+                    </div>
+                    <input type="hidden" name="expected_amount" id="expectedAmountInput" value="0.00">
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Section 2: Bank Account & Deposit Slip -->
+                <h6 class="fw-bold text-uppercase text-muted small mb-3">
+                    <i class="bi bi-bank me-1 text-primary"></i> 2. Bank Deposit &amp; Slip Details
+                </h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Destination Bank Account *</label>
+                        <select name="bank_account" id="bankAccountSelect" class="form-select" required>
+                            <option value="">Select Destination Account...</option>
+                            {% for acc in bank_accounts %}
+                            <option value="{{ acc.id }}" {% if acc.is_default or form_data.bank_account == acc.id|stringformat:"s" %}selected{% endif %}>
+                                {{ acc.bank_name }} — {{ acc.account_name }} ({{ acc.account_number }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Date Physically Deposited *</label>
+                        <input type="date" name="deposit_date" id="depositDate" class="form-control" value="{{ form_data.deposit_date|default:today_str }}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Bank Slip / Reference Number *</label>
+                        <input type="text" name="deposit_reference" id="depositReference" class="form-control font-monospace" placeholder="e.g. SLIP-89210, TXN-94021" value="{{ form_data.deposit_reference }}" required>
+                        <div class="form-text small">Enter teller slip # or transaction code on the bank deposit receipt.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Actual Deposited Amount (KES) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white fw-bold">KES</span>
+                            <input type="number" step="0.01" min="0.01" name="deposited_amount" id="depositedAmountInput" class="form-control form-control-lg fw-bold text-success" placeholder="0.00" value="{{ form_data.deposited_amount }}" oninput="calculateLiveVariance()" required>
+                            <button type="button" class="btn btn-outline-secondary" onclick="useExpectedAmount()" title="Auto-fill with Expected Amount">
+                                Match Expected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Live Variance & Explanation -->
+                <div class="card p-3 mb-4 rounded-3 border" id="varianceCard" style="background:#f8fafc;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase">Deposit Variance (Deposited − Expected):</span>
+                            <h4 class="fw-bold mb-0 mt-1" id="varianceAmountDisplay">KES 0.00</h4>
+                        </div>
+                        <div id="varianceStatusBadge">
+                            <span class="badge bg-success bg-opacity-20 text-success border border-success p-2">
+                                <i class="bi bi-check-circle me-1"></i> Exact Match
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4" id="varianceReasonGroup" style="display:none;">
+                    <label class="form-label small fw-bold text-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Variance Explanation / Justification *
+                    </label>
+                    <textarea name="variance_reason" id="varianceReasonInput" class="form-control border-danger" rows="2" placeholder="Explain the reason for cash shortage or overage (e.g. float retained in safe, damaged currency, cash drop timing)...">{{ form_data.variance_reason }}</textarea>
+                    <div class="form-text text-danger small">An explanation is mandatory whenever physical banking differs from POS collections.</div>
+                </div>
+
+                <!-- Section 4: Attachment & Notes -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Upload Deposit Slip Image / Receipt Photo</label>
+                        <input type="file" name="slip_image" id="slipImage" class="form-control" accept="image/*,application/pdf">
+                        <div class="form-text small">Take a photo of the stamped bank slip with your phone/scanner.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">General Notes</label>
+                        <input type="text" name="notes" id="notesInput" class="form-control" placeholder="Optional notes for accountant/auditor" value="{{ form_data.notes }}">
+                    </div>
+                </div>
+
+            </div>
+            <div class="card-footer bg-light border-0 p-4 d-flex justify-content-between align-items-center">
+                <a href="{% url 'banking_record_list' slug=request.business.slug %}" class="btn btn-secondary btn-sm px-3">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-success px-4 py-2 fw-bold">
+                    <i class="bi bi-check2-circle me-1"></i> Save Banking Record
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let currentExpectedAmount = 0;
+
+async function fetchExpectedCollections() {
+    const branchId = document.getElementById('branchSelect').value;
+    const terminalId = document.getElementById('terminalSelect').value;
+    const periodStart = document.getElementById('periodStart').value;
+    const periodEnd = document.getElementById('periodEnd').value;
+    const paymentType = document.getElementById('paymentType').value;
+
+    const url = `{% url 'api_get_expected_cash' slug=request.business.slug %}?branch_id=${branchId}&terminal_id=${terminalId}&period_start=${periodStart}&period_end=${periodEnd}&payment_type=${paymentType}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.success) {
+            currentExpectedAmount = data.expected_amount;
+            document.getElementById('expectedAmountInput').value = currentExpectedAmount.toFixed(2);
+            document.getElementById('expectedCashDisplay').innerText = `KES ${currentExpectedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('salesCountDisplay').innerText = `${data.sales_count} sales transactions`;
+            calculateLiveVariance();
+        }
+    } catch (err) {
+        console.error('Error fetching expected cash:', err);
+    }
+}
+
+function useExpectedAmount() {
+    document.getElementById('depositedAmountInput').value = currentExpectedAmount.toFixed(2);
+    calculateLiveVariance();
+}
+
+function calculateLiveVariance() {
+    const deposited = parseFloat(document.getElementById('depositedAmountInput').value) || 0;
+    const expected = parseFloat(document.getElementById('expectedAmountInput').value) || 0;
+    const variance = deposited - expected;
+
+    const varianceDisplay = document.getElementById('varianceAmountDisplay');
+    const badge = document.getElementById('varianceStatusBadge');
+    const reasonGroup = document.getElementById('varianceReasonGroup');
+
+    varianceDisplay.innerText = `${variance >= 0 ? '+' : ''}KES ${variance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    if (Math.abs(variance) < 0.01) {
+        badge.innerHTML = '<span class="badge bg-success bg-opacity-20 text-success border border-success p-2"><i class="bi bi-check-circle me-1"></i> Exact Match</span>';
+        varianceDisplay.className = 'fw-bold mb-0 mt-1 text-success';
+        reasonGroup.style.display = 'none';
+    } else if (variance < 0) {
+        badge.innerHTML = `<span class="badge bg-danger p-2"><i class="bi bi-dash-circle me-1"></i> Short by KES ${Math.abs(variance).toFixed(2)}</span>`;
+        varianceDisplay.className = 'fw-bold mb-0 mt-1 text-danger';
+        reasonGroup.style.display = 'block';
+    } else {
+        badge.innerHTML = `<span class="badge bg-warning text-dark p-2"><i class="bi bi-plus-circle me-1"></i> Over by KES ${variance.toFixed(2)}</span>`;
+        varianceDisplay.className = 'fw-bold mb-0 mt-1 text-warning';
+        reasonGroup.style.display = 'block';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    fetchExpectedCollections();
+});
+</script>
+{% endblock %}

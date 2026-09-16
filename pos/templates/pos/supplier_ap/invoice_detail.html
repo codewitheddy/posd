@@ -1,0 +1,395 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Invoice {{ invoice.invoice_number }} | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}" class="text-decoration-none">Purchasing</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'supplier_invoice_list' %}" class="text-decoration-none">Supplier Invoices</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ invoice.invoice_number }}</li>
+                </ol>
+            </nav>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <h3 class="fw-bold text-dark mb-0">{{ invoice.invoice_number }}</h3>
+                {% if invoice.status == 'paid' %}
+                <span class="badge bg-success text-white px-3 py-2 fs-6"><i class="bi bi-check-circle me-1"></i> Paid in Full</span>
+                {% elif invoice.status == 'partially_paid' %}
+                <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-pie-chart me-1"></i> Partially Paid</span>
+                {% elif invoice.is_overdue %}
+                <span class="badge bg-danger text-white px-3 py-2 fs-6"><i class="bi bi-exclamation-triangle me-1"></i> Overdue ({{ invoice.days_overdue }} days)</span>
+                {% else %}
+                <span class="badge bg-secondary text-white px-3 py-2 fs-6">{{ invoice.get_status_display }}</span>
+                {% endif %}
+            </div>
+            <p class="text-secondary small mb-0 mt-1">
+                Supplier: <strong class="text-dark">{{ invoice.supplier.name }}</strong> | 
+                Issued: {{ invoice.invoice_date|date:"M d, Y" }} | 
+                Due Date: <span class="{% if invoice.is_overdue %}text-danger fw-bold{% else %}text-dark{% endif %}">{{ invoice.due_date|date:"M d, Y" }}</span>
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if invoice.attachment %}
+            <a href="{{ invoice.attachment.url }}" target="_blank" class="btn btn-outline-info">
+                <i class="bi bi-paperclip me-1"></i> View Attachment
+            </a>
+            {% endif %}
+            {% if available_credits and invoice.remaining_balance > 0 %}
+            <button class="btn btn-warning text-dark fw-semibold shadow-sm" data-bs-toggle="modal" data-bs-target="#applyCreditModal">
+                <i class="bi bi-arrow-return-left me-1"></i> Apply Credit Note
+            </button>
+            {% endif %}
+            {% if invoice.remaining_balance > 0 %}
+            <a href="{% url 'ap_payment_create' %}?supplier_id={{ invoice.supplier.id }}&invoice_id={{ invoice.id }}" class="btn btn-success fw-semibold shadow-sm">
+                <i class="bi bi-cash-stack me-1"></i> Record Payment
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Pre-Settlement Credit Alert Banner -->
+    {% if available_credits and invoice.remaining_balance > 0 %}
+    <div class="alert alert-warning border-0 shadow-sm rounded-3 d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-lightbulb-fill fs-3 text-warning me-3"></i>
+            <div>
+                <h6 class="fw-bold mb-1 text-dark">Supplier Credit Claim(s) Available!</h6>
+                <div class="small text-dark">
+                    <strong>{{ invoice.supplier.name }}</strong> has open credit notes that can be applied to offset this bill before making a cash or bank payment.
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-warning text-dark btn-sm fw-bold px-3 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#applyCreditModal">
+            <i class="bi bi-arrow-return-left me-1"></i> Apply Credit Note Now
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- Financial Summary Cards Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-primary border-4">
+                <span class="text-muted small text-uppercase fw-bold">Total Invoiced</span>
+                <h4 class="fw-bold text-dark mb-0 mt-1">KES {{ invoice.amount|floatformat:2 }}</h4>
+                <div class="text-secondary small">Accrual Recognized</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-success border-4">
+                <span class="text-muted small text-uppercase fw-bold">Payments Allocated</span>
+                <h4 class="fw-bold text-success mb-0 mt-1">KES {{ invoice.total_paid|floatformat:2 }}</h4>
+                <div class="text-secondary small">{{ allocations.count }} payment transaction(s)</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start border-info border-4">
+                <span class="text-muted small text-uppercase fw-bold">Credit Notes Applied</span>
+                <h4 class="fw-bold text-info mb-0 mt-1">KES {{ invoice.total_credited|floatformat:2 }}</h4>
+                <div class="text-secondary small">{{ credits_applied.count }} claim offset deduction(s)</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white border-start {% if invoice.remaining_balance > 0 %}border-warning{% else %}border-success{% endif %} border-4">
+                <span class="text-muted small text-uppercase fw-bold">Remaining Balance</span>
+                <h4 class="fw-bold {% if invoice.remaining_balance > 0 %}text-warning{% else %}text-success{% endif %} mb-0 mt-1">
+                    KES {{ invoice.remaining_balance|floatformat:2 }}
+                </h4>
+                <div class="text-secondary small">
+                    {% if invoice.remaining_balance == 0 %}
+                    <span class="text-success fw-semibold"><i class="bi bi-check-all"></i> Settled in Full</span>
+                    {% else %}
+                    <span class="text-warning fw-semibold">Net Payable</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Details & Settlement History -->
+        <div class="col-12 col-lg-8">
+            <!-- Payments Ledger -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-cash-coin me-2 text-success"></i> Payment Allocations
+                    </h5>
+                    {% if invoice.remaining_balance > 0 %}
+                    <a href="{% url 'ap_payment_create' %}?supplier_id={{ invoice.supplier.id }}&invoice_id={{ invoice.id }}" class="btn btn-sm btn-success">
+                        <i class="bi bi-plus-circle me-1"></i> Add Payment
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Payment #</th>
+                                <th class="py-3">Date</th>
+                                <th class="py-3">Method / Source</th>
+                                <th class="py-3">Reference</th>
+                                <th class="text-end py-3">Allocated Amount</th>
+                                <th class="py-3 text-center">Status</th>
+                                <th class="text-end pe-3 py-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alloc in allocations %}
+                            <tr>
+                                <td class="ps-3 fw-bold">
+                                    <a href="{% url 'ap_payment_detail' slug=business.slug payment_id=alloc.payment.id %}" class="text-primary text-decoration-none">
+                                        {{ alloc.payment.payment_number }}
+                                    </a>
+                                </td>
+                                <td class="text-secondary">{{ alloc.payment.payment_date|date:"M d, Y" }}</td>
+                                <td>
+                                    <div class="text-dark fw-semibold">{{ alloc.payment.get_payment_method_type_display }}</div>
+                                    <small class="text-muted">{{ alloc.payment.get_source_type_display }}</small>
+                                </td>
+                                <td class="text-secondary">{{ alloc.payment.reference_number|default:"-" }}</td>
+                                <td class="text-end fw-bold text-success">KES {{ alloc.amount|floatformat:2 }}</td>
+                                <td class="text-center">
+                                    {% if alloc.payment.status == 'cleared' %}
+                                    <span class="badge bg-success text-white">Cleared</span>
+                                    {% elif alloc.payment.status == 'sent' %}
+                                    <span class="badge bg-warning text-dark">In Transit</span>
+                                    {% elif alloc.payment.status == 'reversed' %}
+                                    <span class="badge bg-danger text-white">Reversed</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-dark border">{{ alloc.payment.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <a href="{% url 'ap_payment_detail' slug=business.slug payment_id=alloc.payment.id %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted">
+                                    <i class="bi bi-cash-stack d-block fs-3 mb-2 opacity-50"></i>
+                                    No payments recorded for this invoice yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Credits Applied -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-arrow-return-left me-2 text-warning"></i> Applied Supplier Credits &amp; Debit Notes
+                    </h5>
+                    {% if available_credits and invoice.remaining_balance > 0 %}
+                    <button class="btn btn-sm btn-warning text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#applyCreditModal">
+                        <i class="bi bi-plus-circle me-1"></i> Apply Credit Note
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 py-3">Credit Note #</th>
+                                <th class="py-3">Applied Date</th>
+                                <th class="py-3">Claim Reason</th>
+                                <th class="py-3">Applied By</th>
+                                <th class="text-end pe-3 py-3">Offset Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for app in credits_applied %}
+                            <tr>
+                                <td class="ps-3 fw-bold">
+                                    <a href="{% url 'supplier_credit_detail' slug=business.slug credit_id=app.credit.id %}" class="text-primary text-decoration-none">
+                                        {{ app.credit.credit_number }}
+                                    </a>
+                                </td>
+                                <td class="text-secondary">{{ app.applied_at|date:"M d, Y" }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ app.credit.get_reason_display }}</span></td>
+                                <td class="text-secondary">{{ app.applied_by.get_full_name|default:app.applied_by.username }}</td>
+                                <td class="text-end pe-3 fw-bold text-info">KES {{ app.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    <i class="bi bi-tag d-block fs-3 mb-2 opacity-50"></i>
+                                    No supplier credits applied to this invoice.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Summary Info -->
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="card-title fw-bold mb-0 text-dark">
+                        <i class="bi bi-info-circle me-2 text-primary"></i> Bill &amp; Accrual Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Supplier</span>
+                            <span class="fw-semibold text-dark">{{ invoice.supplier.name }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Invoice Date</span>
+                            <span class="text-dark">{{ invoice.invoice_date|date:"M d, Y" }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Payment Due Date</span>
+                            <span class="{% if invoice.is_overdue %}text-danger fw-bold{% else %}text-dark{% endif %}">
+                                {{ invoice.due_date|date:"M d, Y" }}
+                            </span>
+                        </li>
+                        {% if invoice.purchase %}
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Linked PO</span>
+                            <a href="{% url 'purchase_detail' slug=business.slug pk=invoice.purchase.id %}" class="text-primary text-decoration-none fw-semibold">
+                                {{ invoice.purchase.purchase_number }}
+                            </a>
+                        </li>
+                        {% endif %}
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Subtotal</span>
+                            <span class="text-dark">KES {{ invoice.subtotal|floatformat:2 }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Tax Amount</span>
+                            <span class="text-dark">KES {{ invoice.tax_amount|floatformat:2 }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between border-top pt-2">
+                            <span class="text-muted fw-bold">Gross Invoiced</span>
+                            <span class="fw-bold text-dark fs-6">KES {{ invoice.amount|floatformat:2 }}</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between">
+                            <span class="text-muted">Recorded By</span>
+                            <span class="text-secondary">{{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"System" }}</span>
+                        </li>
+                    </ul>
+
+                    {% if invoice.notes %}
+                    <div class="mt-3 pt-3 border-top">
+                        <span class="text-muted small text-uppercase fw-semibold d-block mb-1">Notes:</span>
+                        <div class="small text-dark p-2 bg-light rounded border">{{ invoice.notes|linebreaksbr }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Apply Credit Note -->
+{% if available_credits and invoice.remaining_balance > 0 %}
+<div class="modal fade" id="applyCreditModal" tabindex="-1" aria-labelledby="applyCreditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-white border-0 shadow rounded-3">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold text-dark" id="applyCreditModalLabel">
+                    <i class="bi bi-arrow-return-left text-warning me-2"></i> Apply Supplier Credit Note
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{% url 'supplier_credit_apply' slug=business.slug credit_id=available_credits.0.id %}" method="post" id="applyCreditForm">
+                {% csrf_token %}
+                <input type="hidden" name="invoice_id" value="{{ invoice.id }}">
+                <div class="modal-body p-4">
+                    <div class="alert alert-info border-0 rounded-2 py-2 small mb-3">
+                        Applying a credit note reduces the open balance of this bill without requiring cash/bank payout.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Select Available Credit Claim</label>
+                        <select id="creditSelect" class="form-select" onchange="updateCreditFormAction(this)">
+                            {% for cr in available_credits %}
+                            <option value="{{ cr.id }}" data-max="{{ cr.remaining_credit }}" data-url="{% url 'supplier_credit_apply' slug=business.slug credit_id=cr.id %}">
+                                {{ cr.credit_number }} — KES {{ cr.remaining_credit|floatformat:2 }} available ({{ cr.get_reason_display }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Offset Amount (KES)</label>
+                        <input type="number" step="0.01" min="0.01" max="{{ invoice.remaining_balance }}" name="amount" id="creditOffsetAmount" value="{{ invoice.remaining_balance }}" class="form-control fw-bold text-dark fs-5" required oninput="calculateNetPreview()">
+                        <div class="form-text small">Max offset on this bill: KES {{ invoice.remaining_balance|floatformat:2 }}</div>
+                    </div>
+
+                    <!-- Live Calculation Preview -->
+                    <div class="card bg-light border p-3 rounded-2 mb-3">
+                        <div class="d-flex justify-content-between small text-secondary mb-1">
+                            <span>Current Bill Balance:</span>
+                            <span>KES {{ invoice.remaining_balance|floatformat:2 }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-info fw-semibold mb-1">
+                            <span>Less Credit Note Offset:</span>
+                            <span id="previewOffsetAmount">- KES {{ invoice.remaining_balance|floatformat:2 }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between fw-bold text-dark border-top pt-1">
+                            <span>New Net Balance:</span>
+                            <span id="previewNewBalance">KES 0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-dark small text-uppercase fw-semibold">Remarks / Reason (Optional)</label>
+                        <input type="text" name="notes" class="form-control" placeholder="e.g. Offset for goods return claim">
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold">
+                        <i class="bi bi-check-circle me-1"></i> Apply Credit Note
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const currentRemainingBalance = {{ invoice.remaining_balance }};
+
+function updateCreditFormAction(selectEl) {
+    const selectedOpt = selectEl.options[selectEl.selectedIndex];
+    const formUrl = selectedOpt.getAttribute('data-url');
+    const maxCredit = parseFloat(selectedOpt.getAttribute('data-max')) || 0;
+    document.getElementById('applyCreditForm').action = formUrl;
+
+    const offsetInput = document.getElementById('creditOffsetAmount');
+    const recommended = Math.min(currentRemainingBalance, maxCredit);
+    offsetInput.value = recommended.toFixed(2);
+    offsetInput.max = recommended.toFixed(2);
+    calculateNetPreview();
+}
+
+function calculateNetPreview() {
+    const offset = parseFloat(document.getElementById('creditOffsetAmount').value) || 0;
+    const newBal = Math.max(0, currentRemainingBalance - offset);
+    document.getElementById('previewOffsetAmount').textContent = `- KES ${offset.toFixed(2)}`;
+    document.getElementById('previewNewBalance').textContent = `KES ${newBal.toFixed(2)}`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sel = document.getElementById('creditSelect');
+    if (sel) updateCreditFormAction(sel);
+});
+</script>
+{% endif %}
+{% endblock %}
