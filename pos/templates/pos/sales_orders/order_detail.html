@@ -1,0 +1,198 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Sales Order {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'sales_order_list' slug=business_slug %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+            <h2 class="mb-0">Sales Order {{ order.order_number }}</h2>
+            <span class="badge 
+                {% if order.status == 'draft' %}bg-secondary
+                {% elif order.status == 'confirmed' %}bg-info text-dark
+                {% elif order.status == 'partially_delivered' %}bg-warning text-dark
+                {% elif order.status == 'delivered' %}bg-success
+                {% elif order.status == 'invoiced' %}bg-primary
+                {% elif order.status == 'cancelled' %}bg-danger
+                {% else %}bg-secondary{% endif %} fs-6">
+                {{ order.get_status_display }}
+            </span>
+        </div>
+    </div>
+    <div class="col-auto d-flex gap-2">
+        {% if can_confirm %}
+        <form method="post" action="{% url 'sales_order_confirm' slug=business_slug pk=order.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Confirm Order</button>
+        </form>
+        {% endif %}
+        {% if can_dispatch %}
+        <a href="{% url 'delivery_note_create_from_order' slug=business_slug order_id=order.pk %}" class="btn btn-primary">
+            <i class="bi bi-truck"></i> Create Delivery Note
+        </a>
+        {% endif %}
+        {% if can_cancel %}
+        <form method="post" action="{% url 'sales_order_cancel' slug=business_slug pk=order.pk %}" onsubmit="return confirm('Cancel this sales order?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle"></i> Cancel Order</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-8">
+        <!-- Order Items -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-box-seam"></i> Ordered Items</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th class="text-end">Qty Ordered</th>
+                            <th class="text-end">Qty Delivered</th>
+                            <th class="text-end">Pending</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Tax</th>
+                            <th class="text-end">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.product.name }}</strong>
+                                <br><small class="text-muted">SKU: {{ item.product.sku|default:"-" }}</small>
+                            </td>
+                            <td class="text-end">{{ item.quantity_ordered }}</td>
+                            <td class="text-end text-success fw-bold">{{ item.quantity_delivered }}</td>
+                            <td class="text-end {% if item.quantity_pending_delivery > 0 %}text-warning fw-bold{% else %}text-muted{% endif %}">
+                                {{ item.quantity_pending_delivery }}
+                            </td>
+                            <td class="text-end">KES {{ item.unit_price|floatformat:2 }}</td>
+                            <td class="text-end">KES {{ item.tax_amount|floatformat:2 }}</td>
+                            <td class="text-end fw-bold">KES {{ item.line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="6" class="text-end">Subtotal:</td>
+                            <td class="text-end">KES {{ order.subtotal|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="6" class="text-end">Tax:</td>
+                            <td class="text-end">KES {{ order.tax_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% if order.discount_amount > 0 %}
+                        <tr>
+                            <td colspan="6" class="text-end text-danger">Discount:</td>
+                            <td class="text-end text-danger">- KES {{ order.discount_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="fw-bold fs-6">
+                            <td colspan="6" class="text-end">Total Amount:</td>
+                            <td class="text-end text-primary">KES {{ order.total_amount|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Linked Deliveries -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-truck"></i> Fulfillment Deliveries</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Delivery #</th>
+                            <th>Dispatch Date</th>
+                            <th>Carrier / Driver</th>
+                            <th>Status</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dn in deliveries %}
+                        <tr>
+                            <td><strong>{{ dn.delivery_number }}</strong></td>
+                            <td>{{ dn.dispatch_date|date:"d M Y H:i" }}</td>
+                            <td>{{ dn.carrier_name|default:dn.driver_name|default:"Direct Dispatch" }}</td>
+                            <td>
+                                <span class="badge {% if dn.status == 'delivered' %}bg-success{% elif dn.status == 'dispatched' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ dn.get_status_display }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'delivery_note_detail' slug=business_slug pk=dn.pk %}" class="btn btn-sm btn-outline-primary">
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-3 text-muted">No delivery notes generated yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Customer & Order Meta -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-person-badge"></i> Client Details</h5>
+            </div>
+            <div class="card-body">
+                <h6>{{ order.customer.name }}</h6>
+                <p class="text-muted small mb-1"><i class="bi bi-telephone"></i> {{ order.customer.phone|default:"No phone provided" }}</p>
+                <p class="text-muted small mb-1"><i class="bi bi-envelope"></i> {{ order.customer.email|default:"No email provided" }}</p>
+                <p class="text-muted small mb-0"><i class="bi bi-geo-alt"></i> {{ order.shipping_address|default:order.customer.address|default:"No address" }}</p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Order Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0 small">
+                    <dt class="col-sm-5">Order Date:</dt>
+                    <dd class="col-sm-7">{{ order.order_date|date:"d M Y" }}</dd>
+
+                    <dt class="col-sm-5">Expected Date:</dt>
+                    <dd class="col-sm-7">{{ order.expected_delivery_date|date:"d M Y"|default:"-" }}</dd>
+
+                    <dt class="col-sm-5">Payment Terms:</dt>
+                    <dd class="col-sm-7">{{ order.get_payment_terms_display }}</dd>
+
+                    <dt class="col-sm-5">Created By:</dt>
+                    <dd class="col-sm-7">{{ order.created_by.get_full_name|default:order.created_by.username|default:"System" }}</dd>
+
+                    {% if order.confirmed_by %}
+                    <dt class="col-sm-5">Confirmed By:</dt>
+                    <dd class="col-sm-7">{{ order.confirmed_by.username }} ({{ order.confirmed_at|date:"d M Y" }})</dd>
+                    {% endif %}
+                </dl>
+                {% if order.notes %}
+                <hr>
+                <div class="small">
+                    <strong>Notes:</strong>
+                    <p class="text-muted mb-0">{{ order.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

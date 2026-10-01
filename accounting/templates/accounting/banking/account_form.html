@@ -1,0 +1,66 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Add Bank / M-Pesa Account{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-bank2 me-2 text-primary"></i>Add Bank / M-Pesa Account</h1>
+        <p class="page-subtitle">Configure bank account details and link to a General Ledger cash/bank asset account.</p>
+    </div>
+    <a href="{% url 'accounting_bank_account_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Accounts
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Internal Account Display Name <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|first }}</div>{% endif %}
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bank / Institution Name <span class="text-danger">*</span></label>
+                            {{ form.bank_name }}
+                            {% if form.bank_name.errors %}<div class="text-danger small mt-1">{{ form.bank_name.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Account / Till / Paybill Number <span class="text-danger">*</span></label>
+                            {{ form.account_number }}
+                            {% if form.account_number.errors %}<div class="text-danger small mt-1">{{ form.account_number.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">GL Ledger Asset Account <span class="text-danger">*</span></label>
+                            {{ form.gl_account }}
+                            {% if form.gl_account.errors %}<div class="text-danger small mt-1">{{ form.gl_account.errors|first }}</div>{% endif %}
+                            <small class="text-muted">Must be in Category: Cash &amp; Bank Equivalents (1010–1050).</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bank Branch Name (Optional)</label>
+                            {{ form.branch_name }}
+                            {% if form.branch_name.errors %}<div class="text-danger small mt-1">{{ form.branch_name.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'accounting_bank_account_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-acc-primary px-4">
+                            <i class="bi bi-check-circle me-1"></i>Save Bank Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

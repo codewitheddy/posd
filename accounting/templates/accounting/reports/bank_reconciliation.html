@@ -1,0 +1,87 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Bank Reconciliation Statement — {{ bank_account.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary bg-opacity-10 text-primary font-monospace">{{ bank_account.gl_account.code }}</span>
+            <span class="badge bg-light text-dark border">{{ bank_account.bank_name }}</span>
+        </div>
+        <h1><i class="bi bi-file-earmark-check me-2 text-primary"></i>Bank Reconciliation Statement</h1>
+        <p class="page-subtitle">{{ bank_account.name }} (A/C: {{ bank_account.account_number }}) | As of <strong>{{ as_of_date|date:"d F Y" }}</strong></p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_bank_account_detail' bank_account.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Account
+        </a>
+        <button onclick="window.print()" class="btn btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Print Statement
+        </button>
+    </div>
+</div>
+
+<div class="row justify-content-center mb-4">
+    <div class="col-lg-10">
+        <!-- Formal Bank Reconciliation Statement -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+                <span class="fw-bold fs-6"><i class="bi bi-shield-check me-2"></i>Bank Reconciliation Schedule (IFRS Form)</span>
+                {% if recon.is_reconciled %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Reconciled (Diff: KES 0.00)</span>
+                {% else %}
+                <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Out of Balance (Diff: KES {{ recon.difference|floatformat:2 }})</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-4">
+                <table class="table table-borderless align-middle mb-0">
+                    <tbody>
+                        <tr class="border-bottom">
+                            <td class="fw-bold py-3">Balance as per General Ledger (Account {{ bank_account.gl_account.code }}):</td>
+                            <td class="text-end font-monospace fw-bold py-3 fs-6">
+                                KES {{ recon.gl_balance|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="pt-3 text-muted"><em>Add:</em> Unpresented Payments &amp; Disbursements (Outstanding in Bank)</td>
+                            <td class="text-end font-monospace pt-3 text-success fw-semibold">
+                                + KES {{ recon.unpresented_payments|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr class="border-bottom">
+                            <td class="pb-3 text-muted"><em>Less:</em> Uncredited Receipts &amp; Lodgements (Outstanding in Bank)</td>
+                            <td class="text-end font-monospace pb-3 text-danger fw-semibold">
+                                - KES {{ recon.uncredited_receipts|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr class="border-bottom bg-light">
+                            <td class="fw-bold py-3">Reconciled / Adjusted Book Balance:</td>
+                            <td class="text-end font-monospace fw-bold py-3 fs-6 text-primary">
+                                KES {{ recon.adjusted_book_balance|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr class="border-bottom">
+                            <td class="fw-bold py-3">Balance as per Bank Statement:</td>
+                            <td class="text-end font-monospace fw-bold py-3 fs-6">
+                                KES {{ recon.statement_balance|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr class="{% if recon.is_reconciled %}table-success{% else %}table-danger{% endif %}">
+                            <td class="fw-bold py-3">
+                                {% if recon.is_reconciled %}
+                                <i class="bi bi-check-circle-fill text-success me-2"></i>Net Reconciliation Variance (Balanced):
+                                {% else %}
+                                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Net Reconciliation Variance (Difference):
+                                {% endif %}
+                            </td>
+                            <td class="text-end font-monospace fw-bold py-3 fs-5 {% if recon.is_reconciled %}text-success{% else %}text-danger{% endif %}">
+                                KES {{ recon.difference|floatformat:2 }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

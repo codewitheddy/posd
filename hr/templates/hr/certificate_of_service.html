@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Certificate of Service — {{ employee.get_full_name }}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      font-size: 13px;
+      color: #0f172a;
+      background: #f8fafc;
+    }
+    .cert-card {
+      max-width: 750px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 2px solid #0f172a;
+      padding: 40px 50px;
+      position: relative;
+    }
+    .cert-header {
+      text-align: center;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+    }
+    .cert-header h1 {
+      font-size: 22px;
+      letter-spacing: 0.05em;
+      margin: 0 0 6px 0;
+    }
+    .cert-header h3 {
+      font-size: 13px;
+      font-weight: normal;
+      color: #475569;
+      margin: 0;
+    }
+    .field-row {
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .field-label {
+      font-weight: bold;
+      display: inline-block;
+      min-width: 220px;
+    }
+    .sig-section {
+      margin-top: 50px;
+      border-top: 1px solid #cbd5e1;
+      padding-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .print-btn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 8px 16px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    @media print {
+      .print-btn { display: none; }
+      body { margin: 0; background: #fff; }
+      .cert-card { border: 2px solid #000; box-shadow: none; padding: 30px; }
+    }
+  </style>
+</head>
+<body>
+
+  <button class="print-btn" onclick="window.print()">Print Certificate</button>
+
+  <div class="cert-card">
+    <div class="cert-header">
+      <div style="font-size: 12px; font-weight: bold; letter-spacing: 0.1em; color: #475569; margin-bottom: 4px;">REPUBLIC OF KENYA</div>
+      <h1>CERTIFICATE OF SERVICE</h1>
+      <h3>Issued pursuant to Section 51 of the Employment Act (Cap 227)</h3>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">1. Name of Employer:</span>
+      <strong>{{ business.name|upper }}</strong>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">2. Employer's Postal Address:</span>
+      <span>{{ business.address|default:"P.O. Box Nairobi, Kenya" }}</span>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">3. Full Name of Employee:</span>
+      <strong style="font-size: 14px;">{{ employee.get_full_name|upper }}</strong>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">4. National ID / Passport No.:</span>
+      <strong class="font-monospace">{{ employee.id_number }}</strong>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">5. Employee's KRA PIN:</span>
+      <strong class="font-monospace">{{ employee.kra_pin|default:"—" }}</strong>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">6. Date of Commencement:</span>
+      <span>{{ employee.hire_date|date:"d F Y" }}</span>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">7. Date of Termination of Service:</span>
+      <span>{{ termination_date|date:"d F Y"|default:today|date:"d F Y" }}</span>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">8. Nature of Employment / Title:</span>
+      <span>{{ employee.job_title }}</span>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">9. Rate of Remuneration at Exit:</span>
+      <span>KES {{ employee.basic_salary|floatformat:2 }} per month</span>
+    </div>
+
+    <div class="sig-section">
+      <div>
+        <strong>Employer Signature / Stamp:</strong><br><br><br>
+        __________________________________<br>
+        Authorized Signatory
+      </div>
+      <div style="text-align: right;">
+        <strong>Date of Issue:</strong><br><br><br>
+        {{ today|date:"d F Y" }}
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

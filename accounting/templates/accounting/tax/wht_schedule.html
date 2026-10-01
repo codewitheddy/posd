@@ -1,0 +1,130 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Withholding Tax (WHT) Schedule{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-danger text-white font-monospace">KENYA REVENUE AUTHORITY</span>
+            <span class="badge bg-light text-dark border">WHT &amp; WHVAT Schedule</span>
+        </div>
+        <h1><i class="bi bi-file-earmark-ruled me-2 text-primary"></i>Withholding Tax Schedule</h1>
+        <p class="page-subtitle">Schedule of WHT (5% Management/Prof, 3% Contractual, 10% Rent, 2% WHVAT) &amp; KRA iTax batch upload.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="get" class="d-flex align-items-center gap-2">
+            <label class="small text-muted fw-bold mb-0 text-nowrap">Period:</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <span class="small text-muted">to</span>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <select name="wht_type" class="form-select form-select-sm">
+                <option value="" {% if not wht_type %}selected{% endif %}>All Types</option>
+                <option value="payable" {% if wht_type == 'payable' %}selected{% endif %}>Withheld by Us (Payable to KRA)</option>
+                <option value="receivable" {% if wht_type == 'receivable' %}selected{% endif %}>Withheld from Us (Credits)</option>
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-filter me-1"></i>Filter
+            </button>
+        </form>
+        <a href="{% url 'accounting_wht_csv' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}{% if wht_type %}&wht_type={{ wht_type }}{% endif %}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-download me-1"></i>iTax WHT CSV
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="stat-label">WHT Withheld by Us (Payable to KRA)</span>
+                <span class="badge bg-danger bg-opacity-10 text-danger">Due by 20th</span>
+            </div>
+            <div class="stat-val text-danger font-monospace">KES {{ wht.totals.total_withheld_by_us|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Deducted from vendor payments (Consultancy, Rent, Subcontractors)</div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="stat-label">WHT Withheld from Us (Tax Credits)</span>
+                <span class="badge bg-success bg-opacity-10 text-success">Advance Tax</span>
+            </div>
+            <div class="stat-val text-success font-monospace">KES {{ wht.totals.total_withheld_from_us|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Deducted by corporate/government customers (Claimable against income tax)</div>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold">Itemized Withholding Tax Transactions ({{ wht.records|length }})</span>
+        <a href="{% url 'accounting_wht_csv' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-dark">
+            <i class="bi bi-filetype-csv me-1"></i>Export for iTax Upload
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Category</th>
+                    <th>Entity / Supplier</th>
+                    <th>KRA PIN</th>
+                    <th class="text-center">Rate</th>
+                    <th class="text-end">Gross Amount (KES)</th>
+                    <th class="text-end">WHT Amount (KES)</th>
+                    <th>Certificate #</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in wht.records %}
+                <tr>
+                    <td>{{ r.transaction_date|date:"d M Y" }}</td>
+                    <td>
+                        {% if r.wht_type == 'payable' %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Withheld by Us</span>
+                        {% else %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Withheld from Us</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ r.get_category_display }}</span>
+                    </td>
+                    <td class="fw-semibold">{{ r.party_name }}</td>
+                    <td>
+                        <span class="font-monospace small badge bg-light text-dark border">{{ r.party_pin|default:"—" }}</span>
+                    </td>
+                    <td class="text-center font-monospace">{{ r.rate_percentage }}%</td>
+                    <td class="text-end font-monospace">KES {{ r.base_amount|floatformat:2 }}</td>
+                    <td class="text-end font-monospace fw-bold {% if r.wht_type == 'payable' %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ r.tax_amount|floatformat:2 }}
+                    </td>
+                    <td>
+                        <span class="font-monospace small text-muted">{{ r.certificate_number|default:"—" }}</span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center py-5 text-muted">
+                        <i class="bi bi-file-earmark-ruled display-6 d-block mb-2 text-secondary"></i>
+                        No withholding tax records found for the selected period.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if wht.records %}
+            <tfoot class="table-dark font-monospace fw-bold">
+                <tr>
+                    <td colspan="6">TOTALS</td>
+                    <td class="text-end">KES {{ wht.totals.gross_amount|floatformat:2 }}</td>
+                    <td class="text-end text-warning">KES {{ wht.totals.wht_amount|floatformat:2 }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

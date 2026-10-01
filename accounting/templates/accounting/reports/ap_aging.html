@@ -1,0 +1,129 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Accounts Payable (AP) Aging Schedule{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-hourglass-split me-2 text-primary"></i>Accounts Payable Aging Schedule</h1>
+        <p class="page-subtitle">Standard supplier aging schedule (Current, 1–30, 31–60, 61–90, 90+ Days) for cash flow management.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <form method="get" class="d-flex align-items-center gap-2">
+            <label class="small text-muted fw-bold mb-0 text-nowrap">As of Date:</label>
+            <input type="date" name="as_of_date" value="{{ as_of_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-filter me-1"></i>Recalculate
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Aging KPI Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <span class="stat-label">Total Payables</span>
+            <div class="stat-val text-danger font-monospace mt-1">KES {{ report.totals.total|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">All unpaid bills</div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <span class="stat-label text-success">Current (Not Due)</span>
+            <div class="stat-val text-success font-monospace mt-1">KES {{ report.totals.current|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Within terms</div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <span class="stat-label text-info">1 – 30 Days</span>
+            <div class="stat-val text-info font-monospace mt-1">KES {{ report.totals.days_1_30|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Due shortly</div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <span class="stat-label text-warning">31 – 60 Days</span>
+            <div class="stat-val text-warning font-monospace mt-1">KES {{ report.totals.days_31_60|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Overdue</div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <span class="stat-label text-danger">61 – 90 Days</span>
+            <div class="stat-val text-danger font-monospace mt-1">KES {{ report.totals.days_61_90|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Severely overdue</div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <span class="stat-label text-danger">90+ Days (Critical)</span>
+            <div class="stat-val text-danger font-monospace mt-1">KES {{ report.totals.days_over_90|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Supplier risk</div>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold">Vendor Aging Breakdown (As of {{ as_of_date|date:"d M Y" }})</span>
+        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Print Report
+        </button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Vendor / Supplier Name</th>
+                    <th>KRA PIN / Bank Details</th>
+                    <th class="text-end">Current (KES)</th>
+                    <th class="text-end">1–30 Days (KES)</th>
+                    <th class="text-end">31–60 Days (KES)</th>
+                    <th class="text-end">61–90 Days (KES)</th>
+                    <th class="text-end">Over 90 Days (KES)</th>
+                    <th class="text-end">Total Payable (KES)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in report.rows %}
+                <tr>
+                    <td class="fw-bold">{{ r.vendor_name }}</td>
+                    <td>
+                        {% if r.kra_pin %}<span class="badge bg-light text-dark border font-monospace me-1">{{ r.kra_pin }}</span>{% endif %}
+                        {% if r.phone %}<small class="text-muted">{{ r.phone }}</small>{% endif %}
+                        {% if not r.kra_pin and not r.phone %}<span class="text-muted small">—</span>{% endif %}
+                    </td>
+                    <td class="text-end font-monospace">KES {{ r.current|floatformat:2 }}</td>
+                    <td class="text-end font-monospace">KES {{ r.days_1_30|floatformat:2 }}</td>
+                    <td class="text-end font-monospace {% if r.days_31_60 > 0 %}text-warning fw-semibold{% endif %}">KES {{ r.days_31_60|floatformat:2 }}</td>
+                    <td class="text-end font-monospace {% if r.days_61_90 > 0 %}text-danger fw-semibold{% endif %}">KES {{ r.days_61_90|floatformat:2 }}</td>
+                    <td class="text-end font-monospace {% if r.days_over_90 > 0 %}text-danger fw-bold{% endif %}">KES {{ r.days_over_90|floatformat:2 }}</td>
+                    <td class="text-end font-monospace fw-bold text-danger">KES {{ r.total|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-5 text-muted">
+                        <i class="bi bi-check2-circle display-6 d-block mb-2 text-success"></i>
+                        No outstanding vendor payables as of {{ as_of_date|date:"d M Y" }}.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if report.rows %}
+            <tfoot class="table-dark">
+                <tr class="fw-bold font-monospace">
+                    <td colspan="2">TOTAL PAYABLES</td>
+                    <td class="text-end">KES {{ report.totals.current|floatformat:2 }}</td>
+                    <td class="text-end">KES {{ report.totals.days_1_30|floatformat:2 }}</td>
+                    <td class="text-end">KES {{ report.totals.days_31_60|floatformat:2 }}</td>
+                    <td class="text-end">KES {{ report.totals.days_61_90|floatformat:2 }}</td>
+                    <td class="text-end">KES {{ report.totals.days_over_90|floatformat:2 }}</td>
+                    <td class="text-end text-danger">KES {{ report.totals.total|floatformat:2 }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

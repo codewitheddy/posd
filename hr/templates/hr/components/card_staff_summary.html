@@ -1,0 +1,16 @@
+<div class="{{ card.width }}">
+    <div class="card shadow-sm border-0 h-100 border-start border-success border-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col">
+                    <div class="text-xs fw-bold text-success text-uppercase mb-1">Active Personnel (HR)</div>
+                    <div class="h5 mb-0 fw-bold text-gray-800">{{ total_active_staff|default:0 }} Employees</div>
+                    <div class="small text-muted mt-1">{{ staff_on_leave_today|default:0 }} currently on leave</div>
+                </div>
+                <div class="col-auto">
+                    <i class="bi bi-people-fill text-gray-300 fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

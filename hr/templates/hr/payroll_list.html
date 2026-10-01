@@ -1,0 +1,118 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Payroll Processing{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-cash-stack me-2 text-primary"></i>Kenyan Payroll Processing &amp; Payslips</h1>
+    <p class="page-subtitle">Statutory deductions: PAYE (Income Tax Act), NSSF Act 2013, SHIF/SHA 2023, Affordable Housing Levy 2024, NITA.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'hr_statutory_returns' %}" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Statutory Returns</a>
+    <a href="{% url 'hr_p9_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-text me-1"></i>P9 Tax Cards</a>
+  </div>
+</div>
+
+<!-- Calculate Payroll Card -->
+<div class="form-card mb-4">
+  <h6 class="fw-bold mb-3"><i class="bi bi-calculator me-1 text-primary"></i>Execute Monthly Payroll Run</h6>
+  <form method="POST" action="{% url 'hr_payroll_calculate' %}" class="row g-3 align-items-end">
+    {% csrf_token %}
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Pay Period Start <span class="text-danger">*</span></label>
+      <input type="date" name="period_start" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Pay Period End <span class="text-danger">*</span></label>
+      <input type="date" name="period_end" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-3">
+      <button type="submit" class="btn btn-hr-primary btn-sm w-100"><i class="bi bi-play-circle-fill me-1"></i>Compute Statutory Payroll</button>
+    </div>
+  </form>
+  <div class="alert alert-light border py-2 px-3 mt-3 mb-0 small text-muted">
+    <i class="bi bi-shield-check text-success me-1"></i> <strong>Automated Compliance:</strong> Evaluates active versioned <code>StatutoryRuleSet</code>, progressive PAYE tax brackets, personal/insurance reliefs, NSSF Tier I/II limits, and employer matching obligations.
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Payment Status</label>
+      <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending Disbursement</option>
+        <option value="paid" {% if status_filter == 'paid' %}selected{% endif %}>Paid &amp; Settled</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Employee</th>
+          <th>Pay Period</th>
+          <th>Gross Salary</th>
+          <th>Overtime Hrs</th>
+          <th>Overtime Pay</th>
+          <th>PAYE Tax</th>
+          <th>NSSF (T1+T2)</th>
+          <th>SHIF (2.75%)</th>
+          <th>Housing Levy</th>
+          <th>Net Pay</th>
+          <th>Status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payrolls %}
+        <tr>
+          <td>
+            <div class="fw-bold">{{ p.employee.get_full_name }}</div>
+            <div class="text-muted small font-monospace">PIN: {{ p.employee.kra_pin|default:"—" }}</div>
+          </td>
+          <td class="small text-muted font-monospace">{{ p.period_start|date:"d/m/Y" }} &ndash; {{ p.period_end|date:"d/m/Y" }}</td>
+          <td><strong>KES {{ p.gross_salary|floatformat:2 }}</strong></td>
+          <td class="font-monospace small">{% if p.overtime_hours %}{{ p.overtime_hours|floatformat:2 }}h{% else %}0.00h{% endif %}</td>
+          <td class="text-success small font-monospace">{% if p.overtime_amount %}KES {{ p.overtime_amount|floatformat:2 }}{% else %}KES 0.00{% endif %}</td>
+          <td class="text-danger small font-monospace">KES {{ p.paye|floatformat:2 }}</td>
+          <td class="text-danger small font-monospace">KES {{ p.nssf|floatformat:2 }}</td>
+          <td class="text-danger small font-monospace">KES {{ p.shif|floatformat:2 }}</td>
+          <td class="text-danger small font-monospace">KES {{ p.housing_levy|floatformat:2 }}</td>
+          <td><span class="fw-bold text-success font-monospace fs-6">KES {{ p.net_salary|floatformat:2 }}</span></td>
+          <td>
+            <span class="badge {% if p.status == 'paid' %}bg-success bg-opacity-15 text-success border border-success border-opacity-25{% else %}bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25{% endif %}">
+              {{ p.get_status_display }}
+            </span>
+            {% if p.pay_date %}<div class="text-muted small" style="font-size:11px;">Paid: {{ p.pay_date|date:"d M Y" }}</div>{% endif %}
+          </td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm">
+              <a href="{% url 'hr_payslip_view' payroll_pk=p.pk %}" class="btn btn-outline-primary" target="_blank" title="View Printable Payslip">
+                <i class="bi bi-eye"></i> Payslip
+              </a>
+              <a href="{% url 'hr_payslip_download' payroll_pk=p.pk %}" class="btn btn-primary" title="Download PDF Payslip">
+                <i class="bi bi-download"></i> PDF
+              </a>
+              {% if p.status == 'pending' %}
+              <form method="POST" action="{% url 'hr_payroll_mark_paid' pk=p.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success" onclick="return confirm('Disburse and mark payroll record as PAID?')" title="Mark Paid">
+                  <i class="bi bi-check-circle"></i> Disburse
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-4">No payroll records computed for this period. Click "Compute Statutory Payroll" above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

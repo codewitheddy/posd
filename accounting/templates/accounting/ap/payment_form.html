@@ -1,0 +1,97 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Issue Payment Voucher{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-wallet2 me-2 text-primary"></i>Issue Vendor Payment Voucher</h1>
+        <p class="page-subtitle">Disburse funds to supplier and automatically post double-entry GL journal lines.</p>
+    </div>
+    <a href="{% url 'accounting_vendor_payment_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Vouchers
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Vendor / Supplier <span class="text-danger">*</span></label>
+                            {{ form.vendor }}
+                            {% if form.vendor.errors %}<div class="text-danger small mt-1">{{ form.vendor.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Branch (Optional)</label>
+                            {{ form.branch }}
+                            {% if form.branch.errors %}<div class="text-danger small mt-1">{{ form.branch.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Payment Voucher Number <span class="text-danger">*</span></label>
+                            {{ form.voucher_number }}
+                            {% if form.voucher_number.errors %}<div class="text-danger small mt-1">{{ form.voucher_number.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Payment Date <span class="text-danger">*</span></label>
+                            {{ form.payment_date }}
+                            {% if form.payment_date.errors %}<div class="text-danger small mt-1">{{ form.payment_date.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Amount Paid (KES) <span class="text-danger">*</span></label>
+                            {{ form.amount }}
+                            {% if form.amount.errors %}<div class="text-danger small mt-1">{{ form.amount.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Payment Method <span class="text-danger">*</span></label>
+                            {{ form.payment_method }}
+                            {% if form.payment_method.errors %}<div class="text-danger small mt-1">{{ form.payment_method.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Paid From Account <span class="text-danger">*</span></label>
+                            {{ form.paid_from_account }}
+                            {% if form.paid_from_account.errors %}<div class="text-danger small mt-1">{{ form.paid_from_account.errors|first }}</div>{% endif %}
+                            <small class="text-muted">Bank/Cash source (e.g. 1010 Bank, 1020 Petty Cash, 1030 M-Pesa).</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bank Reference / Cheque # / EFT Ref</label>
+                            {{ form.reference }}
+                            {% if form.reference.errors %}<div class="text-danger small mt-1">{{ form.reference.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Notes / Description</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors|first }}</div>{% endif %}
+                    </div>
+
+                    <div class="alert alert-info py-2 small mb-4">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        Saving this voucher automatically applies payment to the vendor's oldest open bills and posts double-entry GL journal lines: <strong>DR Trade Payables (2000)</strong> / <strong>CR Paid From Account</strong>.
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'accounting_vendor_payment_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-acc-primary px-4">
+                            <i class="bi bi-check-circle me-1"></i>Issue &amp; Post Voucher
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

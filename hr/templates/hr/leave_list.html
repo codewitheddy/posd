@@ -1,0 +1,83 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Leave Management{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-calendar-check me-2 text-primary"></i>Leave Applications &amp; Statutory Entitlements</h1>
+    <p class="page-subtitle">Kenya Employment Act: Annual Leave (21 days), Maternity (3 mo), Paternity (2 wk), Sick Leave (30 full / 15 half pay).</p>
+  </div>
+  <a href="{% url 'hr_leave_create' %}" class="btn btn-hr-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Apply for Leave</a>
+</div>
+
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Status Filter</label>
+      <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending Approval</option>
+        <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Employee</th>
+          <th>Leave Classification</th>
+          <th>Start Date</th>
+          <th>End Date</th>
+          <th>Days Count</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th class="text-end">Approval Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in leave_requests %}
+        <tr>
+          <td>
+            <div class="fw-bold">{{ l.employee.get_full_name }}</div>
+            <div class="text-muted small">{{ l.employee.job_title }}</div>
+          </td>
+          <td><span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">{{ l.get_leave_type_display }}</span></td>
+          <td>{{ l.start_date|date:"d M Y" }}</td>
+          <td>{{ l.end_date|date:"d M Y" }}</td>
+          <td><strong>{{ l.days_count }} days</strong></td>
+          <td class="small text-muted">{{ l.reason|truncatechars:45 }}</td>
+          <td>
+            <span class="badge {% if l.status == 'approved' %}bg-success bg-opacity-15 text-success border border-success border-opacity-25{% elif l.status == 'rejected' %}bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25{% else %}bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25{% endif %}">
+              {{ l.get_status_display }}
+            </span>
+            {% if l.approved_by %}
+              <div class="text-muted small" style="font-size:11px;">By {{ l.approved_by.get_full_name }}</div>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if is_manager and l.status == 'pending' %}
+            <form method="POST" action="{% url 'hr_leave_approve' pk=l.pk %}" style="display:inline">{% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Approve Leave"><i class="bi bi-check-lg"></i> Approve</button>
+            </form>
+            <form method="POST" action="{% url 'hr_leave_reject' pk=l.pk %}" style="display:inline">{% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Reject Leave"><i class="bi bi-x-lg"></i> Reject</button>
+            </form>
+            {% elif not is_manager and l.status == 'pending' %}
+            <span class="text-muted small">Pending Review</span>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No leave applications recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

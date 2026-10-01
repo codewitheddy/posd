@@ -4,18 +4,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marid POS - Next-Gen Business Management</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Marid POS & ERP — Modular Business Platform</title>
+    
+    <!-- Bootstrap 5 & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
     <style>
         :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --secondary: #8b5cf6;
-            --accent: #ec4899;
-            --dark: #0f172a;
-            --light: #f8fafc;
+            --bg-body: #f8f9fc;
+            --bg-card: #ffffff;
+            --bg-subtle: #f1f5f9;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            
+            --primary-blue: #224195;
+            --primary-blue-hover: #1b357a;
+            
+            --pos-green: #059669;
+            --pos-green-hover: #047857;
+            
+            --hr-indigo: #4f46e5;
+            --acct-cyan: #0284c7;
+            
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --text-light: #94a3b8;
         }
         
         * {
@@ -25,613 +44,360 @@
         }
         
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--dark);
-            color: #fff;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
             overflow-x: hidden;
+            line-height: 1.5;
         }
         
-        /* Animated Background */
-        .animated-bg {
-            position: fixed;
+        /* Navbar */
+        .navbar-custom {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 14px 0;
+            position: sticky;
             top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            z-index: 1000;
         }
         
-        .animated-bg::before {
-            content: '';
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
-            border-radius: 50%;
-            top: -250px;
-            right: -250px;
-            animation: float 20s ease-in-out infinite;
-        }
-        
-        .animated-bg::after {
-            content: '';
-            position: absolute;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
-            border-radius: 50%;
-            bottom: -200px;
-            left: -200px;
-            animation: float 15s ease-in-out infinite reverse;
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            33% { transform: translate(30px, -50px) rotate(120deg); }
-            66% { transform: translate(-20px, 20px) rotate(240deg); }
-        }
-        
-        /* Navigation */
-        .navbar {
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1rem 0;
-        }
-        
-        .navbar-brand {
-            font-weight: 700;
-            font-size: 1.5rem;
-            color: #fff !important;
+        .navbar-brand-custom {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 10px;
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: var(--text-main);
+            text-decoration: none;
+            letter-spacing: -0.02em;
         }
         
-        .navbar-brand i {
-            color: var(--primary);
-            font-size: 1.8rem;
-        }
-        
-        .btn-nav {
-            padding: 0.6rem 1.5rem;
+        .brand-icon-box {
+            width: 36px;
+            height: 36px;
             border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: var(--primary-blue);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
         }
         
-        .btn-nav:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        .btn-custom-primary {
+            background-color: var(--primary-blue);
+            color: #ffffff;
+            font-weight: 600;
+            padding: 9px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--primary-blue);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .btn-custom-primary:hover {
+            background-color: var(--primary-blue-hover);
+            border-color: var(--primary-blue-hover);
+            color: #ffffff;
         }
         
-        .btn-primary-nav {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border: none;
-            color: white;
+        .btn-custom-outline {
+            background-color: transparent;
+            color: var(--text-main);
+            font-weight: 600;
+            padding: 9px 18px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .btn-custom-outline:hover {
+            background-color: var(--bg-subtle);
+            border-color: var(--border-hover);
+            color: var(--text-main);
+        }
+        
+        .btn-custom-danger {
+            background-color: transparent;
+            color: #dc2626;
+            font-weight: 600;
+            padding: 9px 18px;
+            border-radius: 8px;
+            border: 1px solid #fecaca;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-custom-danger:hover {
+            background-color: #fef2f2;
+            color: #b91c1c;
         }
         
         /* Hero Section */
-        .hero {
-            min-height: 90vh;
-            display: flex;
-            align-items: center;
-            position: relative;
-            padding: 4rem 0;
+        .hero-section {
+            padding: 72px 0 56px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-card);
         }
         
-        .hero-content {
-            position: relative;
-            z-index: 2;
-        }
-        
-        .hero h1 {
-            font-size: clamp(2.5rem, 5vw, 4.5rem);
-            font-weight: 800;
-            line-height: 1.1;
-            margin-bottom: 1.5rem;
-            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .hero .subtitle {
-            font-size: clamp(1.1rem, 2vw, 1.4rem);
-            color: #cbd5e1;
-            margin-bottom: 2.5rem;
-            font-weight: 400;
-            line-height: 1.6;
-        }
-        
-        .btn-hero {
-            padding: 1rem 2.5rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: 12px;
-            margin: 0.5rem;
-            transition: all 0.3s ease;
+        .badge-pill {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 6px;
+            padding: 6px 14px;
+            background-color: var(--bg-subtle);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 0.8125rem;
+            font-weight: 700;
+            color: var(--primary-blue);
+            margin-bottom: 20px;
         }
         
-        .btn-hero-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border: none;
-            color: white;
-            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
-        }
-        
-        .btn-hero-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 32px rgba(99, 102, 241, 0.5);
-            color: white;
-        }
-        
-        .btn-hero-outline {
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            backdrop-filter: blur(10px);
-        }
-        
-        .btn-hero-outline:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: var(--primary);
-            transform: translateY(-3px);
-            color: white;
-        }
-        
-        .hero-badge {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            background: rgba(99, 102, 241, 0.1);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 50px;
-            font-size: 0.9rem;
-            margin-bottom: 1.5rem;
-            color: #a5b4fc;
-        }
-        
-        /* Stats Section */
-        .stats {
-            padding: 4rem 0;
-            background: rgba(255, 255, 255, 0.02);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        
-        .stat-card {
-            text-align: center;
-            padding: 2rem 1rem;
-        }
-        
-        .stat-number {
+        .hero-title {
             font-size: 3rem;
             font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            color: var(--text-main);
+            margin-bottom: 18px;
         }
         
-        .stat-label {
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.2rem;
+            }
+        }
+        
+        .hero-subtitle {
+            font-size: 1.125rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 28px;
+            max-width: 580px;
+        }
+        
+        /* Architecture Showcase Box */
+        .arch-box {
+            background-color: var(--bg-body);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        .arch-box-header {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 800;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .arch-card {
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        
+        .arch-card:last-child {
+            margin-bottom: 0;
+        }
+        
+        .arch-icon-wrap {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #ffffff;
+            flex-shrink: 0;
+        }
+        
+        /* Workspaces Section */
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        .section-tag {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--primary-blue);
+            margin-bottom: 8px;
+        }
+        .section-heading {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+        .section-subtext {
             font-size: 1rem;
-            color: #94a3b8;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 8px auto 0;
+        }
+        
+        .workspace-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 28px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: border-color 0.15s ease, transform 0.15s ease;
+        }
+        .workspace-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+        }
+        
+        .ws-icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #ffffff;
+            margin-bottom: 20px;
+        }
+        
+        .ws-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-main);
+        }
+        
+        .ws-desc {
+            font-size: 0.9375rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            flex-grow: 1;
+        }
+        
+        .ws-feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px;
+            font-size: 0.875rem;
+            color: var(--text-main);
+        }
+        .ws-feature-list li {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ws-feature-list li i {
+            color: var(--pos-green);
+            font-size: 14px;
+        }
+        
+        /* Stats Strip */
+        .stats-strip {
+            background-color: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 40px 0;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: var(--text-main);
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
             font-weight: 500;
         }
         
-        /* Features Section */
-        .features {
-            padding: 6rem 0;
-        }
-        
-        .section-title {
-            text-align: center;
-            margin-bottom: 4rem;
-        }
-        
-        .section-title h2 {
-            font-size: clamp(2rem, 4vw, 3rem);
-            font-weight: 800;
-            margin-bottom: 1rem;
-        }
-        
-        .section-title p {
-            font-size: 1.2rem;
-            color: #94a3b8;
-        }
-        
-        .feature-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 2.5rem;
-            height: 100%;
-            transition: all 0.4s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-            opacity: 0;
-            transition: opacity 0.4s ease;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-10px);
-            border-color: var(--primary);
-            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2);
-        }
-        
-        .feature-card:hover::before {
-            opacity: 1;
-        }
-        
-        .feature-icon {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2rem;
-            margin-bottom: 1.5rem;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .feature-title {
-            font-size: 1.4rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .feature-card p {
-            color: #94a3b8;
-            line-height: 1.6;
-            position: relative;
-            z-index: 1;
-        }
-        
-        /* CTA Section */
-        .cta {
-            padding: 6rem 0;
-            text-align: center;
-            position: relative;
-        }
-        
-        .cta-box {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 24px;
-            padding: 4rem 2rem;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .cta-box::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
-            animation: rotate 20s linear infinite;
-        }
-        
-        @keyframes rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        
-        .cta-box h2 {
-            font-size: clamp(2rem, 4vw, 3rem);
-            font-weight: 800;
-            margin-bottom: 1rem;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .cta-box p {
-            font-size: 1.2rem;
-            color: #cbd5e1;
-            margin-bottom: 2rem;
-            position: relative;
-            z-index: 1;
+        /* Compliance Banner */
+        .compliance-banner {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 32px;
+            margin: 48px 0;
         }
         
         /* Footer */
-        footer {
-            background: rgba(15, 23, 42, 0.8);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 3rem 0;
-            text-align: center;
+        .footer-custom {
+            background-color: #ffffff;
+            border-top: 1px solid var(--border-color);
+            padding: 36px 0;
+            font-size: 0.875rem;
+            color: var(--text-muted);
         }
-        
-        footer a {
-            color: #94a3b8;
+        .footer-custom a {
+            color: var(--text-muted);
             text-decoration: none;
-            transition: color 0.3s ease;
         }
-        
-        footer a:hover {
-            color: var(--primary);
-        }
-        
-        /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .fade-in-up {
-            animation: fadeInUp 0.8s ease-out forwards;
-        }
-        
-        .delay-1 { animation-delay: 0.1s; opacity: 0; }
-        .delay-2 { animation-delay: 0.2s; opacity: 0; }
-        .delay-3 { animation-delay: 0.3s; opacity: 0; }
-        .delay-4 { animation-delay: 0.4s; opacity: 0; }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .hero {
-                min-height: 70vh;
-                text-align: center;
-            }
-            
-            .btn-hero {
-                width: 100%;
-                justify-content: center;
-            }
-            
-            .feature-card {
-                margin-bottom: 1.5rem;
-            }
-        }
-        
-        /* Hero Illustration */
-        .hero-illustration {
-            position: relative;
-            height: 500px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        /* POS Terminal */
-        .pos-terminal {
-            position: relative;
-            z-index: 2;
-            animation: fadeInUp 1s ease-out 0.5s forwards;
-            opacity: 0;
-        }
-        
-        .terminal-screen {
-            width: 280px;
-            height: 380px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(99, 102, 241, 0.3);
-            border-radius: 24px;
-            padding: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 60px rgba(99, 102, 241, 0.2);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .terminal-screen::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-            animation: shimmer 3s ease-in-out infinite;
-        }
-        
-        @keyframes shimmer {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 0.6; }
-        }
-        
-        .screen-header {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .screen-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            animation: pulse 2s ease-in-out infinite;
-        }
-        
-        .screen-dot:nth-child(2) { animation-delay: 0.2s; }
-        .screen-dot:nth-child(3) { animation-delay: 0.4s; }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 0.5; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.1); }
-        }
-        
-        .screen-content {
-            position: relative;
-            z-index: 1;
-        }
-        
-        .screen-item {
-            height: 60px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            margin-bottom: 12px;
-            animation: slideIn 0.5s ease-out forwards;
-            opacity: 0;
-        }
-        
-        .screen-item:nth-child(1) { animation-delay: 0.8s; }
-        .screen-item:nth-child(2) { animation-delay: 1s; }
-        .screen-item:nth-child(3) { animation-delay: 1.2s; }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        /* Floating Cards */
-        .float-card {
-            position: absolute;
-            width: 100px;
-            height: 100px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 16px;
-            backdrop-filter: blur(10px);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
-            animation: floatCard 6s ease-in-out infinite;
-            opacity: 0;
-        }
-        
-        .float-card i {
-            font-size: 2rem;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .card-text {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: #cbd5e1;
-        }
-        
-        .card-1 {
-            top: 50px;
-            right: 50px;
-            animation: floatCard 6s ease-in-out infinite, fadeInUp 1s ease-out 0.7s forwards;
-        }
-        
-        .card-2 {
-            bottom: 100px;
-            right: 20px;
-            animation: floatCard 6s ease-in-out infinite 2s, fadeInUp 1s ease-out 0.9s forwards;
-        }
-        
-        .card-3 {
-            top: 150px;
-            left: 20px;
-            animation: floatCard 6s ease-in-out infinite 4s, fadeInUp 1s ease-out 1.1s forwards;
-        }
-        
-        @keyframes floatCard {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(5deg); }
-        }
-        
-        /* Decorative Circles */
-        .deco-circle {
-            position: absolute;
-            border-radius: 50%;
-            border: 2px solid rgba(99, 102, 241, 0.2);
-            animation: rotate 20s linear infinite;
-        }
-        
-        .circle-1 {
-            width: 400px;
-            height: 400px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            opacity: 0.3;
-        }
-        
-        .circle-2 {
-            width: 300px;
-            height: 300px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            opacity: 0.2;
-            animation-duration: 15s;
-            animation-direction: reverse;
-        }
-        
-        .circle-3 {
-            width: 200px;
-            height: 200px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            opacity: 0.1;
-            animation-duration: 10s;
+        .footer-custom a:hover {
+            color: var(--text-main);
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <!-- Animated Background -->
-    <div class="animated-bg"></div>
 
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'landing' %}">
-                <i class="fas fa-cube"></i>
-                <span>Marid POS</span>
+    <!-- Top Navigation -->
+    <nav class="navbar-custom">
+        <div class="container d-flex justify-content-between align-items-center">
+            <a class="navbar-brand-custom" href="{% url 'landing' %}">
+                <div class="brand-icon-box">
+                    <i class="bi bi-grid-fill"></i>
+                </div>
+                <span>Marid POS & ERP</span>
             </a>
-            <div class="ms-auto d-flex gap-2">
+            
+            <div class="d-flex align-items-center gap-2">
                 {% if user.is_authenticated %}
-                    <a href="{% url 'business_list' %}" class="btn btn-nav btn-outline-light">
-                        <i class="fas fa-building"></i> My Businesses
+                    <a href="{% url 'business_list' %}" class="btn-custom-outline">
+                        <i class="bi bi-building"></i> <span>Workspaces</span>
                     </a>
-                    <a href="{% url 'logout' %}" class="btn btn-nav btn-outline-danger">
-                        <i class="fas fa-sign-out-alt"></i> Logout
+                    {% if user.is_superuser %}
+                        <a href="{% url 'platform_admin_dashboard' %}" class="btn-custom-outline">
+                            <i class="bi bi-shield-lock"></i> <span>Platform Admin</span>
+                        </a>
+                    {% endif %}
+                    <a href="{% url 'logout' %}" class="btn-custom-danger">
+                        <i class="bi bi-box-arrow-right"></i> <span>Logout</span>
                     </a>
                 {% else %}
-                    <a href="{% url 'login' %}" class="btn btn-nav btn-outline-light">
-                        <i class="fas fa-sign-in-alt"></i> Login
+                    <a href="{% url 'login' %}" class="btn-custom-outline">
+                        <i class="bi bi-box-arrow-in-right"></i> <span>Sign In</span>
                     </a>
-                    <a href="{% url 'register_business' %}" class="btn btn-nav btn-primary-nav">
-                        <i class="fas fa-rocket"></i> Get Started
+                    <a href="{% url 'register_business' %}" class="btn-custom-primary">
+                        <i class="bi bi-rocket-takeoff"></i> <span>Get Started</span>
                     </a>
                 {% endif %}
             </div>
@@ -639,225 +405,270 @@
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero">
+    <section class="hero-section">
         <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-6 hero-content">
-                    <div class="hero-badge fade-in-up">
-                        <i class="fas fa-sparkles"></i> Next-Generation Business Management
+            <div class="row align-items-center g-5">
+                <div class="col-lg-6">
+                    <div class="badge-pill">
+                        <i class="bi bi-layers-fill"></i>
+                        <span>Unified Modular Monolith ERP</span>
                     </div>
-                    <h1 class="fade-in-up delay-1">
-                        Transform Your Business with Intelligent POS
+                    <h1 class="hero-title">
+                        One Platform.<br>Dedicated Workspaces.
                     </h1>
-                    <p class="subtitle fade-in-up delay-2">
-                        Cloud-powered point of sale system with real-time analytics, inventory management, and multi-tenant architecture. Built for modern businesses.
+                    <p class="hero-subtitle">
+                        Central Backoffice governance orchestrating high-speed POS checkout, Kenya statutory HR &amp; Payroll, and future General Ledger modules under a single multi-tenant database.
                     </p>
-                    <div class="fade-in-up delay-3">
+                    
+                    <div class="d-flex gap-3 flex-wrap align-items-center">
                         {% if user.is_authenticated %}
-                            <a href="{% url 'business_list' %}" class="btn btn-hero btn-hero-primary">
-                                <i class="fas fa-building"></i> Go to Dashboard
+                            <a href="{% url 'business_list' %}" class="btn-custom-primary btn-lg">
+                                <i class="bi bi-arrow-right-circle"></i> Go to My Business Workspaces
                             </a>
-                            {% if user.is_superuser %}
-                                <a href="{% url 'platform_admin_dashboard' %}" class="btn btn-hero btn-hero-outline">
-                                    <i class="fas fa-crown"></i> Platform Admin
-                                </a>
-                            {% endif %}
                         {% else %}
-                            <a href="{% url 'register_business' %}" class="btn btn-hero btn-hero-primary">
-                                <i class="fas fa-rocket"></i> Start Free Trial
+                            <a href="{% url 'register_business' %}" class="btn-custom-primary btn-lg">
+                                <i class="bi bi-rocket-takeoff"></i> Register New Business
                             </a>
-                            <a href="{% url 'login' %}" class="btn btn-hero btn-hero-outline">
-                                <i class="fas fa-sign-in-alt"></i> Sign In
+                            <a href="{% url 'login' %}" class="btn-custom-outline btn-lg">
+                                <i class="bi bi-box-arrow-in-right"></i> Sign In
                             </a>
                         {% endif %}
                     </div>
-                    <p class="mt-4 text-muted fade-in-up delay-4">
-                        {% if not user.is_authenticated %}
-                        <small><i class="fas fa-check-circle text-success"></i> 30-day free trial • No credit card required • Cancel anytime</small>
-                        {% else %}
-                        <small><i class="fas fa-user-circle text-primary"></i> Welcome back, {{ user.username }}!</small>
-                        {% endif %}
-                    </p>
+                    
+                    <div class="mt-4 pt-2 d-flex align-items-center gap-3 text-muted small">
+                        <span><i class="bi bi-check-circle-fill text-success me-1"></i> Multi-Company</span>
+                        <span><i class="bi bi-check-circle-fill text-success me-1"></i> Kenya KES Ready</span>
+                        <span><i class="bi bi-check-circle-fill text-success me-1"></i> Zero External Queue Dependencies</span>
+                    </div>
                 </div>
-                <div class="col-lg-6 d-none d-lg-block">
-                    <div class="hero-illustration">
-                        <!-- POS Terminal -->
-                        <div class="pos-terminal">
-                            <div class="terminal-screen">
-                                <div class="screen-header">
-                                    <div class="screen-dot"></div>
-                                    <div class="screen-dot"></div>
-                                    <div class="screen-dot"></div>
-                                </div>
-                                <div class="screen-content">
-                                    <div class="screen-item"></div>
-                                    <div class="screen-item"></div>
-                                    <div class="screen-item"></div>
-                                </div>
+                
+                <div class="col-lg-6">
+                    <div class="arch-box">
+                        <div class="arch-box-header">
+                            <span>Modular Architecture Topology</span>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">Online</span>
+                        </div>
+                        
+                        <!-- Backoffice Controller Card -->
+                        <div class="arch-card" style="border-left: 4px solid var(--primary-blue);">
+                            <div class="arch-icon-wrap" style="background-color: var(--primary-blue);">
+                                <i class="bi bi-speedometer2"></i>
                             </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold" style="font-size: 0.9375rem;">Central Backoffice Control Plane</div>
+                                <div class="text-muted small">Security, Multi-Branch, Auditing, Job Queue, Settings Store</div>
+                            </div>
+                            <span class="badge bg-light text-dark border">Core</span>
                         </div>
                         
-                        <!-- Floating Cards -->
-                        <div class="float-card card-1">
-                            <i class="fas fa-chart-line"></i>
-                            <div class="card-text">Analytics</div>
-                        </div>
-                        <div class="float-card card-2">
-                            <i class="fas fa-shopping-cart"></i>
-                            <div class="card-text">Sales</div>
-                        </div>
-                        <div class="float-card card-3">
-                            <i class="fas fa-boxes"></i>
-                            <div class="card-text">Inventory</div>
+                        <!-- POS Front Office Card -->
+                        <div class="arch-card" style="border-left: 4px solid var(--pos-green);">
+                            <div class="arch-icon-wrap" style="background-color: var(--pos-green);">
+                                <i class="bi bi-cart-check"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold" style="font-size: 0.9375rem;">Front Office POS Workspace</div>
+                                <div class="text-muted small">Till Shifts, Barcode Scanning, Receipt Printers, Offline Sync</div>
+                            </div>
+                            <span class="badge bg-success bg-opacity-10 text-success">POS</span>
                         </div>
                         
-                        <!-- Decorative Elements -->
-                        <div class="deco-circle circle-1"></div>
-                        <div class="deco-circle circle-2"></div>
-                        <div class="deco-circle circle-3"></div>
+                        <!-- HR & Payroll Workspace Card -->
+                        <div class="arch-card" style="border-left: 4px solid var(--hr-indigo);">
+                            <div class="arch-icon-wrap" style="background-color: var(--hr-indigo);">
+                                <i class="bi bi-people-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold" style="font-size: 0.9375rem;">HR &amp; Payroll Workspace</div>
+                                <div class="text-muted small">PAYE, NSSF, SHA, Housing Levy, P9 Forms, DPA 2019 Logs</div>
+                            </div>
+                            <span class="badge bg-primary bg-opacity-10 text-primary">HRMS</span>
+                        </div>
+                        
+                        <!-- Accounting Module Card -->
+                        <div class="arch-card" style="border-left: 4px solid var(--acct-cyan);">
+                            <div class="arch-icon-wrap" style="background-color: var(--acct-cyan);">
+                                <i class="bi bi-journal-bookmark-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold" style="font-size: 0.9375rem;">General Ledger &amp; Financials</div>
+                                <div class="text-muted small">Double-Entry Posting Interface, Fiscal Periods, Outbox Listeners</div>
+                            </div>
+                            <span class="badge bg-info bg-opacity-10 text-info">Core API</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Stats Section -->
-    <section class="stats">
+    <!-- Stats Strip -->
+    <div class="stats-strip">
         <div class="container">
-            <div class="row">
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-number">∞</div>
-                        <div class="stat-label">Unlimited Businesses</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-number">99.9%</div>
-                        <div class="stat-label">Uptime SLA</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-number">24/7</div>
-                        <div class="stat-label">Cloud Access</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-number">100%</div>
-                        <div class="stat-label">Data Isolation</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Features Section -->
-    <section class="features">
-        <div class="container">
-            <div class="section-title">
-                <h2>Powerful Features, Simple Interface</h2>
-                <p>Everything you need to run a modern business</p>
-            </div>
             <div class="row g-4">
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <div class="feature-title">Lightning-Fast POS</div>
-                        <p>Process transactions in milliseconds with our optimized checkout system. Barcode scanning, quick search, and instant receipts.</p>
-                    </div>
+                <div class="col-6 col-md-3 stat-item">
+                    <div class="stat-number">47</div>
+                    <div class="stat-label">Kenya Counties Seeded</div>
                 </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <div class="feature-title">Real-Time Analytics</div>
-                        <p>Track sales, inventory, and performance with live dashboards. Make data-driven decisions with comprehensive reports.</p>
-                    </div>
+                <div class="col-6 col-md-3 stat-item">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Kenya Statutory Tax Compliance</div>
                 </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-boxes"></i>
-                        </div>
-                        <div class="feature-title">Smart Inventory</div>
-                        <p>Automated stock tracking, low-stock alerts, expiry management, and purchase order automation.</p>
-                    </div>
+                <div class="col-6 col-md-3 stat-item">
+                    <div class="stat-number">0ms</div>
+                    <div class="stat-label">External Broker Latency (Pure DB Queue)</div>
                 </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-shield-alt"></i>
-                        </div>
-                        <div class="feature-title">Multi-Tenant Security</div>
-                        <p>Enterprise-grade data isolation. Each business has completely separate data with role-based access control.</p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-users-cog"></i>
-                        </div>
-                        <div class="feature-title">Team Collaboration</div>
-                        <p>Invite unlimited team members with customizable roles and permissions. Track activity and performance.</p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-cloud"></i>
-                        </div>
-                        <div class="feature-title">Cloud-Native</div>
-                        <p>Access from anywhere, automatic backups, and seamless updates. Your data is always safe and accessible.</p>
-                    </div>
+                <div class="col-6 col-md-3 stat-item">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Strict Module Boundary Isolation</div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
-    <!-- CTA Section -->
-    <section class="cta">
-        <div class="container">
-            <div class="cta-box">
-                <h2>Ready to Transform Your Business?</h2>
-                <p>Join thousands of businesses already using our platform</p>
-                <a href="{% url 'register_business' %}" class="btn btn-hero btn-hero-primary">
-                    <i class="fas fa-rocket"></i> Start Your Free Trial
-                </a>
-                <p class="mt-3 text-muted">
-                    <small>No credit card required • 30-day free trial • Cancel anytime</small>
-                </p>
+    <!-- Dedicated Workspaces Section -->
+    <section class="py-5">
+        <div class="container py-4">
+            <div class="section-header">
+                <div class="section-tag">Dedicated Workspaces</div>
+                <h2 class="section-heading">Purpose-Built for Operational Clarity</h2>
+                <p class="section-subtext">Each department operates in an optimized, distraction-free environment while data flows seamlessly through Core events.</p>
+            </div>
+            
+            <div class="row g-4">
+                <!-- Backoffice Card -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="workspace-card">
+                        <div>
+                            <div class="ws-icon-box" style="background-color: var(--primary-blue);">
+                                <i class="bi bi-speedometer2"></i>
+                            </div>
+                            <h3 class="ws-title">Backoffice Control</h3>
+                            <p class="ws-desc">The central executive portal for management, finance supervisors, and administrators.</p>
+                            <ul class="ws-feature-list">
+                                <li><i class="bi bi-check2"></i> Multi-branch inventory &amp; pricing</li>
+                                <li><i class="bi bi-check2"></i> Concurrency-safe sequential numbering</li>
+                                <li><i class="bi bi-check2"></i> Immutable system audit logging</li>
+                                <li><i class="bi bi-check2"></i> Multi-step approval workflows</li>
+                            </ul>
+                        </div>
+                        <a href="{% url 'business_list' %}" class="btn-custom-outline w-100 justify-content-center">
+                            Launch Backoffice
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- POS Front Office Card -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="workspace-card">
+                        <div>
+                            <div class="ws-icon-box" style="background-color: var(--pos-green);">
+                                <i class="bi bi-shop"></i>
+                            </div>
+                            <h3 class="ws-title">Front Office POS</h3>
+                            <p class="ws-desc">High-speed cashier point-of-sale built for rapid checkout and barcode workflow.</p>
+                            <ul class="ws-feature-list">
+                                <li><i class="bi bi-check2"></i> Till shift opening/closing floats</li>
+                                <li><i class="bi bi-check2"></i> Automatic Z-Report generation</li>
+                                <li><i class="bi bi-check2"></i> Dual-screen Customer Display</li>
+                                <li><i class="bi bi-check2"></i> ESC/POS &amp; Bluetooth pairing</li>
+                            </ul>
+                        </div>
+                        <a href="{% url 'pos_screen' %}" class="btn-custom-outline w-100 justify-content-center">
+                            Launch Cashier POS
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- HR Portal Card -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="workspace-card">
+                        <div>
+                            <div class="ws-icon-box" style="background-color: var(--hr-indigo);">
+                                <i class="bi bi-people-fill"></i>
+                            </div>
+                            <h3 class="ws-title">HR &amp; Payroll Portal</h3>
+                            <p class="ws-desc">Complete workforce management fully compliant with Kenyan labor and tax laws.</p>
+                            <ul class="ws-feature-list">
+                                <li><i class="bi bi-check2"></i> PAYE, NSSF, SHA &amp; Housing Levy</li>
+                                <li><i class="bi bi-check2"></i> Annual Tax Deduction P9 Cards</li>
+                                <li><i class="bi bi-check2"></i> Clock-in attendance &amp; leaves</li>
+                                <li><i class="bi bi-check2"></i> Kenya DPA 2019 consent logs</li>
+                            </ul>
+                        </div>
+                        <a href="{% url 'hr_dashboard' %}" class="btn-custom-outline w-100 justify-content-center">
+                            Launch HR Portal
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Accounting & GL Card -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="workspace-card">
+                        <div>
+                            <div class="ws-icon-box" style="background-color: var(--acct-cyan);">
+                                <i class="bi bi-journal-bookmark-fill"></i>
+                            </div>
+                            <h3 class="ws-title">Accounting &amp; GL</h3>
+                            <p class="ws-desc">IFRS-compliant double-entry general ledger, Kenyan tax schedules, and financial statements.</p>
+                            <ul class="ws-feature-list">
+                                <li><i class="bi bi-check2"></i> Double-entry Chart of Accounts</li>
+                                <li><i class="bi bi-check2"></i> KRA Form VAT 3 &amp; WHT return</li>
+                                <li><i class="bi bi-check2"></i> Bank &amp; M-Pesa reconciliation</li>
+                                <li><i class="bi bi-check2"></i> Income Statement &amp; Balance Sheet</li>
+                            </ul>
+                        </div>
+                        <a href="{% url 'accounting_dashboard' %}" class="btn-custom-outline w-100 justify-content-center">
+                            Launch Accounting
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Kenyan Compliance Banner -->
+            <div class="compliance-banner">
+                <div class="row align-items-center g-4">
+                    <div class="col-lg-8">
+                        <div class="d-flex align-items-center gap-2 text-primary fw-bold mb-2">
+                            <i class="bi bi-shield-check fs-5"></i>
+                            <span>REPUBLIC OF KENYA STATUTORY COMPLIANCE</span>
+                        </div>
+                        <h4 class="fw-bold mb-2">Effective-Dated Tax Rules &amp; Statutory Returns</h4>
+                        <p class="text-muted mb-0">
+                            Pre-configured for Income Tax Act Cap 470 (PAYE), NSSF Act 2013 (Tier I &amp; II), Social Health Insurance Act 2023 (SHA/SHIF), Affordable Housing Act 2024, and Data Protection Act 2019.
+                        </p>
+                    </div>
+                    <div class="col-lg-4 text-lg-end">
+                        <div class="d-inline-flex flex-column gap-2 text-start">
+                            <span class="badge bg-light text-dark border p-2"><i class="bi bi-file-earmark-spreadsheet text-success me-1"></i> KRA iTax PAYE Return CSV</span>
+                            <span class="badge bg-light text-dark border p-2"><i class="bi bi-file-earmark-spreadsheet text-success me-1"></i> NSSF &amp; SHA Return Files</span>
+                            <span class="badge bg-light text-dark border p-2"><i class="bi bi-file-earmark-pdf text-danger me-1"></i> Tax Form P9A / P9B Cards</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
     <!-- Footer -->
-    <footer>
+    <footer class="footer-custom">
         <div class="container">
-            <p class="mb-3">&copy; <span id="currentYear"></span> Ropenix POS. Built with cutting-edge technology.</p>
-            <div class="d-flex justify-content-center gap-4 mb-3">
-                <a href="{% url 'register_business' %}"><i class="fas fa-rocket"></i> Get Started</a>
-                <a href="{% url 'login' %}"><i class="fas fa-sign-in-alt"></i> Login</a>
-                {% if user.is_superuser %}
-                <a href="{% url 'platform_admin_dashboard' %}"><i class="fas fa-crown"></i> Admin</a>
-                {% endif %}
-            </div>
-            <div class="d-flex justify-content-center gap-4 mt-3" style="font-size: 0.9rem;">
-                <a href="{% url 'terms' %}" style="color: rgba(255,255,255,0.7);">Terms of Service</a>
-                <a href="{% url 'privacy' %}" style="color: rgba(255,255,255,0.7);">Privacy Policy</a>
-                <a href="{% url 'refund' %}" style="color: rgba(255,255,255,0.7);">Refund Policy</a>
+            <div class="row align-items-center g-3">
+                <div class="col-md-6 text-center text-md-start">
+                    <span>&copy; <span id="yearSpan">2026</span> Marid POS &amp; ERP. All rights reserved.</span>
+                </div>
+                <div class="col-md-6 text-center text-md-end d-flex gap-3 justify-content-center justify-content-md-end">
+                    <a href="{% url 'terms' %}">Terms of Service</a>
+                    <a href="{% url 'privacy' %}">Privacy Policy</a>
+                    <a href="{% url 'refund' %}">Refund Policy</a>
+                </div>
             </div>
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Auto-update copyright year
-        document.getElementById('currentYear').textContent = new Date().getFullYear();
+        document.getElementById('yearSpan').textContent = new Date().getFullYear();
     </script>
 </body>
 </html>

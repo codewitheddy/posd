@@ -1,0 +1,592 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}{% if is_edit %}Edit Employee{% else %}Register Employee{% endif %}{% endblock %}
+
+{% block extra_head %}
+<style>
+.emp-type-card {
+  display: block;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: all .2s;
+  background: #ffffff;
+  user-select: none;
+}
+.emp-type-card:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+.emp-type-card.active {
+  border-color: var(--hr-primary);
+  background: #f5f3ff;
+}
+.emp-type-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.emp-type-card .check-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: all .2s;
+}
+.emp-type-card.active .check-dot {
+  border-color: var(--hr-primary);
+  background: var(--hr-primary);
+  box-shadow: inset 0 0 0 3px #ffffff;
+}
+.tab-section-title {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 800;
+  color: var(--hr-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 16px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-person-badge me-2 text-primary"></i>{% if is_edit %}Edit Employee Profile{% else %}Register New Employee{% endif %}</h1>
+    {% if is_edit %}<p class="page-subtitle">{{ employee.get_full_name }} &bull; Staff Code: {{ employee.staff_code|default:"EMP---" }}</p>{% endif %}
+  </div>
+  <a href="{% url 'hr_employee_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Staff Directory</a>
+</div>
+
+<div class="row justify-content-center">
+<div class="col-lg-10">
+<div class="form-card">
+<form method="POST">{% csrf_token %}
+  <div class="row g-4">
+
+    {% if not is_edit %}
+    <!-- ── Employee Classification ── -->
+    <div class="col-12">
+      <div class="tab-section-title">1. System Access Classification</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="emp-type-card active" id="cardPos" onclick="selectType('pos')">
+            <input type="radio" name="emp_type" value="pos" checked class="d-none">
+            <div class="d-flex align-items-center gap-3">
+              <div class="emp-type-icon" style="background:#e0e7ff;color:#4338ca;">
+                <i class="bi bi-pc-display-horizontal fs-4"></i>
+              </div>
+              <div class="flex-grow-1">
+                <div class="fw-bold">POS / System Operator</div>
+                <div class="text-muted small">Has user login — Cashier, Supervisor, Manager, Admin</div>
+              </div>
+              <div class="check-dot"></div>
+            </div>
+          </label>
+        </div>
+        <div class="col-md-6">
+          <label class="emp-type-card" id="cardNonPos" onclick="selectType('non_pos')">
+            <input type="radio" name="emp_type" value="non_pos" class="d-none">
+            <div class="d-flex align-items-center gap-3">
+              <div class="emp-type-icon" style="background:#ecfdf5;color:#047857;">
+                <i class="bi bi-person-fill fs-4"></i>
+              </div>
+              <div class="flex-grow-1">
+                <div class="fw-bold">Non-Login Personnel</div>
+                <div class="text-muted small">No POS login — Driver, Cleaner, Security, Casual, Attendant</div>
+              </div>
+              <div class="check-dot"></div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── POS user account selection ── -->
+    <div id="posUserSection" class="col-12">
+      <div class="input-group">
+        <select name="user_account" id="userAccountSelect" class="form-select">
+          <option value="">-- Link Existing System User Account --</option>
+          {% for u in users %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }} ({{ u.username }})</option>{% endfor %}
+        </select>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+          <i class="bi bi-person-plus me-1"></i>Create New User
+        </button>
+      </div>
+      <div class="form-text">Select an active user account or click <strong>Create New User</strong> to provision credentials.</div>
+    </div>
+
+    <!-- ── Non-POS name fields ── -->
+    <div id="nonPosSection" class="col-12" style="display:none;">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label small fw-bold">First Name <span class="text-danger">*</span></label>
+          <input type="text" name="first_name" class="form-control" placeholder="e.g. Samuel">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-bold">Last Name <span class="text-danger">*</span></label>
+          <input type="text" name="last_name" class="form-control" placeholder="e.g. Ochieng">
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Employment Particulars (Employment Act Cap 227) ── -->
+    <div class="col-12">
+      <div class="tab-section-title">2. Employment &amp; Deployment Particulars</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Job Title <span class="text-danger">*</span></label>
+          <input type="text" name="job_title" class="form-control" value="{{ employee.job_title|default:'' }}" required placeholder="e.g. Chief Cashier">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Branch Deployment <span class="text-danger">*</span></label>
+          <select name="branch" class="form-select" required>
+            {% for b in branches %}<option value="{{ b.pk }}" {% if employee.branch_id == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Department</label>
+          <div class="input-group">
+            <select name="department" id="departmentSelect" class="form-select">
+              <option value="">-- None / General --</option>
+              {% for d in departments %}<option value="{{ d.pk }}" {% if employee.department_id == d.pk %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+            </select>
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addDeptModal">
+              <i class="bi bi-plus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Employment Status</label>
+          <select name="status" class="form-select">
+            <option value="active" {% if employee.status == 'active' or not employee %}selected{% endif %}>Active</option>
+            <option value="suspended" {% if employee.status == 'suspended' %}selected{% endif %}>Suspended</option>
+            <option value="terminated" {% if employee.status == 'terminated' %}selected{% endif %}>Terminated</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Date of Hire / Commencement <span class="text-danger">*</span></label>
+          <input type="date" name="hire_date" class="form-control" value="{{ employee.hire_date|date:'Y-m-d'|default:'' }}" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Staff Code</label>
+          <input type="text" class="form-control font-monospace bg-light" value="{% if employee.staff_code %}{{ employee.staff_code }}{% else %}Auto-assigned on save{% endif %}" readonly>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Kenya Statutory Identity & Tax Compliance ── -->
+    <div class="col-12">
+      <div class="tab-section-title">3. Republic of Kenya Statutory Identity &amp; Tax Compliance</div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">ID Document Type</label>
+          <select name="id_type" class="form-select">
+            <option value="national_id" {% if employee.id_type == 'national_id' or not employee %}selected{% endif %}>National ID Card</option>
+            <option value="passport" {% if employee.id_type == 'passport' %}selected{% endif %}>Passport</option>
+            <option value="alien_id" {% if employee.id_type == 'alien_id' %}selected{% endif %}>Alien / Refugee ID</option>
+            <option value="military_id" {% if employee.id_type == 'military_id' %}selected{% endif %}>Military ID</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">National ID / Passport No. <span class="text-danger">*</span></label>
+          <input type="text" name="id_number" class="form-control font-monospace" value="{{ employee.id_number|default:'' }}" required placeholder="e.g. 12345678">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">KRA PIN (Cap 470) <span class="text-danger">*</span></label>
+          <input type="text" name="kra_pin" class="form-control font-monospace text-uppercase" value="{{ employee.kra_pin|default:'' }}" required placeholder="A012345678X" maxlength="11">
+          <div class="form-text small">11-char KRA Tax PIN format</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">NSSF Member Number <span class="text-danger">*</span></label>
+          <input type="text" name="nssf_number" class="form-control font-monospace" value="{{ employee.nssf_number|default:'' }}" required placeholder="e.g. 10023456">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">SHA / SHIF Number</label>
+          <input type="text" name="sha_number" class="form-control font-monospace" value="{{ employee.sha_number|default:'' }}" placeholder="SHA Member No.">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Legacy NHIF Number</label>
+          <input type="text" name="nhif_number" class="form-control font-monospace" value="{{ employee.nhif_number|default:'' }}" placeholder="NHIF No.">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">HELB Loan Reference</label>
+          <input type="text" name="helb_number" class="form-control" value="{{ employee.helb_number|default:'' }}" placeholder="HELB Account">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">County of Residence</label>
+          <select name="county" class="form-select">
+            <option value="">-- Select County --</option>
+            {% for code, name in county_choices %}
+              <option value="{{ code }}" {% if employee.county == code %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Tax Classification Checkboxes -->
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_secondary_employee" id="isSecondary" {% if employee.is_secondary_employee %}checked{% endif %}>
+            <label class="form-check-label small fw-semibold" for="isSecondary">Secondary Employment (No Personal Relief)</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_non_resident" id="isNonResident" {% if employee.is_non_resident %}checked{% endif %}>
+            <label class="form-check-label small fw-semibold" for="isNonResident">Non-Resident for Tax (Flat Withholding)</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="disability_status" id="isDisability" {% if employee.disability_status %}checked{% endif %}>
+            <label class="form-check-label small fw-semibold" for="isDisability">Person with Disability (PWD Exemption)</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Compensation & Allowances ── -->
+    <div class="col-12">
+      <div class="tab-section-title">4. Compensation &amp; Allowances (KES)</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Monthly Basic Salary (KES) <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="basic_salary" class="form-control" value="{{ employee.basic_salary|default:'0' }}" step="0.01" min="0" required>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">House Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="house_allowance" class="form-control" value="{{ employee.house_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Transport Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="transport_allowance" class="form-control" value="{{ employee.transport_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Medical Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="medical_allowance" class="form-control" value="{{ employee.medical_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Other Fixed Allowance (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="other_allowance" class="form-control" value="{{ employee.other_allowance|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Hourly Rate (KES)</label>
+          <div class="input-group">
+            <span class="input-group-text">KES</span>
+            <input type="number" name="hourly_rate" class="form-control" value="{{ employee.hourly_rate|default:'0' }}" step="0.01" min="0">
+          </div>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label small fw-bold">Custom Named Allowances</label>
+          <div id="additional-allowances-container">
+            {% if employee.other_allowances %}
+              {% for name, amount in employee.other_allowances.items %}
+              <div class="allowance-row mb-2">
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <input type="text" class="form-control allowance-name" placeholder="Allowance name (e.g. Risk Allowance)" value="{{ name }}">
+                  </div>
+                  <div class="col-md-5">
+                    <div class="input-group">
+                      <span class="input-group-text">KES</span>
+                      <input type="number" class="form-control allowance-amount" placeholder="0.00" step="0.01" min="0" value="{{ amount }}">
+                    </div>
+                  </div>
+                  <div class="col-md-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-allowance">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+          <button type="button" id="add-allowance-btn" class="btn btn-outline-primary btn-sm mt-1">
+            <i class="bi bi-plus me-1"></i>Add Custom Allowance
+          </button>
+          <input type="hidden" name="other_allowances" id="other_allowances_json" value="{{ employee.other_allowances|default:'{}' }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Disbursement & Banking Details ── -->
+    <div class="col-12">
+      <div class="tab-section-title">5. Salary Disbursement &amp; Payment Details</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label small fw-bold">M-Pesa B2C Salary Phone Number</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+            <input type="text" name="mpesa_number" class="form-control font-monospace" value="{{ employee.mpesa_number|default:'' }}" placeholder="+254712345678">
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-bold">Official Contact Phone Number</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+            <input type="text" name="phone_number" class="form-control font-monospace" value="{{ employee.phone_number|default:'' }}" placeholder="+254712345678">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Commercial Bank</label>
+          <input type="text" name="bank_name" class="form-control" value="{{ employee.bank_name|default:'' }}" placeholder="e.g. Equity Bank, KCB">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Bank Clearing Code</label>
+          <input type="text" name="bank_code" class="form-control font-monospace" value="{{ employee.bank_code|default:'' }}" placeholder="e.g. 68">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Bank Account Number</label>
+          <input type="text" name="bank_account_number" class="form-control font-monospace" value="{{ employee.bank_account_number|default:'' }}" placeholder="Account Number">
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Emergency Contact & Notes ── -->
+    <div class="col-12">
+      <div class="tab-section-title">6. Emergency Contact &amp; Personnel Notes</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label small fw-bold">Emergency Contact Full Name</label>
+          <input type="text" name="emergency_contact_name" class="form-control" value="{{ employee.emergency_contact_name|default:'' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-bold">Emergency Contact Phone</label>
+          <input type="text" name="emergency_contact_phone" class="form-control" value="{{ employee.emergency_contact_phone|default:'' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-bold">Residential Physical Address</label>
+          <textarea name="address" class="form-control" rows="2">{{ employee.address|default:'' }}</textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-bold">Administrative Notes</label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Internal HR notes...">{{ employee.notes|default:'' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+
+  <div class="d-flex gap-2 mt-4 pt-3 border-top">
+    <button type="submit" class="btn btn-hr-primary px-4">
+      <i class="bi bi-check-circle me-1"></i>{% if is_edit %}Update Employee Profile{% else %}Save &amp; Register Employee{% endif %}
+    </button>
+    <a href="{% url 'hr_employee_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+</div>
+</div>
+</div>
+
+<!-- Add Department Modal -->
+<div class="modal fade" id="addDeptModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title fw-bold"><i class="bi bi-diagram-3 me-1"></i>Add Department</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="text" class="form-control form-control-sm" id="newDeptName" placeholder="e.g. Finance, Logistics, Sales">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="quickAddDept()"><i class="bi bi-plus me-1"></i>Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title fw-bold"><i class="bi bi-person-plus me-1"></i>Create POS System User</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="createUserError" class="alert alert-danger d-none py-2 small"></div>
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label form-label-sm fw-bold">First Name</label>
+            <input type="text" class="form-control form-control-sm" id="newUserFirst" placeholder="First name">
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm fw-bold">Last Name</label>
+            <input type="text" class="form-control form-control-sm" id="newUserLast" placeholder="Last name">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm fw-bold">Username <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm" id="newUserUsername" placeholder="e.g. john.kamau">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm fw-bold">Email</label>
+            <input type="email" class="form-control form-control-sm" id="newUserEmail" placeholder="email@company.co.ke">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm fw-bold">Password <span class="text-danger">*</span></label>
+            <input type="password" class="form-control form-control-sm" id="newUserPassword" placeholder="Min 8 characters">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm fw-bold">System Role</label>
+            <select class="form-select form-select-sm" id="newUserRole">
+              <option value="cashier">Cashier</option>
+              <option value="sales">Sales Associate</option>
+              <option value="stock_manager">Stock Manager</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="quickCreateUser()"><i class="bi bi-person-check me-1"></i>Provision Account</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const DEPT_URL = '{% url "hr_department_quick_create" %}';
+const USER_URL = '{% url "hr_user_quick_create" %}';
+const CSRF = '{{ csrf_token }}';
+
+function selectType(val) {
+  const posSection = document.getElementById('posUserSection');
+  const nonPosSection = document.getElementById('nonPosSection');
+  const userSelect = document.getElementById('userAccountSelect');
+  const cardPos = document.getElementById('cardPos');
+  const cardNonPos = document.getElementById('cardNonPos');
+
+  if (val === 'non_pos') {
+    if (posSection) posSection.style.display = 'none';
+    if (nonPosSection) nonPosSection.style.display = '';
+    if (userSelect) userSelect.required = false;
+    cardPos.classList.remove('active');
+    cardNonPos.classList.add('active');
+    cardNonPos.querySelector('input[type=radio]').checked = true;
+  } else {
+    if (posSection) posSection.style.display = '';
+    if (nonPosSection) nonPosSection.style.display = 'none';
+    if (userSelect) userSelect.required = true;
+    cardNonPos.classList.remove('active');
+    cardPos.classList.add('active');
+    cardPos.querySelector('input[type=radio]').checked = true;
+  }
+}
+
+function quickAddDept() {
+  const name = document.getElementById('newDeptName').value.trim();
+  if (!name) return;
+  fetch(DEPT_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+    body: 'name=' + encodeURIComponent(name)
+  }).then(r => r.json()).then(data => {
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('departmentSelect').add(new Option(data.name, data.id, true, true));
+    bootstrap.Modal.getInstance(document.getElementById('addDeptModal')).hide();
+    document.getElementById('newDeptName').value = '';
+  }).catch(() => alert('Could not create department.'));
+}
+
+function quickCreateUser() {
+  const errEl = document.getElementById('createUserError');
+  errEl.classList.add('d-none');
+  const body = new URLSearchParams({
+    username: document.getElementById('newUserUsername').value.trim(),
+    first_name: document.getElementById('newUserFirst').value.trim(),
+    last_name: document.getElementById('newUserLast').value.trim(),
+    email: document.getElementById('newUserEmail').value.trim(),
+    password: document.getElementById('newUserPassword').value,
+    role: document.getElementById('newUserRole').value,
+  });
+  fetch(USER_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+    body: body.toString()
+  }).then(r => r.json()).then(data => {
+    if (data.error) { errEl.textContent = data.error; errEl.classList.remove('d-none'); return; }
+    const sel = document.getElementById('userAccountSelect');
+    if (sel) sel.add(new Option(data.name, data.id, true, true));
+    bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+    ['newUserFirst','newUserLast','newUserUsername','newUserEmail','newUserPassword'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+  }).catch(() => alert('Could not create user.'));
+}
+
+function addAllowanceRow(name, amount) {
+  const container = document.getElementById('additional-allowances-container');
+  const row = document.createElement('div');
+  row.className = 'allowance-row mb-2';
+  row.innerHTML = `
+    <div class="row g-2">
+      <div class="col-md-6">
+        <input type="text" class="form-control allowance-name form-control-sm" placeholder="Allowance name (e.g. Risk Allowance)" value="${name || ''}">
+      </div>
+      <div class="col-md-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">KES</span>
+          <input type="number" class="form-control allowance-amount" placeholder="0.00" step="0.01" min="0" value="${amount || ''}">
+        </div>
+      </div>
+      <div class="col-md-1">
+        <button type="button" class="btn btn-outline-danger btn-sm remove-allowance">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+    </div>`;
+  container.appendChild(row);
+}
+
+document.getElementById('add-allowance-btn')?.addEventListener('click', function() {
+  addAllowanceRow('', '');
+});
+
+document.getElementById('additional-allowances-container')?.addEventListener('click', function(e) {
+  const btn = e.target.closest('.remove-allowance');
+  if (btn) btn.closest('.allowance-row').remove();
+});
+
+document.querySelector('form').addEventListener('submit', function() {
+  const allowances = {};
+  document.querySelectorAll('#additional-allowances-container .allowance-row').forEach(function(row) {
+    const name = row.querySelector('.allowance-name').value.trim();
+    const amount = parseFloat(row.querySelector('.allowance-amount').value) || 0;
+    if (name) allowances[name] = amount;
+  });
+  const hiddenEl = document.getElementById('other_allowances_json');
+  if (hiddenEl) hiddenEl.value = JSON.stringify(allowances);
+});
+</script>
+{% endblock %}

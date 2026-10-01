@@ -344,27 +344,85 @@
                     <i class="bi bi-circle-fill text-light me-1" style="font-size: 0.45rem; vertical-align: middle;"></i>Shift #{{ current_session.session_number }}
                 </span>
             {% endif %}
-            <span class="text-light opacity-75 small d-none d-xl-inline"><i class="bi bi-person-badge"></i> {{ request.user.get_full_name|default:request.user.username }}</span>
+
+            <!-- Cashier Profile Dropdown -->
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-sm btn-dark bg-opacity-50 text-light py-0 px-2 fw-semibold dropdown-toggle border border-secondary border-opacity-50" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius: 12px; font-size: 0.8rem;">
+                    <i class="bi bi-person-circle text-info me-1"></i>{{ request.user.get_full_name|default:request.user.username }}
+                </button>
+                <ul class="dropdown-menu shadow border-0" style="border-radius: 12px; font-size: 0.85rem; min-width: 200px;">
+                    <li class="dropdown-header fw-bold text-uppercase" style="font-size: 0.7rem;">Active Cashier</li>
+                    <li>
+                        <div class="px-3 py-1">
+                            <div class="fw-bold text-dark">{{ request.user.get_full_name|default:request.user.username }}</div>
+                            <small class="text-muted">Role: {{ user_permissions.user_role|default:"Cashier" }}</small>
+                        </div>
+                    </li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'home' %}">
+                            <i class="bi bi-house-door-fill me-2 text-primary"></i> Home Portal
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'terminal_lock' %}">
+                            <i class="bi bi-lock-fill me-2 text-warning"></i> Lock Terminal (PIN)
+                        </a>
+                    </li>
+                    {% if current_session %}
+                    <li>
+                        <a class="dropdown-item py-2 text-warning" href="{% url 'terminal_session_close' %}">
+                            <i class="bi bi-door-closed-fill me-2"></i> Close Shift &amp; Z-Report
+                        </a>
+                    </li>
+                    {% else %}
+                    <li>
+                        <a class="dropdown-item py-2 text-success" href="{% url 'terminal_session_open' %}">
+                            <i class="bi bi-door-open-fill me-2"></i> Open Shift Float
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if user_permissions.can_access_back_office or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'dashboard' %}">
+                            <i class="bi bi-speedometer2 me-2 text-info"></i> Backoffice Dashboard
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <a class="dropdown-item py-2 text-danger fw-bold" href="{% url 'logout' %}" onclick="return confirm('Are you sure you want to log out of this cashier session?');">
+                            <i class="bi bi-box-arrow-right me-2"></i> Logout Cashier
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
         
         <div class="d-flex align-items-center gap-1 flex-wrap">
             <span class="text-light small d-none d-xxl-inline me-1"><i class="bi bi-receipt"></i> Order #<span id="pos-order-number">---</span></span>
             <span class="badge bg-dark border text-light font-monospace d-none d-lg-inline" id="pos-clock"><i class="bi bi-clock"></i> --:--</span>
             <span id="posSyncStatusBadge" class="badge rounded-pill bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-2 py-1"><i class="bi bi-broadcast me-1"></i>Live Sync</span>
+            <button type="button" class="btn btn-outline-light btn-sm py-0 px-2 fw-semibold bt-printer-badge" onclick="connectBluetoothInPOS()" title="Pair / Manage Bluetooth Printer">
+                <i class="bi bi-bluetooth me-1"></i><span class="d-none d-md-inline">Bluetooth</span>
+            </button>
             
-            <!-- Front Office Actions -->
+            <!-- Front Office Navigation & Actions -->
+            <a href="{% url 'home' %}" class="btn btn-outline-light btn-sm py-0 px-2 fw-semibold" title="Return to Home Screen / Hub">
+                <i class="bi bi-house-door-fill me-1"></i><span class="d-none d-xl-inline">Home</span>
+            </a>
             <a href="{% url 'customer_display' %}" target="_blank" class="btn btn-outline-info btn-sm py-0 px-2 fw-semibold" title="Launch Customer-Facing Display on second screen / window">
                 <i class="bi bi-display me-1"></i><span class="d-none d-xl-inline">CFD</span>
             </a>
             <button type="button" class="btn btn-outline-light btn-sm py-0 px-2 fw-semibold" onclick="if(window.posKeyboard) window.posKeyboard.showShortcuts(); else { const sp = document.getElementById('shortcuts-panel'); if(sp) sp.style.display='block'; }" title="Keyboard Shortcuts (F12)">
                 <i class="bi bi-keyboard me-1"></i><span class="d-none d-xl-inline">Keys</span>
             </button>
-            <a href="{% url 'terminal_lock' %}" class="btn btn-warning btn-sm py-0 px-2 fw-semibold" title="Lock Screen (Requires PIN)">
+            <a href="{% url 'terminal_lock' %}" class="btn btn-warning btn-sm py-0 px-2 fw-semibold" title="Lock Screen (Requires PIN to resume)">
                 <i class="bi bi-lock-fill"></i> <span class="d-none d-sm-inline">Lock</span>
             </a>
 
             {% if current_session %}
-                <a href="{% url 'terminal_session_close' %}" class="btn btn-outline-danger btn-sm py-0 px-2 fw-semibold" title="Close Current Cashier Shift &amp; Generate Z-Report">
+                <a href="{% url 'terminal_session_close' %}" class="btn btn-outline-warning btn-sm py-0 px-2 fw-semibold" title="Close Current Cashier Shift &amp; Generate Z-Report">
                     <i class="bi bi-door-closed-fill"></i> <span class="d-none d-sm-inline">Close Shift</span>
                 </a>
             {% else %}
@@ -378,6 +436,11 @@
                     <i class="bi bi-speedometer2 me-1"></i><span class="d-none d-md-inline">Back Office</span>
                 </a>
             {% endif %}
+
+            <!-- Cashier Logout Button -->
+            <a href="{% url 'logout' %}" class="btn btn-danger btn-sm py-0 px-2 fw-bold text-white shadow-sm" title="Sign Out of Cashier Account" onclick="return confirm('Are you sure you want to log out of this cashier session?');">
+                <i class="bi bi-box-arrow-right me-1"></i><span>Logout</span>
+            </a>
         </div>
     </div>
 
@@ -1103,13 +1166,18 @@
                     <!-- Dynamic receipt HTML inserted here -->
                 </div>
             </div>
-            <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
+            <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
                     <i class="bi bi-check-lg me-1"></i> Done / Next Sale
                 </button>
-                <button type="button" class="btn btn-primary btn-sm px-3 fw-bold" onclick="printOfflineReceipt()">
-                    <i class="bi bi-printer-fill me-1"></i> Print Receipt
-                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary btn-sm px-3 fw-bold" onclick="printOfflineReceiptBluetooth()" title="Direct 1-Click Bluetooth ESC/POS Print">
+                        <i class="bi bi-bluetooth me-1"></i> Bluetooth Print
+                    </button>
+                    <button type="button" class="btn btn-outline-dark btn-sm px-2.5" onclick="printOfflineReceipt()" title="Standard System Print">
+                        <i class="bi bi-printer me-1"></i> Print
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -4790,8 +4858,16 @@ async function processOfflineSale(saleData) {
         // Save into IndexedDB outbox
         await window.offlineDB.savePendingSale(saleData);
 
+        // Store reference for Bluetooth printing
+        window.lastOfflineSaleData = saleData;
+
         // Render receipt
         renderOfflineReceipt(saleData);
+
+        // Auto-print via Bluetooth if enabled
+        if (localStorage.getItem('pos_bt_autoprint') === 'true' && window.BluetoothPrinter && window.BluetoothPrinter.isSupported()) {
+            setTimeout(() => printOfflineReceiptBluetooth(true), 300);
+        }
 
         // Play chime & notify CFD
         if (typeof playSuccessChime === 'function') playSuccessChime();
@@ -4941,6 +5017,84 @@ function printOfflineReceipt() {
         printWindow.print();
         printWindow.close();
     }, 250);
+}
+
+async function printOfflineReceiptBluetooth(isAuto = false) {
+    if (!window.BluetoothPrinter) return;
+    const saleData = window.lastOfflineSaleData;
+    if (!saleData) {
+        if (!isAuto) alert('No offline receipt data found.');
+        return;
+    }
+
+    try {
+        if (!window.BluetoothPrinter.isSupported()) {
+            if (!isAuto) printOfflineReceipt();
+            return;
+        }
+
+        const settings = {
+            shop_name: "{{ request.business.name|default:'My Store'|escapejs }}",
+            receipt_header: "OFFLINE SALE RECEIPT",
+            receipt_footer: "Thank you for shopping with us! (Offline Sync Queued)",
+            address: "",
+            phone: "",
+            tax_id: "",
+            thermal_receipt_width: 80,
+            thermal_auto_cut: true,
+            thermal_copies: 1,
+            thermal_print_barcode: true,
+            thermal_show_tax_breakdown: true
+        };
+
+        if (typeof showNotification === 'function') {
+            showNotification('Printing offline receipt via Bluetooth ESC/POS...', 'info');
+        }
+
+        await window.BluetoothPrinter.printReceipt(saleData, settings);
+
+        if (typeof showNotification === 'function') {
+            showNotification('Receipt printed via Bluetooth!', 'success');
+        }
+    } catch (err) {
+        console.warn('Bluetooth offline print error:', err);
+        if (!isAuto && err.name !== 'NotFoundError' && !err.message.includes('User cancelled')) {
+            alert(`Bluetooth Print Error: ${err.message}`);
+        }
+    }
+}
+
+async function connectBluetoothInPOS() {
+    if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+        alert('Web Bluetooth is not supported in this browser. Please use Google Chrome or Microsoft Edge on Windows, Android, Mac, or Linux over HTTPS / localhost.');
+        return;
+    }
+
+    if (window.BluetoothPrinter.isConnected()) {
+        const choice = confirm(`Bluetooth Printer Connected: ${window.BluetoothPrinter.getDeviceName()}\n\nWould you like to print a test receipt? (Click OK for Test Print, Cancel to Disconnect)`);
+        if (choice) {
+            try {
+                if (typeof showNotification === 'function') showNotification('Printing Bluetooth test receipt...', 'info');
+                await window.BluetoothPrinter.printTestReceipt(80);
+                if (typeof showNotification === 'function') showNotification('Test receipt printed successfully!', 'success');
+            } catch (e) {
+                alert(`Test print error: ${e.message}`);
+            }
+        } else {
+            await window.BluetoothPrinter.disconnect();
+            if (typeof showNotification === 'function') showNotification('Bluetooth printer disconnected', 'info');
+        }
+    } else {
+        try {
+            if (typeof showNotification === 'function') showNotification('Searching for Bluetooth thermal printers...', 'info');
+            await window.BluetoothPrinter.connect();
+            if (typeof showNotification === 'function') showNotification(`Connected to ${window.BluetoothPrinter.getDeviceName()}!`, 'success');
+        } catch (err) {
+            if (err.name !== 'NotFoundError' && !err.message.includes('User cancelled')) {
+                alert(`Bluetooth connection error: ${err.message}`);
+            }
+        }
+    }
 }
 
 function escapeHtml(text) {

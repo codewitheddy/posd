@@ -1,0 +1,97 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Record Customer Receipt{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-cash-stack me-2 text-primary"></i>Record Customer Payment</h1>
+        <p class="page-subtitle">Receive money from customer into bank/cash and automatically post double-entry GL journal.</p>
+    </div>
+    <a href="{% url 'accounting_customer_payment_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Receipts
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Customer <span class="text-danger">*</span></label>
+                            {{ form.customer }}
+                            {% if form.customer.errors %}<div class="text-danger small mt-1">{{ form.customer.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Branch (Optional)</label>
+                            {{ form.branch }}
+                            {% if form.branch.errors %}<div class="text-danger small mt-1">{{ form.branch.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Receipt / Voucher Number <span class="text-danger">*</span></label>
+                            {{ form.receipt_number }}
+                            {% if form.receipt_number.errors %}<div class="text-danger small mt-1">{{ form.receipt_number.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Payment Date <span class="text-danger">*</span></label>
+                            {{ form.payment_date }}
+                            {% if form.payment_date.errors %}<div class="text-danger small mt-1">{{ form.payment_date.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Amount Received (KES) <span class="text-danger">*</span></label>
+                            {{ form.amount }}
+                            {% if form.amount.errors %}<div class="text-danger small mt-1">{{ form.amount.errors|first }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Payment Method <span class="text-danger">*</span></label>
+                            {{ form.payment_method }}
+                            {% if form.payment_method.errors %}<div class="text-danger small mt-1">{{ form.payment_method.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Deposit GL Account <span class="text-danger">*</span></label>
+                            {{ form.deposit_account }}
+                            {% if form.deposit_account.errors %}<div class="text-danger small mt-1">{{ form.deposit_account.errors|first }}</div>{% endif %}
+                            <small class="text-muted">Account where funds are received (e.g. 1010 Bank, 1020 Till, 1030 M-Pesa).</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">External Reference / M-Pesa Code</label>
+                            {{ form.reference }}
+                            {% if form.reference.errors %}<div class="text-danger small mt-1">{{ form.reference.errors|first }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Notes / Description</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors|first }}</div>{% endif %}
+                    </div>
+
+                    <div class="alert alert-info py-2 small mb-4">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        Saving this receipt automatically applies it to the customer's oldest open invoices and posts double-entry GL journal lines: <strong>DR Deposit Account</strong> / <strong>CR Trade Receivables (1200)</strong>.
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'accounting_customer_payment_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-acc-primary px-4">
+                            <i class="bi bi-check-circle me-1"></i>Record &amp; Post Receipt
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

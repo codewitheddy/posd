@@ -1,0 +1,147 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}{{ bank_account.name }} — Bank &amp; Reconciliation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary bg-opacity-10 text-primary font-monospace">{{ bank_account.gl_account.code }}</span>
+            <span class="badge bg-light text-dark border">{{ bank_account.bank_name }}</span>
+        </div>
+        <h1><i class="bi bi-bank2 me-2 text-primary"></i>{{ bank_account.name }}</h1>
+        <p class="page-subtitle">Account Number: <strong class="font-monospace text-dark">{{ bank_account.account_number }}</strong> | Mapped to <strong>{{ bank_account.gl_account.code }} - {{ bank_account.gl_account.name }}</strong></p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_bank_account_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Accounts
+        </a>
+        <a href="{% url 'accounting_bank_reconciliation_report' bank_account.pk %}" class="btn btn-outline-primary">
+            <i class="bi bi-file-earmark-check me-1"></i>Reconciliation Report
+        </a>
+        <a href="{% url 'accounting_bank_statement_import' bank_account.pk %}" class="btn btn-acc-primary">
+            <i class="bi bi-upload me-1"></i>Import Statement CSV
+        </a>
+    </div>
+</div>
+
+<!-- Reconciliation Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">General Ledger Balance</span>
+            <div class="stat-val text-primary font-monospace mt-1">KES {{ recon_summary.gl_balance|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Book balance per GL {{ bank_account.gl_account.code }}</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Statement Closing Balance</span>
+            <div class="stat-val text-success font-monospace mt-1">KES {{ recon_summary.statement_balance|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Latest verified bank closing</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Reconciliation Difference</span>
+            <div class="stat-val {% if recon_summary.is_reconciled %}text-success{% else %}text-danger{% endif %} font-monospace mt-1">
+                KES {{ recon_summary.difference|floatformat:2 }}
+            </div>
+            <div class="text-muted small mt-1">
+                {% if recon_summary.is_reconciled %}
+                <span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>Fully Reconciled</span>
+                {% else %}
+                <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Unreconciled Variance</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Outstanding Items</span>
+            <div class="d-flex justify-content-between font-monospace small mt-2">
+                <span class="text-muted">Unpresented DRs:</span>
+                <span class="fw-bold">KES {{ recon_summary.unpresented_payments|floatformat:2 }}</span>
+            </div>
+            <div class="d-flex justify-content-between font-monospace small mt-1">
+                <span class="text-muted">Uncredited CRs:</span>
+                <span class="fw-bold">KES {{ recon_summary.uncredited_receipts|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Imported Statements History -->
+<div class="table-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold">Imported Bank &amp; M-Pesa Statements</span>
+        <a href="{% url 'accounting_bank_statement_import' bank_account.pk %}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-upload me-1"></i>Import New CSV
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Statement Date</th>
+                    <th>Transactions</th>
+                    <th class="text-end">Opening Balance (KES)</th>
+                    <th class="text-end">Closing Balance (KES)</th>
+                    <th class="text-center">Reconciliation Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stmt in statements %}
+                <tr>
+                    <td>
+                        <div class="fw-bold">{{ stmt.statement_date|date:"d M Y" }}</div>
+                        <small class="text-muted">Imported {{ stmt.created_at|date:"d M Y, H:i" }}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ stmt.lines.count }} entries</span>
+                    </td>
+                    <td class="text-end font-monospace">
+                        KES {{ stmt.opening_balance|floatformat:2 }}
+                    </td>
+                    <td class="text-end font-monospace fw-bold">
+                        KES {{ stmt.closing_balance|floatformat:2 }}
+                    </td>
+                    <td class="text-center">
+                        {% if stmt.reconciliation.is_closed %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Reconciled &amp; Closed</span>
+                        {% else %}
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Open / Partially Matched</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if not stmt.reconciliation.is_closed %}
+                        <form method="post" action="{% url 'accounting_bank_statement_reconcile' stmt.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-acc-primary">
+                                <i class="bi bi-magic me-1"></i>Auto-Reconcile
+                            </button>
+                        </form>
+                        {% endif %}
+                        <a href="{% url 'accounting_bank_reconciliation_report' bank_account.pk %}?statement={{ stmt.pk }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-file-text me-1"></i>Report
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-file-earmark-spreadsheet display-6 d-block mb-2 text-secondary"></i>
+                        No bank statements imported for this account yet.
+                        <div class="mt-2">
+                            <a href="{% url 'accounting_bank_statement_import' bank_account.pk %}" class="btn btn-sm btn-acc-primary">
+                                <i class="bi bi-upload me-1"></i>Import Statement CSV
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

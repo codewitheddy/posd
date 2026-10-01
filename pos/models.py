@@ -27,9 +27,44 @@ def get_audit_request():
     return getattr(_audit_request, 'value', None)
 
 
+def _get_or_create_core_company_and_branch(pos_business, pos_branch=None):
+    """
+    Adapter bridging POS Business/Branch to Platform Core Company/Branch.
+    Enables gradual Strangler migration without breaking legacy POS data.
+    """
+    if not pos_business:
+        return None, None
+    try:
+        from core.models.organization import Company, Branch as CoreBranch
+        company = Company.objects.filter(name=pos_business.name).first()
+        if not company:
+            slug = slugify(pos_business.name) or f"company-{pos_business.id}"
+            company, _ = Company.objects.get_or_create(
+                slug=slug,
+                defaults={
+                    'name': pos_business.name,
+                    'currency': getattr(pos_business, 'currency', 'KES') or 'KES',
+                    'kra_pin': getattr(pos_business, 'kra_pin', '') or '',
+                    'vat_number': getattr(pos_business, 'vat_number', '') or '',
+                }
+            )
+        core_branch = None
+        if pos_branch:
+            core_branch = CoreBranch.objects.filter(company=company, name=pos_branch.name).first()
+            if not core_branch:
+                core_branch, _ = CoreBranch.objects.get_or_create(
+                    company=company,
+                    code=getattr(pos_branch, 'code', 'HQ') or 'HQ',
+                    defaults={'name': pos_branch.name}
+                )
+        return company, core_branch
+    except Exception:
+        return None, None
+
+
 class AuditModelMixin:
     """
-    Mixin that auto-logs create/update/delete to ActivityLog.
+    Mixin that auto-logs create/update/delete to ActivityLog and Core AuditLog.
     Add to any model that needs full audit trails.
     Usage: class MyModel(AuditModelMixin, models.Model): ...
     """
@@ -58,6 +93,19 @@ class AuditModelMixin:
                 entity_type=self.__class__.__name__,
                 entity_id=str(self.pk),
             )
+            # Log to unified Backoffice Core AuditLog
+            try:
+                from core.audit.service import log_audit
+                company, _ = _get_or_create_core_company_and_branch(business)
+                log_audit(
+                    action=action,
+                    instance=self,
+                    user=user if (user and getattr(user, 'is_authenticated', False)) else None,
+                    request=request,
+                    company=company,
+                )
+            except Exception:
+                pass
         except Exception:
             pass  # Never let audit logging break the main operation
 
@@ -81,6 +129,19 @@ class AuditModelMixin:
                 entity_type=self.__class__.__name__,
                 entity_id=str(pk),
             )
+            # Log to unified Backoffice Core AuditLog
+            try:
+                from core.audit.service import log_audit
+                company, _ = _get_or_create_core_company_and_branch(business)
+                log_audit(
+                    action='delete',
+                    instance=self,
+                    user=user if (user and getattr(user, 'is_authenticated', False)) else None,
+                    request=request,
+                    company=company,
+                )
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -1306,21 +1367,62 @@ class Sale(AuditModelMixin, CacheInvalidationMixin, models.Model):
         return f"Invoice {self.invoice_number} - KES {self.total}"
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
         if not self.invoice_number:
-            # Generate invoice number: INV-YYYYMMDD-XXXX
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_sale = Sale.objects.filter(business=self.business, invoice_number__startswith=f'INV-{date_str}').order_by('-invoice_number').first()
-            if last_sale:
-                try:
-                    last_num = int(last_sale.invoice_number.split('-')[-1])
-                except (ValueError, IndexError):
-                    last_num = Sale.objects.filter(business=self.business).count()
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.invoice_number = f'INV-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, branch = _get_or_create_core_company_and_branch(self.business, getattr(self, 'branch', None))
+                if company:
+                    today = self.date.date() if self.date else timezone.now().date()
+                    self.invoice_number = next_document_number(
+                        document_type='sale_invoice',
+                        company=company,
+                        branch=branch,
+                        date_val=today,
+                        prefix='INV',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                # Fallback to legacy numbering
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_sale = Sale.objects.filter(business=self.business, invoice_number__startswith=f'INV-{date_str}').order_by('-invoice_number').first()
+                if last_sale:
+                    try:
+                        last_num = int(last_sale.invoice_number.split('-')[-1])
+                    except (ValueError, IndexError):
+                        last_num = Sale.objects.filter(business=self.business).count()
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.invoice_number = f'INV-{date_str}-{new_num:04d}'
+
         super().save(*args, **kwargs)
+
+        if is_new:
+            try:
+                from core.events.bus import publish
+                company, _ = _get_or_create_core_company_and_branch(self.business, getattr(self, 'branch', None))
+                publish(
+                    event_name='pos.sale_completed.v1',
+                    payload={
+                        'sale_id': self.pk,
+                        'invoice_number': self.invoice_number,
+                        'total': str(self.total),
+                        'subtotal': str(self.subtotal),
+                        'vat_amount': str(self.vat_amount),
+                        'cashier_id': self.cashier_id,
+                        'customer_id': self.customer_id,
+                        'branch_id': self.branch_id,
+                        'business_id': self.business_id,
+                        'is_credit_sale': self.is_credit_sale,
+                    },
+                    company=company,
+                )
+            except Exception:
+                pass
 
 
 class SaleItem(models.Model):
@@ -1376,9 +1478,9 @@ class StockAdjustment(AuditModelMixin, models.Model):
     business = models.ForeignKey('Business', on_delete=models.CASCADE, related_name='stock_adjustments')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_adjustments')
     adjustment_type = models.CharField(max_length=20, choices=ADJUSTMENT_TYPES)
-    quantity_change = models.IntegerField(help_text="Positive for additions, negative for deductions")
-    previous_quantity = models.IntegerField()
-    new_quantity = models.IntegerField()
+    quantity_change = models.DecimalField(max_digits=12, decimal_places=3, help_text="Positive for additions, negative for deductions")
+    previous_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    new_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
     reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='stock_adjustments')
@@ -1387,7 +1489,7 @@ class StockAdjustment(AuditModelMixin, models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.product.name} - {self.adjustment_type} ({self.quantity_change:+d})"
+        return f"{self.product.name} - {self.adjustment_type} ({self.quantity_change:+f})"
     
     def save(self, *args, **kwargs):
         if not self.business_id and self.product:
@@ -1532,19 +1634,35 @@ class Purchase(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.purchase_number:
-            # Generate purchase number: PO-YYYYMMDD-XXXX
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_purchase = Purchase.objects.filter(
-                business=self.business,
-                purchase_number__startswith=f'PO-{date_str}'
-            ).order_by('-purchase_number').first()
-            if last_purchase:
-                last_num = int(last_purchase.purchase_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.purchase_number = f'PO-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, branch = _get_or_create_core_company_and_branch(self.business, getattr(self, 'branch', None))
+                if company:
+                    today = self.date.date() if self.date else timezone.now().date()
+                    self.purchase_number = next_document_number(
+                        document_type='purchase_order',
+                        company=company,
+                        branch=branch,
+                        date_val=today,
+                        prefix='PO',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                # Fallback to legacy numbering
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_purchase = Purchase.objects.filter(
+                    business=self.business,
+                    purchase_number__startswith=f'PO-{date_str}'
+                ).order_by('-purchase_number').first()
+                if last_purchase:
+                    last_num = int(last_purchase.purchase_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.purchase_number = f'PO-{date_str}-{new_num:04d}'
         
         # Validate amounts are not negative
         if self.subtotal < 0 or self.tax_amount < 0 or self.total_amount < 0:
@@ -1596,15 +1714,15 @@ class Purchase(models.Model):
                     continue
 
                 if item_data:
-                    qty_received = int(item_data.get('quantity_received', 0) or 0)
-                    qty_damaged = int(item_data.get('quantity_damaged', 0) or 0)
+                    qty_received = Decimal(str(item_data.get('quantity_received', 0) or 0))
+                    qty_damaged = Decimal(str(item_data.get('quantity_damaged', 0) or 0))
                     notes = item_data.get('notes', '')
                     expiry_date = item_data.get('expiry_date')
                     batch_number = item_data.get('batch_number', '')
                 else:
                     # Backward compatibility: receive only what is still outstanding.
                     qty_received = remaining_before
-                    qty_damaged = 0
+                    qty_damaged = Decimal('0.000')
                     notes = ''
                     expiry_date = None
                     batch_number = ''
@@ -1646,7 +1764,7 @@ class Purchase(models.Model):
 
                 previous_qty = product.stock_quantity
                 if qty_received > 0:
-                    product.stock_quantity += Decimal(qty_received)
+                    product.stock_quantity += Decimal(str(qty_received))
 
                 product_update_fields = ['stock_quantity']
                 if item.expiry_date:
@@ -1659,8 +1777,8 @@ class Purchase(models.Model):
                         product=product,
                         adjustment_type='restock',
                         quantity_change=qty_received,
-                        previous_quantity=int(previous_qty),
-                        new_quantity=int(product.stock_quantity),
+                        previous_quantity=previous_qty,
+                        new_quantity=product.stock_quantity,
                         reason=f'Received from {locked_purchase.purchase_number} ({qty_received} of {item.quantity} ordered)'
                     )
 
@@ -1670,8 +1788,8 @@ class Purchase(models.Model):
                         product=product,
                         adjustment_type='damage',
                         quantity_change=-qty_damaged,
-                        previous_quantity=int(product.stock_quantity),
-                        new_quantity=int(product.stock_quantity),
+                        previous_quantity=product.stock_quantity,
+                        new_quantity=product.stock_quantity,
                         reason=f'Damaged on delivery - {locked_purchase.purchase_number}: {notes}'
                     )
 
@@ -1730,7 +1848,7 @@ class PurchaseItem(models.Model):
     purchase = models.ForeignKey(Purchase, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     description = models.CharField(max_length=255, blank=True, help_text='Optional item description / override')
-    quantity = models.PositiveIntegerField(help_text='Quantity ordered')
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('1.000'), help_text='Quantity ordered')
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     discount = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='Discount percentage (0-100)')
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
@@ -1738,8 +1856,8 @@ class PurchaseItem(models.Model):
     batch_number = models.CharField(max_length=100, blank=True, help_text='Batch or lot number for tracking')
     
     # Receiving details
-    quantity_received = models.PositiveIntegerField(default=0, help_text='Actual quantity received (good items)')
-    quantity_damaged = models.PositiveIntegerField(default=0, help_text='Quantity damaged or missing')
+    quantity_received = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'), help_text='Actual quantity received (good items)')
+    quantity_damaged = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'), help_text='Quantity damaged or missing')
     receiving_notes = models.TextField(blank=True, help_text='Notes about receiving (damage details, etc.)')
     
     def __str__(self):
@@ -1951,18 +2069,33 @@ class SupplierPayment(models.Model):
         
         # Generate payment number: PAY-YYYYMMDD-XXXX
         if not self.payment_number:
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_payment = SupplierPayment.objects.filter(
-                business=self.business,
-                payment_number__startswith=f'PAY-{date_str}'
-            ).order_by('-payment_number').first()
-            if last_payment:
-                last_num = int(last_payment.payment_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.payment_number = f'PAY-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, _ = _get_or_create_core_company_and_branch(self.business)
+                if company:
+                    today = self.payment_date if hasattr(self.payment_date, 'year') else timezone.now().date()
+                    self.payment_number = next_document_number(
+                        document_type='supplier_payment',
+                        company=company,
+                        date_val=today,
+                        prefix='PAY',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_payment = SupplierPayment.objects.filter(
+                    business=self.business,
+                    payment_number__startswith=f'PAY-{date_str}'
+                ).order_by('-payment_number').first()
+                if last_payment:
+                    last_num = int(last_payment.payment_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.payment_number = f'PAY-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
     
     def total_allocated(self):
@@ -2066,18 +2199,33 @@ class SupplierCredit(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.credit_number:
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_credit = SupplierCredit.objects.filter(
-                business=self.business,
-                credit_number__startswith=f'SCR-{date_str}'
-            ).order_by('-credit_number').first()
-            if last_credit:
-                last_num = int(last_credit.credit_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.credit_number = f'SCR-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, _ = _get_or_create_core_company_and_branch(self.business)
+                if company:
+                    today = self.date_raised if hasattr(self.date_raised, 'year') else timezone.now().date()
+                    self.credit_number = next_document_number(
+                        document_type='supplier_credit',
+                        company=company,
+                        date_val=today,
+                        prefix='SCR',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_credit = SupplierCredit.objects.filter(
+                    business=self.business,
+                    credit_number__startswith=f'SCR-{date_str}'
+                ).order_by('-credit_number').first()
+                if last_credit:
+                    last_num = int(last_credit.credit_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.credit_number = f'SCR-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
 
     def remaining_credit(self):
@@ -2178,18 +2326,33 @@ class SupplierRefund(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.refund_number:
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_ref = SupplierRefund.objects.filter(
-                business=self.business,
-                refund_number__startswith=f'SRF-{date_str}'
-            ).order_by('-refund_number').first()
-            if last_ref:
-                last_num = int(last_ref.refund_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.refund_number = f'SRF-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, _ = _get_or_create_core_company_and_branch(self.business)
+                if company:
+                    today = self.received_date if hasattr(self.received_date, 'year') else timezone.now().date()
+                    self.refund_number = next_document_number(
+                        document_type='supplier_refund',
+                        company=company,
+                        date_val=today,
+                        prefix='SRF',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_ref = SupplierRefund.objects.filter(
+                    business=self.business,
+                    refund_number__startswith=f'SRF-{date_str}'
+                ).order_by('-refund_number').first()
+                if last_ref:
+                    last_num = int(last_ref.refund_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.refund_number = f'SRF-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
 
 
@@ -2910,9 +3073,9 @@ class GoodsReceivedNote(models.Model):
     driver_name = models.CharField(max_length=100, blank=True)
 
     # Totals (denormalised for fast reporting)
-    total_ordered_qty = models.PositiveIntegerField(default=0)
-    total_received_qty = models.PositiveIntegerField(default=0)
-    total_damaged_qty = models.PositiveIntegerField(default=0)
+    total_ordered_qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    total_received_qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    total_damaged_qty = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
     total_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
     notes = models.TextField(blank=True)
@@ -2932,14 +3095,29 @@ class GoodsReceivedNote(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.grn_number:
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last = GoodsReceivedNote.objects.filter(
-                business=self.business,
-                grn_number__startswith=f'GRNR-{date_str}'
-            ).order_by('-grn_number').first()
-            new_num = (int(last.grn_number.split('-')[-1]) + 1) if last else 1
-            self.grn_number = f'GRNR-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, _ = _get_or_create_core_company_and_branch(self.business)
+                if company:
+                    today = self.received_date if hasattr(self.received_date, 'year') else timezone.now().date()
+                    self.grn_number = next_document_number(
+                        document_type='goods_received_note',
+                        company=company,
+                        date_val=today,
+                        prefix='GRNR',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last = GoodsReceivedNote.objects.filter(
+                    business=self.business,
+                    grn_number__startswith=f'GRNR-{date_str}'
+                ).order_by('-grn_number').first()
+                new_num = (int(last.grn_number.split('-')[-1]) + 1) if last else 1
+                self.grn_number = f'GRNR-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
 
     @property
@@ -2952,9 +3130,9 @@ class GoodsReceivedNoteItem(models.Model):
 
     grn = models.ForeignKey(GoodsReceivedNote, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('Product', on_delete=models.PROTECT)
-    quantity_ordered = models.PositiveIntegerField()
-    quantity_received = models.PositiveIntegerField()
-    quantity_damaged = models.PositiveIntegerField(default=0)
+    quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    quantity_received = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    quantity_damaged = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     batch_number = models.CharField(max_length=100, blank=True)
@@ -3037,19 +3215,33 @@ class GoodsReturnedNote(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.grn_number:
-            # Generate GRN number: GRN-YYYYMMDD-XXXX
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_grn = GoodsReturnedNote.objects.filter(
-                business=self.business,
-                grn_number__startswith=f'GRN-{date_str}'
-            ).order_by('-grn_number').first()
-            if last_grn:
-                last_num = int(last_grn.grn_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.grn_number = f'GRN-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, _ = _get_or_create_core_company_and_branch(self.business)
+                if company:
+                    today = self.return_date if hasattr(self.return_date, 'year') else timezone.now().date()
+                    self.grn_number = next_document_number(
+                        document_type='goods_returned_note',
+                        company=company,
+                        date_val=today,
+                        prefix='GRN',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_grn = GoodsReturnedNote.objects.filter(
+                    business=self.business,
+                    grn_number__startswith=f'GRN-{date_str}'
+                ).order_by('-grn_number').first()
+                if last_grn:
+                    last_num = int(last_grn.grn_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.grn_number = f'GRN-{date_str}-{new_num:04d}'
         
         # Calculate total value from items
         if self.pk:
@@ -3115,7 +3307,7 @@ class GoodsReturnedNoteItem(models.Model):
     
     grn = models.ForeignKey(GoodsReturnedNote, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('Product', on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     
@@ -3524,22 +3716,37 @@ class Shift(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.shift_number:
-            # Generate shift number: SHIFT-YYYYMMDD-XXXX
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_shift = Shift.objects.filter(
-                shift_number__startswith=f'SHIFT-{date_str}'
-            ).order_by('-shift_number').first()
-            if last_shift:
-                last_num = int(last_shift.shift_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.shift_number = f'SHIFT-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, branch = _get_or_create_core_company_and_branch(getattr(self, 'business', None), getattr(self, 'branch', None))
+                if company:
+                    today = self.start_time.date() if self.start_time else timezone.now().date()
+                    self.shift_number = next_document_number(
+                        document_type='shift',
+                        company=company,
+                        branch=branch,
+                        date_val=today,
+                        prefix='SHIFT',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_shift = Shift.objects.filter(
+                    shift_number__startswith=f'SHIFT-{date_str}'
+                ).order_by('-shift_number').first()
+                if last_shift:
+                    last_num = int(last_shift.shift_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.shift_number = f'SHIFT-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
     
     def close_shift(self, closing_cash):
-        """Close the shift and calculate differences"""
+        """Close the shift, calculate differences, and publish shift_closed domain event"""
         self.end_time = timezone.now()
         self.closing_cash = closing_cash
         
@@ -3565,6 +3772,26 @@ class Shift(models.Model):
         
         self.status = 'closed'
         self.save()
+
+        try:
+            from core.events.bus import publish
+            company, branch = _get_or_create_core_company_and_branch(getattr(self, 'business', None), getattr(self, 'branch', None))
+            publish(
+                event_name='pos.shift_closed.v1',
+                payload={
+                    'shift_id': self.pk,
+                    'shift_number': self.shift_number,
+                    'cashier_id': self.cashier_id,
+                    'expected_cash': str(self.expected_cash),
+                    'closing_cash': str(self.closing_cash),
+                    'cash_difference': str(self.cash_difference),
+                    'total_sales': self.total_sales,
+                    'total_revenue': str(self.total_revenue),
+                },
+                company=company,
+            )
+        except Exception:
+            pass
 
 
 class DayClosureReport(models.Model):
@@ -3677,27 +3904,63 @@ class SaleReturn(models.Model):
         return f"{self.return_number} - {self.original_sale.invoice_number}"
     
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
         if not self.return_number:
-            # Generate return number: RET-YYYYMMDD-XXXX
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last_return = SaleReturn.objects.filter(
-                return_number__startswith=f'RET-{date_str}'
-            ).order_by('-return_number').first()
-            if last_return:
-                last_num = int(last_return.return_number.split('-')[-1])
-                new_num = last_num + 1
-            else:
-                new_num = 1
-            self.return_number = f'RET-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                business = getattr(self.original_sale, 'business', None) if self.original_sale else None
+                company, _ = _get_or_create_core_company_and_branch(business)
+                if company:
+                    today = self.return_date.date() if hasattr(self.return_date, 'date') else timezone.now().date()
+                    self.return_number = next_document_number(
+                        document_type='sale_return',
+                        company=company,
+                        date_val=today,
+                        prefix='RET',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last_return = SaleReturn.objects.filter(
+                    return_number__startswith=f'RET-{date_str}'
+                ).order_by('-return_number').first()
+                if last_return:
+                    last_num = int(last_return.return_number.split('-')[-1])
+                    new_num = last_num + 1
+                else:
+                    new_num = 1
+                self.return_number = f'RET-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
+
+        if is_new:
+            try:
+                from core.events.bus import publish
+                business = getattr(self.original_sale, 'business', None) if self.original_sale else None
+                company, _ = _get_or_create_core_company_and_branch(business)
+                publish(
+                    event_name='pos.sale_refunded.v1',
+                    payload={
+                        'return_id': self.pk,
+                        'return_number': self.return_number,
+                        'original_invoice': self.original_sale.invoice_number if self.original_sale else '',
+                        'total_refund_amount': str(self.total_refund),
+                        'refund_method': self.refund_method.name if self.refund_method else '',
+                        'reason': self.reason,
+                    },
+                    company=company,
+                )
+            except Exception:
+                pass
 
 
 class SaleReturnItem(models.Model):
     """Individual items in a return"""
     sale_return = models.ForeignKey(SaleReturn, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     
@@ -3956,14 +4219,29 @@ class Expense(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.expense_number:
-            today = timezone.now()
-            date_str = today.strftime('%Y%m%d')
-            last = Expense.objects.filter(
-                business=self.business,
-                expense_number__startswith=f'EXP-{date_str}'
-            ).order_by('-expense_number').first()
-            new_num = (int(last.expense_number.split('-')[-1]) + 1) if last else 1
-            self.expense_number = f'EXP-{date_str}-{new_num:04d}'
+            try:
+                from core.numbering.service import next_document_number
+                company, _ = _get_or_create_core_company_and_branch(self.business)
+                if company:
+                    today = self.expense_date if hasattr(self.expense_date, 'year') else timezone.now().date()
+                    self.expense_number = next_document_number(
+                        document_type='expense',
+                        company=company,
+                        date_val=today,
+                        prefix='EXP',
+                        format_pattern='{prefix}-{year}{month:02d}{day:02d}-{seq:04d}',
+                    )
+                else:
+                    raise ValueError("No company")
+            except Exception:
+                today = timezone.now()
+                date_str = today.strftime('%Y%m%d')
+                last = Expense.objects.filter(
+                    business=self.business,
+                    expense_number__startswith=f'EXP-{date_str}'
+                ).order_by('-expense_number').first()
+                new_num = (int(last.expense_number.split('-')[-1]) + 1) if last else 1
+                self.expense_number = f'EXP-{date_str}-{new_num:04d}'
         super().save(*args, **kwargs)
 
 
@@ -7066,4 +7344,252 @@ class CashPaidOut(CacheInvalidationMixin, AuditModelMixin, models.Model):
         super().save(*args, **kwargs)
 
 
+class POSGLMapping(models.Model):
+    """
+    Maps POS operations, payment methods, and sales lines to General Ledger account codes.
+    Stores account codes as string identifiers to avoid cross-module coupling.
+    """
+    business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name='gl_mapping')
+    cash_account_code = models.CharField(max_length=20, default='1010', help_text="Till Cash Account (default: 1010)")
+    mpesa_account_code = models.CharField(max_length=20, default='1030', help_text="M-Pesa Clearing (default: 1030)")
+    card_account_code = models.CharField(max_length=20, default='1040', help_text="Card / Swipe Clearing (default: 1040)")
+    credit_account_code = models.CharField(max_length=20, default='1100', help_text="Accounts Receivable (default: 1100)")
+    sales_revenue_code = models.CharField(max_length=20, default='4000', help_text="Sales Revenue Account (default: 4000)")
+    vat_output_code = models.CharField(max_length=20, default='2100', help_text="VAT Output Account (default: 2100)")
+    cogs_account_code = models.CharField(max_length=20, default='5000', help_text="COGS Account (default: 5000)")
+    inventory_account_code = models.CharField(max_length=20, default='1200', help_text="Inventory Asset Account (default: 1200)")
+    cash_variance_code = models.CharField(max_length=20, default='6900', help_text="Cash Short/Over Account (default: 6900)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'POS GL Mapping'
+        verbose_name_plural = 'POS GL Mappings'
+
+    def __str__(self):
+        return f"GL Mapping for {self.business.name}"
+
+    @classmethod
+    def get_for_business(cls, business):
+        """Retrieve or create default mapping for a business."""
+        if not business:
+            return None
+        mapping, _ = cls.objects.get_or_create(business=business)
+        return mapping
+
+
+class SalesOrderStatus(models.TextChoices):
+    DRAFT = 'draft', 'Draft'
+    PENDING_APPROVAL = 'pending_approval', 'Pending Approval'
+    CONFIRMED = 'confirmed', 'Confirmed'
+    PROCESSING = 'processing', 'Processing'
+    PARTIALLY_DELIVERED = 'partially_delivered', 'Partially Delivered'
+    DELIVERED = 'delivered', 'Delivered'
+    INVOICED = 'invoiced', 'Invoiced'
+    CANCELLED = 'cancelled', 'Cancelled'
+
+
+class SalesOrder(models.Model):
+    """
+    Enterprise B2B Sales Order for wholesale, corporate, and multi-branch client distribution.
+    Bridges CRM quotes/orders with warehouse fulfillment and GL Accounts Receivable.
+    """
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='sales_orders')
+    order_number = models.CharField(max_length=50, editable=False)
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='sales_orders')
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='sales_orders')
+    order_date = models.DateField(default=timezone.now, db_index=True)
+    expected_delivery_date = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=SalesOrderStatus.choices,
+        default=SalesOrderStatus.DRAFT,
+        db_index=True
+    )
+    
+    payment_terms = models.CharField(
+        max_length=30,
+        choices=[
+            ('immediate', 'Immediate / Cash on Delivery'),
+            ('net_15', 'Net 15 Days'),
+            ('net_30', 'Net 30 Days'),
+            ('net_60', 'Net 60 Days'),
+            ('prepaid', 'Prepaid in Advance'),
+        ],
+        default='immediate'
+    )
+    shipping_address = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_sales_orders'
+    )
+    confirmed_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='confirmed_sales_orders'
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-order_date', '-created_at']
+        unique_together = [['business', 'order_number']]
+
+    def __str__(self):
+        return f"{self.order_number} - {self.customer.name}"
+
+    def calculate_totals(self):
+        """Calculate and update line subtotals, taxes, and order total."""
+        items = list(self.items.all())
+        sub = sum((item.line_subtotal for item in items), Decimal('0.00'))
+        tax = sum((item.tax_amount for item in items), Decimal('0.00'))
+        disc = self.discount_amount or Decimal('0.00')
+        self.subtotal = sub
+        self.tax_amount = tax
+        self.total_amount = max(Decimal('0.00'), sub + tax - disc)
+        return self.total_amount
+
+    def save(self, *args, **kwargs):
+        if not self.order_number:
+            try:
+                from core.numbering.service import next_document_number
+                company, branch = _get_or_create_core_company_and_branch(self.business, getattr(self, 'branch', None))
+                if company:
+                    self.order_number = next_document_number(company, 'sales_order', branch=branch)
+            except Exception:
+                pass
+            if not self.order_number:
+                today_str = timezone.now().strftime('%Y%m%d')
+                count = SalesOrder.objects.filter(business=self.business).count() + 1
+                self.order_number = f"SO-{today_str}-{count:04d}"
+        super().save(*args, **kwargs)
+
+
+class SalesOrderItem(models.Model):
+    """Line item on an enterprise B2B sales order."""
+    sales_order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='sales_order_items')
+    quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3)
+    quantity_delivered = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    quantity_invoiced = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal('0.000'))
+    
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('16.00'))
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    line_subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    line_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.sales_order.order_number} - {self.product.name} ({self.quantity_ordered})"
+
+    @property
+    def quantity_pending_delivery(self):
+        return max(Decimal('0.000'), (self.quantity_ordered or Decimal('0.000')) - (self.quantity_delivered or Decimal('0.000')))
+
+    def save(self, *args, **kwargs):
+        qty = self.quantity_ordered or Decimal('0.000')
+        price = self.unit_price or Decimal('0.00')
+        disc_factor = (Decimal('100.00') - (self.discount_percent or Decimal('0.00'))) / Decimal('100.00')
+        self.line_subtotal = (qty * price * disc_factor).quantize(Decimal('0.01'))
+        rate = (self.tax_rate or Decimal('0.00')) / Decimal('100.00')
+        self.tax_amount = (self.line_subtotal * rate).quantize(Decimal('0.01'))
+        self.line_total = self.line_subtotal + self.tax_amount
+        super().save(*args, **kwargs)
+
+
+class DeliveryNoteStatus(models.TextChoices):
+    DRAFT = 'draft', 'Draft'
+    DISPATCHED = 'dispatched', 'Dispatched'
+    DELIVERED = 'delivered', 'Delivered'
+    RETURNED = 'returned', 'Returned'
+    CANCELLED = 'cancelled', 'Cancelled'
+
+
+class DeliveryNote(models.Model):
+    """
+    Goods Dispatch / Delivery Note documenting physical inventory movement from branch/warehouse
+    to client recipient. Triggers stock ledger deduction and COGS journal posting upon dispatch.
+    """
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='delivery_notes')
+    delivery_number = models.CharField(max_length=50, editable=False)
+    sales_order = models.ForeignKey(SalesOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name='delivery_notes')
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='delivery_notes')
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='delivery_notes')
+    
+    dispatch_date = models.DateTimeField(default=timezone.now, db_index=True)
+    delivered_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=DeliveryNoteStatus.choices,
+        default=DeliveryNoteStatus.DRAFT,
+        db_index=True
+    )
+    
+    carrier_name = models.CharField(max_length=100, blank=True)
+    tracking_number = models.CharField(max_length=100, blank=True)
+    vehicle_reg = models.CharField(max_length=50, blank=True)
+    driver_name = models.CharField(max_length=100, blank=True)
+    driver_phone = models.CharField(max_length=50, blank=True)
+    recipient_name = models.CharField(max_length=100, blank=True)
+    delivery_address = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_delivery_notes'
+    )
+    dispatched_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='dispatched_delivery_notes'
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-dispatch_date', '-created_at']
+        unique_together = [['business', 'delivery_number']]
+
+    def __str__(self):
+        return f"{self.delivery_number} -> {self.customer.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.delivery_number:
+            try:
+                from core.numbering.service import next_document_number
+                company, branch = _get_or_create_core_company_and_branch(self.business, getattr(self, 'branch', None))
+                if company:
+                    self.delivery_number = next_document_number(company, 'delivery_note', branch=branch)
+            except Exception:
+                pass
+            if not self.delivery_number:
+                today_str = timezone.now().strftime('%Y%m%d')
+                count = DeliveryNote.objects.filter(business=self.business).count() + 1
+                self.delivery_number = f"DN-{today_str}-{count:04d}"
+        super().save(*args, **kwargs)
+
+
+class DeliveryNoteItem(models.Model):
+    """Individual product row in a Delivery Note / Dispatch document."""
+    delivery_note = models.ForeignKey(DeliveryNote, on_delete=models.CASCADE, related_name='items')
+    sales_order_item = models.ForeignKey(SalesOrderItem, null=True, blank=True, on_delete=models.SET_NULL, related_name='delivery_items')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='delivery_note_items')
+    quantity_dispatched = models.DecimalField(max_digits=12, decimal_places=3)
+    quantity_received = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    remarks = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.delivery_note.delivery_number} - {self.product.name} ({self.quantity_dispatched})"
 

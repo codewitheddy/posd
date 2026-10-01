@@ -18,11 +18,17 @@
       <a href="{% url 'pos_screen' %}" class="btn btn-primary btn-sm">
         <i class="bi bi-cart-plus me-1"></i>Back to POS
       </a>
+      <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-house-door me-1"></i>Home Portal
+      </a>
       {% if user_permissions.can_access_back_office %}
       <a href="{% url 'zreport_list' %}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-archive me-1"></i>Back Office Z-Report Archive
+        <i class="bi bi-archive me-1"></i>Back Office Archive
       </a>
       {% endif %}
+      <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to log out?');">
+        <i class="bi bi-box-arrow-right me-1"></i>Logout
+      </a>
     </div>
   </div>
 

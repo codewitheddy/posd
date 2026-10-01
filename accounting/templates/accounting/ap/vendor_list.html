@@ -1,0 +1,89 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Vendors &amp; Accounts Payable{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-truck me-2 text-primary"></i>Vendor &amp; Supplier Accounts</h1>
+        <p class="page-subtitle">Manage suppliers, payment terms, KRA PINs, and accounts payable.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_ap_aging_report' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-hourglass-split me-1"></i>AP Aging Schedule
+        </a>
+        <a href="{% url 'accounting_vendor_payment_create' %}" class="btn btn-outline-primary">
+            <i class="bi bi-wallet2 me-1"></i>Issue Payment
+        </a>
+        <a href="{% url 'accounting_vendor_create' %}" class="btn btn-acc-primary">
+            <i class="bi bi-truck me-1"></i>New Vendor
+        </a>
+    </div>
+</div>
+
+<div class="table-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold">All Vendors ({{ vendors|length }})</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Vendor Name</th>
+                    <th>KRA PIN</th>
+                    <th>Contact Info</th>
+                    <th>Terms</th>
+                    <th class="text-end">Outstanding Payables (KES)</th>
+                    <th class="text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vendor in vendors %}
+                <tr>
+                    <td>
+                        <div class="fw-bold">{{ vendor.name }}</div>
+                        {% if vendor.address %}<small class="text-muted">{{ vendor.address|truncatechars:35 }}</small>{% endif %}
+                    </td>
+                    <td>
+                        {% if vendor.kra_pin %}
+                        <span class="badge bg-light text-dark font-monospace border">{{ vendor.kra_pin }}</span>
+                        {% else %}
+                        <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div>{% if vendor.phone %}<i class="bi bi-telephone me-1 text-muted"></i>{{ vendor.phone }}{% endif %}</div>
+                        <div>{% if vendor.email %}<i class="bi bi-envelope me-1 text-muted"></i>{{ vendor.email }}{% endif %}</div>
+                        {% if not vendor.phone and not vendor.email %}<span class="text-muted small">—</span>{% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary bg-opacity-10 text-dark">{{ vendor.payment_terms_days }} Days</span>
+                    </td>
+                    <td class="text-end font-monospace fw-bold {% if vendor.outstanding_balance > 0 %}text-danger{% else %}text-muted{% endif %}">
+                        KES {{ vendor.outstanding_balance|floatformat:2 }}
+                    </td>
+                    <td class="text-center">
+                        {% if vendor.is_active %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-truck display-6 d-block mb-2 text-secondary"></i>
+                        No vendors registered yet.
+                        <div class="mt-2">
+                            <a href="{% url 'accounting_vendor_create' %}" class="btn btn-sm btn-acc-primary">
+                                <i class="bi bi-truck me-1"></i>Create First Vendor
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

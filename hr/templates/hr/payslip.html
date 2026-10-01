@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Payslip — {{ payroll.employee.get_full_name }} ({{ payroll.period_end|date:"M Y" }})</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      font-size: 12px;
+      color: #0f172a;
+      background: #f8fafc;
+    }
+    .payslip-card {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 24px 28px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .payslip-header {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .emp-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 24px;
+      background: #f1f5f9;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+      font-size: 11.5px;
+    }
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: bold;
+      color: #475569;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin: 16px 0 8px 0;
+    }
+    table.payslip-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    table.payslip-table th, table.payslip-table td {
+      padding: 6px 8px;
+      font-size: 11.5px;
+    }
+    table.payslip-table th {
+      background: #f8fafc;
+      border-bottom: 1px solid #cbd5e1;
+      text-align: left;
+    }
+    table.payslip-table td.amount {
+      text-align: right;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .net-pay-banner {
+      background: #ecfdf5;
+      border: 1.5px solid #a7f3d0;
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 18px 0;
+    }
+    .net-pay-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: #065f46;
+      font-family: monospace;
+    }
+    .employer-costs-box {
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 14px;
+    }
+    .print-btn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 8px 16px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    @media print {
+      .print-btn { display: none; }
+      body { margin: 0; background: #fff; }
+      .payslip-card { border: none; box-shadow: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <button class="print-btn" onclick="window.print()">Print / Export PDF</button>
+
+  <div class="payslip-card">
+    <div class="payslip-header">
+      <div>
+        <h2 style="margin: 0 0 4px 0; font-size: 18px; color: #0f172a;">{{ business.name|upper }}</h2>
+        <div style="color: #64748b; font-size: 11px;">
+          Branch: {{ payroll.employee.branch.name }} &bull; Kenya
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-weight: 800; font-size: 14px; color: #4f46e5;">ITEMIZED PAYSLIP</div>
+        <div style="color: #64748b; font-size: 11px;">
+          Period: <strong>{{ payroll.period_start|date:"d M Y" }} &ndash; {{ payroll.period_end|date:"d M Y" }}</strong><br>
+          Pay Date: <strong>{{ payroll.pay_date|date:"d M Y"|default:"Pending" }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employee Information Grid -->
+    <div class="emp-grid">
+      <div><strong>Staff Name:</strong> {{ payroll.employee.get_full_name }}</div>
+      <div><strong>Staff Code:</strong> {{ payroll.employee.staff_code|default:"EMP---" }}</div>
+      <div><strong>Job Title:</strong> {{ payroll.employee.job_title }}</div>
+      <div><strong>Department:</strong> {{ payroll.employee.department.name|default:"General Operations" }}</div>
+      <div><strong>National ID / Passport:</strong> {{ payroll.employee.id_number }}</div>
+      <div><strong>KRA PIN:</strong> <span style="font-family: monospace; font-weight: bold;">{{ payroll.employee.kra_pin|default:"—" }}</span></div>
+      <div><strong>NSSF Member No:</strong> {{ payroll.employee.nssf_number|default:"—" }}</div>
+      <div><strong>SHA / SHIF No:</strong> {{ payroll.employee.sha_number|default:payroll.employee.nhif_number|default:"—" }}</div>
+      <div><strong>Payment Method:</strong> {% if payroll.employee.mpesa_number %}M-Pesa ({{ payroll.employee.mpesa_number }}){% elif payroll.employee.bank_account_number %}Bank EFT ({{ payroll.employee.bank_name }}){% else %}Cash / Cheque{% endif %}</div>
+      <div><strong>Tax Status:</strong> {% if payroll.employee.is_secondary_employee %}Secondary (No Relief){% elif payroll.employee.disability_status %}PWD Tax Exempt{% else %}Primary Resident{% endif %}</div>
+    </div>
+
+    <!-- Earnings & Deductions Tables (Side by Side) -->
+    <table width="100%">
+      <tr>
+        <td width="48%" style="vertical-align: top;">
+          <div class="section-title">1. Gross Earnings</div>
+          <table class="payslip-table">
+            <tr>
+              <td>Basic Salary</td>
+              <td class="amount">KES {{ payroll.basic_salary|floatformat:2 }}</td>
+            </tr>
+            {% if payroll.house_allowance > 0 %}
+            <tr>
+              <td>House Allowance</td>
+              <td class="amount">KES {{ payroll.house_allowance|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.transport_allowance > 0 %}
+            <tr>
+              <td>Transport Allowance</td>
+              <td class="amount">KES {{ payroll.transport_allowance|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.medical_allowance > 0 %}
+            <tr>
+              <td>Medical Allowance</td>
+              <td class="amount">KES {{ payroll.medical_allowance|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.other_allowance > 0 or payroll.other_allowances_total > 0 %}
+            <tr>
+              <td>Other Allowances</td>
+              <td class="amount">KES {{ payroll.other_allowance|add:payroll.other_allowances_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.overtime_amount > 0 %}
+            <tr>
+              <td>Overtime ({{ payroll.overtime_hours }} hrs)</td>
+              <td class="amount">KES {{ payroll.overtime_amount|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.bonus > 0 %}
+            <tr>
+              <td>Bonus / Incentives</td>
+              <td class="amount">KES {{ payroll.bonus|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            <tr style="border-top: 1.5px solid #0f172a; font-weight: bold; background: #f8fafc;">
+              <td>TOTAL GROSS EARNINGS</td>
+              <td class="amount">KES {{ payroll.gross_salary|floatformat:2 }}</td>
+            </tr>
+          </table>
+        </td>
+
+        <td width="4%"></td>
+
+        <td width="48%" style="vertical-align: top;">
+          <div class="section-title">2. Deductions (Employee Portion)</div>
+          <table class="payslip-table">
+            <tr>
+              <td>PAYE Income Tax (Cap 470)</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.paye|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td>NSSF (Tier I &amp; II Employee)</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.nssf|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td>SHIF (Social Health 2.75%)</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.shif|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td>Housing Levy (1.5% Employee)</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.housing_levy|floatformat:2 }}</td>
+            </tr>
+            {% if payroll.helb_deduction > 0 %}
+            <tr>
+              <td>HELB Higher Education Loan</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.helb_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.advances_deducted > 0 %}
+            <tr>
+              <td>Salary Advance Recovery</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.advances_deducted|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if payroll.absence_deduction > 0 %}
+            <tr>
+              <td>Unapproved Absence Deduction</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.absence_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            <tr style="border-top: 1.5px solid #0f172a; font-weight: bold; background: #f8fafc;">
+              <td>TOTAL DEDUCTIONS</td>
+              <td class="amount" style="color: #dc2626;">KES {{ payroll.total_deductions|floatformat:2 }}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Net Pay Take-Home Banner -->
+    <div class="net-pay-banner">
+      <div>
+        <div style="font-size: 11px; text-transform: uppercase; font-weight: bold; color: #065f46;">NET TAKE-HOME SALARY</div>
+        <div style="font-size: 11px; color: #047857;">Disbursed in Kenya Shillings (KES)</div>
+      </div>
+      <div class="net-pay-val">
+        KES {{ payroll.net_salary|floatformat:2 }}
+      </div>
+    </div>
+
+    <!-- Employer Statutory Contributions Notice -->
+    <div class="employer-costs-box">
+      <strong>Employer Statutory Obligations (Matching / Non-Deductible from Employee):</strong><br>
+      Employer NSSF: KES {{ payroll.employer_nssf|floatformat:2 }} &bull; Employer Housing Levy (1.5%): KES {{ payroll.employer_housing_levy|floatformat:2 }} &bull; Employer NITA Levy: KES {{ payroll.employer_nita|floatformat:2 }} &bull; Total Cost of Employment: <strong>KES {{ payroll.total_employer_cost|floatformat:2 }}</strong>
+    </div>
+
+    <div style="margin-top: 24px; text-align: center; color: #94a3b8; font-size: 10.5px;">
+      This is an official computer-generated payslip issued under Section 19 &amp; 20 of the Employment Act Cap 227 (Laws of Kenya).
+    </div>
+  </div>
+
+</body>
+</html>

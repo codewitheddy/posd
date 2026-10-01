@@ -42,11 +42,18 @@ web_urlpatterns = [
     path('disciplinary/', web_views.disciplinary_list, name='hr_disciplinary_list'),
     path('disciplinary/create/', web_views.disciplinary_create, name='hr_disciplinary_create'),
     path('p9/', web_views.p9_list, name='hr_p9_list'),
+    path('p9/<int:employee_pk>/view/', web_views.p9_view, name='hr_p9_view'),
     path('p9/<int:employee_pk>/download/', web_views.p9_download, name='hr_p9_download'),
+    path('payslip/<int:payroll_pk>/view/', web_views.payslip_view, name='hr_payslip_view'),
     path('payslip/<int:payroll_pk>/download/', web_views.payslip_download, name='hr_payslip_download'),
     path('departments/', web_views.department_list, name='hr_department_list'),
     path('departments/create/', web_views.department_create, name='hr_department_create'),
     path('departments/<int:pk>/edit/', web_views.department_edit, name='hr_department_edit'),
+    path('returns/', web_views.statutory_returns, name='hr_statutory_returns'),
+    path('returns/export/<str:return_type>/', web_views.export_return, name='hr_export_return'),
+    path('rules/', web_views.statutory_rules, name='hr_statutory_rules'),
+    path('consent/', web_views.consent_list, name='hr_consent_list'),
+    path('certificate/<int:employee_pk>/', web_views.certificate_of_service, name='hr_certificate_of_service'),
     path('api/departments/quick-create/', web_views.department_quick_create, name='hr_department_quick_create'),
     path('api/users/create/', web_views.user_quick_create, name='hr_user_quick_create'),
 ]
@@ -54,3 +61,4 @@ web_urlpatterns = [
 urlpatterns = web_urlpatterns + [
     path('api/', include(router.urls)),
 ]
+

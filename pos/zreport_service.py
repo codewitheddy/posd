@@ -284,6 +284,14 @@ class ZReportService:
             }
         )
         
+        # Post to General Ledger / Queue
+        try:
+            from pos.services.pos_accounting_service import POSAccountingService
+            POSAccountingService.post_zreport_to_gl(zreport, user=user)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Could not post Z-Report to Accounting GL: %s", e)
+            
         return zreport
     
     @staticmethod

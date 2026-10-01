@@ -1,0 +1,58 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Disciplinary Records{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-shield-exclamation me-2 text-primary"></i>Disciplinary &amp; Hearing Records</h1>
+    <p class="page-subtitle">Employment Act Cap 227 Sec. 41: Mandatory procedural fairness, show-cause notices, and hearing records.</p>
+  </div>
+  <a href="{% url 'hr_disciplinary_create' %}" class="btn btn-hr-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Issue Notice / Warning</a>
+</div>
+
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Employee</th>
+          <th>Incident Date</th>
+          <th>Disciplinary Type</th>
+          <th>Hearing Held (Sec. 41)</th>
+          <th>Description &amp; Remediation</th>
+          <th>Issued By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td>
+            <div class="fw-bold">{{ r.employee.get_full_name }}</div>
+            <div class="text-muted small">{{ r.employee.job_title }}</div>
+          </td>
+          <td class="font-monospace">{{ r.incident_date|date:"d M Y" }}</td>
+          <td>
+            <span class="badge {% if r.incident_type == 'termination' %}bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25{% elif r.incident_type == 'suspension' %}bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25{% else %}bg-secondary bg-opacity-15 text-secondary border border-secondary border-opacity-25{% endif %}">
+              {{ r.get_incident_type_display }}
+            </span>
+          </td>
+          <td>
+            {% if r.hearing_held %}
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="bi bi-check-circle me-1"></i>Hearing on {{ r.hearing_date|date:"d/m/Y" }}</span>
+            {% else %}
+              <span class="badge bg-light text-muted border">No Hearing</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="small fw-semibold">{{ r.description|truncatechars:50 }}</div>
+            <div class="small text-muted">Action: {{ r.action_taken|truncatechars:40 }}</div>
+          </td>
+          <td class="small">{{ r.issued_by.get_full_name }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No disciplinary or warning records logged.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

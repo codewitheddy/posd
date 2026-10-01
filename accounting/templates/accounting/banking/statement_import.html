@@ -1,0 +1,79 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Import Statement — {{ bank_account.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-upload me-2 text-primary"></i>Import Statement CSV</h1>
+        <p class="page-subtitle">Upload CSV export from Safaricom M-Pesa Portal or Commercial Bank Internet Banking.</p>
+    </div>
+    <a href="{% url 'accounting_bank_account_detail' bank_account.pk %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to {{ bank_account.name }}
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 p-3 bg-light rounded-3 border mb-4">
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                        <i class="bi bi-bank2"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold">{{ bank_account.name }} ({{ bank_account.bank_name }})</div>
+                        <div class="small text-muted">Account No: <strong class="font-monospace text-dark">{{ bank_account.account_number }}</strong> | GL Account: <strong>{{ bank_account.gl_account.code }} - {{ bank_account.gl_account.name }}</strong></div>
+                    </div>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" novalidate>
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Statement Format / Source <span class="text-danger">*</span></label>
+                        {{ form.statement_type }}
+                        {% if form.statement_type.errors %}<div class="text-danger small mt-1">{{ form.statement_type.errors|first }}</div>{% endif %}
+                        <small class="text-muted">Select 'Safaricom M-Pesa Statement' for Till/Paybill statements or 'Standard Kenyan Bank' for Equity, KCB, Stanbic, Co-op, NCBA, etc.</small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">CSV File to Import <span class="text-danger">*</span></label>
+                        {{ form.csv_file }}
+                        {% if form.csv_file.errors %}<div class="text-danger small mt-1">{{ form.csv_file.errors|first }}</div>{% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'accounting_bank_account_detail' bank_account.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-acc-primary px-4">
+                            <i class="bi bi-upload me-1"></i>Upload &amp; Parse Statement
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Format Helper Card -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <h6 class="fw-bold text-uppercase text-muted mb-3"><i class="bi bi-info-circle me-1 text-primary"></i>Accepted CSV Formats</h6>
+                
+                <div class="mb-3">
+                    <div class="fw-bold small text-dark"><i class="bi bi-file-earmark-text me-1 text-success"></i>1. Safaricom M-Pesa Statement CSV</div>
+                    <p class="text-muted small mb-1">Standard export downloaded directly from the Safaricom M-Pesa Org portal:</p>
+                    <pre class="p-2 bg-light rounded font-monospace border small">Receipt No.,Completion Time,Details,Transaction Status,Paid In,Withdrawn,Balance,Balance Confirmed
+QHD4829J1X,2026-03-15 10:30:00,Customer Payment 0712345678,Completed,5000.00,,5000.00,Yes
+QHD4829J2Y,2026-03-15 11:15:00,Supplier Payout Paybill 123456,Completed,,1200.00,3800.00,Yes</pre>
+                </div>
+
+                <div>
+                    <div class="fw-bold small text-dark"><i class="bi bi-file-earmark-text me-1 text-primary"></i>2. Standard Kenyan Bank CSV</div>
+                    <p class="text-muted small mb-1">Generic bank statement format supported across all major Kenyan commercial banks:</p>
+                    <pre class="p-2 bg-light rounded font-monospace border small">Date,Reference,Description,Debit,Credit,Balance
+2026-03-15,FT2607491823,Customer Cheque Deposit,,150000.00,450000.00
+2026-03-16,EFT99281726,Monthly Office Rent Payment,75000.00,,375000.00</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

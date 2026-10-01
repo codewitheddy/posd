@@ -1,0 +1,164 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Kenya Statutory Rules &amp; Tax Bands{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-sliders me-2 text-primary"></i>Statutory Rules &amp; Versioned Tax Brackets</h1>
+    <p class="page-subtitle">Configurable, effective-dated statutory parameters for Republic of Kenya tax compliance.</p>
+  </div>
+</div>
+
+{% if ruleset %}
+<div class="form-card mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h5 class="fw-bold mb-1">{{ ruleset.name }}</h5>
+      <div class="text-muted small">
+        Version Code: <strong class="font-monospace text-primary">{{ ruleset.version_code }}</strong> &bull;
+        Effective: <strong>{{ ruleset.effective_from|date:"d M Y" }}</strong> to <strong>{{ ruleset.effective_to|date:"d M Y"|default:"Active (Open)" }}</strong>
+      </div>
+    </div>
+    <span class="badge {% if ruleset.is_active %}bg-success bg-opacity-15 text-success border border-success border-opacity-25{% else %}bg-secondary{% endif %} px-3 py-2">
+      {% if ruleset.is_active %}Currently Active In Payroll{% else %}Archived{% endif %}
+    </span>
+  </div>
+  <p class="text-muted small mb-0">{{ ruleset.notes }}</p>
+</div>
+
+<div class="row g-4 mb-4">
+  <!-- PAYE Monthly Bands -->
+  <div class="col-lg-6">
+    <div class="table-card h-100">
+      <h6 class="fw-bold mb-3"><i class="bi bi-percent me-1 text-primary"></i>Progressive PAYE Monthly Bands (Cap 470)</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Band</th>
+              <th>Lower (KES)</th>
+              <th>Upper (KES)</th>
+              <th>Tax Rate</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for band in ruleset.paye_bands.all %}
+            <tr>
+              <td><strong>#{{ band.band_order }}</strong></td>
+              <td class="font-monospace">{{ band.lower_limit|floatformat:2 }}</td>
+              <td class="font-monospace">{% if band.upper_limit %}{{ band.upper_limit|floatformat:2 }}{% else %}Above{% endif %}</td>
+              <td class="fw-bold text-danger">{{ band.rate_percentage }}%</td>
+              <td class="small text-muted">{{ band.description }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">No tax bands configured.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- NSSF Contribution Tiers -->
+  <div class="col-lg-6">
+    <div class="table-card h-100">
+      <h6 class="fw-bold mb-3"><i class="bi bi-shield-shaded me-1 text-primary"></i>NSSF Act 2013 Contribution Limits</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Tier</th>
+              <th>Earnings Band</th>
+              <th>Employee Rate</th>
+              <th>Max Employee</th>
+              <th>Max Employer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tier in ruleset.nssf_tiers.all %}
+            <tr>
+              <td><strong>{{ tier.get_tier_name_display }}</strong></td>
+              <td class="small font-monospace">KES {{ tier.lower_limit|floatformat:0 }} &ndash; {{ tier.upper_limit|floatformat:0 }}</td>
+              <td class="fw-bold">{{ tier.employee_rate }}%</td>
+              <td class="font-monospace text-danger">KES {{ tier.max_employee_deduction|floatformat:2 }}</td>
+              <td class="font-monospace text-primary">KES {{ tier.max_employer_contribution|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">No NSSF tiers configured.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Statutory Reliefs & Caps -->
+  <div class="col-lg-7">
+    <div class="table-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-gift me-1 text-primary"></i>Statutory Tax Reliefs &amp; Allowable Deduction Caps</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Relief / Exemption Type</th>
+              <th>Monthly Fixed Amount</th>
+              <th>Percentage Rate</th>
+              <th>Max Monthly Cap</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for relief in ruleset.relief_rules.all %}
+            <tr>
+              <td><strong>{{ relief.get_relief_type_display }}</strong></td>
+              <td class="font-monospace">{% if relief.monthly_amount > 0 %}KES {{ relief.monthly_amount|floatformat:2 }}{% else %}—{% endif %}</td>
+              <td class="font-monospace">{% if relief.percentage > 0 %}{{ relief.percentage }}%{% else %}—{% endif %}</td>
+              <td class="font-monospace">{% if relief.maximum_monthly_limit > 0 %}KES {{ relief.maximum_monthly_limit|floatformat:2 }}{% else %}No Cap{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted">No relief rules defined.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Other Statutory Levies -->
+  <div class="col-lg-5">
+    <div class="table-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-buildings me-1 text-primary"></i>Statutory Health, Housing &amp; Training Levies</h6>
+      <ul class="list-group list-group-flush small">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>Social Health Insurance Fund (SHIF/SHA)</strong>
+            <div class="text-muted">Social Health Insurance Act 2023</div>
+          </div>
+          <span class="badge bg-primary fs-6">2.75% of Gross</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>Affordable Housing Levy</strong>
+            <div class="text-muted">Affordable Housing Act 2024</div>
+          </div>
+          <span class="badge bg-warning text-dark fs-6">1.5% Emp + 1.5% Empr</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>NITA Training Levy</strong>
+            <div class="text-muted">Industrial Training Act</div>
+          </div>
+          <span class="badge bg-secondary fs-6">KES 50 / staff / mo</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-warning py-3">
+  <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>No Active Statutory Rule Set Found</h5>
+  <p class="mb-0">Run the command <code>python manage.py seed_kenya_statutory_data</code> to seed standard Republic of Kenya tax rates.</p>
+</div>
+{% endif %}
+{% endblock %}

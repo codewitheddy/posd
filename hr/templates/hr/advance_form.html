@@ -1,0 +1,58 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Issue Staff Advance{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-wallet2 me-2 text-primary"></i>Issue Staff Advance</h1>
+    <p class="page-subtitle">Record advance amount and monthly recovery schedule.</p>
+  </div>
+  <a href="{% url 'hr_advance_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Advances</a>
+</div>
+
+<div class="row justify-content-center">
+<div class="col-md-7">
+<div class="form-card">
+<form method="POST">{% csrf_token %}
+  <div class="mb-3">
+    <label class="form-label small fw-bold">Beneficiary Employee <span class="text-danger">*</span></label>
+    <select name="employee" class="form-select" required>
+      <option value="">-- Select Employee --</option>
+      {% for e in employees %}<option value="{{ e.pk }}">{{ e.get_full_name }} ({{ e.job_title }})</option>{% endfor %}
+    </select>
+  </div>
+  
+  <div class="row g-3 mb-3">
+    <div class="col-6">
+      <label class="form-label small fw-bold">Advance Amount (KES) <span class="text-danger">*</span></label>
+      <div class="input-group">
+        <span class="input-group-text">KES</span>
+        <input type="number" name="amount" class="form-control" step="0.01" min="1" required placeholder="0.00">
+      </div>
+    </div>
+    <div class="col-6">
+      <label class="form-label small fw-bold">Date Disbursed <span class="text-danger">*</span></label>
+      <input type="date" name="date_taken" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+    </div>
+    <div class="col-6">
+      <label class="form-label small fw-bold">Monthly Recovery / Deduction (KES) <span class="text-danger">*</span></label>
+      <div class="input-group">
+        <span class="input-group-text">KES</span>
+        <input type="number" name="deduction_per_month" class="form-control" step="0.01" min="1" required placeholder="0.00">
+      </div>
+    </div>
+  </div>
+  
+  <div class="mb-3">
+    <label class="form-label small fw-bold">Reason &amp; Authorization Notes <span class="text-danger">*</span></label>
+    <textarea name="reason" class="form-control" rows="3" required placeholder="Reason for salary advance..."></textarea>
+  </div>
+  
+  <div class="d-flex gap-2 pt-2 border-top">
+    <button type="submit" class="btn btn-hr-primary px-4"><i class="bi bi-check-circle me-1"></i>Issue Advance</button>
+    <a href="{% url 'hr_advance_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+</div>
+</div>
+</div>
+{% endblock %}

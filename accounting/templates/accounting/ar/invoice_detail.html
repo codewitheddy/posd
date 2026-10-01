@@ -1,0 +1,206 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Invoice #{{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary bg-opacity-10 text-primary font-monospace">CUSTOMER INVOICE</span>
+            <span class="badge {% if invoice.status == 'paid' %}bg-success-subtle text-success border border-success-subtle{% elif invoice.status == 'posted' %}bg-primary-subtle text-primary border border-primary-subtle{% elif invoice.status == 'partial' %}bg-warning-subtle text-warning border border-warning-subtle{% else %}bg-secondary-subtle text-secondary border border-secondary-subtle{% endif %}">
+                {{ invoice.get_status_display }}
+            </span>
+        </div>
+        <h1><i class="bi bi-receipt me-2 text-primary"></i>Invoice #{{ invoice.invoice_number }}</h1>
+        <p class="page-subtitle">Issued to <strong>{{ invoice.customer.name }}</strong> on {{ invoice.invoice_date|date:"d F Y" }}</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_invoice_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Invoices
+        </a>
+        {% if invoice.status == 'draft' %}
+        <form method="post" action="{% url 'accounting_invoice_post' invoice.pk %}" class="d-inline" onsubmit="return confirm('Post this invoice to General Ledger? This will lock line amounts and recognize revenue/receivables.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-journal-arrow-up me-1"></i>Post to General Ledger
+            </button>
+        </form>
+        {% endif %}
+        {% if invoice.status == 'posted' or invoice.status == 'partial' %}
+        <a href="{% url 'accounting_customer_payment_create' %}?customer={{ invoice.customer.pk }}" class="btn btn-acc-primary">
+            <i class="bi bi-cash-stack me-1"></i>Record Receipt
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Invoice Info Box -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="text-muted small text-uppercase fw-bold">Customer</div>
+                        <div class="fs-5 fw-bold text-dark mt-1">{{ invoice.customer.name }}</div>
+                        {% if invoice.customer.kra_pin %}
+                        <div class="small font-monospace text-muted">KRA PIN: {{ invoice.customer.kra_pin }}</div>
+                        {% endif %}
+                        {% if invoice.customer.phone %}
+                        <div class="small text-muted"><i class="bi bi-telephone me-1"></i>{{ invoice.customer.phone }}</div>
+                        {% endif %}
+                        {% if invoice.customer.address %}
+                        <div class="small text-muted">{{ invoice.customer.address }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="text-muted small text-uppercase fw-bold">Invoice Date</div>
+                                <div class="fw-bold">{{ invoice.invoice_date|date:"d M Y" }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-muted small text-uppercase fw-bold">Due Date</div>
+                                <div class="fw-bold">{{ invoice.due_date|date:"d M Y" }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-muted small text-uppercase fw-bold">Credit Limit</div>
+                                <div>KES {{ invoice.customer.credit_limit|floatformat:2 }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-muted small text-uppercase fw-bold">Notes</div>
+                                <div>{{ invoice.notes|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Line Items Table -->
+        <div class="table-card">
+            <div class="card-header">
+                <span class="fw-bold">Invoice Line Items</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Description</th>
+                            <th>GL Revenue Account</th>
+                            <th>Tax Rate</th>
+                            <th class="text-end">Taxable Amount (KES)</th>
+                            <th class="text-end">Tax Amount (KES)</th>
+                            <th class="text-end">Line Total (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in invoice.lines.all %}
+                        <tr>
+                            <td class="fw-semibold">{{ line.description }}</td>
+                            <td>
+                                <span class="font-monospace small">{{ line.account.code }}</span>
+                                <div class="small text-muted">{{ line.account.name }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ line.tax_rate }}%</span>
+                            </td>
+                            <td class="text-end font-monospace">
+                                KES {{ line.unit_price|floatformat:2 }}
+                            </td>
+                            <td class="text-end font-monospace text-muted">
+                                KES {{ line.tax_amount|floatformat:2 }}
+                            </td>
+                            <td class="text-end font-monospace fw-bold">
+                                KES {{ line.line_total|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">No line items on this invoice.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary & Journal Link -->
+    <div class="col-lg-4">
+        <!-- Financial Totals -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold text-uppercase text-muted mb-3">Invoice Financial Summary</h6>
+                
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Subtotal (Excl. VAT):</span>
+                    <span class="font-monospace fw-semibold">KES {{ invoice.subtotal|floatformat:2 }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Output VAT:</span>
+                    <span class="font-monospace fw-semibold">KES {{ invoice.tax_amount|floatformat:2 }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom fs-5 fw-bold">
+                    <span>Total Amount:</span>
+                    <span class="font-monospace text-primary">KES {{ invoice.total_amount|floatformat:2 }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Amount Paid:</span>
+                    <span class="font-monospace text-success fw-bold">KES {{ invoice.amount_paid|floatformat:2 }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-2 pt-3 fs-5 fw-bold">
+                    <span>Balance Due:</span>
+                    <span class="font-monospace {% if invoice.balance_due > 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ invoice.balance_due|floatformat:2 }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- GL Journal Integration Box -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold text-uppercase text-muted mb-3"><i class="bi bi-journal-bookmark me-1 text-primary"></i>General Ledger Audit</h6>
+                {% if invoice.journal_entry %}
+                <div class="p-3 bg-light rounded-3 border">
+                    <div class="small text-muted">Linked Journal Entry:</div>
+                    <div class="fw-bold font-monospace fs-6 text-primary">Journal #{{ invoice.journal_entry.entry_number }}</div>
+                    <div class="small text-muted mt-1">Posted on {{ invoice.journal_entry.date|date:"d M Y" }}</div>
+                    <div class="mt-2">
+                        <a href="{% url 'accounting_journal_detail' invoice.journal_entry.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>View GL Journal
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-secondary py-2 small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>Not yet posted to General Ledger. Click "Post to General Ledger" above when verified.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Payment Allocations History -->
+        {% if invoice.payment_allocations.all %}
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <h6 class="fw-bold text-uppercase text-muted mb-3"><i class="bi bi-clock-history me-1 text-primary"></i>Payment Allocations</h6>
+                <div class="list-group list-group-flush">
+                    {% for alloc in invoice.payment_allocations.all %}
+                    <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold small">{{ alloc.payment.receipt_number }}</div>
+                            <div class="text-muted" style="font-size: 11px;">{{ alloc.payment.payment_date|date:"d M Y" }} | {{ alloc.payment.get_payment_method_display }}</div>
+                        </div>
+                        <div class="font-monospace text-success fw-bold">
+                            KES {{ alloc.amount_allocated|floatformat:2 }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

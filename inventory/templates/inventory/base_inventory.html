@@ -1,0 +1,413 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+    <title>{% block title %}Inventory &amp; Stock Ledger{% endblock %} — {{ request.company.name|default:"Enterprise ERP" }}</title>
+    
+    <!-- Bootstrap 5 & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --inv-primary: #059669;
+            --inv-primary-hover: #047857;
+            --inv-accent: #10b981;
+            --inv-dark: #0f172a;
+            --inv-sidebar-bg: #064e3b;
+            --inv-sidebar-hover: #047857;
+            --inv-sidebar-width: 260px;
+            --inv-topbar-height: 60px;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .inv-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: var(--inv-sidebar-width);
+            background: linear-gradient(180deg, #064e3b 0%, #022c22 100%);
+            color: #f1f5f9;
+            z-index: 1040;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .inv-sidebar-brand {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            text-decoration: none;
+            color: #ffffff;
+        }
+
+        .inv-sidebar-brand .brand-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .inv-sidebar-brand .brand-title {
+            font-weight: 700;
+            font-size: 17px;
+            line-height: 1.2;
+            letter-spacing: -0.3px;
+        }
+
+        .inv-sidebar-brand .brand-subtitle {
+            font-size: 11px;
+            color: #6ee7b7;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+        }
+
+        .inv-nav-section {
+            padding: 16px 24px 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6ee7b7;
+        }
+
+        .inv-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 24px;
+            color: #cbd5e1;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .inv-nav-link:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.08);
+            border-left-color: var(--inv-accent);
+        }
+
+        .inv-nav-link.active {
+            color: #ffffff;
+            background: rgba(16, 185, 129, 0.18);
+            border-left-color: var(--inv-accent);
+            font-weight: 600;
+        }
+
+        .inv-nav-link i {
+            font-size: 17px;
+            width: 20px;
+            text-align: center;
+            color: #a7f3d0;
+        }
+
+        .inv-nav-link.active i {
+            color: #34d399;
+        }
+
+        /* Topbar */
+        .inv-topbar {
+            position: fixed;
+            top: 0;
+            left: var(--inv-sidebar-width);
+            right: 0;
+            height: var(--inv-topbar-height);
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 1030;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            transition: left 0.3s ease;
+        }
+
+        .inv-main {
+            margin-left: var(--inv-sidebar-width);
+            margin-top: var(--inv-topbar-height);
+            padding: 30px;
+            min-height: calc(100vh - var(--inv-topbar-height));
+        }
+
+        /* KPI Cards */
+        .inv-kpi-card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 22px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .inv-kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+            border-color: var(--border-hover);
+        }
+
+        .inv-kpi-card .kpi-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .inv-table-card {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            overflow: hidden;
+        }
+
+        .inv-table-card .card-header {
+            background: #ffffff;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .badge-voucher {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 9px;
+            border-radius: 6px;
+        }
+
+        .badge-positive {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-negative {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Buttons */
+        .btn-inv-primary {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: #ffffff;
+            border: none;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-inv-primary:hover {
+            background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+        }
+
+        @media (max-width: 992px) {
+            .inv-sidebar {
+                transform: translateX(-100%);
+            }
+            .inv-sidebar.show {
+                transform: translateX(0);
+            }
+            .inv-topbar {
+                left: 0;
+            }
+            .inv-main {
+                margin-left: 0;
+                padding: 18px;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside class="inv-sidebar" id="invSidebar">
+        <a href="{% url 'inventory_dashboard' %}" class="inv-sidebar-brand">
+            <div class="brand-icon">
+                <i class="bi bi-boxes"></i>
+            </div>
+            <div>
+                <div class="brand-title">Inventory &amp; Stock</div>
+                <div class="brand-subtitle">Perpetual Ledger</div>
+            </div>
+        </a>
+
+        <div class="py-2">
+            <div class="inv-nav-section">Overview</div>
+            <a href="{% url 'inventory_dashboard' %}" class="inv-nav-link {% if request.resolver_match.url_name == 'inventory_dashboard' %}active{% endif %}">
+                <i class="bi bi-speedometer2"></i>
+                <span>Inventory Hub</span>
+            </a>
+
+            <div class="inv-nav-section">Warehouses</div>
+            <a href="{% url 'inventory_warehouse_list' %}" class="inv-nav-link {% if 'warehouse' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-building"></i>
+                <span>Warehouses</span>
+            </a>
+
+            <div class="inv-nav-section">Movements &amp; Valuation</div>
+            <a href="{% url 'inventory_ledger_list' %}" class="inv-nav-link {% if request.resolver_match.url_name == 'inventory_ledger_list' %}active{% endif %}">
+                <i class="bi bi-receipt-cutoff"></i>
+                <span>Stock Ledger</span>
+            </a>
+            <a href="{% url 'inventory_valuation_report' %}" class="inv-nav-link {% if request.resolver_match.url_name == 'inventory_valuation_report' %}active{% endif %}">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span>Valuation Report</span>
+            </a>
+
+            <div class="inv-nav-section">Stock Operations</div>
+            <a href="{% url 'inventory_adjustment_list' %}" class="inv-nav-link {% if 'adjustment' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-sliders"></i>
+                <span>Stock Adjustments</span>
+            </a>
+            <a href="{% url 'inventory_transfer_list' %}" class="inv-nav-link {% if 'transfer' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-arrow-left-right"></i>
+                <span>Transfers</span>
+            </a>
+
+            <div class="inv-nav-section">Modules</div>
+            <a href="{% url 'home_portal' %}" class="inv-nav-link">
+                <i class="bi bi-grid-fill"></i>
+                <span>Main ERP Hub</span>
+            </a>
+            <a href="{% url 'accounting_dashboard' %}" class="inv-nav-link">
+                <i class="bi bi-journal-bookmark"></i>
+                <span>Accounting &amp; GL</span>
+            </a>
+            <a href="{% url 'hr_dashboard' %}" class="inv-nav-link">
+                <i class="bi bi-people-fill"></i>
+                <span>HR &amp; Payroll</span>
+            </a>
+            <a href="{% url 'dashboard' %}" class="inv-nav-link">
+                <i class="bi bi-shop"></i>
+                <span>Backoffice</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Topbar -->
+    <header class="inv-topbar">
+        <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-sm btn-outline-secondary d-lg-none" onclick="document.getElementById('invSidebar').classList.toggle('show')">
+                <i class="bi bi-list fs-5"></i>
+            </button>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-emerald-subtle text-success fw-semibold border border-success-subtle px-2 py-1">
+                    <i class="bi bi-building me-1"></i>{{ request.company.name|default:"Apex Enterprises" }}
+                </span>
+                {% if request.branch %}
+                <span class="badge bg-light text-muted border px-2 py-1">
+                    {{ request.branch.name }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+            <!-- App Switcher Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-grid-3x3-gap-fill text-success"></i>
+                    <span class="d-none d-sm-inline fw-semibold">Apps</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 p-2" style="width: 280px;">
+                    <li><h6 class="dropdown-header text-uppercase fs-xs">Enterprise Modules</h6></li>
+                    <li><a class="dropdown-item d-flex align-items-center gap-2 py-2 rounded" href="{% url 'dashboard' %}"><i class="bi bi-shop text-primary"></i> Backoffice POS</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center gap-2 py-2 rounded" href="{% url 'front_office_pos' %}"><i class="bi bi-cash-stack text-warning"></i> Frontoffice POS</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center gap-2 py-2 rounded" href="{% url 'accounting_dashboard' %}"><i class="bi bi-journal-bookmark text-info"></i> Accounting &amp; GL</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center gap-2 py-2 rounded" href="{% url 'hr_dashboard' %}"><i class="bi bi-people-fill text-purple"></i> HR &amp; Payroll</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center gap-2 py-2 rounded active bg-success-subtle text-success fw-bold" href="{% url 'inventory_dashboard' %}"><i class="bi bi-boxes text-success"></i> Inventory &amp; Stock</a></li>
+                </ul>
+            </div>
+
+            <!-- User Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-sm btn-light border rounded-pill dropdown-toggle d-flex align-items-center gap-2 px-3" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle text-muted"></i>
+                    <span class="fw-semibold">{{ request.user.username|default:"Admin" }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                    <li><a class="dropdown-item" href="{% url 'home_portal' %}"><i class="bi bi-house me-2"></i>Portal Home</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="inv-main">
+        {% if messages %}
+        <div class="mb-4">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm" role="alert">
+                <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'error' or message.tags == 'danger' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,123 @@
+{% extends "inventory/base_inventory.html" %}
+
+{% block title %}{{ warehouse.name }} — Warehouse Details{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <a href="{% url 'inventory_warehouse_list' %}" class="text-decoration-none text-muted small">
+            <i class="bi bi-arrow-left"></i> Back to Warehouses
+        </a>
+        <h3 class="fw-bold mt-1 mb-0">{{ warehouse.name }} <span class="badge bg-light text-success border font-mono fs-6">{{ warehouse.code }}</span></h3>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'inventory_warehouse_update' warehouse.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-pencil me-1"></i> Edit Facility
+        </a>
+    </div>
+</div>
+
+<!-- KPI row -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="inv-kpi-card">
+            <span class="text-muted fw-semibold small text-uppercase">Warehouse Valuation</span>
+            <h3 class="fw-bold mb-0 font-mono mt-2 text-success">KES {{ total_valuation|floatformat:2 }}</h3>
+            <span class="text-muted small">Total on-hand stock value</span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="inv-kpi-card">
+            <span class="text-muted fw-semibold small text-uppercase">Total Units in Stock</span>
+            <h3 class="fw-bold mb-0 font-mono mt-2">{{ total_quantity|floatformat:2 }}</h3>
+            <span class="text-muted small">Pieces/Units across {{ stock_items|length }} SKUs</span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="inv-kpi-card">
+            <span class="text-muted fw-semibold small text-uppercase">Facility Info</span>
+            <div class="mt-2 small">
+                <div><strong>Type:</strong> {{ warehouse.get_warehouse_type_display }}</div>
+                <div><strong>Branch:</strong> {{ warehouse.branch.name|default:"Global" }}</div>
+                <div><strong>Manager:</strong> {{ warehouse.manager.username|default:"Unassigned" }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Items in this Warehouse -->
+<div class="inv-table-card mb-4">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0"><i class="bi bi-box-seam text-success me-2"></i>Current Stock Balances</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-muted text-uppercase">
+                    <th>Product Code</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th class="text-end">On-Hand Qty</th>
+                    <th class="text-end">Valuation Rate</th>
+                    <th class="text-end">Total Valuation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in stock_items %}
+                <tr>
+                    <td class="font-mono text-muted">{{ item.product.product_code|default:"—" }}</td>
+                    <td class="fw-semibold text-dark">{{ item.product.name }}</td>
+                    <td><span class="badge bg-light text-muted border">{{ item.product.category.name|default:"General" }}</span></td>
+                    <td class="text-end font-mono fw-bold">{{ item.balance_quantity|floatformat:2 }}</td>
+                    <td class="text-end font-mono text-muted">KES {{ item.valuation_rate|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold text-success">KES {{ item.total_value|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">No stock balance recorded in this warehouse.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Movements in this Warehouse -->
+<div class="inv-table-card">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0"><i class="bi bi-clock-history text-success me-2"></i>Recent Stock Movements</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-muted text-uppercase">
+                    <th>Date</th>
+                    <th>Product</th>
+                    <th>Voucher</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Unit Cost</th>
+                    <th class="text-end">Balance Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in recent_movements %}
+                <tr>
+                    <td class="small text-muted font-mono">{{ m.posting_date|date:"Y-m-d" }}</td>
+                    <td class="fw-semibold">{{ m.product.name }}</td>
+                    <td><span class="badge bg-secondary-subtle text-dark border font-mono">{{ m.voucher_no }}</span></td>
+                    <td class="text-end font-mono fw-bold {% if m.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {% if m.quantity > 0 %}+{% endif %}{{ m.quantity|floatformat:2 }}
+                    </td>
+                    <td class="text-end font-mono text-muted">KES {{ m.unit_cost|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold">{{ m.balance_quantity|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">No movements found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "inventory/base_inventory.html" %}
+
+{% block title %}Stock Ledger — Immutable Transaction Log{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Immutable Stock Ledger</h3>
+        <p class="text-muted mb-0">Append-only audit trail of every inventory movement, valuation update, and stock transfer.</p>
+    </div>
+    <div>
+        <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success fw-semibold">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export CSV
+        </a>
+    </div>
+</div>
+
+<!-- Filters Card -->
+<div class="inv-table-card p-3 mb-4">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold text-muted mb-1">Search</label>
+            <input type="text" name="q" value="{{ current_q }}" class="form-control form-control-sm" placeholder="Voucher # or Product...">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold text-muted mb-1">Warehouse</label>
+            <select name="warehouse" class="form-select form-select-sm">
+                <option value="">All Warehouses</option>
+                {% for wh in warehouses %}
+                <option value="{{ wh.id }}" {% if current_warehouse == wh.id|stringformat:"i" %}selected{% endif %}>{{ wh.code }} ({{ wh.name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold text-muted mb-1">Voucher Type</label>
+            <select name="voucher_type" class="form-select form-select-sm">
+                <option value="">All Types</option>
+                {% for vt_code, vt_label in voucher_types %}
+                <option value="{{ vt_code }}" {% if current_voucher_type == vt_code %}selected{% endif %}>{{ vt_label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold text-muted mb-1">Start Date</label>
+            <input type="date" name="start_date" value="{{ current_start_date }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold text-muted mb-1">End Date</label>
+            <input type="date" name="end_date" value="{{ current_end_date }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-sm btn-inv-primary w-100">Filter</button>
+        </div>
+    </form>
+</div>
+
+<!-- Ledger Table -->
+<div class="inv-table-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-muted text-uppercase">
+                    <th>Posting Date &amp; Time</th>
+                    <th>Warehouse</th>
+                    <th>Product</th>
+                    <th>Voucher Type</th>
+                    <th>Voucher #</th>
+                    <th class="text-end">Qty Movement</th>
+                    <th class="text-end">Unit Cost</th>
+                    <th class="text-end">Running Bal</th>
+                    <th class="text-end">Valuation Rate</th>
+                    <th class="text-end">Asset Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr>
+                    <td class="font-mono small">
+                        <strong>{{ entry.posting_date|date:"Y-m-d" }}</strong>
+                        <span class="text-muted ms-1">{{ entry.posting_time|time:"H:i:s" }}</span>
+                    </td>
+                    <td><span class="badge bg-light text-dark border">{{ entry.warehouse.code }}</span></td>
+                    <td>
+                        <div class="fw-semibold text-dark">{{ entry.product.name }}</div>
+                        <div class="small text-muted font-mono">{{ entry.product.product_code|default:"" }}</div>
+                    </td>
+                    <td><span class="badge bg-secondary-subtle text-dark border">{{ entry.get_voucher_type_display }}</span></td>
+                    <td class="font-mono small fw-bold">{{ entry.voucher_no }}</td>
+                    <td class="text-end font-mono fw-bold {% if entry.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity|floatformat:4 }}
+                    </td>
+                    <td class="text-end font-mono small text-muted">KES {{ entry.unit_cost|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold">{{ entry.balance_quantity|floatformat:4 }}</td>
+                    <td class="text-end font-mono small text-muted">KES {{ entry.valuation_rate|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold text-success">KES {{ entry.balance_value|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="text-center py-5 text-muted">
+                        <i class="bi bi-journal-x fs-1 d-block mb-2 text-muted"></i>
+                        No stock ledger records found matching your filter criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="p-3 border-top d-flex align-items-center justify-content-between">
+        <span class="small text-muted">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ paginator.count }} entries</span>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ current_q }}&warehouse={{ current_warehouse }}&voucher_type={{ current_voucher_type }}&start_date={{ current_start_date }}&end_date={{ current_end_date }}">Previous</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ current_q }}&warehouse={{ current_warehouse }}&voucher_type={{ current_voucher_type }}&start_date={{ current_start_date }}&end_date={{ current_end_date }}">Next</a></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

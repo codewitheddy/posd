@@ -1,0 +1,108 @@
+{% extends "accounting/base_accounting.html" %}
+
+{% block title %}HR &amp; Payroll GL Mapping — General Ledger{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">HR &amp; Payroll General Ledger Mapping</h1>
+        <p class="text-muted small mb-0">Configure Chart of Accounts links for Gross Salaries, PAYE, NSSF Tier I/II, SHIF, Affordable Housing Levy, NITA, and Staff Advances.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3">
+                <div class="fw-bold text-dark"><i class="bi bi-people me-2 text-primary"></i>Kenyan Payroll Statutory &amp; Expense Accounts</div>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <h6 class="text-uppercase fw-bold text-muted small mb-3">1. Employer Operating Expenses (Debits)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.basic_salaries_expense_code.label }}</label>
+                            {{ form.basic_salaries_expense_code }}
+                            <div class="form-text small">Default: 6000 (Gross Salaries &amp; Wages)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.employer_nssf_expense_code.label }}</label>
+                            {{ form.employer_nssf_expense_code }}
+                            <div class="form-text small">Default: 6010 (NSSF Employer Matching Expense)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.employer_housing_levy_expense_code.label }}</label>
+                            {{ form.employer_housing_levy_expense_code }}
+                            <div class="form-text small">Default: 6030 (Housing Levy Employer Expense 1.5%)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.employer_nita_expense_code.label }}</label>
+                            {{ form.employer_nita_expense_code }}
+                            <div class="form-text small">Default: 6040 (NITA Training Levy Expense)</div>
+                        </div>
+                    </div>
+
+                    <h6 class="text-uppercase fw-bold text-muted small mb-3">2. Net Pay &amp; Statutory Remittance Liabilities (Credits)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.net_salaries_payable_code.label }}</label>
+                            {{ form.net_salaries_payable_code }}
+                            <div class="form-text small">Default: 2200 (Net Salaries Payable to Staff)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.paye_payable_code.label }}</label>
+                            {{ form.paye_payable_code }}
+                            <div class="form-text small">Default: 2110 (KRA PAYE Withholding Tax)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.nssf_payable_code.label }}</label>
+                            {{ form.nssf_payable_code }}
+                            <div class="form-text small">Default: 2120 (NSSF Total Remittance Emp + Empr)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.shif_payable_code.label }}</label>
+                            {{ form.shif_payable_code }}
+                            <div class="form-text small">Default: 2130 (SHIF 2.75% Remittance)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.housing_levy_payable_code.label }}</label>
+                            {{ form.housing_levy_payable_code }}
+                            <div class="form-text small">Default: 2140 (Affordable Housing Levy Emp + Empr 3%)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.helb_payable_code.label }}</label>
+                            {{ form.helb_payable_code }}
+                            <div class="form-text small">Default: 2150 (HELB Loan Deductions Payable)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.staff_advances_asset_code.label }}</label>
+                            {{ form.staff_advances_asset_code }}
+                            <div class="form-text small">Default: 1150 (Staff Advance Asset Recovery)</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+                        <button type="submit" class="btn btn-acc-primary">
+                            <i class="bi bi-save me-1"></i>Save HR &amp; Payroll Mappings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body p-4">
+                <h6 class="fw-bold"><i class="bi bi-shield-check me-1 text-primary"></i>Statutory Payroll Invariant</h6>
+                <p class="small text-muted mb-3">When a monthly Payroll Run is finalized, Accounting constructs an immutable General Journal where employer expenses match employee net disbursements and statutory remittances to KRA, NSSF, and SHIF.</p>
+                <div class="border-start border-3 border-primary ps-3 small text-muted">
+                    <strong>Formula:</strong> Gross Salaries + Employer Contributions = Net Pay + Total Statutory Deductions + Advance Deductions.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

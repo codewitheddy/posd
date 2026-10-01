@@ -1,0 +1,128 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Attendance &amp; Shifts{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-clock-history me-2 text-primary"></i>Attendance &amp; Daily Timesheets</h1>
+    <p class="page-subtitle">Date: {{ filter_date|date:"l, d F Y" }} &bull; Branch: {{ request.branch.name|default:request.business.name }}</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    {% if can_manage_attendance %}
+    <form method="POST" action="{% url 'hr_clock_in' %}" class="d-flex gap-2 align-items-center flex-wrap">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="employee_id" class="form-select form-select-sm" style="min-width:200px" required>
+        <option value="" selected disabled>Select Staff Member</option>
+        {% for e in employees %}
+        <option value="{{ e.pk }}">{{ e.get_full_name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-right me-1"></i>Clock In</button>
+    </form>
+    <form method="POST" action="{% url 'hr_clock_out' %}" class="d-flex gap-2 align-items-center flex-wrap">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="employee_id" class="form-select form-select-sm" style="min-width:200px" required>
+        <option value="" selected disabled>Select Staff Member</option>
+        {% for e in employees %}
+        <option value="{{ e.pk }}">{{ e.get_full_name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-box-arrow-right me-1"></i>Clock Out</button>
+    </form>
+    {% else %}
+    <form method="POST" action="{% url 'hr_clock_in' %}">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-right me-1"></i>Clock In Myself</button>
+    </form>
+    <form method="POST" action="{% url 'hr_clock_out' %}">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-box-arrow-right me-1"></i>Clock Out Myself</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="alert alert-light border mb-3 py-2 px-3 small d-flex align-items-center gap-3 flex-wrap">
+  <span><i class="bi bi-info-circle text-primary me-1"></i>Scheduled Shift: <strong>{{ workday_start_time|time:"H:i" }} &ndash; {{ workday_end_time|time:"H:i" }}</strong></span>
+  <span>Late Grace: <strong>{{ late_grace_minutes }} min</strong></span>
+  <span>Standard Working Day: <strong>{{ scheduled_hours|floatformat:2 }} hrs</strong> (Overtime applies beyond)</span>
+</div>
+
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Filter Date</label>
+      <input type="date" name="date" class="form-control form-control-sm" value="{{ filter_date|date:'Y-m-d' }}" onchange="this.form.submit()">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label form-label-sm fw-bold small">Filter Employee</label>
+      <select name="employee" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Employees</option>
+        {% for e in employees %}<option value="{{ e.pk }}" {% if emp_filter == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.get_full_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <a href="{% url 'hr_attendance_list' %}" class="btn btn-outline-secondary btn-sm w-100">Today</a>
+    </div>
+  </form>
+</div>
+
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Employee</th>
+          <th>Clock In</th>
+          <th>Clock Out</th>
+          <th>Total Hours</th>
+          <th>Overtime (1.5x)</th>
+          <th>Status</th>
+          <th>Notes</th>
+          {% if can_manage_attendance %}<th class="text-end">Action</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in attendance_records %}
+        <tr>
+          <td>
+            <div class="fw-bold">{{ a.employee.get_full_name }}</div>
+            <div class="text-muted small">{{ a.employee.job_title }}</div>
+          </td>
+          <td class="font-monospace">{{ a.clock_in|time:"H:i" }}</td>
+          <td class="font-monospace">{{ a.clock_out|time:"H:i"|default:"—" }}</td>
+          <td><strong>{{ a.total_hours }}h</strong></td>
+          <td>
+            {% if a.clock_out and a.overtime_hours > 0 %}
+              <span class="badge bg-info bg-opacity-15 text-dark border border-info border-opacity-25">{{ a.overtime_hours|floatformat:2 }}h OT</span>
+            {% else %}
+              <span class="text-muted small">0.00h</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {% if a.status == 'present' %}bg-success bg-opacity-15 text-success border border-success border-opacity-25{% elif a.status == 'late' %}bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25{% elif a.status == 'off' %}bg-secondary bg-opacity-15 text-secondary{% else %}bg-danger bg-opacity-15 text-danger{% endif %}">
+              {{ a.get_status_display }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ a.notes|default:"—" }}</td>
+          {% if can_manage_attendance %}
+          <td class="text-end">
+            {% if a.clock_out %}
+              <span class="badge bg-light text-muted border">Completed</span>
+            {% else %}
+              <form method="POST" action="{% url 'hr_clock_out' %}" class="d-inline">{% csrf_token %}
+                <input type="hidden" name="employee_id" value="{{ a.employee.pk }}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Clock Out</button>
+              </form>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if can_manage_attendance %}8{% else %}7{% endif %}" class="text-center text-muted py-4">No attendance records logged for this date.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Bank &amp; M-Pesa Accounts{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-bank2 me-2 text-primary"></i>Bank &amp; M-Pesa Accounts</h1>
+        <p class="page-subtitle">Manage bank accounts, M-Pesa tills/paybills, statement imports, and reconciliation.</p>
+    </div>
+    <a href="{% url 'accounting_bank_account_create' %}" class="btn btn-acc-primary">
+        <i class="bi bi-plus-circle me-1"></i>Add Bank / M-Pesa Account
+    </a>
+</div>
+
+<div class="row g-4">
+    {% for acc in accounts %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body p-4 d-flex flex-column justify-content-between">
+                <div>
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge bg-primary bg-opacity-10 text-primary font-monospace">{{ acc.gl_account.code }}</span>
+                        {% if acc.is_active %}
+                        <span class="badge bg-success-subtle text-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary">Inactive</span>
+                        {% endif %}
+                    </div>
+                    <h5 class="fw-bold mb-1">{{ acc.name }}</h5>
+                    <div class="text-muted small mb-2">{{ acc.bank_name }} {% if acc.branch_name %}— {{ acc.branch_name }}{% endif %}</div>
+                    
+                    <div class="p-2 bg-light rounded font-monospace small mb-3 border">
+                        <i class="bi bi-credit-card me-1 text-muted"></i>Account #: <strong>{{ acc.account_number }}</strong>
+                    </div>
+
+                    <div class="small text-muted mb-1">Mapped GL Ledger Account:</div>
+                    <div class="fw-semibold small text-dark mb-3">{{ acc.gl_account.code }} - {{ acc.gl_account.name }}</div>
+                </div>
+
+                <div class="pt-3 border-top d-flex gap-2">
+                    <a href="{% url 'accounting_bank_account_detail' acc.pk %}" class="btn btn-sm btn-outline-primary flex-fill">
+                        <i class="bi bi-journal-check me-1"></i>View &amp; Reconcile
+                    </a>
+                    <a href="{% url 'accounting_bank_statement_import' acc.pk %}" class="btn btn-sm btn-acc-primary">
+                        <i class="bi bi-upload me-1"></i>Import CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5 text-muted">
+                <i class="bi bi-bank2 display-5 d-block mb-3 text-secondary"></i>
+                <h5>No Bank or M-Pesa Accounts Configured</h5>
+                <p class="text-muted">Link your commercial bank accounts and Safaricom M-Pesa tills to start importing statements.</p>
+                <a href="{% url 'accounting_bank_account_create' %}" class="btn btn-acc-primary mt-2">
+                    <i class="bi bi-plus-circle me-1"></i>Add First Account
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

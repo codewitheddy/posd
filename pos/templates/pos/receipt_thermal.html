@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +17,9 @@
     <!-- QR Code & Barcode Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+    <!-- Web Bluetooth ESC/POS Printing Engine -->
+    <script src="{% static 'js/pos-bluetooth-printer.js' %}"></script>
 
     <style>
         :root {
@@ -164,6 +168,26 @@
         .btn-tool-info:hover {
             background: #0369a1;
             transform: translateY(-1px);
+        }
+
+        .btn-tool-bluetooth {
+            background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+            color: #ffffff;
+            box-shadow: 0 0 16px rgba(37, 99, 235, 0.35);
+        }
+        .btn-tool-bluetooth:hover {
+            background: linear-gradient(135deg, #38bdf8 0%, #3b82f6 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 0 24px rgba(59, 130, 246, 0.5);
+        }
+        .btn-tool-bluetooth.printing {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.65; }
         }
 
         /* Segmented View Switcher */
@@ -638,6 +662,9 @@
             <a href="{% url 'pos_screen' slug=request.business.slug %}" class="btn-tool btn-tool-secondary" title="Return to POS (Esc)">
                 <i class="bi bi-arrow-left"></i> POS Terminal <kbd>Esc</kbd>
             </a>
+            <button type="button" class="btn-tool btn-tool-secondary bt-printer-badge" onclick="openBluetoothModal()" title="Bluetooth Printer Status & Pairing">
+                <i class="bi bi-bluetooth me-1"></i> Connect Bluetooth
+            </button>
             <div class="d-none d-md-flex align-items-center gap-2 text-muted small">
                 <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30 px-2.5 py-1 rounded-pill">
                     <i class="bi bi-check-circle-fill me-1"></i> Paid · {{ sale.invoice_number }}
@@ -674,8 +701,11 @@
             <button onclick="showEmailModal()" class="btn-tool btn-tool-secondary" title="Email Receipt (E)">
                 <i class="bi bi-envelope"></i> Email <kbd>E</kbd>
             </button>
-            <button onclick="thermalPrint()" class="btn-tool btn-tool-primary" title="Print Receipt (P / Enter)">
-                <i class="bi bi-printer-fill fs-6"></i> Print Receipt <kbd>P</kbd>
+            <button onclick="bluetoothPrintReceipt()" class="btn-tool btn-tool-bluetooth" id="btnBluetoothPrint" title="Direct 1-Click Bluetooth ESC/POS Print (B)">
+                <i class="bi bi-bluetooth"></i> Bluetooth <kbd>B</kbd>
+            </button>
+            <button onclick="thermalPrint()" class="btn-tool btn-tool-primary" title="Print via System Dialog (P / Enter)">
+                <i class="bi bi-printer-fill fs-6"></i> Print <kbd>P</kbd>
             </button>
         </div>
     </header>
@@ -899,7 +929,8 @@
 
         <!-- ── Keyboard Shortcuts Guidance ── -->
         <div class="shortcuts-bar">
-            <span><kbd>P</kbd> Print</span>
+            <span><kbd>B</kbd> Bluetooth</span>
+            <span><kbd>P</kbd> System Print</span>
             <span><kbd>W</kbd> WhatsApp</span>
             <span><kbd>E</kbd> Email</span>
             <span><kbd>C</kbd> Copy Text</span>
@@ -908,6 +939,51 @@
             <span><kbd>Esc</kbd> POS Terminal</span>
         </div>
     </main>
+
+    <!-- ── Bluetooth Printer Management Modal ── -->
+    <div id="bluetoothModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-title">
+                <i class="bi bi-bluetooth text-primary fs-4"></i> Bluetooth Thermal Printer
+            </div>
+            <p style="color: var(--app-text-muted); font-size: 14px; margin-bottom: 16px;">
+                Direct ESC/POS 1-click silent thermal printing for portable & desktop Bluetooth printers.
+            </p>
+
+            <div style="background: var(--app-surface-hover); padding: 14px; border-radius: 10px; margin-bottom: 16px; border: 1px solid var(--app-border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 13px; color: var(--app-text-muted);">Current Status:</span>
+                    <span id="btModalStatusPill" class="badge bg-secondary">Checking...</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; color: var(--app-text-muted);">Device Name:</span>
+                    <strong id="btModalDeviceName" style="font-size: 13.5px; color: var(--app-text);">None</strong>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+                <label style="display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; color: var(--app-text);">
+                    <input type="checkbox" id="btAutoPrintCheck" onchange="toggleBluetoothAutoPrint(this.checked)" style="width: 18px; height: 18px; accent-color: #2563eb;">
+                    <span>Auto-print receipts via Bluetooth when completed</span>
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" onclick="connectBluetoothDevice()" class="btn-tool btn-tool-bluetooth" style="flex: 1; justify-content: center; padding: 12px;">
+                    <i class="bi bi-link-45deg"></i> Pair / Connect Printer
+                </button>
+                <button type="button" onclick="testBluetoothPrint()" class="btn-tool btn-tool-secondary" style="padding: 12px 16px;" title="Print a quick alignment & barcode test receipt">
+                    <i class="bi bi-receipt"></i> Test Print
+                </button>
+                <button type="button" onclick="disconnectBluetoothPrinter()" class="btn-tool btn-tool-secondary text-danger" style="padding: 12px 14px;" title="Disconnect Bluetooth printer">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+                <button type="button" onclick="closeBluetoothModal()" class="btn-tool btn-tool-secondary" style="padding: 12px 16px;">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- ── WhatsApp Share Modal ── -->
     <div id="whatsappModal" class="modal-overlay">
@@ -969,6 +1045,67 @@
     </div>
 
     <script>
+        // ── Structured Sale Data for Direct Bluetooth ESC/POS Engine ──
+        window.CURRENT_SALE_DATA = {
+            invoice_number: "{{ sale.invoice_number|escapejs }}",
+            date: "{{ sale.date|date:'d/m/Y H:i:s' }}",
+            branch_name: "{% if sale.branch %}{{ sale.branch.name|escapejs }}{% endif %}",
+            cashier_name: "{% if sale.cashier %}{{ sale.cashier.get_full_name|default:sale.cashier.username|escapejs }}{% endif %}",
+            terminal_code: "{% if sale.terminal %}{{ sale.terminal.terminal_code|escapejs }}{% endif %}",
+            customer_name: "{% if sale.customer %}{{ sale.customer.name|escapejs }}{% endif %}",
+            customer_phone: "{% if sale.customer and sale.customer.phone %}{{ sale.customer.phone|escapejs }}{% endif %}",
+            subtotal: {{ sale.subtotal|default:0|stringformat:".2f" }},
+            discount_amount: {{ sale.discount_amount|default:0|stringformat:".2f" }},
+            vat_rate: {{ sale.vat_rate|default:16|stringformat:".2f" }},
+            vat_amount: {{ sale.vat_amount|default:0|stringformat:".2f" }},
+            total: {{ sale.total|default:0|stringformat:".2f" }},
+            amount_paid: {{ sale.amount_paid|default:sale.total|default:0|stringformat:".2f" }},
+            change_given: {{ sale.change_given|default:0|stringformat:".2f" }},
+            customer_loyalty_balance: {% if sale.customer %}{{ sale.customer.loyalty_points|default:0 }}{% else %}null{% endif %},
+            loyalty_earned: null,
+            loyalty_redeemed: null,
+            tims_verification_url: "{{ sale.tims_verification_url|default:''|escapejs }}",
+            qr_url: `${window.location.origin}/b/{{ request.business.slug }}/invoice/{{ sale.pk }}/`,
+            items: [
+                {% for item in sale.items.all %}
+                {
+                    name: "{{ item.product.name|escapejs }}",
+                    product_code: "{% if item.product.product_code %}{{ item.product.product_code|escapejs }}{% endif %}",
+                    barcode: "{% if item.product.barcode %}{{ item.product.barcode|escapejs }}{% endif %}",
+                    quantity: {{ item.quantity }},
+                    unit: "{% if item.product.unit %}{{ item.product.unit.abbreviation|escapejs }}{% endif %}",
+                    unit_price: {{ item.unit_price|default:0|stringformat:".2f" }},
+                    total_price: {{ item.total_price|default:0|stringformat:".2f" }},
+                    note: "{{ item.note|default:''|escapejs }}"
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ],
+            payments: [
+                {% for payment in sale.payments.all %}
+                {
+                    name: "{{ payment.payment_method.name|escapejs }}",
+                    amount: {{ payment.amount|default:0|stringformat:".2f" }},
+                    reference: "{{ payment.reference_number|default:''|escapejs }}"
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ]
+        };
+
+        window.BUSINESS_SETTINGS = {
+            shop_name: "{{ business_settings.get_business_name|default:shop_name|escapejs }}",
+            receipt_header: "{{ business_settings.receipt_header|default:''|escapejs }}",
+            receipt_footer: "{{ business_settings.receipt_footer|default:''|escapejs }}",
+            address: "{{ business_settings.business_address|default:business_settings.address|default:''|escapejs }}",
+            phone: "{{ business_settings.business_phone|default:business_settings.phone|default:''|escapejs }}",
+            tax_id: "{{ business_settings.tax_id|default:''|escapejs }}",
+            website: "{{ business_settings.business_website|default:business_settings.website|default:''|escapejs }}",
+            thermal_receipt_width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58{% else %}80{% endif %},
+            thermal_auto_cut: {% if business_settings and not business_settings.thermal_auto_cut %}false{% else %}true{% endif %},
+            thermal_copies: {{ business_settings.thermal_copies|default:1 }},
+            thermal_print_barcode: {% if business_settings and not business_settings.thermal_print_barcode %}false{% else %}true{% endif %},
+            thermal_show_tax_breakdown: {% if business_settings and not business_settings.thermal_show_tax_breakdown %}false{% else %}true{% endif %}
+        };
+
         // ── QR Code Generator ──
         try {
             const qrContainer = document.getElementById('receiptQrCode');
@@ -1002,14 +1139,130 @@
             console.warn("Barcode render skipped", e);
         }
 
-        // ── Thermal Print Trigger ──
+        // ── Standard System Print Trigger ──
         function thermalPrint() {
             window.print();
         }
 
+        // ── Direct 1-Click Bluetooth ESC/POS Print ──
+        async function bluetoothPrintReceipt() {
+            const btn = document.getElementById('btnBluetoothPrint');
+            if (btn) btn.classList.add('printing');
+
+            try {
+                if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+                    showToast('Web Bluetooth not supported. Falling back to system print...');
+                    thermalPrint();
+                    return;
+                }
+
+                showToast('⚡ Printing via Bluetooth ESC/POS...');
+                await window.BluetoothPrinter.printReceipt(window.CURRENT_SALE_DATA, window.BUSINESS_SETTINGS);
+                showToast('✓ Printed successfully to Bluetooth printer!');
+            } catch (err) {
+                console.warn('Bluetooth print skipped or cancelled:', err);
+                if (err.name !== 'NotFoundError' && !err.message.includes('User cancelled')) {
+                    showToast(`Bluetooth Print: ${err.message}`);
+                }
+            } finally {
+                if (btn) btn.classList.remove('printing');
+            }
+        }
+
+        // ── Bluetooth Modal Controls ──
+        function openBluetoothModal() {
+            const modal = document.getElementById('bluetoothModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            updateBluetoothModalUI();
+        }
+
+        function closeBluetoothModal() {
+            const modal = document.getElementById('bluetoothModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function updateBluetoothModalUI() {
+            const statusPill = document.getElementById('btModalStatusPill');
+            const nameEl = document.getElementById('btModalDeviceName');
+            const autoCheck = document.getElementById('btAutoPrintCheck');
+
+            if (autoCheck) {
+                autoCheck.checked = localStorage.getItem('pos_bt_autoprint') === 'true';
+            }
+
+            if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+                if (statusPill) {
+                    statusPill.className = 'badge bg-danger';
+                    statusPill.innerText = 'Not Supported';
+                }
+                if (nameEl) nameEl.innerText = 'Browser does not support Web Bluetooth';
+                return;
+            }
+
+            const connected = window.BluetoothPrinter.isConnected();
+            if (statusPill) {
+                statusPill.className = connected ? 'badge bg-success' : 'badge bg-secondary';
+                statusPill.innerText = connected ? 'Connected' : 'Disconnected';
+            }
+            if (nameEl) {
+                nameEl.innerText = window.BluetoothPrinter.getDeviceName();
+            }
+        }
+
+        async function connectBluetoothDevice() {
+            try {
+                showToast('Searching for Bluetooth thermal printers...');
+                await window.BluetoothPrinter.connect();
+                updateBluetoothModalUI();
+                showToast(`✓ Connected to ${window.BluetoothPrinter.getDeviceName()}`);
+            } catch (err) {
+                if (err.name !== 'NotFoundError' && !err.message.includes('User cancelled')) {
+                    alert(`Connection error: ${err.message}`);
+                }
+            }
+        }
+
+        async function testBluetoothPrint() {
+            try {
+                showToast('Sending test receipt over Bluetooth...');
+                const width = window.BUSINESS_SETTINGS.thermal_receipt_width || 80;
+                await window.BluetoothPrinter.printTestReceipt(width);
+                showToast('✓ Test receipt printed successfully!');
+            } catch (err) {
+                alert(`Test print error: ${err.message}`);
+            }
+        }
+
+        async function disconnectBluetoothPrinter() {
+            try {
+                await window.BluetoothPrinter.disconnect();
+                updateBluetoothModalUI();
+                showToast('Bluetooth printer disconnected');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function toggleBluetoothAutoPrint(enabled) {
+            localStorage.setItem('pos_bt_autoprint', enabled ? 'true' : 'false');
+            if (window.BluetoothPrinter) {
+                window.BluetoothPrinter.autoPrintEnabled = enabled;
+            }
+            showToast(`Bluetooth Auto-Print ${enabled ? 'Enabled' : 'Disabled'}`);
+        }
+
+        // Listen for Bluetooth status changes
+        window.addEventListener('pos-bluetooth-status', (e) => {
+            updateBluetoothModalUI();
+        });
+
         // ── Paper Width Switcher ──
         function setPaperWidth(widthMm, btn) {
             document.documentElement.style.setProperty('--paper-width', widthMm + 'mm');
+            if (window.BUSINESS_SETTINGS) {
+                window.BUSINESS_SETTINGS.thermal_receipt_width = widthMm;
+            }
             if (btn) {
                 document.querySelectorAll('.segmented-group .segmented-btn').forEach(b => {
                     if (b.innerText.includes('mm')) b.classList.remove('active');
@@ -1034,8 +1287,8 @@
 
         // ── Copy Clean Receipt Text to Clipboard ──
         function copyReceiptText() {
-            const storeName = "{{ business_settings.get_business_name|default:shop_name }}";
-            const inv = "{{ sale.invoice_number }}";
+            const storeName = "{{ business_settings.get_business_name|default:shop_name|escapejs }}";
+            const inv = "{{ sale.invoice_number|escapejs }}";
             const date = "{{ sale.date|date:'d/m/Y H:i' }}";
             const total = "KES {{ sale.total|floatformat:2 }}";
             
@@ -1043,11 +1296,11 @@
             txt += `  ${storeName.toUpperCase()}\n`;
             txt += `================================\n`;
             txt += `Invoice: ${inv}\nDate: ${date}\n`;
-            {% if sale.customer %}txt += `Customer: {{ sale.customer.name }}\n`;{% endif %}
+            {% if sale.customer %}txt += `Customer: {{ sale.customer.name|escapejs }}\n`;{% endif %}
             txt += `--------------------------------\n`;
             txt += `ITEMS:\n`;
             {% for item in sale.items.all %}
-            txt += `- {{ item.product.name }}{% if item.product.product_code %} [{{ item.product.product_code }}]{% elif item.product.barcode %} [{{ item.product.barcode }}]{% endif %} (x{{ item.quantity }}) : KES {{ item.total_price|floatformat:2 }}\n`;
+            txt += `- {{ item.product.name|escapejs }}{% if item.product.product_code %} [{{ item.product.product_code|escapejs }}]{% elif item.product.barcode %} [{{ item.product.barcode|escapejs }}]{% endif %} (x{{ item.quantity }}) : KES {{ item.total_price|floatformat:2 }}\n`;
             {% endfor %}
             txt += `--------------------------------\n`;
             txt += `Subtotal: KES {{ sale.subtotal|floatformat:2 }}\n`;
@@ -1084,8 +1337,8 @@
                 phone = '254' + phone.substring(1);
             }
 
-            const storeName = "{{ business_settings.get_business_name|default:shop_name }}";
-            const inv = "{{ sale.invoice_number }}";
+            const storeName = "{{ business_settings.get_business_name|default:shop_name|escapejs }}";
+            const inv = "{{ sale.invoice_number|escapejs }}";
             const total = "KES {{ sale.total|floatformat:2 }}";
             const date = "{{ sale.date|date:'d/m/Y H:i' }}";
             const url = `${window.location.origin}/b/{{ request.business.slug }}/invoice/{{ sale.pk }}/`;
@@ -1117,6 +1370,7 @@
         document.addEventListener('keydown', function(e) {
             if (e.target.matches('input, textarea, select')) {
                 if (e.key === 'Escape') {
+                    closeBluetoothModal();
                     closeWhatsAppModal();
                     hideEmailModal();
                 }
@@ -1124,7 +1378,10 @@
             }
 
             const key = e.key.toUpperCase();
-            if (key === 'P' || e.key === 'Enter') {
+            if (key === 'B') {
+                e.preventDefault();
+                bluetoothPrintReceipt();
+            } else if (key === 'P' || e.key === 'Enter') {
                 e.preventDefault();
                 thermalPrint();
             } else if (key === 'W') {
@@ -1143,9 +1400,11 @@
                 e.preventDefault();
                 window.location.href = "{% url 'dashboard' slug=request.business.slug %}";
             } else if (e.key === 'Escape') {
-                if (document.getElementById('whatsappModal').style.display === 'flex') {
+                if (document.getElementById('bluetoothModal')?.style.display === 'flex') {
+                    closeBluetoothModal();
+                } else if (document.getElementById('whatsappModal')?.style.display === 'flex') {
                     closeWhatsAppModal();
-                } else if (document.getElementById('emailModal').style.display === 'flex') {
+                } else if (document.getElementById('emailModal')?.style.display === 'flex') {
                     hideEmailModal();
                 } else {
                     window.location.href = "{% url 'pos_screen' slug=request.business.slug %}";
@@ -1155,13 +1414,16 @@
 
         // Close modals on backdrop click
         window.addEventListener('click', function(e) {
+            if (e.target.id === 'bluetoothModal') closeBluetoothModal();
             if (e.target.id === 'whatsappModal') closeWhatsAppModal();
             if (e.target.id === 'emailModal') hideEmailModal();
         });
 
-        // Check if autoprint query param is set
+        // Check if autoprint query param or auto-bluetooth print is set
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('autoprint') === '1' || urlParams.get('print') === '1') {
+        if (urlParams.get('btprint') === '1' || (localStorage.getItem('pos_bt_autoprint') === 'true' && urlParams.get('no_auto') !== '1')) {
+            setTimeout(() => bluetoothPrintReceipt(), 350);
+        } else if (urlParams.get('autoprint') === '1' || urlParams.get('print') === '1') {
             setTimeout(() => thermalPrint(), 350);
         }
     </script>

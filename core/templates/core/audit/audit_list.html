@@ -1,0 +1,88 @@
+{% extends "core/base.html" %}
+
+{% block title %}System Audit Trail | {{ company.name|default:"Platform" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800 fw-bold">Platform Audit Trail</h1>
+            <p class="text-muted small mb-0">Immutable record of data modifications, approvals, and security events</p>
+        </div>
+    </div>
+
+    <!-- Audit Table -->
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-uppercase">
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Target Entity</th>
+                        <th>IP Address</th>
+                        <th>Field Changes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in audit_logs %}
+                    <tr>
+                        <td class="small text-muted">{{ log.timestamp|date:"d/m/Y H:i:s" }}</td>
+                        <td>
+                            {% if log.user %}
+                                <span class="fw-bold">{{ log.user.get_full_name|default:log.user.username }}</span>
+                            {% else %}
+                                <span class="badge bg-light text-muted border">System</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.action == 'create' %}
+                                <span class="badge bg-success">Created</span>
+                            {% elif log.action == 'update' %}
+                                <span class="badge bg-info text-dark">Updated</span>
+                            {% elif log.action == 'delete' %}
+                                <span class="badge bg-danger">Deleted</span>
+                            {% elif log.action == 'approve' %}
+                                <span class="badge bg-primary">Approved</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ log.get_action_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ log.object_repr|default:log.entity_name }}</div>
+                            <small class="text-muted">{{ log.content_type.model }} #{{ log.object_id }}</small>
+                        </td>
+                        <td class="small font-monospace text-muted">{{ log.ip_address|default:"-" }}</td>
+                        <td>
+                            {% if log.changes %}
+                                <details class="small">
+                                    <summary class="text-primary cursor-pointer">{{ log.changes|length }} field(s) changed</summary>
+                                    <ul class="list-unstyled mt-1 mb-0 ps-2 border-start">
+                                        {% for field_name, diff in log.changes.items %}
+                                            <li>
+                                                <strong>{{ field_name }}:</strong> 
+                                                <span class="text-danger">{{ diff.old|default:"None" }}</span> &rarr; 
+                                                <span class="text-success">{{ diff.new|default:"None" }}</span>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </details>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            No audit log entries found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

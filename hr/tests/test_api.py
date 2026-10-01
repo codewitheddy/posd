@@ -163,7 +163,7 @@ class DashboardMetricsAPITest(HRAPIBaseTestCase):
             status='present',
         )
 
-        response = self.client.get(f'{self.base_url}/dashboard/metrics/')
+        response = self.client.get(f'{self.base_url}/dashboard/metrics/?overtime_range=7d')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['overtime_staff_count'], 1)
         self.assertEqual(response.data['total_overtime_hours'], '3.00')
@@ -237,3 +237,31 @@ class LeaveCreateAPITest(HRAPIBaseTestCase):
         }
         response = self.client.post(f'{self.base_url}/leave/', payload, format='json')
         self.assertIn(response.status_code, [401, 403])
+
+
+# ─── Direct /hr/api/ Routes (No slug in URL) ──────────────────────────────────
+
+class DirectRouteHRAPITest(HRAPIBaseTestCase):
+
+    def test_direct_employees_endpoint_resolves_business(self):
+        self._login(self.admin_user)
+        response = self.client.get('/hr/api/employees/')
+        self.assertEqual(response.status_code, 200)
+        # Verify employees from the admin's active business are returned
+        results = response.data.get('results', response.data)
+        self.assertGreaterEqual(len(results), 1)
+
+    def test_direct_attendance_clock_in_and_out(self):
+        self._login(self.admin_user)
+        response = self.client.post('/hr/api/attendance/clock-in/')
+        self.assertEqual(response.status_code, 201)
+
+        response = self.client.post('/hr/api/attendance/clock-out/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.data.get('clock_out'))
+
+    def test_direct_dashboard_metrics(self):
+        self._login(self.admin_user)
+        response = self.client.get('/hr/api/dashboard/metrics/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('total_employees', response.data)

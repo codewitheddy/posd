@@ -1,0 +1,159 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}KRA Form VAT 3 Return Schedule{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-danger text-white font-monospace">KENYA REVENUE AUTHORITY</span>
+            <span class="badge bg-light text-dark border">Form VAT 3</span>
+        </div>
+        <h1><i class="bi bi-percent me-2 text-primary"></i>VAT Return Schedule (Form VAT 3)</h1>
+        <p class="page-subtitle">Monthly Value Added Tax calculation schedule &amp; KRA iTax batch CSV generation.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="get" class="d-flex align-items-center gap-2">
+            <label class="small text-muted fw-bold mb-0 text-nowrap">Period:</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <span class="small text-muted">to</span>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-filter me-1"></i>Filter
+            </button>
+        </form>
+        <a href="{% url 'accounting_vat_sales_csv' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-download me-1"></i>iTax Sales CSV
+        </a>
+        <a href="{% url 'accounting_vat_purchases_csv' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-download me-1"></i>iTax Purchases CSV
+        </a>
+    </div>
+</div>
+
+<!-- Net VAT Payable / Refund KPI Card -->
+<div class="card mb-4 border-0 shadow-sm {% if vat.net_vat_payable > 0 %}bg-light border-start border-4 border-danger{% else %}bg-light border-start border-4 border-success{% endif %}">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <div class="stat-label">
+                {% if vat.net_vat_payable > 0 %}Net VAT Payable to KRA{% else %}Net VAT Credit / Refund Claimable{% endif %}
+            </div>
+            <div class="stat-val font-monospace fs-2 {% if vat.net_vat_payable > 0 %}text-danger{% else %}text-success{% endif %} mt-1">
+                KES {{ vat.net_vat_payable|floatformat:2 }}
+            </div>
+            <div class="text-muted small mt-1">
+                Period: <strong>{{ start_date|date:"d M Y" }}</strong> to <strong>{{ end_date|date:"d M Y" }}</strong> (Due by 20th of following month)
+            </div>
+        </div>
+        <div class="d-flex gap-3">
+            <div class="p-3 bg-white rounded-3 border text-center">
+                <div class="text-muted small text-uppercase fw-bold">Output VAT (Sales)</div>
+                <div class="font-monospace fw-bold text-danger fs-5">KES {{ vat.sales.total_output_vat|floatformat:2 }}</div>
+            </div>
+            <div class="p-3 bg-white rounded-3 border text-center">
+                <div class="text-muted small text-uppercase fw-bold">Input VAT (Purchases)</div>
+                <div class="font-monospace fw-bold text-success fs-5">KES {{ vat.purchases.total_input_vat|floatformat:2 }}</div>
+            </div>
+            <div class="p-3 bg-white rounded-3 border text-center">
+                <div class="text-muted small text-uppercase fw-bold">WHVAT 2% Credits</div>
+                <div class="font-monospace fw-bold text-primary fs-5">KES {{ vat.whvat_credits|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- SECTION A: OUTPUT VAT (SALES) -->
+    <div class="col-lg-6">
+        <div class="table-card h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="bi bi-box-arrow-up-right me-2 text-primary"></i>Section 1: Sales / Output VAT</span>
+                <a href="{% url 'accounting_vat_sales_csv' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-dark">
+                    <i class="bi bi-filetype-csv me-1"></i>iTax Export
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Supply Classification</th>
+                            <th class="text-end">Taxable Value (KES)</th>
+                            <th class="text-end">Output VAT (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>General Rated Sales (16%)</td>
+                            <td class="text-end font-monospace">KES {{ vat.sales.standard_sales|floatformat:2 }}</td>
+                            <td class="text-end font-monospace fw-bold text-danger">KES {{ vat.sales.output_vat_standard|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td>Zero Rated Sales (0%)</td>
+                            <td class="text-end font-monospace">KES {{ vat.sales.zero_rated_sales|floatformat:2 }}</td>
+                            <td class="text-end font-monospace text-muted">KES 0.00</td>
+                        </tr>
+                        <tr>
+                            <td>Exempt Supplies (0%)</td>
+                            <td class="text-end font-monospace">KES {{ vat.sales.exempt_sales|floatformat:2 }}</td>
+                            <td class="text-end font-monospace text-muted">KES 0.00</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-dark font-monospace fw-bold">
+                        <tr>
+                            <td>TOTAL OUTPUT SUPPLIES</td>
+                            <td class="text-end">KES {{ vat.sales.total_sales|floatformat:2 }}</td>
+                            <td class="text-end text-warning">KES {{ vat.sales.total_output_vat|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION B: INPUT VAT (PURCHASES) -->
+    <div class="col-lg-6">
+        <div class="table-card h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="bi bi-box-arrow-in-down-left me-2 text-success"></i>Section 2: Purchases / Input VAT</span>
+                <a href="{% url 'accounting_vat_purchases_csv' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-dark">
+                    <i class="bi bi-filetype-csv me-1"></i>iTax Export
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Purchase Classification</th>
+                            <th class="text-end">Taxable Value (KES)</th>
+                            <th class="text-end">Input VAT (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>General Rated Purchases (16%)</td>
+                            <td class="text-end font-monospace">KES {{ vat.purchases.standard_purchases|floatformat:2 }}</td>
+                            <td class="text-end font-monospace fw-bold text-success">KES {{ vat.purchases.input_vat_standard|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td>Zero Rated Purchases (0%)</td>
+                            <td class="text-end font-monospace">KES {{ vat.purchases.zero_rated_purchases|floatformat:2 }}</td>
+                            <td class="text-end font-monospace text-muted">KES 0.00</td>
+                        </tr>
+                        <tr>
+                            <td>Exempt Purchases (0%)</td>
+                            <td class="text-end font-monospace">KES {{ vat.purchases.exempt_purchases|floatformat:2 }}</td>
+                            <td class="text-end font-monospace text-muted">KES 0.00</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-dark font-monospace fw-bold">
+                        <tr>
+                            <td>TOTAL INPUT SUPPLIES</td>
+                            <td class="text-end">KES {{ vat.purchases.total_purchases|floatformat:2 }}</td>
+                            <td class="text-end text-success">KES {{ vat.purchases.total_input_vat|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

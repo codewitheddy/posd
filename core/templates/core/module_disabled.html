@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+
+{% block title %}Module Disabled | {{ module_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5 text-center">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 py-4">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <i class="bi bi-shield-slash text-warning" style="font-size: 3.5rem;"></i>
+                    </div>
+                    <h3 class="fw-bold text-dark">{{ module_name }} Module is Disabled</h3>
+                    <p class="text-muted mb-4">
+                        The <strong>{{ module_name }}</strong> module is currently deactivated for 
+                        <strong>{{ company.name|default:"this organization" }}</strong>. 
+                        Please contact a company administrator if you need access to this functionality.
+                    </p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="{% url 'core_dashboard' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+                        </a>
+                        {% if request.user.is_superuser %}
+                        <a href="{% url 'core_module_list' %}" class="btn btn-primary">
+                            <i class="bi bi-puzzle me-1"></i>Modules Manager
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

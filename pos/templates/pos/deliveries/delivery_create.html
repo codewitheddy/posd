@@ -1,0 +1,105 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Create Delivery Note for {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'sales_order_detail' slug=business_slug pk=order.pk %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+            <h2 class="mb-0">Generate Delivery Note for {{ order.order_number }}</h2>
+        </div>
+        <p class="text-muted mb-0">Client: <strong>{{ order.customer.name }}</strong></p>
+    </div>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Select Quantities to Dispatch</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end">Ordered</th>
+                                <th class="text-end">Already Delivered</th>
+                                <th class="text-end">Pending</th>
+                                <th style="width: 180px;">Dispatch Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>
+                                    <strong>{{ item.product.name }}</strong>
+                                    <br><small class="text-muted">SKU: {{ item.product.sku|default:"-" }}</small>
+                                </td>
+                                <td class="text-end">{{ item.quantity_ordered }}</td>
+                                <td class="text-end text-success">{{ item.quantity_delivered }}</td>
+                                <td class="text-end text-warning fw-bold">{{ item.quantity_pending_delivery }}</td>
+                                <td>
+                                    {% if item.quantity_pending_delivery > 0 %}
+                                    <input type="number" step="0.001" min="0" max="{{ item.quantity_pending_delivery }}" 
+                                           name="item_qty_{{ item.id }}" value="{{ item.quantity_pending_delivery }}" 
+                                           class="form-control form-control-sm text-end fw-bold">
+                                    {% else %}
+                                    <span class="badge bg-success">Fully Delivered</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-truck"></i> Carrier & Logistics Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label small">Carrier / Transport Method</label>
+                        <input type="text" class="form-control form-control-sm" name="carrier_name" placeholder="e.g. Courier / In-House Delivery">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Tracking / Consignment #</label>
+                        <input type="text" class="form-control form-control-sm" name="tracking_number" placeholder="Optional">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Vehicle Registration</label>
+                        <input type="text" class="form-control form-control-sm" name="vehicle_reg" placeholder="e.g. KCA 123X">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Driver Name & Phone</label>
+                        <div class="row g-2">
+                            <div class="col-7">
+                                <input type="text" class="form-control form-control-sm" name="driver_name" placeholder="Driver Name">
+                            </div>
+                            <div class="col-5">
+                                <input type="text" class="form-control form-control-sm" name="driver_phone" placeholder="Phone">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Delivery Destination Address</label>
+                        <textarea class="form-control form-control-sm" name="delivery_address" rows="2">{{ order.shipping_address|default:order.customer.address }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Special Instructions / Notes</label>
+                        <textarea class="form-control form-control-sm" name="notes" rows="2" placeholder="Gate pass instructions, fragile items..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-file-earmark-plus"></i> Create Delivery Note</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

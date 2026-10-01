@@ -1,0 +1,168 @@
+{% extends "accounting/base_accounting.html" %}
+
+{% block title %}Posting Queue &amp; Exceptions — General Ledger{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">Posting Queue &amp; Exceptions</h1>
+        <p class="text-muted small mb-0">Monitor and resolve asynchronous or failed journal postings from POS, HR, and external subsystems.</p>
+    </div>
+</div>
+
+<!-- Status Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card border-start border-danger border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold text-uppercase">Failed Postings</div>
+                    <div class="fs-3 fw-bold text-danger">{{ failed_count|default:0 }}</div>
+                </div>
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">Requires review or account re-mapping</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card border-start border-warning border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold text-uppercase">Pending in Queue</div>
+                    <div class="fs-3 fw-bold text-warning">{{ pending_count|default:0 }}</div>
+                </div>
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">Awaiting batch or background processor</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card border-start border-success border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small fw-bold text-uppercase">Processed Successfully</div>
+                    <div class="fs-3 fw-bold text-success">{{ processed_count|default:0 }}</div>
+                </div>
+                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">Posted cleanly to General Ledger</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Tabs -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+        <ul class="nav nav-pills card-header-pills">
+            <li class="nav-item">
+                <a class="nav-link {% if not status_filter %}active{% endif %}" href="{% url 'posting_exceptions' %}">All ({{ queue_items.paginator.count|default:queue_items|length }})</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-danger {% if status_filter == 'failed' %}active bg-danger text-white{% endif %}" href="{% url 'posting_exceptions' %}?status=failed">
+                    Failed <span class="badge bg-white text-danger ms-1">{{ failed_count|default:0 }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-warning {% if status_filter == 'pending' %}active bg-warning text-dark{% endif %}" href="{% url 'posting_exceptions' %}?status=pending">
+                    Pending <span class="badge bg-dark ms-1">{{ pending_count|default:0 }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-success {% if status_filter == 'processed' %}active bg-success text-white{% endif %}" href="{% url 'posting_exceptions' %}?status=processed">
+                    Processed <span class="badge bg-white text-success ms-1">{{ processed_count|default:0 }}</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">ID / Created</th>
+                    <th>Source Module</th>
+                    <th>Reference</th>
+                    <th>Status</th>
+                    <th>Attempts</th>
+                    <th>Error / Journal</th>
+                    <th class="text-end pe-3">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in queue_items %}
+                <tr>
+                    <td class="ps-3">
+                        <div class="fw-bold">#{{ item.id }}</div>
+                        <div class="small text-muted">{{ item.created_at|date:"d/m/Y H:i" }}</div>
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary text-uppercase">{{ item.source_module }}</span>
+                    </td>
+                    <td>
+                        <div class="fw-bold font-monospace">{{ item.source_ref }}</div>
+                        <div class="small text-muted text-truncate" style="max-width: 250px;">{{ item.payload.narration|default:"--" }}</div>
+                    </td>
+                    <td>
+                        {% if item.status == 'failed' %}
+                            <span class="badge bg-danger">Failed</span>
+                        {% elif item.status == 'pending' %}
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        {% else %}
+                            <span class="badge bg-success">Processed</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ item.attempts }}</span>
+                    </td>
+                    <td>
+                        {% if item.error_message %}
+                            <div class="text-danger small font-monospace" style="max-width: 320px; word-break: break-word;">
+                                <i class="bi bi-x-circle me-1"></i>{{ item.error_message }}
+                            </div>
+                        {% elif item.created_journal_entry %}
+                            <a href="{% url 'accounting_journal_detail' item.created_journal_entry.pk %}" class="font-monospace text-primary text-decoration-none fw-bold">
+                                <i class="bi bi-journal-check me-1"></i>{{ item.created_journal_entry.entry_number }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted small">--</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-3">
+                        <div class="d-flex justify-content-end gap-2">
+                            {% if item.status == 'failed' or item.status == 'pending' %}
+                            <form method="post" action="{% url 'posting_exception_retry' item.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Retry Posting Now">
+                                    <i class="bi bi-arrow-repeat me-1"></i>Retry
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'posting_exception_dismiss' item.pk %}" onsubmit="return confirm('Dismiss and remove this queue item?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Dismiss">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="bi bi-check2-circle fs-1 text-success d-block mb-2"></i>
+                        <p class="mb-0 fw-bold">All Posting Queues are Clear</p>
+                        <small>There are no failed or pending integration postings in the queue.</small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

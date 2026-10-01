@@ -408,6 +408,42 @@
             <div class="col-md-6">
               <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="thermal_show_tax_breakdown" name="thermal_show_tax_breakdown" {% if settings.thermal_show_tax_breakdown %}checked{% endif %}><label class="form-check-label" for="thermal_show_tax_breakdown">Show VAT breakdown</label></div>
             </div>
+
+            <!-- Web Bluetooth Integration Block -->
+            <div class="col-12 mt-3">
+              <div class="card border-primary border-opacity-50 shadow-sm" style="border-radius: 10px; overflow: hidden;">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2 px-3">
+                  <span class="fw-bold"><i class="bi bi-bluetooth me-2"></i>Web Bluetooth ESC/POS 1-Click Printing</span>
+                  <span id="settingsBtStatusPill" class="badge bg-light text-dark">Checking...</span>
+                </div>
+                <div class="card-body p-3 bg-light">
+                  <p class="small text-muted mb-3">
+                    Connect portable or desktop Bluetooth thermal printers (POS-58, POS-80, Xprinter, GOOJPRT, Rongta, etc.) for instant, silent receipt printing without the system print preview dialog.
+                  </p>
+                  <div class="row g-2 align-items-center mb-3">
+                    <div class="col-sm-6">
+                      <div class="small text-muted">Paired Printer:</div>
+                      <strong id="settingsBtDeviceName" class="text-dark">None</strong>
+                    </div>
+                    <div class="col-sm-6 text-sm-end">
+                      <button type="button" class="btn btn-primary btn-sm me-1" onclick="settingsPairBluetooth()">
+                        <i class="bi bi-link-45deg me-1"></i> Pair / Connect
+                      </button>
+                      <button type="button" class="btn btn-outline-primary btn-sm me-1" onclick="settingsTestBluetooth()">
+                        <i class="bi bi-receipt me-1"></i> Test Print
+                      </button>
+                      <button type="button" class="btn btn-outline-danger btn-sm" onclick="settingsDisconnectBluetooth()" title="Disconnect Bluetooth printer">
+                        <i class="bi bi-x-circle"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="settings_bt_autoprint" onchange="settingsToggleBtAutoprint(this.checked)">
+                    <label class="form-check-label fw-semibold" for="settings_bt_autoprint">Auto-print receipts via Bluetooth when sale is completed</label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -771,5 +807,85 @@ document.querySelectorAll('input[name="mpesa_type"]').forEach(function(radio) {
     document.getElementById('account-ref-row').style.display = isPaybill ? '' : 'none';
   });
 });
+
+// Bluetooth Printer Settings Handlers
+function updateSettingsBtUI() {
+  const statusPill = document.getElementById('settingsBtStatusPill');
+  const deviceNameEl = document.getElementById('settingsBtDeviceName');
+  const autoPrintCheck = document.getElementById('settings_bt_autoprint');
+
+  if (autoPrintCheck) {
+    autoPrintCheck.checked = localStorage.getItem('pos_bt_autoprint') === 'true';
+  }
+
+  if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+    if (statusPill) {
+      statusPill.className = 'badge bg-danger';
+      statusPill.innerText = 'Not Supported';
+    }
+    if (deviceNameEl) deviceNameEl.innerText = 'Web Bluetooth not supported in this browser';
+    return;
+  }
+
+  const isConnected = window.BluetoothPrinter.isConnected();
+  if (statusPill) {
+    statusPill.className = isConnected ? 'badge bg-success' : 'badge bg-secondary';
+    statusPill.innerText = isConnected ? 'Connected' : 'Disconnected';
+  }
+  if (deviceNameEl) {
+    deviceNameEl.innerText = window.BluetoothPrinter.getDeviceName();
+  }
+}
+
+async function settingsPairBluetooth() {
+  if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+    alert('Web Bluetooth is not supported in this browser. Please use Chrome or Edge over HTTPS / localhost.');
+    return;
+  }
+  try {
+    await window.BluetoothPrinter.connect();
+    updateSettingsBtUI();
+    alert(`Connected to ${window.BluetoothPrinter.getDeviceName()}`);
+  } catch (e) {
+    if (e.name !== 'NotFoundError' && !e.message.includes('User cancelled')) {
+      alert(`Bluetooth connection error: ${e.message}`);
+    }
+  }
+}
+
+async function settingsTestBluetooth() {
+  if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+    alert('Web Bluetooth is not supported in this browser.');
+    return;
+  }
+  try {
+    const widthEl = document.querySelector('select[name="thermal_receipt_width"]');
+    const width = widthEl ? parseInt(widthEl.value, 10) : 80;
+    await window.BluetoothPrinter.printTestReceipt(width);
+    alert('Test receipt sent to Bluetooth printer!');
+  } catch (e) {
+    alert(`Test print error: ${e.message}`);
+  }
+}
+
+async function settingsDisconnectBluetooth() {
+  if (!window.BluetoothPrinter) return;
+  try {
+    await window.BluetoothPrinter.disconnect();
+    updateSettingsBtUI();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function settingsToggleBtAutoprint(checked) {
+  localStorage.setItem('pos_bt_autoprint', checked ? 'true' : 'false');
+  if (window.BluetoothPrinter) {
+    window.BluetoothPrinter.autoPrintEnabled = checked;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', updateSettingsBtUI);
+window.addEventListener('pos-bluetooth-status', updateSettingsBtUI);
 </script>
 {% endblock %}

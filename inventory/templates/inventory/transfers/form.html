@@ -1,0 +1,114 @@
+{% extends "inventory/base_inventory.html" %}
+
+{% block title %}New Inter-Warehouse Stock Transfer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <a href="{% url 'inventory_transfer_list' %}" class="text-decoration-none text-muted small">
+                    <i class="bi bi-arrow-left"></i> Back to Transfers
+                </a>
+                <h3 class="fw-bold mt-1">New Inter-Warehouse Stock Transfer</h3>
+            </div>
+        </div>
+
+        <div class="inv-table-card p-4">
+            <form method="post" id="transferForm">
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+                {% endif %}
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Source Warehouse (From) <span class="text-danger">*</span></label>
+                        {{ form.source_warehouse }}
+                        {% if form.source_warehouse.errors %}<div class="text-danger small">{{ form.source_warehouse.errors }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Target Warehouse (To) <span class="text-danger">*</span></label>
+                        {{ form.target_warehouse }}
+                        {% if form.target_warehouse.errors %}<div class="text-danger small">{{ form.target_warehouse.errors }}</div>{% endif %}
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Transfer Narration / Reference</label>
+                        {{ form.narration }}
+                        {% if form.narration.errors %}<div class="text-danger small">{{ form.narration.errors }}</div>{% endif %}
+                    </div>
+                </div>
+
+                <div class="border-top pt-4 mb-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h5 class="fw-bold mb-0">Items to Transfer</h5>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="addRow()">
+                            <i class="bi bi-plus-lg me-1"></i> Add Item
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered align-middle" id="transferItemsTable">
+                            <thead class="table-light">
+                                <tr class="small text-muted text-uppercase">
+                                    <th style="width: 60%;">Product</th>
+                                    <th style="width: 30%;">Quantity to Move</th>
+                                    <th style="width: 10%;" class="text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transferItemsBody">
+                                <tr>
+                                    <td>
+                                        <select name="product_id[]" class="form-select" required>
+                                            <option value="">Select product...</option>
+                                            {% for prod in products %}
+                                            <option value="{{ prod.id }}">{{ prod.name }} ({{ prod.product_code|default:"No Code" }})</option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="number" step="0.0001" min="0.0001" name="quantity[]" class="form-control font-mono" placeholder="0.0000" required>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+                    <a href="{% url 'inventory_transfer_list' %}" class="btn btn-light border">Cancel</a>
+                    <button type="submit" class="btn btn-inv-primary">Execute Atomic Stock Transfer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addRow() {
+    const tbody = document.getElementById('transferItemsBody');
+    const firstRow = tbody.querySelector('tr');
+    const newRow = firstRow.cloneNode(true);
+    newRow.querySelector('select').selectedIndex = 0;
+    newRow.querySelector('input').value = '';
+    tbody.appendChild(newRow);
+}
+
+function removeRow(btn) {
+    const tbody = document.getElementById('transferItemsBody');
+    if (tbody.querySelectorAll('tr').length > 1) {
+        btn.closest('tr').remove();
+    }
+}
+</script>
+{% endblock %}

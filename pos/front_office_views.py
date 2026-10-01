@@ -305,7 +305,6 @@ def terminal_pin_login(request):
     })
 
 
-@require_POST
 def terminal_lock(request):
     """
     Quick lock the terminal without terminating the active cashier shift session.

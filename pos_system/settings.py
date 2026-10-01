@@ -121,8 +121,11 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_spectacular',
     'django_ratelimit',
+    'core',
+    'inventory',
     'pos',
     'hr',
+    'accounting',
     'events',
     'sync',
     'backup',
@@ -139,8 +142,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'pos.middleware.AuditRequestMiddleware',  # Attach request to audit logs
     'django.contrib.messages.middleware.MessageMiddleware',  # Move before TenantMiddleware
-    'pos.middleware.StoreMiddleware',  # Single-store context
-    'pos.middleware.BranchMiddleware',  # Multi-branch context
+    'core.middleware.CompanyTenantMiddleware',  # Core multi-company tenant context
+    'core.middleware.BranchContextMiddleware',  # Core multi-branch context
+    'core.middleware.ModuleGateMiddleware',  # Core dynamic module access gate
+    'pos.middleware.StoreMiddleware',  # Single-store context (backward-compat)
+    'pos.middleware.BranchMiddleware',  # Multi-branch context (backward-compat)
     'pos.middleware.TerminalMiddleware',  # POS Terminal device context & active session
     'pos.middleware.RoleAccessControlMiddleware',  # Front Office / Back Office access control
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -167,6 +173,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.core_platform_context',  # Core platform context processor
                 'pos.permissions.user_permissions',  # Add permission context processor
                 'pos.context_processors.business_context',  # Add business context processor
             ],
@@ -827,3 +834,9 @@ BRANCH_LIMITS = {
     'free': 3,
     'paid': 3,   # Hard cap at 3 to prevent system overload
 }
+
+# Python 3.14 alpha GC protection during test database migrations on Windows
+if 'test' in sys.argv:
+    import gc
+    gc.disable()
+

@@ -1,0 +1,259 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Statement of Profit or Loss (Income Statement){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary text-white font-monospace">IFRS FOR SMEs</span>
+            <span class="badge bg-light text-dark border">Statement of Comprehensive Income</span>
+        </div>
+        <h1><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Income Statement (Profit &amp; Loss)</h1>
+        <p class="page-subtitle">Multi-step P&amp;L with Gross Profit, EBIT, Operating Margins, and Comparative Analysis.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="small text-muted fw-bold mb-0">Period:</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <span class="small text-muted">to</span>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+
+            <label class="small text-muted fw-bold mb-0 ms-2">Compare:</label>
+            <input type="date" name="compare_start_date" value="{{ compare_start_date|date:'Y-m-d' }}" class="form-control form-control-sm" placeholder="Comp Start">
+            <span class="small text-muted">to</span>
+            <input type="date" name="compare_end_date" value="{{ compare_end_date|date:'Y-m-d' }}" class="form-control form-control-sm" placeholder="Comp End">
+
+            {% if branches %}
+            <select name="branch" class="form-select form-select-sm">
+                <option value="">All Branches</option>
+                {% for b in branches %}
+                <option value="{{ b.pk }}" {% if branch and branch.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-repeat me-1"></i>Generate
+            </button>
+        </form>
+        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Print
+        </button>
+    </div>
+</div>
+
+<!-- Performance KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Net Revenue</span>
+            <div class="stat-val text-success font-monospace mt-1">KES {{ report.primary.net_revenue|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Gross sales less discounts</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Gross Profit (Margin)</span>
+            <div class="stat-val text-primary font-monospace mt-1">
+                KES {{ report.primary.gross_profit|floatformat:2 }}
+                <span class="badge bg-primary-subtle text-primary fs-6 ms-1">{{ report.primary.gross_margin_pct }}%</span>
+            </div>
+            <div class="text-muted small mt-1">Revenue less direct costs (COGS)</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Operating Profit (EBIT)</span>
+            <div class="stat-val {% if report.primary.operating_profit >= 0 %}text-info{% else %}text-danger{% endif %} font-monospace mt-1">
+                KES {{ report.primary.operating_profit|floatformat:2 }}
+                <span class="badge bg-info-subtle text-info fs-6 ms-1">{{ report.primary.ebit_margin_pct }}%</span>
+            </div>
+            <div class="text-muted small mt-1">Operating profit before taxes</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <span class="stat-label">Net Profit / (Loss)</span>
+            <div class="stat-val {% if report.primary.net_profit >= 0 %}text-success{% else %}text-danger{% endif %} font-monospace mt-1">
+                KES {{ report.primary.net_profit|floatformat:2 }}
+                <span class="badge {% if report.primary.net_profit >= 0 %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %} fs-6 ms-1">{{ report.primary.net_margin_pct }}%</span>
+            </div>
+            <div class="text-muted small mt-1">Bottom line net performance</div>
+        </div>
+    </div>
+</div>
+
+<!-- Multi-Step Income Statement Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <span class="fw-bold fs-6">Statement of Comprehensive Income</span>
+            <div class="small opacity-75">Period: {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }} (Currency: KES)</div>
+        </div>
+        {% if report.is_comparative %}
+        <div class="badge bg-secondary font-monospace">Comparative Mode Active</div>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 55%;">Account / Financial Item</th>
+                    <th class="text-end" style="width: 22.5%;">Current Period (KES)</th>
+                    {% if report.is_comparative %}
+                    <th class="text-end" style="width: 22.5%;">Comparative Period (KES)</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 1. REVENUE -->
+                <tr class="table-secondary fw-bold">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}"><i class="bi bi-plus-circle me-1 text-success"></i>REVENUE &amp; TURNOVER</td>
+                </tr>
+                {% for r in report.primary.gross_sales_rows %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="font-monospace small text-muted me-2">{{ r.account.code }}</span> {{ r.account.name }}
+                    </td>
+                    <td class="text-end font-monospace">KES {{ r.amount|floatformat:2 }}</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">-</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                {% for d in report.primary.discount_rows %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="font-monospace small text-muted me-2">{{ d.account.code }}</span> {{ d.account.name }}
+                    </td>
+                    <td class="text-end font-monospace text-danger">(KES {{ d.amount|floatformat:2 }})</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">-</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-2">NET REVENUE</td>
+                    <td class="text-end font-monospace text-success">KES {{ report.primary.net_revenue|floatformat:2 }}</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">KES {{ report.comparative.net_revenue|floatformat:2 }}</td>
+                    {% endif %}
+                </tr>
+
+                <!-- 2. COST OF GOODS SOLD -->
+                <tr class="table-secondary fw-bold">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}"><i class="bi bi-dash-circle me-1 text-danger"></i>COST OF GOODS SOLD (COGS)</td>
+                </tr>
+                {% for c in report.primary.cogs_rows %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="font-monospace small text-muted me-2">{{ c.account.code }}</span> {{ c.account.name }}
+                    </td>
+                    <td class="text-end font-monospace text-danger">(KES {{ c.amount|floatformat:2 }})</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">-</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-2">TOTAL COST OF GOODS SOLD</td>
+                    <td class="text-end font-monospace text-danger">(KES {{ report.primary.total_cogs|floatformat:2 }})</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">(KES {{ report.comparative.total_cogs|floatformat:2 }})</td>
+                    {% endif %}
+                </tr>
+
+                <!-- GROSS PROFIT -->
+                <tr class="table-primary fw-bold fs-6">
+                    <td>GROSS PROFIT (Margin: {{ report.primary.gross_margin_pct }}%)</td>
+                    <td class="text-end font-monospace text-primary">KES {{ report.primary.gross_profit|floatformat:2 }}</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">KES {{ report.comparative.gross_profit|floatformat:2 }}</td>
+                    {% endif %}
+                </tr>
+
+                <!-- 3. OPERATING EXPENSES -->
+                <tr class="table-secondary fw-bold">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}"><i class="bi bi-dash-circle me-1 text-danger"></i>OPERATING EXPENSES (OPEX)</td>
+                </tr>
+                {% for o in report.primary.opex_rows %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="font-monospace small text-muted me-2">{{ o.account.code }}</span> {{ o.account.name }}
+                    </td>
+                    <td class="text-end font-monospace text-danger">(KES {{ o.amount|floatformat:2 }})</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">-</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-2">TOTAL OPERATING EXPENSES</td>
+                    <td class="text-end font-monospace text-danger">(KES {{ report.primary.total_opex|floatformat:2 }})</td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">(KES {{ report.comparative.total_opex|floatformat:2 }})</td>
+                    {% endif %}
+                </tr>
+
+                <!-- OPERATING PROFIT (EBIT) -->
+                <tr class="table-info fw-bold fs-6">
+                    <td>OPERATING PROFIT / EBIT (Operating Margin: {{ report.primary.ebit_margin_pct }}%)</td>
+                    <td class="text-end font-monospace {% if report.primary.operating_profit >= 0 %}text-info{% else %}text-danger{% endif %}">
+                        KES {{ report.primary.operating_profit|floatformat:2 }}
+                    </td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">KES {{ report.comparative.operating_profit|floatformat:2 }}</td>
+                    {% endif %}
+                </tr>
+
+                <!-- 4. OTHER INCOME -->
+                {% if report.primary.other_income_rows %}
+                <tr class="table-secondary fw-bold">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}">OTHER INCOME</td>
+                </tr>
+                {% for oi in report.primary.other_income_rows %}
+                <tr>
+                    <td class="ps-4"><span class="font-monospace small text-muted me-2">{{ oi.account.code }}</span> {{ oi.account.name }}</td>
+                    <td class="text-end font-monospace">KES {{ oi.amount|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                {% endif %}
+
+                <!-- PROFIT BEFORE TAX (EBT) -->
+                <tr class="fw-bold border-bottom">
+                    <td>PROFIT BEFORE TAX</td>
+                    <td class="text-end font-monospace {% if report.primary.profit_before_tax >= 0 %}text-dark{% else %}text-danger{% endif %}">
+                        KES {{ report.primary.profit_before_tax|floatformat:2 }}
+                    </td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-muted">KES {{ report.comparative.profit_before_tax|floatformat:2 }}</td>
+                    {% endif %}
+                </tr>
+
+                <!-- INCOME TAX EXPENSE -->
+                {% if report.primary.tax_rows %}
+                {% for it in report.primary.tax_rows %}
+                <tr>
+                    <td class="ps-4"><span class="font-monospace small text-muted me-2">{{ it.account.code }}</span> {{ it.account.name }}</td>
+                    <td class="text-end font-monospace text-danger">(KES {{ it.amount|floatformat:2 }})</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                {% endif %}
+
+                <!-- NET PROFIT / LOSS -->
+                <tr class="table-dark fw-bold fs-5">
+                    <td>NET PROFIT / (LOSS) FOR THE PERIOD (Net Margin: {{ report.primary.net_margin_pct }}%)</td>
+                    <td class="text-end font-monospace {% if report.primary.net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        KES {{ report.primary.net_profit|floatformat:2 }}
+                    </td>
+                    {% if report.is_comparative %}
+                    <td class="text-end font-monospace text-warning">KES {{ report.comparative.net_profit|floatformat:2 }}</td>
+                    {% endif %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

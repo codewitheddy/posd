@@ -444,6 +444,8 @@ class RoleAccessControlMiddleware:
                 clean_path.startswith('/pos/')
                 or clean_path.startswith('/api/')
                 or '/api/' in clean_path
+                or clean_path.startswith('/hr/attendance/')
+                or clean_path.startswith('/hr/leave/')
                 or '/z-reports/' in clean_path
                 or '/zreport/' in clean_path
                 or '/finances/pickups/' in clean_path  # Allow cashiers to create pickups and view pickup slips

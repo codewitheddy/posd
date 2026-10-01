@@ -1,0 +1,65 @@
+{% extends "core/base.html" %}
+
+{% block title %}Notifications | {{ company.name|default:"Platform" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800 fw-bold">Notifications</h1>
+            <p class="text-muted small mb-0">System updates, operational alerts, and required actions</p>
+        </div>
+        <div>
+            <form method="post" action="{% url 'core_notification_mark_all_read' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-check2-all me-1"></i>Mark All Read
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <ul class="list-group list-group-flush">
+            {% for n in notifications %}
+            <li class="list-group-item d-flex justify-content-between align-items-start p-3 {% if not n.is_read %}bg-light{% endif %}">
+                <div class="d-flex gap-3">
+                    <div class="mt-1">
+                        {% if n.notification_type == 'warning' %}
+                            <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+                        {% elif n.notification_type == 'action_required' %}
+                            <i class="bi bi-bell-fill text-danger fs-5"></i>
+                        {% elif n.notification_type == 'success' %}
+                            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                        {% else %}
+                            <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h6 class="mb-1 fw-bold {% if not n.is_read %}text-dark{% else %}text-muted{% endif %}">{{ n.title }}</h6>
+                        <p class="mb-1 small text-secondary">{{ n.message }}</p>
+                        <small class="text-muted">{{ n.created_at|timesince }} ago</small>
+                    </div>
+                </div>
+
+                <div>
+                    {% if not n.is_read %}
+                        <form method="post" action="{% url 'core_notification_read' n.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
+                                {% if n.link_url %}Open &rarr;{% else %}Mark Read{% endif %}
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-center py-5 text-muted">
+                <i class="bi bi-bell-slash fs-2 d-block mb-2"></i>
+                No notifications found.
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

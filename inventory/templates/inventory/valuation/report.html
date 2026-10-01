@@ -1,0 +1,165 @@
+{% extends "inventory/base_inventory.html" %}
+
+{% block title %}Inventory Valuation Report{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Inventory Asset Valuation Report</h3>
+        <p class="text-muted mb-0">Balance sheet asset values computed using Moving Weighted Average Cost and FIFO layers.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success fw-semibold">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export Valuation CSV
+        </a>
+    </div>
+</div>
+
+<!-- KPI Summary Header -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="inv-kpi-card">
+            <span class="text-muted fw-semibold small text-uppercase">Total Inventory Asset Value</span>
+            <h3 class="fw-bold mb-0 font-mono mt-2 text-success">KES {{ total_valuation|floatformat:2 }}</h3>
+            <span class="text-muted small">Current general ledger asset balance</span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="inv-kpi-card">
+            <span class="text-muted fw-semibold small text-uppercase">Total On-Hand Quantity</span>
+            <h3 class="fw-bold mb-0 font-mono mt-2">{{ total_quantity|floatformat:2 }}</h3>
+            <span class="text-muted small">Total units across {{ total_items_count }} products</span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="inv-kpi-card">
+            <span class="text-muted fw-semibold small text-uppercase">Valuation Methodology</span>
+            <h5 class="fw-bold mb-0 mt-2 text-dark">IFRS Moving Weighted Average</h5>
+            <span class="text-muted small">Perpetual continuous recalculation</span>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="inv-table-card p-3 mb-4">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold text-muted mb-1">Search Product</label>
+            <input type="text" name="q" value="{{ current_q }}" class="form-control form-control-sm" placeholder="Product name or code...">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold text-muted mb-1">Warehouse</label>
+            <select name="warehouse" class="form-select form-select-sm">
+                <option value="">All Warehouses</option>
+                {% for wh in warehouses %}
+                <option value="{{ wh.id }}" {% if current_warehouse == wh.id|stringformat:"i" %}selected{% endif %}>{{ wh.code }} ({{ wh.name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold text-muted mb-1">Category</label>
+            <select name="category" class="form-select form-select-sm">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if current_category == cat.id|stringformat:"i" %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-sm btn-inv-primary w-100">Apply Filter</button>
+        </div>
+    </form>
+</div>
+
+<!-- Valuation Table -->
+<div class="inv-table-card mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-muted text-uppercase">
+                    <th>Warehouse</th>
+                    <th>Product Code</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th class="text-end">On-Hand Qty</th>
+                    <th class="text-end">Valuation Rate</th>
+                    <th class="text-end">Total Valuation Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in valuation_items %}
+                <tr>
+                    <td><span class="badge bg-light text-dark border">{{ item.warehouse.code }}</span></td>
+                    <td class="font-mono text-muted">{{ item.product.product_code|default:"—" }}</td>
+                    <td class="fw-semibold text-dark">{{ item.product.name }}</td>
+                    <td><span class="badge bg-light text-muted border">{{ item.product.category.name|default:"General" }}</span></td>
+                    <td class="text-end font-mono fw-bold">{{ item.balance_quantity|floatformat:2 }}</td>
+                    <td class="text-end font-mono text-muted">KES {{ item.valuation_rate|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold text-success">KES {{ item.total_value|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="bi bi-boxes fs-1 d-block mb-2 text-muted"></i>
+                        No inventory balances found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if valuation_items %}
+            <tfoot class="table-light fw-bold">
+                <tr>
+                    <td colspan="4" class="text-uppercase small">Total Valuation</td>
+                    <td class="text-end font-mono">{{ total_quantity|floatformat:2 }}</td>
+                    <td></td>
+                    <td class="text-end font-mono text-success fs-6">KES {{ total_valuation|floatformat:2 }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<!-- FIFO Layers Inspector -->
+<div class="inv-table-card">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0"><i class="bi bi-layers-half text-success me-2"></i>Active FIFO Valuation Layers</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-muted text-uppercase">
+                    <th>Received Date</th>
+                    <th>Warehouse</th>
+                    <th>Product</th>
+                    <th>Batch / Lot</th>
+                    <th class="text-end">Original Qty</th>
+                    <th class="text-end">Remaining Qty</th>
+                    <th class="text-end">Layer Cost</th>
+                    <th class="text-end">Remaining Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for layer in open_layers %}
+                <tr>
+                    <td class="small font-mono">{{ layer.received_date|date:"Y-m-d" }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ layer.warehouse.code }}</span></td>
+                    <td class="fw-semibold">{{ layer.product.name }}</td>
+                    <td class="font-mono small">{{ layer.batch_number|default:"—" }}</td>
+                    <td class="text-end font-mono">{{ layer.original_quantity|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold text-primary">{{ layer.remaining_quantity|floatformat:2 }}</td>
+                    <td class="text-end font-mono text-muted">KES {{ layer.unit_cost|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold text-success">
+                        KES {% widthratio layer.remaining_quantity 1 layer.unit_cost %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">No open FIFO batches tracked.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

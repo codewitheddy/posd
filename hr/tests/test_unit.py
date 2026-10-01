@@ -459,7 +459,7 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
             hire_date=date.today(),
         )
 
-    def test_clock_in_denies_cashier_access(self):
+    def test_clock_in_allows_cashier_self_service(self):
         self.client.force_login(self.cashier_user)
 
         response = self.client.post(
@@ -467,43 +467,32 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('pos_screen'))
-        self.assertFalse(Employee.objects.filter(user_account=self.cashier_user, business=self.business).exists())
+        emp = Employee.objects.filter(user_account=self.cashier_user, business=self.business).first()
+        self.assertIsNotNone(emp)
+        self.assertTrue(Attendance.objects.filter(employee=emp, date=timezone.localdate()).exists())
 
-    def test_clock_out_denies_cashier_access(self):
+    def test_clock_out_allows_cashier_self_service(self):
         self.client.force_login(self.cashier_user)
 
         self.client.post(reverse('hr_clock_in', kwargs={'slug': self.business.slug}))
         response = self.client.post(reverse('hr_clock_out', kwargs={'slug': self.business.slug}))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('pos_screen'))
-        self.assertFalse(Employee.objects.filter(user_account=self.cashier_user, business=self.business).exists())
+        emp = Employee.objects.get(user_account=self.cashier_user, business=self.business)
+        attendance = Attendance.objects.get(employee=emp, date=timezone.localdate())
+        self.assertIsNotNone(attendance.clock_out)
 
-    def test_clock_in_ignores_safe_next_for_denied_cashier(self):
+    def test_clock_in_with_safe_next(self):
         self.client.force_login(self.cashier_user)
 
-        dashboard_url = reverse('dashboard', kwargs={'slug': self.business.slug})
+        attendance_url = reverse('hr_attendance_list', kwargs={'slug': self.business.slug})
         response = self.client.post(
             reverse('hr_clock_in', kwargs={'slug': self.business.slug}),
-            data={'next': dashboard_url},
+            data={'next': attendance_url},
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('pos_screen'))
-
-    def test_clock_out_ignores_safe_next_for_denied_cashier(self):
-        self.client.force_login(self.cashier_user)
-        self.client.post(reverse('hr_clock_in', kwargs={'slug': self.business.slug}))
-
-        dashboard_url = reverse('dashboard', kwargs={'slug': self.business.slug})
-        response = self.client.post(
-            reverse('hr_clock_out', kwargs={'slug': self.business.slug}),
-            data={'next': dashboard_url},
-        )
-
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('pos_screen'))
+        self.assertEqual(response.url, attendance_url)
 
     def test_manager_can_clock_in_selected_employee(self):
         self.client.force_login(self.owner)
@@ -548,3 +537,78 @@ class AttendanceWebViewAutoProvisionTest(HRBaseTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Clock Out')
         self.assertContains(response, f'name="employee_id" value="{self.staff_employee.pk}"', html=False)
+
+
+class P9AndPayslipWebViewsTest(HRBaseTestCase):
+
+    def setUp(self):
+        super().setUp()
+        BusinessMembership.objects.create(
+            user=self.owner,
+            business=self.business,
+            role='owner',
+            is_active=True,
+        )
+        self.client.force_login(self.owner)
+
+    def test_p9_download_returns_pdf(self):
+        # Create a paid payroll record
+        Payroll.objects.create(
+            employee=self.employee,
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+            basic_salary=Decimal('50000.00'),
+            net_salary=Decimal('42000.00'),
+            status='paid',
+        )
+
+        url = reverse('hr_p9_download', kwargs={'slug': self.business.slug, 'employee_pk': self.employee.pk})
+        response = self.client.get(f'{url}?year=2026')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+    def test_payslip_download_returns_pdf(self):
+        payroll = Payroll.objects.create(
+            employee=self.employee,
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+            basic_salary=Decimal('50000.00'),
+            net_salary=Decimal('42000.00'),
+            status='paid',
+        )
+
+        url = reverse('hr_payslip_download', kwargs={'slug': self.business.slug, 'payroll_pk': payroll.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+
+class PerformanceServiceNonPOSStaffTest(HRBaseTestCase):
+
+    def test_generate_period_handles_non_pos_staff(self):
+        # Non-POS staff has no user_account
+        non_pos_emp = Employee.objects.create(
+            first_name='Peter',
+            last_name='Driver',
+            business=self.business,
+            branch=self.branch,
+            job_title='Driver',
+            status='active',
+            hire_date=date.today(),
+            basic_salary=Decimal('25000.00'),
+        )
+
+        records = PerformanceService.generate_period(
+            self.business,
+            date(2026, 1, 1),
+            date(2026, 1, 31)
+        )
+
+        driver_rec = next((r for r in records if r.employee == non_pos_emp), None)
+        self.assertIsNotNone(driver_rec)
+        self.assertEqual(driver_rec.total_sales, 0)
+        self.assertEqual(driver_rec.performance_score, Decimal('0.00'))

@@ -1,9 +1,12 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Z-Report #{{ zreport.z_number|stringformat:"05d" }} - {{ business.name }}</title>
+    <!-- Web Bluetooth ESC/POS Printing Engine -->
+    <script src="{% static 'js/pos-bluetooth-printer.js' %}"></script>
     <style>
         * {
             margin: 0;
@@ -610,8 +613,11 @@
     <!-- Action Buttons & Shortcuts (Hidden during Print) -->
     <div class="page-footer">
         <div class="action-bar">
-            <button onclick="thermalPrint()" class="btn btn-primary" title="Print Thermal Slip (P)">
-                🖨️ Print Thermal Slip
+            <button onclick="bluetoothPrintZReport()" class="btn" style="background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%); color: white;" title="Direct 1-Click Bluetooth ESC/POS Print (B)">
+                📶 Bluetooth Print <kbd style="background:rgba(0,0,0,0.25); border-radius:3px; padding:1px 4px; font-size:11px;">B</kbd>
+            </button>
+            <button onclick="thermalPrint()" class="btn btn-primary" title="Print via System Dialog (P)">
+                🖨️ System Print <kbd style="background:rgba(0,0,0,0.25); border-radius:3px; padding:1px 4px; font-size:11px;">P</kbd>
             </button>
             <a href="{% url 'front_office_zreport' %}" class="btn btn-secondary" title="Shift Z-Reports">
                 📊 Shift Z-Reports
@@ -625,23 +631,72 @@
         </div>
         
         <div class="shortcuts-hint">
-            ⌨️ Keyboard shortcuts: <kbd>P</kbd> Print Slip · <kbd>Esc</kbd> Close
+            ⌨️ Keyboard shortcuts: <kbd>B</kbd> Bluetooth Print · <kbd>P</kbd> System Print · <kbd>Esc</kbd> Back
         </div>
     </div>
     
     <script>
+        window.ZREPORT_DATA = {
+            z_number: "{{ zreport.z_number|stringformat:'05d' }}",
+            generated_at: "{{ zreport.generated_at|date:'d/m/Y H:i' }}",
+            generated_by: "{% if zreport.generated_by %}{{ zreport.generated_by.get_full_name|default:zreport.generated_by.username|escapejs }}{% else %}Automated{% endif %}",
+            branch_name: "{% if business.name %}{{ business.name|escapejs }}{% endif %}",
+            total_transactions: {{ zreport.total_transactions|default:0 }},
+            gross_sales: {{ zreport.gross_sales|default:0|stringformat:'.2f' }},
+            total_discounts: {{ zreport.total_discounts|default:0|stringformat:'.2f' }},
+            vat_collected: {{ zreport.vat_collected|default:0|stringformat:'.2f' }},
+            net_sales: {{ zreport.net_sales|default:0|stringformat:'.2f' }},
+            payments_breakdown: [
+                {% if report_data.payment_breakdown %}
+                    {% for method, amount in report_data.payment_breakdown.items %}
+                    { method: "{{ method|escapejs }}", amount: {{ amount|default:0|stringformat:'.2f' }} }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                {% endif %}
+            ],
+            cash_opening: {% if report_data.cash_reconciliation.opening_float is not None %}{{ report_data.cash_reconciliation.opening_float|stringformat:'.2f' }}{% else %}null{% endif %},
+            cash_sales: {% if report_data.cash_reconciliation.cash_sales is not None %}{{ report_data.cash_reconciliation.cash_sales|stringformat:'.2f' }}{% else %}null{% endif %},
+            expected_cash: {% if report_data.cash_reconciliation.expected_cash is not None %}{{ report_data.cash_reconciliation.expected_cash|stringformat:'.2f' }}{% else %}null{% endif %},
+            counted_cash: {% if report_data.cash_reconciliation.actual_counted is not None %}{{ report_data.cash_reconciliation.actual_counted|stringformat:'.2f' }}{% else %}null{% endif %},
+            variance: {% if report_data.cash_reconciliation.variance is not None %}{{ report_data.cash_reconciliation.variance|stringformat:'.2f' }}{% else %}null{% endif %}
+        };
+
+        window.BUSINESS_SETTINGS = {
+            shop_name: "{{ business.name|escapejs }}",
+            thermal_receipt_width: {% if business_settings and business_settings.thermal_receipt_width == 58 %}58{% else %}80{% endif %},
+            thermal_auto_cut: true
+        };
+
         function thermalPrint() {
             window.print();
         }
 
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'p' || e.key === 'P') {
-                if (!e.target.matches('input, textarea, select')) {
-                    e.preventDefault();
-                    thermalPrint();
+        async function bluetoothPrintZReport() {
+            if (!window.BluetoothPrinter || !window.BluetoothPrinter.isSupported()) {
+                alert('Web Bluetooth is not supported in this browser. Please use Chrome or Edge over HTTPS / localhost.');
+                thermalPrint();
+                return;
+            }
+
+            try {
+                await window.BluetoothPrinter.printZReport(window.ZREPORT_DATA, window.BUSINESS_SETTINGS);
+            } catch (err) {
+                if (err.name !== 'NotFoundError' && !err.message.includes('User cancelled')) {
+                    alert(`Bluetooth Print Error: ${err.message}`);
                 }
             }
-            if (e.key === 'Escape') {
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.target.matches('input, textarea, select')) return;
+
+            const key = e.key.toUpperCase();
+            if (key === 'B') {
+                e.preventDefault();
+                bluetoothPrintZReport();
+            } else if (key === 'P') {
+                e.preventDefault();
+                thermalPrint();
+            } else if (e.key === 'Escape') {
                 window.history.back();
             }
         });

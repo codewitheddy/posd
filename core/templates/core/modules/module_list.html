@@ -1,0 +1,102 @@
+{% extends "core/base.html" %}
+
+{% block title %}Module Control Center | {{ company.name|default:"ERP Platform" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800 fw-bold">Installed Business Modules</h1>
+            <p class="text-muted small mb-0">Manage active modules, dependency health, and feature flags for {{ company.name }}</p>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for item in modules %}
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="{{ item.manifest.icon }} text-primary fs-4"></i>
+                        <div>
+                            <h5 class="mb-0 fw-bold">{{ item.manifest.name }}</h5>
+                            <span class="badge bg-light text-muted border">v{{ item.manifest.version }}</span>
+                            {% if item.manifest.is_core %}
+                                <span class="badge bg-dark">Core Platform</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        {% if item.is_enabled %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i>Disabled</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <p class="text-muted small mb-3">{{ item.manifest.description }}</p>
+
+                    <!-- Dependencies -->
+                    {% if item.manifest.dependencies %}
+                    <div class="mb-3">
+                        <span class="small fw-bold text-dark d-block mb-1">Dependencies:</span>
+                        {% for dep in item.manifest.dependencies %}
+                            <span class="badge bg-info text-dark me-1"><i class="bi bi-link-45deg me-1"></i>{{ dep }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Health Check Results -->
+                    {% if item.health_results %}
+                    <div class="mb-3">
+                        <span class="small fw-bold text-dark d-block mb-1">Health Checks:</span>
+                        {% for hr in item.health_results %}
+                            <div class="d-flex align-items-center small mb-1">
+                                {% if hr.passed %}
+                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                {% else %}
+                                    <i class="bi bi-x-circle-fill text-danger me-2"></i>
+                                {% endif %}
+                                <span>{{ hr.name }}: <span class="text-muted">{{ hr.message }}</span></span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if not item.deps_valid %}
+                    <div class="alert alert-warning small py-2 mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        Missing dependencies: {{ item.missing_deps|join:", " }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="card-footer bg-light d-flex justify-content-between align-items-center py-2">
+                    <span class="small text-muted">Key: <code>{{ item.manifest.key }}</code></span>
+
+                    {% if item.can_toggle %}
+                    <form method="post" action="{% url 'core_module_toggle' item.manifest.key %}">
+                        {% csrf_token %}
+                        {% if item.is_enabled %}
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="bi bi-power me-1"></i>Disable Module
+                            </button>
+                        {% else %}
+                            <button type="submit" class="btn btn-success btn-sm" {% if not item.deps_valid %}disabled{% endif %}>
+                                <i class="bi bi-check-lg me-1"></i>Enable Module
+                            </button>
+                        {% endif %}
+                    </form>
+                    {% else %}
+                        <span class="small text-muted"><i class="bi bi-lock-fill me-1"></i>System Protected</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

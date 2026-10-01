@@ -764,24 +764,85 @@
             </li>
             {% endif %}
 
-            {% if user_permissions.is_admin %}
+            {% if user_permissions.is_manager or user.is_superuser %}
+            <li class="nav-section">General Ledger &amp; Accounting</li>
+            <li>
+                <a href="{% url 'accounting_dashboard' %}" class="{% if '/accounting/' in request.path and 'accounts' not in request.path and 'journals' not in request.path and 'periods' not in request.path and 'trial-balance' not in request.path and 'income-statement' not in request.path and 'balance-sheet' not in request.path and 'tax' not in request.path %}active{% endif %}">
+                    <i class="bi bi-journal-bookmark" style="color: #38bdf8;"></i> Accounting Hub
+                    <span class="badge" style="background-color: #0284c7; color: white;">GL</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'accounting_account_list' %}" class="{% if '/accounting/accounts/' in request.path %}active{% endif %}">
+                    <i class="bi bi-diagram-3"></i> Chart of Accounts
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'accounting_journal_list' %}" class="{% if '/accounting/journals/' in request.path %}active{% endif %}">
+                    <i class="bi bi-journal-text"></i> Journal Entries
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'accounting_trial_balance' %}" class="{% if '/accounting/trial-balance/' in request.path %}active{% endif %}">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Trial Balance
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'accounting_income_statement' %}" class="{% if '/accounting/income-statement/' in request.path %}active{% endif %}">
+                    <i class="bi bi-graph-up-arrow"></i> Income Statement (P&amp;L)
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'accounting_balance_sheet' %}" class="{% if '/accounting/balance-sheet/' in request.path %}active{% endif %}">
+                    <i class="bi bi-pie-chart-fill"></i> Balance Sheet
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'accounting_vat_schedule' %}" class="{% if '/accounting/tax/vat/' in request.path %}active{% endif %}">
+                    <i class="bi bi-percent"></i> KRA VAT 3 Return
+                </a>
+            </li>
+            {% endif %}
+
+            {% if request.business or current_business %}
             <li class="nav-section">My Work</li>
             <li>
                 <a href="{% url 'hr_attendance_list' %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
                     <i class="bi bi-clock-history"></i> My Attendance
                 </a>
             </li>
+            <li>
+                <a href="{% url 'hr_leave_list' %}" class="{% if '/hr/leave/' in request.path %}active{% endif %}">
+                    <i class="bi bi-calendar-x"></i> My Leave
+                </a>
+            </li>
             {% endif %}
+
             {% if user_permissions.is_admin %}
             <li class="nav-section">HR &amp; Staff</li>
             <li>
-                <a href="{% url 'hr_dashboard' %}" class="{% if '/hr/' in request.path and 'department' not in request.path %}active{% endif %}">
-                    <i class="bi bi-person-badge"></i> HR Module
+                <a href="{% url 'hr_dashboard' %}" class="{% if '/hr/' in request.path and 'department' not in request.path and '/attendance/' not in request.path and '/leave/' not in request.path and '/payroll/' not in request.path and '/employees/' not in request.path and '/p9/' not in request.path and '/advances/' not in request.path and '/performance/' not in request.path and '/disciplinary/' not in request.path %}active{% endif %}">
+                    <i class="bi bi-speedometer2"></i> HR Dashboard
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_employee_list' %}" class="{% if '/hr/employees/' in request.path %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i> Staff Directory
                 </a>
             </li>
             <li>
                 <a href="{% url 'hr_attendance_list' %}" class="{% if '/hr/attendance/' in request.path %}active{% endif %}">
                     <i class="bi bi-clock-history"></i> Staff Attendance
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_leave_list' %}" class="{% if '/hr/leave/' in request.path %}active{% endif %}">
+                    <i class="bi bi-calendar-check"></i> Leave Management
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'hr_payroll_list' %}" class="{% if '/hr/payroll/' in request.path or '/payslip/' in request.path or '/hr/p9/' in request.path %}active{% endif %}">
+                    <i class="bi bi-cash-stack"></i> Payroll &amp; P9
                 </a>
             </li>
             <li>
@@ -958,15 +1019,31 @@
                     </div>
                     <i class="bi bi-chevron-down" style="font-size: 0.8rem; color: #858796;"></i>
                 </div>
-                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius: 12px;">
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius: 12px; min-width: 220px;">
+                    <li class="dropdown-header fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.5px;">Switch Workspace</li>
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'home_portal' %}">
+                            <i class="bi bi-grid-fill me-2 text-secondary"></i> Gateway Hub
+                        </a>
+                    </li>
                     {% if user_permissions.can_make_sales or user.is_superuser or user_permissions.is_admin or user_permissions.is_manager %}
                     <li>
-                        <a class="dropdown-item fw-semibold text-primary py-2" href="{% url 'pos_screen' %}">
-                            <i class="bi bi-cart-check-fill me-2"></i> Launch Point of Sale (POS)
+                        <a class="dropdown-item fw-semibold text-success py-2" href="{% url 'pos_screen' %}">
+                            <i class="bi bi-cart-check-fill me-2"></i> Cashier FrontOffice POS
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'hr_dashboard' %}" style="color: #4f46e5;">
+                            <i class="bi bi-people-fill me-2"></i> HR &amp; Workforce
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'accounting_dashboard' %}" style="color: #0284c7;">
+                            <i class="bi bi-journal-bookmark me-2"></i> Accounting &amp; General Ledger
                         </a>
                     </li>
                     <li><hr class="dropdown-divider"></li>
-                    {% endif %}
                     <li>
                         <a class="dropdown-item" href="{% url 'user_profile' %}">
                             <i class="bi bi-person me-2"></i> My Profile
@@ -1100,6 +1177,9 @@
     <!-- Offline Sync Scripts -->
     <script src="{% static 'js/offline-db.js' %}"></script>
     <script src="{% static 'js/sync-manager.js' %}"></script>
+    
+    <!-- Web Bluetooth ESC/POS Printing Engine -->
+    <script src="{% static 'js/pos-bluetooth-printer.js' %}"></script>
     
     <!-- Connection Status Indicator -->
     <div id="connection-status" class="connection-status online">

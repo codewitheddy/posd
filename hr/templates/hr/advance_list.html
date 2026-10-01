@@ -1,0 +1,51 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Staff Advances{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-wallet2 me-2 text-primary"></i>Staff Salary Advances</h1>
+    <p class="page-subtitle">Track advances and automatic monthly deductions against payroll runs.</p>
+  </div>
+  <a href="{% url 'hr_advance_create' %}" class="btn btn-hr-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Issue New Advance</a>
+</div>
+
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Employee</th>
+          <th>Date Taken</th>
+          <th>Original Amount</th>
+          <th>Monthly Deduction</th>
+          <th>Balance Remaining</th>
+          <th>Status</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in advances %}
+        <tr>
+          <td>
+            <div class="fw-bold">{{ a.employee.get_full_name }}</div>
+            <div class="text-muted small">{{ a.employee.job_title }}</div>
+          </td>
+          <td>{{ a.date_taken|date:"d M Y" }}</td>
+          <td><strong>KES {{ a.amount|floatformat:2 }}</strong></td>
+          <td class="text-danger">KES {{ a.deduction_per_month|floatformat:2 }} / mo</td>
+          <td class="fw-bold text-primary">KES {{ a.balance_remaining|floatformat:2 }}</td>
+          <td>
+            <span class="badge {% if a.status == 'settled' %}bg-success bg-opacity-15 text-success border border-success border-opacity-25{% else %}bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25{% endif %}">
+              {{ a.get_status_display }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ a.reason|truncatechars:40 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No staff advances currently recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

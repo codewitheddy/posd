@@ -1,0 +1,217 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Statement of Cash Flows (Indirect Method){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary text-white font-monospace">IFRS / IAS 7</span>
+            <span class="badge bg-light text-dark border">Statement of Cash Flows (Indirect Method)</span>
+        </div>
+        <h1><i class="bi bi-currency-exchange me-2 text-primary"></i>Cash Flow Statement</h1>
+        <p class="page-subtitle">Operating (Indirect with Working Capital), Investing, Financing Activities &amp; GL Cash Reconciliation.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="small text-muted fw-bold mb-0">Period:</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+            <span class="small text-muted">to</span>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+
+            {% if branches %}
+            <select name="branch" class="form-select form-select-sm">
+                <option value="">All Branches</option>
+                {% for b in branches %}
+                <option value="{{ b.pk }}" {% if branch and branch.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-repeat me-1"></i>Generate
+            </button>
+        </form>
+        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Print
+        </button>
+    </div>
+</div>
+
+<!-- Cash Flow Health & Equilibrium Banner -->
+<div class="card mb-4 border-0 shadow-sm {% if report.summary.is_reconciled %}bg-light border-start border-4 border-success{% else %}bg-light border-start border-4 border-danger{% endif %}">
+    <div class="card-body py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi {% if report.summary.is_reconciled %}bi-check-circle-fill text-success fs-3{% else %}bi-exclamation-octagon-fill text-danger fs-3{% endif %}"></i>
+            <div>
+                <div class="fw-bold fs-6">
+                    Cash Flow Reconciliation: 
+                    {% if report.summary.is_reconciled %}
+                    <span class="text-success">Perfect Cash Reconciliation ($\text{Calculated Ending Cash} = \text{GL Cash \& Bank (1010–1050)}$)</span>
+                    {% else %}
+                    <span class="text-danger">Unreconciled Difference (Diff: KES {{ report.summary.difference|floatformat:2 }})</span>
+                    {% endif %}
+                </div>
+                <div class="text-muted small">
+                    Beginning Cash: <strong class="text-dark font-monospace">KES {{ report.summary.beginning_cash|floatformat:2 }}</strong> | Net Change: <strong class="text-dark font-monospace">KES {{ report.summary.net_cash_change|floatformat:2 }}</strong> | Ending Cash: <strong class="text-dark font-monospace">KES {{ report.summary.ending_cash_actual|floatformat:2 }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="p-2 px-3 bg-white rounded border text-center">
+                <span class="small text-muted text-uppercase fw-bold">Operating</span>
+                <div class="font-monospace fw-bold {% if report.operating_activities.net_cash_from_operations >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    KES {{ report.operating_activities.net_cash_from_operations|floatformat:2 }}
+                </div>
+            </div>
+            <div class="p-2 px-3 bg-white rounded border text-center">
+                <span class="small text-muted text-uppercase fw-bold">Investing</span>
+                <div class="font-monospace fw-bold {% if report.investing_activities.net_cash_from_investing >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    KES {{ report.investing_activities.net_cash_from_investing|floatformat:2 }}
+                </div>
+            </div>
+            <div class="p-2 px-3 bg-white rounded border text-center">
+                <span class="small text-muted text-uppercase fw-bold">Financing</span>
+                <div class="font-monospace fw-bold {% if report.financing_activities.net_cash_from_financing >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    KES {{ report.financing_activities.net_cash_from_financing|floatformat:2 }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <span class="fw-bold fs-6">Statement of Cash Flows (IAS 7)</span>
+            <div class="small opacity-75">For the period: {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }} | Currency: KES</div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 70%;">Cash Flow Activity &amp; Line Item</th>
+                    <th class="text-end" style="width: 30%;">Amount (KES)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 1. CASH FLOWS FROM OPERATING ACTIVITIES -->
+                <tr class="table-primary fw-bold fs-6">
+                    <td colspan="2"><i class="bi bi-gear-wide-connected me-2"></i>1. CASH FLOWS FROM OPERATING ACTIVITIES</td>
+                </tr>
+                <tr>
+                    <td class="ps-4 fw-semibold">Net Profit / (Loss) Before Tax</td>
+                    <td class="text-end font-monospace fw-bold">KES {{ report.operating_activities.net_profit_before_tax|floatformat:2 }}</td>
+                </tr>
+
+                <!-- Non-Cash Adjustments -->
+                <tr class="table-light fw-bold">
+                    <td class="ps-4 text-muted small text-uppercase" colspan="2">Adjustments for Non-Cash Items:</td>
+                </tr>
+                <tr>
+                    <td class="ps-5 text-muted">Depreciation &amp; Amortization Addback</td>
+                    <td class="text-end font-monospace">KES {{ report.operating_activities.depreciation_addback|floatformat:2 }}</td>
+                </tr>
+
+                <!-- Working Capital Changes -->
+                <tr class="table-light fw-bold">
+                    <td class="ps-4 text-muted small text-uppercase" colspan="2">Movements in Working Capital:</td>
+                </tr>
+                <tr>
+                    <td class="ps-5 text-muted">(Increase) / Decrease in Accounts Receivable (1100)</td>
+                    <td class="text-end font-monospace {% if report.operating_activities.delta_ar < 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ report.operating_activities.delta_ar|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="ps-5 text-muted">(Increase) / Decrease in Inventory (1200)</td>
+                    <td class="text-end font-monospace {% if report.operating_activities.delta_inv < 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ report.operating_activities.delta_inv|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="ps-5 text-muted">(Increase) / Decrease in Prepayments &amp; Other Receivables</td>
+                    <td class="text-end font-monospace {% if report.operating_activities.delta_prepayments < 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ report.operating_activities.delta_prepayments|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="ps-5 text-muted">Increase / (Decrease) in Accounts Payable (2000)</td>
+                    <td class="text-end font-monospace {% if report.operating_activities.delta_ap < 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ report.operating_activities.delta_ap|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="ps-5 text-muted">Increase / (Decrease) in Statutory &amp; Accrued Liabilities (2100–2210)</td>
+                    <td class="text-end font-monospace {% if report.operating_activities.delta_statutory_and_accruals < 0 %}text-danger{% else %}text-success{% endif %}">
+                        KES {{ report.operating_activities.delta_statutory_and_accruals|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <tr class="fw-bold border-bottom table-info fs-6">
+                    <td>NET CASH GENERATED FROM / (USED IN) OPERATING ACTIVITIES</td>
+                    <td class="text-end font-monospace {% if report.operating_activities.net_cash_from_operations >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        KES {{ report.operating_activities.net_cash_from_operations|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <!-- 2. CASH FLOWS FROM INVESTING ACTIVITIES -->
+                <tr class="table-primary fw-bold fs-6">
+                    <td colspan="2"><i class="bi bi-building-add me-2"></i>2. CASH FLOWS FROM INVESTING ACTIVITIES</td>
+                </tr>
+                <tr>
+                    <td class="ps-4 text-muted">Additions to Property, Plant &amp; Equipment (PPE)</td>
+                    <td class="text-end font-monospace {% if report.investing_activities.ppe_additions < 0 %}text-danger{% endif %}">
+                        KES {{ report.investing_activities.ppe_additions|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr class="fw-bold border-bottom table-info fs-6">
+                    <td>NET CASH USED IN INVESTING ACTIVITIES</td>
+                    <td class="text-end font-monospace {% if report.investing_activities.net_cash_from_investing >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        KES {{ report.investing_activities.net_cash_from_investing|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <!-- 3. CASH FLOWS FROM FINANCING ACTIVITIES -->
+                <tr class="table-primary fw-bold fs-6">
+                    <td colspan="2"><i class="bi bi-cash-coin me-2"></i>3. CASH FLOWS FROM FINANCING ACTIVITIES</td>
+                </tr>
+                <tr>
+                    <td class="ps-4 text-muted">Owner Drawings / Distributions Paid</td>
+                    <td class="text-end font-monospace {% if report.financing_activities.drawings_paid < 0 %}text-danger{% endif %}">
+                        KES {{ report.financing_activities.drawings_paid|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="ps-4 text-muted">Net Borrowing / (Repayment) of Long-Term Loans</td>
+                    <td class="text-end font-monospace {% if report.financing_activities.loan_delta < 0 %}text-danger{% endif %}">
+                        KES {{ report.financing_activities.loan_delta|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr class="fw-bold border-bottom table-info fs-6">
+                    <td>NET CASH GENERATED FROM / (USED IN) FINANCING ACTIVITIES</td>
+                    <td class="text-end font-monospace {% if report.financing_activities.net_cash_from_financing >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        KES {{ report.financing_activities.net_cash_from_financing|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <!-- 4. NET CHANGE IN CASH & RECONCILIATION -->
+                <tr class="table-secondary fw-bold fs-6">
+                    <td>NET INCREASE / (DECREASE) IN CASH &amp; CASH EQUIVALENTS</td>
+                    <td class="text-end font-monospace {% if report.summary.net_cash_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        KES {{ report.summary.net_cash_change|floatformat:2 }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="ps-4">Cash &amp; Cash Equivalents at Beginning of Period</td>
+                    <td class="text-end font-monospace">KES {{ report.summary.beginning_cash|floatformat:2 }}</td>
+                </tr>
+                <tr class="table-dark fw-bold fs-5">
+                    <td>CASH &amp; CASH EQUIVALENTS AT END OF PERIOD (1010–1050)</td>
+                    <td class="text-end font-monospace text-warning">KES {{ report.summary.ending_cash_actual|floatformat:2 }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

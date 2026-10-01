@@ -1,0 +1,480 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+    <title>{% block title %}HR &amp; Payroll Portal{% endblock %} — {{ request.business.name|default:"Enterprise ERP" }}</title>
+    
+    <!-- Bootstrap 5 & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --hr-primary: #4f46e5;
+            --hr-primary-hover: #4338ca;
+            --hr-dark: #1e1b4b;
+            --hr-sidebar-bg: #0f172a;
+            --hr-sidebar-hover: #1e293b;
+            --hr-sidebar-width: 260px;
+            --hr-topbar-height: 60px;
+            --bg-body: #f8f9fc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .hr-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: var(--hr-sidebar-width);
+            background-color: var(--hr-sidebar-bg);
+            color: #f1f5f9;
+            z-index: 1040;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            border-right: 1px solid #1e293b;
+        }
+
+        .hr-sidebar-brand {
+            padding: 18px 20px;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: #ffffff;
+        }
+
+        .hr-brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background-color: var(--hr-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #ffffff;
+            flex-shrink: 0;
+        }
+
+        .hr-brand-text {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+
+        .hr-brand-sub {
+            font-size: 0.72rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .hr-nav-section-title {
+            padding: 16px 20px 6px;
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            color: #64748b;
+        }
+
+        .hr-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 20px;
+            color: #cbd5e1;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .hr-nav-item:hover {
+            background-color: var(--hr-sidebar-hover);
+            color: #ffffff;
+        }
+
+        .hr-nav-item.active {
+            background-color: #1e293b;
+            color: #ffffff;
+            border-left-color: var(--hr-primary);
+        }
+
+        .hr-nav-item i {
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+            color: #94a3b8;
+        }
+
+        .hr-nav-item:hover i, .hr-nav-item.active i {
+            color: #ffffff;
+        }
+
+        /* Topbar & Main Wrapper */
+        .hr-main-wrapper {
+            margin-left: var(--hr-sidebar-width);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @media (max-width: 991.98px) {
+            .hr-sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+            }
+            .hr-sidebar.show {
+                transform: translateX(0);
+            }
+            .hr-main-wrapper {
+                margin-left: 0;
+            }
+        }
+
+        .hr-topbar {
+            height: var(--hr-topbar-height);
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+
+        .hr-content-area {
+            flex: 1;
+            padding: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .hr-content-area {
+                padding: 16px;
+            }
+        }
+
+        /* Generic HR Cards & Badges */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .page-subtitle {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            margin-bottom: 0;
+        }
+
+        .form-card, .table-card, .stat-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .stat-icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+
+        .stat-label {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .stat-value {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1.2;
+        }
+
+        .btn-hr-primary {
+            background-color: var(--hr-primary);
+            color: #ffffff;
+            font-weight: 600;
+            border: 1px solid var(--hr-primary);
+        }
+        .btn-hr-primary:hover {
+            background-color: var(--hr-primary-hover);
+            color: #ffffff;
+        }
+
+        .workspace-switcher-btn {
+            background-color: var(--bg-subtle);
+            border: 1px solid var(--border-color);
+            font-size: 0.8125rem;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+            text-decoration: none;
+        }
+        .workspace-switcher-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-main);
+        }
+
+        .kenya-flag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #334155;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="hr-sidebar" id="hrSidebar">
+        <a href="{% url 'hr_dashboard' %}" class="hr-sidebar-brand">
+            <div class="hr-brand-icon">
+                <i class="bi bi-people-fill"></i>
+            </div>
+            <div>
+                <div class="hr-brand-text">{{ request.business.name|default:"Enterprise POS" }}</div>
+                <div class="hr-brand-sub">HR &amp; Payroll Workspace</div>
+            </div>
+        </a>
+
+        <!-- Navigation Sections -->
+        <div class="hr-nav-section-title">Core Operations</div>
+        <a href="{% url 'hr_dashboard' %}" class="hr-nav-item {% if request.resolver_match.url_name == 'hr_dashboard' %}active{% endif %}">
+            <i class="bi bi-speedometer2"></i> <span>HR Dashboard</span>
+        </a>
+        <a href="{% url 'hr_employee_list' %}" class="hr-nav-item {% if 'employee' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-people"></i> <span>Staff Directory</span>
+        </a>
+        <a href="{% url 'hr_department_list' %}" class="hr-nav-item {% if 'department' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-diagram-3"></i> <span>Departments</span>
+        </a>
+
+        <div class="hr-nav-section-title">Time &amp; Leave</div>
+        <a href="{% url 'hr_attendance_list' %}" class="hr-nav-item {% if 'attendance' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-clock-history"></i> <span>Attendance &amp; Shifts</span>
+        </a>
+        <a href="{% url 'hr_leave_list' %}" class="hr-nav-item {% if 'leave' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-calendar-check"></i> <span>Leave Management</span>
+        </a>
+        <a href="{% url 'hr_performance_list' %}" class="hr-nav-item {% if 'performance' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-award"></i> <span>Performance</span>
+        </a>
+
+        <div class="hr-nav-section-title">Kenyan Payroll &amp; Tax</div>
+        <a href="{% url 'hr_payroll_list' %}" class="hr-nav-item {% if 'payroll' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-cash-stack"></i> <span>Payroll Processing</span>
+        </a>
+        <a href="{% url 'hr_advance_list' %}" class="hr-nav-item {% if 'advance' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-wallet2"></i> <span>Staff Advances</span>
+        </a>
+        <a href="{% url 'hr_p9_list' %}" class="hr-nav-item {% if 'p9' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-file-earmark-spreadsheet"></i> <span>Tax Form P9 Cards</span>
+        </a>
+        <a href="{% url 'hr_statutory_returns' %}" class="hr-nav-item {% if 'returns' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-file-earmark-arrow-down"></i> <span>Statutory Returns</span>
+        </a>
+        <a href="{% url 'hr_statutory_rules' %}" class="hr-nav-item {% if 'rules' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-sliders"></i> <span>Tax Bands &amp; Rules</span>
+        </a>
+
+        <div class="hr-nav-section-title">Compliance &amp; Governance</div>
+        <a href="{% url 'hr_disciplinary_list' %}" class="hr-nav-item {% if 'disciplinary' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-shield-exclamation"></i> <span>Disciplinary &amp; Hearings</span>
+        </a>
+        <a href="{% url 'hr_consent_list' %}" class="hr-nav-item {% if 'consent' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-shield-check"></i> <span>Kenya DPA 2019 Privacy</span>
+        </a>
+
+        <div class="hr-nav-section-title">Switch Workspace</div>
+        <a href="{% url 'dashboard' %}" class="hr-nav-item">
+            <i class="bi bi-speedometer2 text-primary"></i> <span>Backoffice Hub</span>
+        </a>
+        <a href="{% url 'accounting_dashboard' %}" class="hr-nav-item">
+            <i class="bi bi-journal-bookmark" style="color: #38bdf8;"></i> <span>Accounting &amp; GL</span>
+        </a>
+        <a href="{% url 'pos_screen' %}" class="hr-nav-item">
+            <i class="bi bi-cart-check text-success"></i> <span>POS Terminal</span>
+        </a>
+        <a href="{% url 'home' %}" class="hr-nav-item">
+            <i class="bi bi-house-door text-secondary"></i> <span>Gateway Portal</span>
+        </a>
+
+        <div class="mt-auto p-3 border-top border-dark">
+            <div class="d-flex align-items-center justify-content-between">
+                <span class="kenya-flag-badge">
+                    <i class="bi bi-geo-alt-fill text-danger"></i> Kenya (KES)
+                </span>
+                <span class="badge bg-secondary text-light font-monospace small">v2.0.0</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="hr-main-wrapper">
+        <!-- Topbar -->
+        <header class="hr-topbar">
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-outline-secondary d-lg-none" onclick="document.getElementById('hrSidebar').classList.toggle('show')">
+                    <i class="bi bi-list"></i>
+                </button>
+                
+                <!-- Workspace Selector / Switcher -->
+                <div class="dropdown">
+                    <button class="workspace-switcher-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-grid-fill text-primary"></i>
+                        <span>Workspace: <strong>HR &amp; Payroll</strong></span>
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        <li><h6 class="dropdown-header">Switch Workspace</h6></li>
+                        <li>
+                            <a class="dropdown-item py-2" href="{% url 'home' %}">
+                                <i class="bi bi-house-door me-2 text-secondary"></i> Enterprise Gateway Hub
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item py-2" href="{% url 'dashboard' %}">
+                                <i class="bi bi-speedometer2 me-2 text-primary"></i> Backoffice Central Controller
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item py-2" href="{% url 'pos_screen' %}">
+                                <i class="bi bi-cart-check me-2 text-success"></i> Cashier Front Office POS
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item py-2" href="{% url 'accounting_dashboard' %}">
+                                <i class="bi bi-journal-bookmark me-2" style="color: #0284c7;"></i> Accounting &amp; General Ledger
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Direct Quick Jump Action Links -->
+                <div class="d-none d-md-flex align-items-center gap-2 ms-2">
+                    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" style="font-weight: 600; font-size: 0.8125rem;">
+                        <i class="bi bi-speedometer2"></i> Backoffice
+                    </a>
+                    <a href="{% url 'accounting_dashboard' %}" class="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1" style="color: #0284c7; border-color: #0284c7; font-weight: 600; font-size: 0.8125rem;">
+                        <i class="bi bi-journal-bookmark"></i> Accounting
+                    </a>
+                    <a href="{% url 'pos_screen' %}" class="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1" style="font-weight: 600; font-size: 0.8125rem;">
+                        <i class="bi bi-cart-check"></i> POS Terminal
+                    </a>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-muted small d-none d-md-inline">
+                    <i class="bi bi-building me-1"></i>{{ request.branch.name|default:request.business.name }}
+                </span>
+                
+                <!-- User Profile & Sign Out -->
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-light border d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-person-circle text-primary"></i>
+                        <span class="fw-semibold">{{ request.user.first_name|default:request.user.username }}</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                        <li><h6 class="dropdown-header">Signed in as <strong>{{ request.user.username }}</strong></h6></li>
+                        <li><a class="dropdown-item" href="{% url 'dashboard' %}"><i class="bi bi-speedometer2 me-2"></i>Backoffice Hub</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounting_dashboard' %}"><i class="bi bi-journal-bookmark me-2"></i>Accounting</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main class="hr-content-area">
+            {% if messages %}
+                <div class="messages-container mb-3">
+                    {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show shadow-sm" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

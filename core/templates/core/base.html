@@ -1,0 +1,236 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Backoffice Platform{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --topbar-height: 62px;
+            --primary-color: #224195;
+            --sidebar-bg: #1a1514;
+            --sidebar-hover: #2a2827;
+            --accent-gold: #cd8a4c;
+            --body-bg: #f8f9fc;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--body-bg);
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+
+        /* Sidebar Styling */
+        .platform-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-bg);
+            color: #e0e0e0;
+            z-index: 1040;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+
+        .platform-sidebar .sidebar-brand {
+            height: var(--topbar-height);
+            display: flex;
+            align-items: center;
+            padding: 0 1.25rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-weight: 700;
+            font-size: 1.15rem;
+            color: #fff;
+            text-decoration: none;
+        }
+
+        .platform-sidebar .sidebar-brand i {
+            color: var(--accent-gold);
+            margin-right: 0.6rem;
+            font-size: 1.3rem;
+        }
+
+        .sidebar-section-title {
+            padding: 1rem 1.25rem 0.4rem;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #8c8887;
+            font-weight: 700;
+        }
+
+        .sidebar-nav-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-nav-item a {
+            display: flex;
+            align-items: center;
+            padding: 0.65rem 1.25rem;
+            color: #c5c3c2;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.15s ease;
+        }
+
+        .sidebar-nav-item a:hover {
+            background-color: var(--sidebar-hover);
+            color: #ffffff;
+            padding-left: 1.45rem;
+        }
+
+        .sidebar-nav-item a.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+            font-weight: 600;
+            border-left: 4px solid var(--accent-gold);
+        }
+
+        .sidebar-nav-item a i {
+            width: 1.5rem;
+            font-size: 1.1rem;
+            margin-right: 0.6rem;
+            color: inherit;
+        }
+
+        /* Topbar Header */
+        .platform-topbar {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            height: var(--topbar-height);
+            background: #ffffff;
+            border-bottom: 1px solid #e3e6f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            z-index: 1030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+        }
+
+        /* Main Content Wrapper */
+        .platform-main {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--topbar-height);
+            padding: 1.75rem;
+            min-height: calc(100vh - var(--topbar-height));
+        }
+
+        .badge-module {
+            font-size: 0.75rem;
+            padding: 0.3em 0.6em;
+            border-radius: 4px;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="platform-sidebar">
+        <a href="{% url 'core_dashboard' %}" class="sidebar-brand">
+            <i class="bi bi-layers-fill"></i>
+            <span>{{ request.company.name|default:"Platform Core" }}</span>
+        </a>
+
+        {% load core_tags %}
+        {% get_platform_navigation as nav_sections %}
+
+        {% for section in nav_sections %}
+            <div class="sidebar-section-title">{{ section.title }}</div>
+            <ul class="sidebar-nav-list">
+                {% for item in section.items %}
+                    <li class="sidebar-nav-item">
+                        <a href="{% url item.url_name %}" class="{% if request.resolver_match.url_name == item.url_name %}active{% endif %}">
+                            <i class="{{ item.icon }}"></i>
+                            <span class="flex-grow-1">{{ item.title }}</span>
+                            {% if item.badge %}
+                                <span class="{{ item.badge_class }}">{{ item.badge }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endfor %}
+
+        <!-- System Administration Links -->
+        <div class="sidebar-section-title">Platform</div>
+        <ul class="sidebar-nav-list">
+            <li class="sidebar-nav-item">
+                <a href="{% url 'core_module_list' %}" class="{% if 'modules' in request.path %}active{% endif %}">
+                    <i class="bi bi-puzzle"></i>
+                    <span>Modules Manager</span>
+                </a>
+            </li>
+            <li class="sidebar-nav-item">
+                <a href="{% url 'admin:index' %}" target="_blank">
+                    <i class="bi bi-shield-lock"></i>
+                    <span>Django Admin</span>
+                </a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Topbar -->
+    <header class="platform-topbar">
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-muted small">
+                <i class="bi bi-building me-1"></i>
+                <strong>{{ request.company.name|default:"Default Company" }}</strong>
+            </span>
+            {% if request.branch %}
+                <span class="badge bg-light text-dark border">
+                    <i class="bi bi-geo-alt-fill text-primary me-1"></i>{{ request.branch.name }}
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle me-1"></i>{{ request.user.username }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow">
+                    <li><h6 class="dropdown-header">Signed in as {{ request.user.get_full_name|default:request.user.username }}</h6></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{% url 'admin:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="platform-main">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

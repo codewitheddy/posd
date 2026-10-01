@@ -1,0 +1,68 @@
+{% extends "inventory/base_inventory.html" %}
+
+{% block title %}Inter-Warehouse Transfers{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Inter-Warehouse Stock Transfers</h3>
+        <p class="text-muted mb-0">Track and dispatch inventory movements between primary warehouses and store branches.</p>
+    </div>
+    <a href="{% url 'inventory_transfer_create' %}" class="btn btn-inv-primary">
+        <i class="bi bi-arrow-left-right me-1"></i> New Transfer
+    </a>
+</div>
+
+<div class="inv-table-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr class="small text-muted text-uppercase">
+                    <th>Posting Date</th>
+                    <th>Warehouse</th>
+                    <th>Direction</th>
+                    <th>Product</th>
+                    <th>Transfer Ref</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Unit Cost</th>
+                    <th class="text-end">Balance Qty</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trf in transfers %}
+                <tr>
+                    <td class="font-mono small">{{ trf.posting_date|date:"Y-m-d" }} {{ trf.posting_time|time:"H:i" }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ trf.warehouse.code }}</span></td>
+                    <td>
+                        {% if trf.voucher_type == 'stock_transfer_in' %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-arrow-down-left me-1"></i>Inbound Received</span>
+                        {% else %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-arrow-up-right me-1"></i>Outbound Dispatched</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="fw-semibold text-dark">{{ trf.product.name }}</div>
+                        <div class="small text-muted font-mono">{{ trf.product.product_code|default:"" }}</div>
+                    </td>
+                    <td class="font-mono small fw-bold">{{ trf.voucher_no }}</td>
+                    <td class="text-end font-mono fw-bold {% if trf.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {% if trf.quantity > 0 %}+{% endif %}{{ trf.quantity|floatformat:4 }}
+                    </td>
+                    <td class="text-end font-mono small text-muted">KES {{ trf.unit_cost|floatformat:2 }}</td>
+                    <td class="text-end font-mono fw-bold">{{ trf.balance_quantity|floatformat:4 }}</td>
+                    <td class="small text-muted">{{ trf.created_by.username|default:"System" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center py-5 text-muted">
+                        <i class="bi bi-arrow-left-right fs-1 d-block mb-2 text-muted"></i>
+                        No stock transfers recorded yet. Click <strong>New Transfer</strong> to move goods.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

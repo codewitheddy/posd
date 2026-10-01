@@ -83,6 +83,13 @@ def on_sale_saved(sender, instance, created, **kwargs):
         elif p.stock_quantity <= p.low_stock_threshold:
             dispatch_event('product.low_stock', _product_data(p), instance.business)
 
+    # Sync to ERP Stock Ledger via Strangler Adapter
+    try:
+        from .services.pos_inventory_adapter import POSInventoryAdapter
+        POSInventoryAdapter.sync_sale(instance)
+    except Exception:
+        pass
+
 
 @receiver(post_save, sender='pos.SaleReturn')
 def on_sale_returned(sender, instance, created, **kwargs):
@@ -101,6 +108,13 @@ def on_sale_returned(sender, instance, created, **kwargs):
         'refund_method': instance.refund_method.name if instance.refund_method else None,
     }
     dispatch_event('sale.refunded', data, instance.original_sale.business)
+
+    # Sync to ERP Stock Ledger via Strangler Adapter
+    try:
+        from .services.pos_inventory_adapter import POSInventoryAdapter
+        POSInventoryAdapter.sync_sale_return(instance)
+    except Exception:
+        pass
 
 
 @receiver(post_save, sender='pos.SalePayment')
@@ -157,6 +171,13 @@ def on_purchase_saved(sender, instance, created, **kwargs):
         'status': instance.status,
     }
     dispatch_event(event, data, instance.business)
+
+    if instance.status == 'received':
+        try:
+            from .services.pos_inventory_adapter import POSInventoryAdapter
+            POSInventoryAdapter.sync_purchase_receipt(instance)
+        except Exception:
+            pass
 
 
 @receiver(post_save, sender='pos.Customer')

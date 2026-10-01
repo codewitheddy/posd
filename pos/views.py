@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.db.models import Sum, Count, Q, F
+from django.db.models import Sum, Count, Q, F, Value, DecimalField
 from django.db import models, IntegrityError, transaction
 from django.db.models.functions import Coalesce, TruncHour, ExtractHour
 from django.http import HttpResponse, JsonResponse
@@ -13,7 +13,8 @@ from .models import (
     PurchaseItem, Customer, SupplierPayment, PaymentAllocation, ActivityLog,
     SalePayment, Shift, Business, BusinessMembership, PaymentMethod, BusinessSettings,
     GoodsReturnedNote, GoodsReturnedNoteItem, GoodsReceivedNote, GoodsReceivedNoteItem, DayClosureReport,
-    Branch, BranchStock, StockMovement, VATCode, Brand, UnitOfMeasurement
+    Branch, BranchStock, StockMovement, VATCode, Brand, UnitOfMeasurement,
+    _get_or_create_core_company_and_branch
 )
 from .decorators import business_required, business_permission_required, feature_required
 from reportlab.lib.pagesizes import letter, A4
@@ -3076,11 +3077,7 @@ def complete_sale(request, slug=None):
                     
                     if getattr(request, 'branch', None):
                         from .branch_services import BranchStockService
-                        try:
-                            BranchStockService.deduct(request.branch, item['product'], item['quantity'])
-                        except Exception as b_err:
-                            import logging
-                            logging.getLogger(__name__).warning(f"Branch stock deduction logged: {b_err}")
+                        BranchStockService.deduct(request.branch, item['product'], item['quantity'])
 
                     StockAdjustment.objects.create(
                         product=item['product'],
@@ -4171,16 +4168,46 @@ def low_stock_alert(request, slug=None):
 
 @business_required
 def supplier_list(request, slug=None):
-    """List all suppliers"""
-    suppliers = Supplier.objects.filter(business=request.business).all()
-    
-    # Add purchase statistics for each supplier
+    """List all suppliers with pagination and fast bulk aggregations"""
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from django.db.models import Sum, Count, Q
+    from django.db.models.functions import Coalesce
+
+    suppliers_qs = Supplier.objects.filter(business=request.business).annotate(
+        annotated_purchases_amount=Coalesce(
+            Sum('purchases__total_amount', filter=Q(purchases__status__in=['received', 'closed', 'ordered', 'sent', 'partially_received'])),
+            Decimal('0.00')
+        ),
+        annotated_purchases_count=Count('purchases')
+    ).order_by('name')
+
+    search = request.GET.get('search', '').strip()
+    if search:
+        suppliers_qs = suppliers_qs.filter(
+            Q(name__icontains=search) |
+            Q(contact_person__icontains=search) |
+            Q(email__icontains=search) |
+            Q(phone__icontains=search)
+        )
+
+    per_page = int(request.GET.get('per_page', 25))
+    paginator = Paginator(suppliers_qs, per_page)
+    page = request.GET.get('page', 1)
+    try:
+        suppliers = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        suppliers = paginator.page(1)
+
     for supplier in suppliers:
-        supplier.total_purchases_amount = supplier.total_purchases()
-        supplier.purchases_count = supplier.purchase_count()
-    
+        supplier.total_purchases_amount = getattr(supplier, 'annotated_purchases_amount', Decimal('0.00'))
+        supplier.purchases_count = getattr(supplier, 'annotated_purchases_count', 0)
+
     context = {
         'suppliers': suppliers,
+        'search': search,
+        'paginator': paginator,
+        'page_obj': suppliers,
+        'is_paginated': suppliers.has_other_pages(),
     }
     return render(request, 'pos/supplier_list.html', context)
 
@@ -4366,8 +4393,10 @@ def supplier_delete(request, slug=None, pk=None):
 
 @business_required
 def purchase_list(request, slug=None):
-    """List all purchases"""
-    purchases = Purchase.objects.filter(business=request.business).select_related('supplier')
+    """List all purchases with filtering and pagination"""
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    purchases_qs = Purchase.objects.filter(business=request.business).select_related('supplier')
 
     # Filters
     status_filter = request.GET.get('status', '').strip()
@@ -4378,25 +4407,25 @@ def purchase_list(request, slug=None):
     sort_by = request.GET.get('sort', 'newest').strip()
 
     if status_filter:
-        purchases = purchases.filter(status=status_filter)
+        purchases_qs = purchases_qs.filter(status=status_filter)
 
     if supplier_filter:
-        purchases = purchases.filter(supplier_id=supplier_filter)
+        purchases_qs = purchases_qs.filter(supplier_id=supplier_filter)
 
     if from_date:
         try:
-            purchases = purchases.filter(date__date__gte=datetime.strptime(from_date, '%Y-%m-%d').date())
+            purchases_qs = purchases_qs.filter(date__date__gte=datetime.strptime(from_date, '%Y-%m-%d').date())
         except ValueError:
             pass
 
     if to_date:
         try:
-            purchases = purchases.filter(date__date__lte=datetime.strptime(to_date, '%Y-%m-%d').date())
+            purchases_qs = purchases_qs.filter(date__date__lte=datetime.strptime(to_date, '%Y-%m-%d').date())
         except ValueError:
             pass
 
     if search:
-        purchases = purchases.filter(
+        purchases_qs = purchases_qs.filter(
             models.Q(purchase_number__icontains=search) |
             models.Q(supplier__name__icontains=search)
         )
@@ -4407,7 +4436,15 @@ def purchase_list(request, slug=None):
         'amount_desc': '-total_amount',
         'amount_asc': 'total_amount',
     }
-    purchases = purchases.order_by(sort_map.get(sort_by, '-date'))
+    purchases_qs = purchases_qs.order_by(sort_map.get(sort_by, '-date'))
+
+    per_page = int(request.GET.get('per_page', 25))
+    paginator = Paginator(purchases_qs, per_page)
+    page = request.GET.get('page', 1)
+    try:
+        purchases = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        purchases = paginator.page(1)
 
     context = {
         'purchases': purchases,
@@ -4418,6 +4455,9 @@ def purchase_list(request, slug=None):
         'search': search,
         'sort_by': sort_by,
         'suppliers': Supplier.objects.filter(business=request.business, is_active=True).order_by('name'),
+        'paginator': paginator,
+        'page_obj': purchases,
+        'is_paginated': purchases.has_other_pages(),
     }
     return render(request, 'pos/purchase_list.html', context)
 
@@ -4487,9 +4527,9 @@ def purchase_create(request, slug=None):
                     product = get_object_or_404(Product, pk=product_id, business=request.business)
 
                     try:
-                        quantity = int(qty_raw)
-                        unit_cost = Decimal(cost_raw)
-                        discount = Decimal(discount_raw)
+                        quantity = Decimal(str(qty_raw))
+                        unit_cost = Decimal(str(cost_raw))
+                        discount = Decimal(str(discount_raw))
                     except (ValueError, InvalidOperation):
                         raise ValueError(f'Invalid quantity/cost/discount value for {product.name}.')
 
@@ -4628,10 +4668,10 @@ def purchase_receive(request, slug=None, pk=None):
             batch_number = request.POST.get(f'batch_{item.id}', '').strip()
 
             try:
-                qty_received = int(qty_received_raw)
-                qty_damaged = int(qty_damaged_raw)
-            except (TypeError, ValueError):
-                messages.error(request, f'{item.product.name}: quantities must be valid whole numbers!')
+                qty_received = Decimal(str(qty_received_raw))
+                qty_damaged = Decimal(str(qty_damaged_raw))
+            except (TypeError, ValueError, InvalidOperation):
+                messages.error(request, f'{item.product.name}: quantities must be valid numbers!')
                 has_errors = True
                 break
             
@@ -4868,16 +4908,32 @@ def purchase_cancel(request, slug=None, pk=None):
 @can_manage_purchases
 @require_POST
 def purchase_submit(request, slug=None, pk=None):
-    """Submit a draft PO for approval"""
+    """Submit a draft PO for approval (integrates with multi-level workflow engine if configured)."""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     if purchase.status not in ('draft', 'pending'):
         messages.error(request, 'Only draft purchase orders can be submitted for approval.')
         return redirect('purchase_detail', slug=slug, pk=pk)
+
+    company, _ = _get_or_create_core_company_and_branch(request.business)
+    workflow_req = None
+    if company:
+        try:
+            from core.workflows.engine import submit_for_approval
+            from core.models.workflows import WorkflowDefinition
+            if WorkflowDefinition.objects.filter(company=company, code='purchase_order', is_active=True).exists():
+                workflow_req = submit_for_approval(purchase, 'purchase_order', request.user, company=company)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Could not create workflow request for PO %s: %s", purchase.purchase_number, e)
+
     purchase.status = 'pending_approval'
     purchase.submitted_by = request.user
     purchase.submitted_at = timezone.now()
     purchase.save()
-    messages.success(request, f'{purchase.purchase_number} submitted for approval.')
+    if workflow_req and workflow_req.current_step:
+        messages.success(request, f'{purchase.purchase_number} submitted for approval ({workflow_req.current_step.name}).')
+    else:
+        messages.success(request, f'{purchase.purchase_number} submitted for approval.')
     return redirect('purchase_detail', slug=slug, pk=pk)
 
 
@@ -4886,16 +4942,45 @@ def purchase_submit(request, slug=None, pk=None):
 @can_manage_purchases
 @require_POST
 def purchase_approve(request, slug=None, pk=None):
-    """Approve a PO that is pending approval"""
+    """Approve a PO pending approval (advances workflow step or marks approved)."""
     purchase = get_object_or_404(Purchase, business=request.business, pk=pk)
     if purchase.status != 'pending_approval':
         messages.error(request, 'Only purchase orders pending approval can be approved.')
         return redirect('purchase_detail', slug=slug, pk=pk)
-    purchase.status = 'approved'
-    purchase.approved_by = request.user
-    purchase.approved_at = timezone.now()
-    purchase.save()
-    messages.success(request, f'{purchase.purchase_number} approved.')
+
+    company, _ = _get_or_create_core_company_and_branch(request.business)
+    processed_via_engine = False
+    if company:
+        try:
+            from core.workflows.engine import process_approval
+            from core.models.workflows import ApprovalRequest
+            from django.contrib.contenttypes.models import ContentType
+            ct = ContentType.objects.get_for_model(purchase)
+            appr_req = ApprovalRequest.objects.filter(
+                content_type=ct, object_id=str(purchase.pk), status=ApprovalRequest.STATUS_PENDING
+            ).first()
+            if appr_req:
+                res = process_approval(appr_req.id, request.user, 'approve')
+                processed_via_engine = True
+                if res.status == ApprovalRequest.STATUS_APPROVED:
+                    purchase.status = 'approved'
+                    purchase.approved_by = request.user
+                    purchase.approved_at = timezone.now()
+                    purchase.save()
+                    messages.success(request, f'{purchase.purchase_number} has received final approval.')
+                else:
+                    messages.info(request, f'{purchase.purchase_number} approval recorded. Advanced to {res.current_step.name}.')
+                return redirect('purchase_detail', slug=slug, pk=pk)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Workflow processing exception for PO %s: %s", purchase.purchase_number, e)
+
+    if not processed_via_engine:
+        purchase.status = 'approved'
+        purchase.approved_by = request.user
+        purchase.approved_at = timezone.now()
+        purchase.save()
+        messages.success(request, f'{purchase.purchase_number} approved.')
     return redirect('purchase_detail', slug=slug, pk=pk)
 
 
@@ -5247,7 +5332,7 @@ def logout_view(request):
     
     auth_logout(request)
     messages.success(request, 'You have been logged out successfully')
-    return redirect('login')
+    return redirect('home')
 
 
 # ==================== PASSWORD RESET ====================
@@ -6262,19 +6347,26 @@ from .models import Customer
 
 @business_required
 def customer_list(request, slug=None):
-    """List all customers"""
+    """List all customers with pagination and aggregated metrics"""
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from django.db.models import Count, Q
+
     all_customers = Customer.objects.filter(business=request.business)
-    customers = all_customers
     
-    # Get counts by type for statistics
-    regular_count = all_customers.filter(customer_type='regular').count()
-    vip_count = all_customers.filter(customer_type='vip').count()
-    wholesale_count = all_customers.filter(customer_type='wholesale').count()
+    # Combined single-query aggregation for statistics
+    stats = all_customers.aggregate(
+        total_count=Count('id'),
+        regular_count=Count('id', filter=Q(customer_type='regular')),
+        vip_count=Count('id', filter=Q(customer_type='vip')),
+        wholesale_count=Count('id', filter=Q(customer_type='wholesale')),
+    )
+
+    customers_qs = all_customers
     
     # Search
-    search = request.GET.get('search', '')
+    search = request.GET.get('search', '').strip()
     if search:
-        customers = customers.filter(
+        customers_qs = customers_qs.filter(
             Q(name__icontains=search) | 
             Q(phone__icontains=search) | 
             Q(customer_code__icontains=search) |
@@ -6282,19 +6374,19 @@ def customer_list(request, slug=None):
         )
     
     # Filter by type
-    customer_type = request.GET.get('customer_type', '')
+    customer_type = request.GET.get('customer_type', '').strip()
     if customer_type:
-        customers = customers.filter(customer_type=customer_type)
+        customers_qs = customers_qs.filter(customer_type=customer_type)
 
     # Filter by active status
-    status_filter = request.GET.get('status', '')
+    status_filter = request.GET.get('status', '').strip()
     if status_filter == 'active':
-        customers = customers.filter(is_active=True)
+        customers_qs = customers_qs.filter(is_active=True)
     elif status_filter == 'inactive':
-        customers = customers.filter(is_active=False)
+        customers_qs = customers_qs.filter(is_active=False)
 
     # Sorting
-    sort_by = request.GET.get('sort', 'newest')
+    sort_by = request.GET.get('sort', 'newest').strip()
     sort_options = {
         'newest': '-created_at',
         'oldest': 'created_at',
@@ -6303,7 +6395,15 @@ def customer_list(request, slug=None):
         'spending_desc': '-total_purchases',
         'points_desc': '-loyalty_points',
     }
-    customers = customers.order_by(sort_options.get(sort_by, '-created_at'))
+    customers_qs = customers_qs.order_by(sort_options.get(sort_by, '-created_at'))
+
+    per_page = int(request.GET.get('per_page', 25))
+    paginator = Paginator(customers_qs, per_page)
+    page = request.GET.get('page', 1)
+    try:
+        customers = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        customers = paginator.page(1)
     
     context = {
         'customers': customers,
@@ -6311,10 +6411,13 @@ def customer_list(request, slug=None):
         'customer_type': customer_type,
         'status_filter': status_filter,
         'sort_by': sort_by,
-        'total_count': all_customers.count(),
-        'regular_count': regular_count,
-        'vip_count': vip_count,
-        'wholesale_count': wholesale_count,
+        'total_count': stats['total_count'] or 0,
+        'regular_count': stats['regular_count'] or 0,
+        'vip_count': stats['vip_count'] or 0,
+        'wholesale_count': stats['wholesale_count'] or 0,
+        'paginator': paginator,
+        'page_obj': customers,
+        'is_paginated': customers.has_other_pages(),
     }
     return render(request, 'pos/customer_list.html', context)
 
@@ -8199,7 +8302,7 @@ def payment_method_delete(request, slug=None, pk=None):
         messages.error(request, f'Cannot delete "{payment_method.name}" because it has been used in sales.')
         return redirect('payment_method_list', slug=request.business.slug)
     
-    if payment_method.supplierpayment_set.exists():
+    if hasattr(payment_method, 'supplierpayment_set') and payment_method.supplierpayment_set.exists():
         messages.error(request, f'Cannot delete "{payment_method.name}" because it has been used in supplier payments.')
         return redirect('payment_method_list', slug=request.business.slug)
     
@@ -8355,7 +8458,7 @@ def grn_list(request, slug=None):
     # Optimized queryset for display
     grns = all_grns.select_related('supplier', 'created_by', 'related_purchase').annotate(
         items_count=Count('items', distinct=True),
-        total_qty=Coalesce(Sum('items__quantity'), 0)
+        total_qty=Coalesce(Sum('items__quantity'), Value(Decimal('0.000'), output_field=DecimalField(max_digits=12, decimal_places=3)))
     )
 
     # Filters
@@ -8497,8 +8600,8 @@ def grn_create(request, slug=None):
                             continue
 
                         try:
-                            quantity = int(quantity_raw)
-                        except (TypeError, ValueError):
+                            quantity = Decimal(str(quantity_raw))
+                        except (TypeError, ValueError, InvalidOperation):
                             raise ValueError('Invalid quantity in GRN items.')
                         if quantity <= 0:
                             raise ValueError('Return quantity must be greater than zero.')

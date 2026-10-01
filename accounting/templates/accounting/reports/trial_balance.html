@@ -1,0 +1,128 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Trial Balance — {{ as_of_date|date:"d/m/Y" }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Trial Balance</h1>
+        <p class="page-subtitle">Standard IFRS Trial Balance as of <strong>{{ as_of_date|date:"d F Y" }}</strong>. Currency: KES.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_trial_balance_csv' %}?as_of_date={{ as_of_date|date:'Y-m-d' }}" class="btn btn-outline-success">
+            <i class="bi bi-download me-1"></i>Download CSV
+        </a>
+        <button onclick="window.print()" class="btn btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Print Report
+        </button>
+    </div>
+</div>
+
+<!-- Balance Invariant Status Banner -->
+<div class="card border-0 shadow-sm mb-4 {% if tb.is_balanced %}bg-light border-start border-4 border-success{% else %}bg-light border-start border-4 border-danger{% endif %}">
+    <div class="card-body d-flex align-items-center justify-content-between p-3 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi {% if tb.is_balanced %}bi-check-circle-fill text-success fs-4{% else %}bi-exclamation-octagon-fill text-danger fs-4{% endif %}"></i>
+            <div>
+                <span class="fw-bold">
+                    {% if tb.is_balanced %}
+                    <span class="text-success">Trial Balance Invariant Verified: Balanced to KES 0.00</span>
+                    {% else %}
+                    <span class="text-danger">Out of Balance! Difference: KES {{ tb.difference|floatformat:2 }}</span>
+                    {% endif %}
+                </span>
+                <div class="text-muted small">Total Debits: KES {{ tb.total_debits|floatformat:2 }} | Total Credits: KES {{ tb.total_credits|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Date Filter Card -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-3">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">As of Date</label>
+                {{ filter_form.as_of_date }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">From Date (Optional)</label>
+                {{ filter_form.start_date }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Branch</label>
+                {{ filter_form.branch }}
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-fill">Update Report</button>
+                <a href="{% url 'accounting_trial_balance' %}" class="btn btn-sm btn-outline-secondary">Today</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Trial Balance Table -->
+<div class="table-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small">
+                <tr>
+                    <th style="width: 110px;">Code</th>
+                    <th>Account Name</th>
+                    <th>Account Type</th>
+                    <th>Category</th>
+                    <th class="text-end" style="width: 170px;">Debit (DR)</th>
+                    <th class="text-end" style="width: 170px;">Credit (CR)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in tb.rows %}
+                <tr>
+                    <td>
+                        <a href="{% url 'accounting_account_detail' pk=r.account_id %}" class="fw-bold font-monospace text-primary text-decoration-none">
+                            {{ r.account_code }}
+                        </a>
+                    </td>
+                    <td class="fw-semibold">
+                        <a href="{% url 'accounting_account_detail' pk=r.account_id %}" class="text-dark text-decoration-none">
+                            {{ r.account_name }}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="badge {% if r.account_type == 'asset' %}bg-primary{% elif r.account_type == 'liability' %}bg-danger{% elif r.account_type == 'equity' %}bg-dark{% elif r.account_type == 'income' %}bg-success{% else %}bg-warning text-dark{% endif %} bg-opacity-10 text-dark border small">
+                            {{ r.account_type_display }}
+                        </span>
+                    </td>
+                    <td class="small text-muted">{{ r.category }}</td>
+                    <td class="text-end font-monospace {% if r.closing_debit > 0 %}fw-bold text-dark{% else %}text-muted{% endif %}">
+                        {% if r.closing_debit > 0 %}KES {{ r.closing_debit|floatformat:2 }}{% else %}—{% endif %}
+                    </td>
+                    <td class="text-end font-monospace {% if r.closing_credit > 0 %}fw-bold text-dark{% else %}text-muted{% endif %}">
+                        {% if r.closing_credit > 0 %}KES {{ r.closing_credit|floatformat:2 }}{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">
+                        <i class="bi bi-file-earmark-x fs-1 d-block mb-2 text-secondary"></i>
+                        No ledger transactions recorded as of this date.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-dark fw-bold fs-6">
+                <tr>
+                    <td colspan="4" class="text-end text-uppercase">Totals (KES)</td>
+                    <td class="text-end font-monospace text-light">KES {{ tb.total_debits|floatformat:2 }}</td>
+                    <td class="text-end font-monospace text-light">KES {{ tb.total_credits|floatformat:2 }}</td>
+                </tr>
+                {% if not tb.is_balanced %}
+                <tr class="table-danger text-danger">
+                    <td colspan="4" class="text-end text-uppercase">Difference</td>
+                    <td colspan="2" class="text-end font-monospace">KES {{ tb.difference|floatformat:2 }}</td>
+                </tr>
+                {% endif %}
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endblock %}

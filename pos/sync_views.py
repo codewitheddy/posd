@@ -388,9 +388,9 @@ def sync_offline_sales_view(request):
                             product=prod,
                             branch=branch,
                             adjustment_type='sale',
-                            quantity_change=-int(qty),
-                            previous_quantity=int(prev_qty),
-                            new_quantity=int(prod.stock_quantity),
+                            quantity_change=-Decimal(str(qty)),
+                            previous_quantity=prev_qty,
+                            new_quantity=prod.stock_quantity,
                             reason=f'Offline Sync Sale: {sale.invoice_number}'
                         )
 

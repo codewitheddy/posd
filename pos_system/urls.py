@@ -31,8 +31,14 @@ urlpatterns = [
     path('api/v1/backup/', include('backup.urls')),
     path('api/v1/restore/', include('restore.urls')),
     path('settings/backup/', include('backup.web_urls')),
+    path('platform/', include('core.urls')),  # Modular Platform Core Backoffice
+    path('modules/', include('core.urls')),   # Backoffice Module Management
     path('hr/', include('hr.urls')),  # HR module web + API
     path('b/<slug:slug>/hr/', include('hr.urls')),  # Legacy compatibility
+    path('accounting/', include('accounting.urls')),  # Accounting & General Ledger module
+    path('b/<slug:slug>/accounting/', include('accounting.urls')),  # Multi-tenant route
+    path('inventory/', include('inventory.urls')),  # Inventory & Stock Ledger module
+    path('b/<slug:slug>/inventory/', include('inventory.urls')),  # Multi-tenant route
     path('b/<slug:slug>/', include('pos.urls')),  # Legacy compatibility
     path('', include('pos.urls')),  # Single-store web interface
 ]

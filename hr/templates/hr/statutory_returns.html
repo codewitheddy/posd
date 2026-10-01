@@ -1,0 +1,149 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Statutory Returns &amp; Bank Exports{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-file-earmark-arrow-down me-2 text-primary"></i>Statutory Returns &amp; Payment Batch Files</h1>
+    <p class="page-subtitle">Export official CSV files for KRA iTax, NSSF, SHA, Housing Levy, and Banking EFT/M-Pesa B2C.</p>
+  </div>
+</div>
+
+<div class="form-card mb-4">
+  <h6 class="fw-bold mb-3"><i class="bi bi-calendar3 me-1 text-primary"></i>Select Reporting / Filing Period</h6>
+  <form method="GET" class="row g-3 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Period Start</label>
+      <input type="date" name="period_start" class="form-control form-control-sm" value="{{ period_start|date:'Y-m-d' }}" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label form-label-sm fw-bold small">Period End</label>
+      <input type="date" name="period_end" class="form-control form-control-sm" value="{{ period_end|date:'Y-m-d' }}" required>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-arrow-clockwise me-1"></i>Update Period</button>
+    </div>
+  </form>
+</div>
+
+<div class="row g-4">
+  <!-- KRA iTax PAYE Return -->
+  <div class="col-md-6 col-lg-4">
+    <div class="form-card h-100 d-flex flex-column justify-content-between">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="stat-icon-box" style="background:#fee2e2;color:#dc2626;width:38px;height:38px;font-size:18px;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </div>
+          <h6 class="fw-bold mb-0">KRA iTax PAYE Return</h6>
+        </div>
+        <p class="text-muted small mb-3">
+          Monthly P10 return CSV containing employee KRA PINs, gross taxable emoluments, allowable deductions, and net PAYE tax payable.
+        </p>
+      </div>
+      <a href="{% url 'hr_export_return' return_type='kra_paye' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-outline-danger btn-sm w-100">
+        <i class="bi bi-download me-1"></i>Download KRA iTax CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- NSSF Contribution Return -->
+  <div class="col-md-6 col-lg-4">
+    <div class="form-card h-100 d-flex flex-column justify-content-between">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="stat-icon-box" style="background:#dbeafe;color:#2563eb;width:38px;height:38px;font-size:18px;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </div>
+          <h6 class="fw-bold mb-0">NSSF Monthly Return</h6>
+        </div>
+        <p class="text-muted small mb-3">
+          NSSF Act 2013 return CSV specifying payroll numbers, NSSF member numbers, Tier I, Tier II, and employer matching contributions.
+        </p>
+      </div>
+      <a href="{% url 'hr_export_return' return_type='nssf' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-outline-primary btn-sm w-100">
+        <i class="bi bi-download me-1"></i>Download NSSF Return CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- SHA / SHIF Return -->
+  <div class="col-md-6 col-lg-4">
+    <div class="form-card h-100 d-flex flex-column justify-content-between">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="stat-icon-box" style="background:#dcfce7;color:#16a34a;width:38px;height:38px;font-size:18px;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </div>
+          <h6 class="fw-bold mb-0">SHA / SHIF Return</h6>
+        </div>
+        <p class="text-muted small mb-3">
+          Social Health Authority (SHA) monthly contribution return (2.75% gross salary) formatted for the employer portal.
+        </p>
+      </div>
+      <a href="{% url 'hr_export_return' return_type='sha' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-outline-success btn-sm w-100">
+        <i class="bi bi-download me-1"></i>Download SHA / SHIF CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Affordable Housing Levy Return -->
+  <div class="col-md-6 col-lg-4">
+    <div class="form-card h-100 d-flex flex-column justify-content-between">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="stat-icon-box" style="background:#fef3c7;color:#d97706;width:38px;height:38px;font-size:18px;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </div>
+          <h6 class="fw-bold mb-0">Housing Levy Return</h6>
+        </div>
+        <p class="text-muted small mb-3">
+          Affordable Housing Act 2024 statutory declaration showing 1.5% employee and 1.5% employer matching remittances.
+        </p>
+      </div>
+      <a href="{% url 'hr_export_return' return_type='housing_levy' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-outline-warning btn-sm w-100">
+        <i class="bi bi-download me-1"></i>Download Housing Levy CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Bank EFT / RTGS Batch Payment File -->
+  <div class="col-md-6 col-lg-4">
+    <div class="form-card h-100 d-flex flex-column justify-content-between">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="stat-icon-box" style="background:#f3e8ff;color:#9333ea;width:38px;height:38px;font-size:18px;">
+            <i class="bi bi-bank2"></i>
+          </div>
+          <h6 class="fw-bold mb-0">Bank EFT / RTGS Batch</h6>
+        </div>
+        <p class="text-muted small mb-3">
+          Standard Kenya Bankers Association (KBA) EFT batch upload file with clearing codes, account numbers, and net disbursements.
+        </p>
+      </div>
+      <a href="{% url 'hr_export_return' return_type='bank_eft' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm w-100">
+        <i class="bi bi-download me-1"></i>Download Bank EFT Batch
+      </a>
+    </div>
+  </div>
+
+  <!-- M-Pesa B2C Bulk Salary File -->
+  <div class="col-md-6 col-lg-4">
+    <div class="form-card h-100 d-flex flex-column justify-content-between">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="stat-icon-box" style="background:#ecfdf5;color:#059669;width:38px;height:38px;font-size:18px;">
+            <i class="bi bi-phone"></i>
+          </div>
+          <h6 class="fw-bold mb-0">M-Pesa B2C Salary Batch</h6>
+        </div>
+        <p class="text-muted small mb-3">
+          Safaricom M-Pesa Bulk Salary Payment portal CSV formatted for instant mobile payroll disbursement.
+        </p>
+      </div>
+      <a href="{% url 'hr_export_return' return_type='mpesa_b2c' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-outline-success btn-sm w-100">
+        <i class="bi bi-download me-1"></i>Download M-Pesa B2C CSV
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

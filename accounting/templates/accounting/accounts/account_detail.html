@@ -1,0 +1,101 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}{{ account.code }} — {{ account.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary fs-6 font-monospace">{{ account.code }}</span>
+            <h1 class="mb-0">{{ account.name }}</h1>
+        </div>
+        <p class="page-subtitle">{{ account.get_account_type_display }} &bull; {{ account.get_category_display }} &bull; Normal: {{ account.get_normal_balance_display }}</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_account_edit' pk=account.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-pencil me-1"></i>Edit Account
+        </a>
+        <a href="{% url 'accounting_account_list' %}" class="btn btn-outline-primary">
+            <i class="bi bi-diagram-3 me-1"></i>All Accounts
+        </a>
+    </div>
+</div>
+
+<!-- Account Summary Balance Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Opening Balance</div>
+            <div class="stat-val font-monospace mt-1">KES {{ opening_balance|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Period Debits</div>
+            <div class="stat-val text-primary font-monospace mt-1">KES {{ period_debits|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Period Credits</div>
+            <div class="stat-val text-success font-monospace mt-1">KES {{ period_credits|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-light border-primary">
+            <div class="stat-label text-primary">Current Closing Balance</div>
+            <div class="stat-val text-dark font-monospace mt-1">KES {{ closing_balance|floatformat:2 }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Itemized Transactions Table -->
+<div class="table-card">
+    <div class="card-header">
+        <div class="fw-bold fs-6">
+            <i class="bi bi-journal-text me-2 text-primary"></i>General Ledger Transaction History
+        </div>
+        <span class="badge bg-light text-dark border">{{ transactions|length }} Record(s)</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Journal #</th>
+                    <th>Type</th>
+                    <th>Source &amp; Ref</th>
+                    <th>Description</th>
+                    <th class="text-end">Debit (DR)</th>
+                    <th class="text-end">Credit (CR)</th>
+                    <th class="text-end">Running Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions %}
+                <tr>
+                    <td class="small">{{ tx.date|date:"d/m/Y" }}</td>
+                    <td>
+                        <a href="{% url 'accounting_journal_detail' pk=tx.entry_id %}" class="fw-bold font-monospace text-decoration-none">
+                            {{ tx.entry_number }}
+                        </a>
+                    </td>
+                    <td><span class="badge bg-light text-dark border">{{ tx.entry_type }}</span></td>
+                    <td>
+                        <span class="badge bg-secondary bg-opacity-10 text-dark font-monospace small">{{ tx.source_module|upper }}</span>
+                        {% if tx.source_ref %}<span class="text-muted small font-monospace">({{ tx.source_ref }})</span>{% endif %}
+                    </td>
+                    <td class="small text-truncate" style="max-width: 280px;" title="{{ tx.line_description }}">{{ tx.line_description }}</td>
+                    <td class="text-end font-monospace">{% if tx.debit > 0 %}KES {{ tx.debit|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td class="text-end font-monospace">{% if tx.credit > 0 %}KES {{ tx.credit|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td class="text-end fw-bold font-monospace">KES {{ tx.running_balance|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">No journal entries posted to this account yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

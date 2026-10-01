@@ -19,9 +19,16 @@ from pos.models import Business, BusinessMembership, Branch, ActivityLog, Busine
 from pos.decorators import business_required
 from .models import (
     Department, Employee, Attendance, Payroll,
-    StaffAdvance, Leave, PerformanceRecord, DisciplinaryRecord
+    StaffAdvance, Leave, PerformanceRecord, DisciplinaryRecord,
+    KENYA_COUNTIES, StatutoryRuleSet, ConsentRecord, DataSubjectRequest, SensitiveDataAccessLog
 )
 from .services import AttendanceService, PayrollService, PerformanceService
+from .exports import (
+    generate_kra_itax_paye_csv, generate_nssf_return_csv,
+    generate_sha_return_csv, generate_housing_levy_return_csv,
+    generate_bank_eft_csv, generate_mpesa_b2c_csv, get_p9_annual_data
+)
+
 
 
 def _require_manager(request):
@@ -320,10 +327,22 @@ def employee_create(request, slug=None):
                 branch=Branch.objects.get(pk=branch_id),
                 department=Department.objects.get(pk=dept_id) if dept_id else None,
                 job_title=request.POST.get('job_title', ''),
+                id_type=request.POST.get('id_type', 'national_id'),
                 id_number=request.POST.get('id_number', ''),
                 kra_pin=request.POST.get('kra_pin', ''),
                 nssf_number=request.POST.get('nssf_number', ''),
                 nhif_number=request.POST.get('nhif_number', ''),
+                sha_number=request.POST.get('sha_number', ''),
+                helb_number=request.POST.get('helb_number', ''),
+                county=request.POST.get('county', ''),
+                phone_number=request.POST.get('phone_number', ''),
+                mpesa_number=request.POST.get('mpesa_number', ''),
+                bank_name=request.POST.get('bank_name', ''),
+                bank_code=request.POST.get('bank_code', ''),
+                bank_account_number=request.POST.get('bank_account_number', ''),
+                is_secondary_employee=bool(request.POST.get('is_secondary_employee')),
+                is_non_resident=bool(request.POST.get('is_non_resident')),
+                disability_status=bool(request.POST.get('disability_status')),
                 address=request.POST.get('address', ''),
                 basic_salary=Decimal(request.POST.get('basic_salary') or '0'),
                 hourly_rate=Decimal('0') if Decimal(request.POST.get('basic_salary') or '0') > 0 else Decimal(request.POST.get('hourly_rate') or '0'),
@@ -331,7 +350,7 @@ def employee_create(request, slug=None):
                 transport_allowance=Decimal(request.POST.get('transport_allowance') or '0'),
                 medical_allowance=Decimal(request.POST.get('medical_allowance') or '0'),
                 other_allowance=Decimal(request.POST.get('other_allowance') or '0'),
-                other_allowances={},  # Initialize as empty dict
+                other_allowances={},
                 status=request.POST.get('status', 'active'),
                 emergency_contact_name=request.POST.get('emergency_contact_name', ''),
                 emergency_contact_phone=request.POST.get('emergency_contact_phone', ''),
@@ -361,6 +380,7 @@ def employee_create(request, slug=None):
         'branches': branches,
         'departments': departments,
         'users': users_without_employee,
+        'county_choices': KENYA_COUNTIES,
         'is_edit': False,
     })
 
@@ -383,10 +403,22 @@ def employee_edit(request, slug=None, pk=None):
             emp.branch = Branch.objects.get(pk=branch_id)
             emp.department = Department.objects.get(pk=dept_id) if dept_id else None
             emp.job_title = request.POST.get('job_title', emp.job_title)
+            emp.id_type = request.POST.get('id_type', emp.id_type)
             emp.id_number = request.POST.get('id_number', emp.id_number)
             emp.kra_pin = request.POST.get('kra_pin', emp.kra_pin)
             emp.nssf_number = request.POST.get('nssf_number', emp.nssf_number)
             emp.nhif_number = request.POST.get('nhif_number', emp.nhif_number)
+            emp.sha_number = request.POST.get('sha_number', emp.sha_number)
+            emp.helb_number = request.POST.get('helb_number', emp.helb_number)
+            emp.county = request.POST.get('county', emp.county)
+            emp.phone_number = request.POST.get('phone_number', emp.phone_number)
+            emp.mpesa_number = request.POST.get('mpesa_number', emp.mpesa_number)
+            emp.bank_name = request.POST.get('bank_name', emp.bank_name)
+            emp.bank_code = request.POST.get('bank_code', emp.bank_code)
+            emp.bank_account_number = request.POST.get('bank_account_number', emp.bank_account_number)
+            emp.is_secondary_employee = bool(request.POST.get('is_secondary_employee'))
+            emp.is_non_resident = bool(request.POST.get('is_non_resident'))
+            emp.disability_status = bool(request.POST.get('disability_status'))
             emp.address = request.POST.get('address', emp.address)
             emp.basic_salary = Decimal(request.POST.get('basic_salary') or emp.basic_salary)
             emp.hourly_rate = Decimal('0') if Decimal(request.POST.get('basic_salary') or str(emp.basic_salary)) > 0 else Decimal(request.POST.get('hourly_rate') or emp.hourly_rate)
@@ -423,6 +455,7 @@ def employee_edit(request, slug=None, pk=None):
         'employee': emp,
         'branches': branches,
         'departments': departments,
+        'county_choices': KENYA_COUNTIES,
         'is_edit': True,
     })
 
@@ -432,9 +465,6 @@ def employee_edit(request, slug=None, pk=None):
 @login_required
 @business_required
 def attendance_list(request, slug=None):
-    if not _require_manager(request):
-        messages.error(request, 'Permission denied.')
-        return redirect('dashboard', slug=slug)
     business = request.business
     today = timezone.localdate()
     date_filter = request.GET.get('date', str(today))
@@ -447,7 +477,10 @@ def attendance_list(request, slug=None):
     qs = Attendance.objects.filter(
         employee__business=business, date=filter_date
     ).select_related('employee__user_account').order_by('employee__user_account__first_name')
-    if emp_filter:
+    is_mgr = _require_manager(request)
+    if not is_mgr:
+        qs = qs.filter(employee__user_account=request.user)
+    elif emp_filter:
         qs = qs.filter(employee_id=emp_filter)
 
     policy = AttendanceService.get_working_hours_policy(business)
@@ -462,7 +495,7 @@ def attendance_list(request, slug=None):
         'attendance_records': qs,
         'employees': employees,
         'my_employee': my_employee,
-        'can_manage_attendance': _require_manager(request),
+        'can_manage_attendance': is_mgr,
         'workday_start_time': policy['shift_start'],
         'workday_end_time': policy['shift_end'],
         'late_grace_minutes': policy['late_grace_minutes'],
@@ -475,9 +508,6 @@ def attendance_list(request, slug=None):
 @login_required
 @business_required
 def attendance_clock_in(request, slug=None):
-    if not _require_manager(request):
-        messages.error(request, 'Permission denied.')
-        return redirect('dashboard', slug=slug)
     if request.method != 'POST':
         return redirect('hr_attendance_list', slug=slug)
     business = request.business
@@ -498,9 +528,6 @@ def attendance_clock_in(request, slug=None):
 @login_required
 @business_required
 def attendance_clock_out(request, slug=None):
-    if not _require_manager(request):
-        messages.error(request, 'Permission denied.')
-        return redirect('dashboard', slug=slug)
     if request.method != 'POST':
         return redirect('hr_attendance_list', slug=slug)
     business = request.business
@@ -523,29 +550,30 @@ def attendance_clock_out(request, slug=None):
 @login_required
 @business_required
 def leave_list(request, slug=None):
-    if not _require_manager(request):
-        messages.error(request, 'Permission denied.')
-        return redirect('dashboard', slug=slug)
     business = request.business
     qs = Leave.objects.filter(employee__business=business).select_related(
         'employee__user_account', 'approved_by__user_account'
     ).order_by('-created_at')
+    is_mgr = _require_manager(request)
+    if not is_mgr:
+        qs = qs.filter(employee__user_account=request.user)
     status_filter = request.GET.get('status', '')
     if status_filter:
         qs = qs.filter(status=status_filter)
-    return render(request, 'hr/leave_list.html', {'leave_requests': qs, 'status_filter': status_filter})
+    return render(request, 'hr/leave_list.html', {
+        'leave_requests': qs,
+        'status_filter': status_filter,
+        'is_manager': is_mgr,
+    })
 
 
 @login_required
 @business_required
 def leave_create(request, slug=None):
-    if not _require_manager(request):
-        messages.error(request, 'Permission denied.')
-        return redirect('dashboard', slug=slug)
     business = request.business
     if request.method == 'POST':
         try:
-            employee = Employee.objects.get(user_account=request.user, business=business)
+            employee, _ = _get_or_create_employee_for_attendance(request)
             start = date.fromisoformat(request.POST['start_date'])
             end = date.fromisoformat(request.POST['end_date'])
             if end < start:
@@ -924,7 +952,13 @@ def p9_download(request, slug=None, employee_pk=None):
 
     # Employer / Employee info table
     settings_obj = getattr(business, 'settings', None)
-    employer_pin = business.kra_pin or '—'
+    employer_pin = (
+        getattr(business, 'kra_pin', '') or
+        getattr(business, 'tax_id', '') or
+        (getattr(settings_obj, 'kra_pin', '') if settings_obj else '') or
+        (getattr(settings_obj, 'tax_id', '') if settings_obj else '') or
+        '—'
+    )
     employer_name = (settings_obj.get_business_name() if settings_obj else business.name)
     if employee.user_account:
         employee_name = employee.user_account.get_full_name() or employee.user_account.username
@@ -1309,3 +1343,162 @@ def user_quick_create(request, slug=None):
     )
     full_name = user.get_full_name() or username
     return _JsonResponse({'id': user.pk, 'name': f'{full_name} ({username})'})
+
+
+# ─── Kenyan Tax P9 Forms, Payslips & Statutory Return Exporters ───────────────
+
+@login_required
+@business_required
+def p9_view(request, slug=None, employee_pk=None):
+    """Render printable KRA Tax Form P9A for an employee for a specific tax year."""
+    if not _require_manager(request):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard', slug=slug)
+    business = request.business
+    emp = get_object_or_404(Employee, pk=employee_pk, business=business)
+    today = timezone.localdate()
+    tax_year = int(request.GET.get('year', str(today.year)))
+    monthly_data, totals = get_p9_annual_data(emp, tax_year)
+
+    return render(request, 'hr/p9_view.html', {
+        'employee': emp,
+        'business': business,
+        'tax_year': tax_year,
+        'monthly_data': monthly_data,
+        'totals': totals,
+        'business_pin': getattr(business, 'kra_pin', 'P051234567Z'),
+    })
+
+
+@login_required
+@business_required
+def payslip_view(request, slug=None, payroll_pk=None):
+    """Render official itemized payslip (Employment Act Sec. 19 & 20)."""
+    business = request.business
+    payroll = get_object_or_404(Payroll, pk=payroll_pk, employee__business=business)
+    # Check permission: manager or own payslip
+    is_mgr = _require_manager(request)
+    if not is_mgr and (not payroll.employee.user_account or payroll.employee.user_account != request.user):
+        messages.error(request, 'Permission denied.')
+        return redirect('hr_dashboard', slug=slug)
+
+    return render(request, 'hr/payslip.html', {
+        'payroll': payroll,
+        'business': business,
+    })
+
+
+@login_required
+@business_required
+def statutory_returns(request, slug=None):
+    """Statutory returns selector dashboard for KRA, NSSF, SHA, Housing Levy."""
+    if not _require_manager(request):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard', slug=slug)
+    today = timezone.localdate()
+    start_of_month = today.replace(day=1)
+    return render(request, 'hr/statutory_returns.html', {
+        'period_start': start_of_month,
+        'period_end': today,
+    })
+
+
+@login_required
+@business_required
+def export_return(request, slug=None, return_type=None):
+    """Export statutory CSV return file for the chosen format."""
+    if not _require_manager(request):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard', slug=slug)
+    business = request.business
+    today = timezone.localdate()
+    start_str = request.GET.get('start', str(today.replace(day=1)))
+    end_str = request.GET.get('end', str(today))
+    try:
+        p_start = date.fromisoformat(start_str)
+        p_end = date.fromisoformat(end_str)
+    except ValueError:
+        p_start = today.replace(day=1)
+        p_end = today
+
+    payrolls = Payroll.objects.filter(
+        employee__business=business,
+        period_start__gte=p_start,
+        period_end__lte=p_end,
+    ).select_related('employee')
+
+    if return_type == 'kra_paye':
+        content = generate_kra_itax_paye_csv(payrolls, business, p_start, p_end)
+        filename = f"KRA_PAYE_Return_{p_end.strftime('%b_%Y')}.csv"
+    elif return_type == 'nssf':
+        content = generate_nssf_return_csv(payrolls, business, p_start, p_end)
+        filename = f"NSSF_Return_{p_end.strftime('%b_%Y')}.csv"
+    elif return_type == 'sha':
+        content = generate_sha_return_csv(payrolls, business, p_start, p_end)
+        filename = f"SHA_SHIF_Return_{p_end.strftime('%b_%Y')}.csv"
+    elif return_type == 'housing_levy':
+        content = generate_housing_levy_return_csv(payrolls, business, p_start, p_end)
+        filename = f"Housing_Levy_Return_{p_end.strftime('%b_%Y')}.csv"
+    elif return_type == 'bank_eft':
+        content = generate_bank_eft_csv(payrolls, business)
+        filename = f"Bank_EFT_Batch_{p_end.strftime('%b_%Y')}.csv"
+    elif return_type == 'mpesa_b2c':
+        content = generate_mpesa_b2c_csv(payrolls, business)
+        filename = f"Mpesa_B2C_Salary_{p_end.strftime('%b_%Y')}.csv"
+    else:
+        messages.error(request, 'Unknown statutory return type.')
+        return redirect('hr_statutory_returns', slug=slug)
+
+    response = HttpResponse(content, content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@business_required
+def statutory_rules(request, slug=None):
+    """View active statutory rules, tax bands, and contribution limits."""
+    if not _require_manager(request):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard', slug=slug)
+    business = request.business
+    ruleset = StatutoryRuleSet.get_active_ruleset(business)
+    return render(request, 'hr/statutory_rules.html', {
+        'ruleset': ruleset,
+    })
+
+
+@login_required
+@business_required
+def consent_list(request, slug=None):
+    """View Kenya DPA 2019 consent records and DSAR requests."""
+    if not _require_manager(request):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard', slug=slug)
+    business = request.business
+    consents = ConsentRecord.objects.filter(employee__business=business)[:25]
+    dsr_requests = DataSubjectRequest.objects.filter(business=business)[:25]
+    sensitive_logs = SensitiveDataAccessLog.objects.filter(business=business)[:25]
+    return render(request, 'hr/consent_list.html', {
+        'consents': consents,
+        'dsr_requests': dsr_requests,
+        'sensitive_logs': sensitive_logs,
+    })
+
+
+@login_required
+@business_required
+def certificate_of_service(request, slug=None, employee_pk=None):
+    """Generate printable Certificate of Service under Employment Act Sec. 51."""
+    if not _require_manager(request):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard', slug=slug)
+    business = request.business
+    emp = get_object_or_404(Employee, pk=employee_pk, business=business)
+    today = timezone.localdate()
+    return render(request, 'hr/certificate_of_service.html', {
+        'employee': emp,
+        'business': business,
+        'today': today,
+    })
+

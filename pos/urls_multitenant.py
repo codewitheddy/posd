@@ -10,7 +10,8 @@ from . import (
     support_access_views, zreport_views, sync_views, registration_admin_views,
     financial_views, crm_views, webhook_views, branch_views, promotion_views,
     hscode_views, terminal_views, vatcode_views, cashier_assignment_views,
-    banking_views, cash_pickup_views, cash_paid_out_views, supplier_ap_views
+    banking_views, cash_pickup_views, cash_paid_out_views, supplier_ap_views,
+    sales_order_views
 )
 
 
@@ -257,6 +258,19 @@ business_urlpatterns = [
     path('purchases/<int:pk>/send/', views.purchase_send_to_supplier, name='purchase_send_to_supplier'),
     path('purchases/<int:pk>/duplicate/', views.purchase_duplicate, name='purchase_duplicate'),
     path('purchases/<int:pk>/close/', views.purchase_close, name='purchase_close'),
+    
+    # B2B Sales Orders
+    path('sales-orders/', sales_order_views.sales_order_list, name='sales_order_list'),
+    path('sales-orders/<int:pk>/', sales_order_views.sales_order_detail, name='sales_order_detail'),
+    path('sales-orders/<int:pk>/confirm/', sales_order_views.sales_order_confirm, name='sales_order_confirm'),
+    path('sales-orders/<int:pk>/cancel/', sales_order_views.sales_order_cancel, name='sales_order_cancel'),
+    path('sales-orders/<int:order_id>/delivery/', sales_order_views.delivery_note_create_from_order, name='delivery_note_create_from_order'),
+
+    # Goods Dispatch & Delivery Notes
+    path('deliveries/', sales_order_views.delivery_note_list, name='delivery_note_list'),
+    path('deliveries/<int:pk>/', sales_order_views.delivery_note_detail, name='delivery_note_detail'),
+    path('deliveries/<int:pk>/dispatch/', sales_order_views.delivery_note_dispatch, name='delivery_note_dispatch'),
+    path('deliveries/<int:pk>/complete/', sales_order_views.delivery_note_complete, name='delivery_note_complete'),
     
     # Goods Received Notes
     path('goods-received/', views.goods_received_list, name='goods_received_list'),

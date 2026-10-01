@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KRA Form P9A — {{ employee.get_full_name }} ({{ tax_year }})</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      font-size: 11px;
+      color: #000;
+      background: #fff;
+    }
+    .header-table, .p9-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    .header-table td {
+      padding: 4px;
+      vertical-align: top;
+    }
+    .title-box {
+      text-align: center;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .title-box h2 {
+      margin: 0 0 4px 0;
+      font-size: 16px;
+    }
+    .title-box h3 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: normal;
+    }
+    .p9-table th, .p9-table td {
+      border: 1px solid #000;
+      padding: 4px 3px;
+      text-align: right;
+      font-size: 10px;
+    }
+    .p9-table th {
+      background-color: #f2f2f2;
+      text-align: center;
+      font-weight: bold;
+      vertical-align: middle;
+    }
+    .p9-table td.text-left {
+      text-align: left;
+    }
+    .p9-table tr.total-row td {
+      font-weight: bold;
+      background-color: #f9f9f9;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+    }
+    .cert-box {
+      border: 1px solid #000;
+      padding: 10px;
+      margin-top: 15px;
+      font-size: 10.5px;
+      line-height: 1.4;
+    }
+    .print-btn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 8px 16px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    @media print {
+      .print-btn { display: none; }
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <button class="print-btn" onclick="window.print()">Print / Export PDF</button>
+
+  <div class="title-box">
+    <h2>KENYA REVENUE AUTHORITY</h2>
+    <h3>DOMESTIC TAXES DEPARTMENT &bull; INCOME TAX ACT (CAP 470)</h3>
+    <h3 style="font-weight: bold; margin-top: 4px;">TAX DEDUCTION CARD — YEAR {{ tax_year }} (FORM P9A)</h3>
+  </div>
+
+  <table class="header-table">
+    <tr>
+      <td width="55%">
+        <strong>Employer's Name:</strong> {{ business.name|upper }}<br>
+        <strong>Employer's PIN:</strong> {{ business_pin|default:"P051234567Z" }}
+      </td>
+      <td width="45%">
+        <strong>Employee's Main Name:</strong> {{ employee.get_full_name|upper }}<br>
+        <strong>Employee's Other Names:</strong> {{ employee.first_name|upper }}<br>
+        <strong>Employee's PIN:</strong> <span style="font-family: monospace; font-weight: bold; font-size: 12px;">{{ employee.kra_pin|default:"NOT SPECIFIED" }}</span><br>
+        <strong>National ID / Passport No:</strong> {{ employee.id_number }}
+      </td>
+    </tr>
+  </table>
+
+  <table class="p9-table">
+    <thead>
+      <tr>
+        <th rowspan="2" style="width: 70px;">MONTH</th>
+        <th rowspan="2">Basic Salary<br>(A)</th>
+        <th rowspan="2">Benefits<br>Non-Cash<br>(B)</th>
+        <th rowspan="2">Value of<br>Quarters<br>(C)</th>
+        <th rowspan="2">Total Gross<br>Pay<br>(D = A+B+C)</th>
+        <th colspan="3">Defined Contribution / NSSF (E)</th>
+        <th rowspan="2">Owner Occ.<br>Interest<br>(F)</th>
+        <th rowspan="2">Post-Ret.<br>Medical<br>(G)</th>
+        <th rowspan="2">Retirement &amp;<br>Reliefs Cap<br>(H)</th>
+        <th rowspan="2">Taxable<br>Pay<br>(J = D - H)</th>
+        <th rowspan="2">Tax<br>Charged<br>(K)</th>
+        <th rowspan="2">Personal<br>Relief<br>(L1)</th>
+        <th rowspan="2">Insurance<br>Relief<br>(L2)</th>
+        <th rowspan="2">P.A.Y.E<br>Tax<br>(M = K-L)</th>
+      </tr>
+      <tr>
+        <th>Actual (E1)</th>
+        <th>Fixed (E2)</th>
+        <th>30% of A (E3)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in monthly_data %}
+      <tr>
+        <td class="text-left"><strong>{{ m.month_name }}</strong></td>
+        <td>{{ m.basic_salary|floatformat:2 }}</td>
+        <td>{{ m.benefits|floatformat:2 }}</td>
+        <td>{{ m.quarters|floatformat:2 }}</td>
+        <td><strong>{{ m.gross_pay|floatformat:2 }}</strong></td>
+        <td>{{ m.nssf_actual|floatformat:2 }}</td>
+        <td>{{ m.nssf_fixed|floatformat:2 }}</td>
+        <td>{{ m.nssf_percent|floatformat:2 }}</td>
+        <td>{{ m.mortgage_interest|floatformat:2 }}</td>
+        <td>{{ m.post_retirement|floatformat:2 }}</td>
+        <td>{{ m.allowable_deductions|floatformat:2 }}</td>
+        <td><strong>{{ m.taxable_pay|floatformat:2 }}</strong></td>
+        <td>{{ m.tax_charged|floatformat:2 }}</td>
+        <td>{{ m.personal_relief|floatformat:2 }}</td>
+        <td>{{ m.insurance_relief|floatformat:2 }}</td>
+        <td style="font-weight: bold;">{{ m.paye_deducted|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+
+      <tr class="total-row">
+        <td class="text-left"><strong>TOTALS</strong></td>
+        <td>{{ totals.basic_salary|floatformat:2 }}</td>
+        <td>{{ totals.benefits|floatformat:2 }}</td>
+        <td>{{ totals.quarters|floatformat:2 }}</td>
+        <td><strong>{{ totals.gross_pay|floatformat:2 }}</strong></td>
+        <td>{{ totals.nssf_actual|floatformat:2 }}</td>
+        <td>{{ totals.nssf_fixed|floatformat:2 }}</td>
+        <td>{{ totals.nssf_percent|floatformat:2 }}</td>
+        <td>{{ totals.mortgage_interest|floatformat:2 }}</td>
+        <td>{{ totals.post_retirement|floatformat:2 }}</td>
+        <td>{{ totals.allowable_deductions|floatformat:2 }}</td>
+        <td><strong>{{ totals.taxable_pay|floatformat:2 }}</strong></td>
+        <td>{{ totals.tax_charged|floatformat:2 }}</td>
+        <td>{{ totals.personal_relief|floatformat:2 }}</td>
+        <td>{{ totals.insurance_relief|floatformat:2 }}</td>
+        <td style="font-size: 11px;"><strong>{{ totals.paye_deducted|floatformat:2 }}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="cert-box">
+    <strong>EMPLOYER'S CERTIFICATE OF PAYE DEDUCTED:</strong><br>
+    I certify that the particulars entered above are correct and that the total tax deducted of <strong>KES {{ totals.paye_deducted|floatformat:2 }}</strong> has been remitted to the Commissioner of Domestic Taxes.<br><br>
+    <table width="100%" style="margin-top: 10px;">
+      <tr>
+        <td width="35%"><strong>Employer Name:</strong> {{ business.name }}</td>
+        <td width="35%"><strong>Authorized Signature:</strong> ______________________</td>
+        <td width="30%"><strong>Date:</strong> 31/12/{{ tax_year }}</td>
+      </tr>
+    </table>
+  </div>
+
+</body>
+</html>

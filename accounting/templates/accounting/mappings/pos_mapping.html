@@ -1,0 +1,102 @@
+{% extends "accounting/base_accounting.html" %}
+
+{% block title %}POS GL Account Mapping — General Ledger{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">POS General Ledger Mapping</h1>
+        <p class="text-muted small mb-0">Configure default Chart of Accounts mapping for POS payment methods, sales revenue, VAT, and inventory cost of sales.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3">
+                <div class="fw-bold text-dark"><i class="bi bi-cart-check me-2 text-primary"></i>POS Payment Tender &amp; Revenue Accounts</div>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <h6 class="text-uppercase fw-bold text-muted small mb-3">1. Tender &amp; Asset Clearing Accounts</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.cash_account_code.label }}</label>
+                            {{ form.cash_account_code }}
+                            <div class="form-text small">Default: 1010 (Cash in Till / Drawer)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.mpesa_account_code.label }}</label>
+                            {{ form.mpesa_account_code }}
+                            <div class="form-text small">Default: 1030 (M-Pesa Till / Paybill)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.card_account_code.label }}</label>
+                            {{ form.card_account_code }}
+                            <div class="form-text small">Default: 1040 (Card / POS Swipe Clearing)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.credit_account_code.label }}</label>
+                            {{ form.credit_account_code }}
+                            <div class="form-text small">Default: 1100 (Trade Accounts Receivable)</div>
+                        </div>
+                    </div>
+
+                    <h6 class="text-uppercase fw-bold text-muted small mb-3">2. Revenue &amp; Tax Recognition</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.sales_revenue_code.label }}</label>
+                            {{ form.sales_revenue_code }}
+                            <div class="form-text small">Default: 4000 (Sales - General / Retail)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.vat_output_code.label }}</label>
+                            {{ form.vat_output_code }}
+                            <div class="form-text small">Default: 2100 (VAT Output Tax 16%)</div>
+                        </div>
+                    </div>
+
+                    <h6 class="text-uppercase fw-bold text-muted small mb-3">3. Inventory &amp; Cost of Sales (COGS)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.cogs_account_code.label }}</label>
+                            {{ form.cogs_account_code }}
+                            <div class="form-text small">Default: 5000 (Cost of Goods Sold)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.inventory_account_code.label }}</label>
+                            {{ form.inventory_account_code }}
+                            <div class="form-text small">Default: 1200 (Merchandise Inventory Asset)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">{{ form.cash_variance_code.label }}</label>
+                            {{ form.cash_variance_code }}
+                            <div class="form-text small">Default: 6900 (Cash Short / Over Expense)</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+                        <button type="submit" class="btn btn-acc-primary">
+                            <i class="bi bi-save me-1"></i>Save POS Mappings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body p-4">
+                <h6 class="fw-bold"><i class="bi bi-info-circle me-1 text-primary"></i>Integration Architecture</h6>
+                <p class="small text-muted mb-3">When cashiers execute an End-of-Day Z-Report or shift closure in the POS module, a double-entry journal is automatically prepared and posted to Accounting.</p>
+                <div class="border-start border-3 border-primary ps-3 small text-muted">
+                    <strong>Invariant:</strong> Debits (Cash + M-Pesa + Card + AR) must equal Credits (Sales Revenue + VAT Output) with exact zero difference.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Accounting &amp; General Ledger Hub{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="bi bi-speedometer2 me-2 text-primary"></i>Accounting &amp; General Ledger Hub</h1>
+        <p class="page-subtitle">Central financial control plane, Chart of Accounts, and double-entry General Ledger.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'accounting_trial_balance' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>View Trial Balance
+        </a>
+        <a href="{% url 'accounting_journal_create' %}" class="btn btn-acc-primary">
+            <i class="bi bi-plus-circle me-1"></i>New Journal Entry
+        </a>
+    </div>
+</div>
+
+<!-- Ledger Health & Period Status Alert -->
+<div class="card mb-4 border-0 shadow-sm {% if is_balanced %}bg-light border-start border-4 border-success{% else %}bg-light border-start border-4 border-danger{% endif %}">
+    <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3 py-3">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi {% if is_balanced %}bi-check-circle-fill text-success fs-3{% else %}bi-exclamation-octagon-fill text-danger fs-3{% endif %}"></i>
+            <div>
+                <div class="fw-bold fs-6">
+                    Ledger Status: {% if is_balanced %}<span class="text-success">Perfect Double-Entry Balance ($\Sigma DR = \Sigma CR$)</span>{% else %}<span class="text-danger">Unbalanced Invariant (Diff: KES {{ trial_balance_difference|floatformat:2 }})</span>{% endif %}
+                </div>
+                <div class="text-muted small">
+                    Active Period: <strong class="text-dark">{{ current_period.name|default:"Open Fiscal Cycle" }}</strong> 
+                    {% if current_period.is_closed %}<span class="badge bg-danger ms-1">Closed</span>{% else %}<span class="badge bg-success ms-1">Open for Posting</span>{% endif %}
+                    | Fiscal Year: <strong class="text-dark">{{ current_year.name|default:"FY 2026" }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'accounting_period_list' %}" class="btn btn-sm btn-outline-dark">
+                <i class="bi bi-calendar3-range me-1"></i>Manage Periods
+            </a>
+            <a href="{% url 'accounting_account_list' %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-diagram-3 me-1"></i>COA ({{ accounts_count }} Accounts)
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Financial KPI Summary Cards -->
+<div class="row g-3 mb-4">
+    <!-- Total Assets -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="stat-label">Total Assets</span>
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-bank"></i></div>
+            </div>
+            <div class="stat-val text-primary font-monospace">KES {{ total_assets|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Cash, Bank, AR, Stock</div>
+        </div>
+    </div>
+
+    <!-- Total Liabilities -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="stat-label">Total Liabilities</span>
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-receipt-cutoff"></i></div>
+            </div>
+            <div class="stat-val text-danger font-monospace">KES {{ total_liabilities|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">AP, Taxes, Payroll</div>
+        </div>
+    </div>
+
+    <!-- Total Equity -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="stat-label">Total Equity</span>
+                <div class="stat-icon bg-info bg-opacity-10 text-info"><i class="bi bi-pie-chart"></i></div>
+            </div>
+            <div class="stat-val text-dark font-monospace">KES {{ total_equity|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">Capital &amp; Reserves</div>
+        </div>
+    </div>
+
+    <!-- Operating Revenue -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="stat-label">Operating Revenue</span>
+                <div class="stat-icon bg-success bg-opacity-10 text-success"><i class="bi bi-graph-up-arrow"></i></div>
+            </div>
+            <div class="stat-val text-success font-monospace">KES {{ total_revenue|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">POS Sales &amp; Income</div>
+        </div>
+    </div>
+
+    <!-- Total Expenses -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="stat-label">Total Expenses</span>
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-cash-stack"></i></div>
+            </div>
+            <div class="stat-val text-warning font-monospace">KES {{ total_expenses|floatformat:2 }}</div>
+            <div class="text-muted small mt-1">COGS, Payroll, Ops</div>
+        </div>
+    </div>
+
+    <!-- Net Profit / Loss -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="stat-label">Net Profit / (Loss)</span>
+                <div class="stat-icon {% if net_profit_loss >= 0 %}bg-success bg-opacity-10 text-success{% else %}bg-danger bg-opacity-10 text-danger{% endif %}">
+                    <i class="bi {% if net_profit_loss >= 0 %}bi-trophy{% else %}bi-graph-down-arrow{% endif %}"></i>
+                </div>
+            </div>
+            <div class="stat-val {% if net_profit_loss >= 0 %}text-success{% else %}text-danger{% endif %} font-monospace">
+                KES {{ net_profit_loss|floatformat:2 }}
+            </div>
+            <div class="text-muted small mt-1">Current Fiscal Cycle</div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Journal Entries Table -->
+<div class="table-card">
+    <div class="card-header">
+        <div class="fw-bold fs-6">
+            <i class="bi bi-journal-text me-2 text-primary"></i>Recent General Ledger Postings
+        </div>
+        <a href="{% url 'accounting_journal_list' %}" class="btn btn-sm btn-outline-secondary">View All Journals</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Entry Number</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Source Module</th>
+                    <th>Source Ref</th>
+                    <th>Narration</th>
+                    <th class="text-end">Total Amount</th>
+                    <th>Status</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in recent_journals %}
+                <tr>
+                    <td>
+                        <a href="{% url 'accounting_journal_detail' pk=j.pk %}" class="fw-bold text-decoration-none font-monospace">
+                            {{ j.entry_number }}
+                        </a>
+                    </td>
+                    <td class="small">{{ j.date|date:"d/m/Y" }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ j.get_entry_type_display }}</span></td>
+                    <td><span class="badge bg-secondary bg-opacity-10 text-dark font-monospace">{{ j.source_module|upper }}</span></td>
+                    <td class="font-monospace small text-muted">{{ j.source_ref|default:"—" }}</td>
+                    <td class="small text-truncate" style="max-width: 260px;" title="{{ j.narration }}">{{ j.narration }}</td>
+                    <td class="text-end fw-bold font-monospace">KES {{ j.total_amount|floatformat:2 }}</td>
+                    <td>
+                        <span class="badge {% if j.status == 'posted' %}bg-success bg-opacity-15 text-success border border-success border-opacity-25{% elif j.status == 'reversed' %}bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25{% else %}bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25{% endif %}">
+                            {{ j.get_status_display }}
+                        </span>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'accounting_journal_detail' pk=j.pk %}" class="btn btn-sm btn-outline-primary" title="View Lines">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">
+                        <i class="bi bi-journal-x fs-3 d-block mb-2 text-secondary"></i>
+                        No journal entries posted yet. Click <strong>"New Journal Entry"</strong> above to record your first transaction.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

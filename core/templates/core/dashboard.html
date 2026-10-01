@@ -1,0 +1,61 @@
+{% extends "core/base.html" %}
+
+{% block title %}Dashboard | {{ company.name|default:"ERP Platform" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800 fw-bold">Platform Overview</h1>
+            <p class="text-muted small mb-0">Unified operations dashboard across active modules</p>
+        </div>
+        
+        {% if user_branches %}
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted">Active Outlet:</span>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-geo-alt me-1"></i>{{ branch.name|default:"All Outlets" }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                    {% for b in user_branches %}
+                    <li>
+                        <form method="post" action="{% url 'core_switch_branch' b.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item {% if b.id == branch.id %}active fw-bold{% endif %}">
+                                {{ b.name }} {% if b.is_headquarters %}<span class="badge bg-secondary ms-1">HQ</span>{% endif %}
+                            </button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Modular Dynamic Dashboard Cards -->
+    <div class="row">
+        {% if rendered_cards %}
+            {% for card_data in rendered_cards %}
+                {{ card_data.html }}
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <div class="card shadow-sm border-0 py-5 text-center">
+                    <div class="card-body">
+                        <i class="bi bi-grid-3x3-gap text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3 text-secondary">Welcome to your Platform Dashboard</h5>
+                        <p class="text-muted max-w-500 mx-auto">
+                            All your active modules (POS, HR, and future modules) will register their overview cards and metrics here automatically.
+                        </p>
+                        <a href="{% url 'core_module_list' %}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-puzzle me-1"></i>Manage Modules
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

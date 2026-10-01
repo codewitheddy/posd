@@ -1,0 +1,157 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Sales Orders (B2B){% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h2><i class="bi bi-receipt-cutoff"></i> B2B Sales Orders</h2>
+        <p class="text-muted mb-0">Manage wholesale sales orders, client contracts, and warehouse fulfillment tracking.</p>
+    </div>
+</div>
+
+<!-- Metrics Overview -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Total Sales Orders</div>
+                <div class="h4 mb-0 fw-bold">{{ metrics.total_orders }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Total Value</div>
+                <div class="h4 mb-0 fw-bold text-primary">KES {{ metrics.total_value|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Draft / Pending</div>
+                <div class="h4 mb-0 fw-bold text-warning">{{ metrics.draft_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body">
+                <div class="text-muted small">Fulfilled / Delivered</div>
+                <div class="h4 mb-0 fw-bold text-success">{{ metrics.delivered_count }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small">Search</label>
+                <input type="text" class="form-control" name="q" value="{{ search }}" placeholder="Order #, client name, notes...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Status</label>
+                <select class="form-select" name="status">
+                    <option value="">All Statuses</option>
+                    {% for st_val, st_lbl in status_choices %}
+                    <option value="{{ st_val }}" {% if status_filter == st_val %}selected{% endif %}>{{ st_lbl }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Customer</label>
+                <select class="form-select" name="customer">
+                    <option value="">All Customers</option>
+                    {% for cust in customers %}
+                    <option value="{{ cust.id }}" {% if customer_filter == cust.id|stringformat:"s" %}selected{% endif %}>{{ cust.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">From Date</label>
+                <input type="date" class="form-control" name="from_date" value="{{ from_date }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel"></i> Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Orders Table -->
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Order #</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Items</th>
+                    <th>Total Amount</th>
+                    <th>Status</th>
+                    <th>Payment Terms</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td><strong>{{ order.order_number }}</strong></td>
+                    <td>{{ order.order_date|date:"d M Y" }}</td>
+                    <td>{{ order.customer.name }}</td>
+                    <td><span class="badge bg-secondary">{{ order.items_count }} item(s)</span></td>
+                    <td class="fw-bold">KES {{ order.total_amount|floatformat:2 }}</td>
+                    <td>
+                        {% if order.status == 'draft' %}
+                        <span class="badge bg-secondary">Draft</span>
+                        {% elif order.status == 'confirmed' %}
+                        <span class="badge bg-info text-dark">Confirmed</span>
+                        {% elif order.status == 'partially_delivered' %}
+                        <span class="badge bg-warning text-dark">Partial Delivery</span>
+                        {% elif order.status == 'delivered' %}
+                        <span class="badge bg-success">Delivered</span>
+                        {% elif order.status == 'invoiced' %}
+                        <span class="badge bg-primary">Invoiced</span>
+                        {% elif order.status == 'cancelled' %}
+                        <span class="badge bg-danger">Cancelled</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ order.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ order.get_payment_terms_display }}</small></td>
+                    <td class="text-end">
+                        <a href="{% url 'sales_order_detail' slug=business_slug pk=order.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">No sales orders found matching your criteria.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if is_paginated %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2">
+        <small class="text-muted">Showing page {{ page_obj.number }} of {{ paginator.num_pages }}</small>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search }}&status={{ status_filter }}&customer={{ customer_filter }}">&laquo; Prev</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search }}&status={{ status_filter }}&customer={{ customer_filter }}">Next &raquo;</a></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

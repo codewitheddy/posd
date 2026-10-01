@@ -28,10 +28,36 @@ class HRPagination(PageNumberPagination):
 
 
 def _get_business(request):
-    slug = request.resolver_match.kwargs.get('slug')
-    if not slug:
-        return None
-    return get_object_or_404(Business, slug=slug)
+    slug = (
+        (request.resolver_match.kwargs.get('slug') if request.resolver_match else None) or
+        (request.query_params.get('slug') if hasattr(request, 'query_params') else None) or
+        (request.data.get('slug') if isinstance(getattr(request, 'data', None), dict) else None)
+    )
+    if slug:
+        return get_object_or_404(Business, slug=slug)
+
+    if hasattr(request, 'business') and request.business:
+        if hasattr(request, 'user') and request.user.is_authenticated and not request.user.is_superuser:
+            if BusinessMembership.objects.filter(user=request.user, business=request.business, is_active=True).exists():
+                return request.business
+        else:
+            return request.business
+
+    if hasattr(request, 'session') and request.session.get('business_id'):
+        try:
+            return Business.objects.get(id=request.session.get('business_id'))
+        except Business.DoesNotExist:
+            pass
+
+    if hasattr(request, 'user') and request.user.is_authenticated:
+        membership = BusinessMembership.objects.filter(user=request.user, is_active=True).first()
+        if membership:
+            return membership.business
+
+    if hasattr(request, 'business') and request.business:
+        return request.business
+
+    return None
 
 
 def _log(user, action_type, description, model_name, object_id, business):
@@ -476,37 +502,33 @@ class ReportViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='shift-cash')
     def shift_cash(self, request, slug=None):
-        """Shift cash difference report from pos.Shift, aggregated per cashier."""
-        from pos.models import Shift
-        from django.db.models import Sum, Count
+        """Shift cash difference report from pos.Shift via pos.api, aggregated per cashier."""
+        from pos.api import get_shift_cash_difference_report
         business = _get_business(request)
-        qs = Shift.objects.filter(cashier__business_memberships__business=business).select_related('cashier')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         emp_id = request.query_params.get('employee')
-        if date_from:
-            qs = qs.filter(start_time__date__gte=date_from)
-        if date_to:
-            qs = qs.filter(start_time__date__lte=date_to)
+        cashier_user_id = None
         if emp_id:
             try:
                 employee = Employee.objects.get(pk=emp_id, business=business)
-                qs = qs.filter(cashier=employee.user_account)
+                cashier_user_id = employee.user_account_id
             except Employee.DoesNotExist:
                 pass
-        # Aggregate per cashier
-        aggregated = qs.values(
-            'cashier__id', 'cashier__username', 'cashier__first_name', 'cashier__last_name'
-        ).annotate(
-            total_cash_difference=Sum('cash_difference'),
-            shift_count=Count('id'),
-        ).order_by('total_cash_difference')
-        # Also return raw shift records
+
+        biz_id = business.id if hasattr(business, 'id') else business
+        result = get_shift_cash_difference_report(
+            business_id=biz_id,
+            date_from=date_from,
+            date_to=date_to,
+            cashier_user_id=cashier_user_id,
+        )
+
         shifts_data = []
-        for shift in qs.order_by('-start_time')[:100]:
+        for shift in result['shifts']:
             shifts_data.append({
                 'id': shift.id,
-                'cashier': shift.cashier.get_full_name() or shift.cashier.username,
+                'cashier': shift.cashier.get_full_name() or shift.cashier.username if shift.cashier else 'Unknown',
                 'shift_number': shift.shift_number,
                 'start_time': shift.start_time,
                 'end_time': shift.end_time,
@@ -515,8 +537,9 @@ class ReportViewSet(viewsets.ViewSet):
                 'cash_difference': str(shift.cash_difference),
                 'status': shift.status,
             })
+
         return Response({
-            'summary': list(aggregated),
+            'summary': result['aggregated'],
             'shifts': shifts_data,
         })
 

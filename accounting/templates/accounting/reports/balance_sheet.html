@@ -1,0 +1,229 @@
+{% extends 'accounting/base_accounting.html' %}
+{% block title %}Statement of Financial Position (Balance Sheet){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary text-white font-monospace">IFRS FOR SMEs</span>
+            <span class="badge bg-light text-dark border">Statement of Financial Position</span>
+        </div>
+        <h1><i class="bi bi-pie-chart-fill me-2 text-primary"></i>Balance Sheet</h1>
+        <p class="page-subtitle">Classified Assets, Liabilities &amp; Equity with strict mathematical invariant check ($\text{Assets} = \text{Liabilities} + \text{Equity}$).</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="small text-muted fw-bold mb-0">As of Date:</label>
+            <input type="date" name="as_of_date" value="{{ as_of_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+
+            <label class="small text-muted fw-bold mb-0 ms-2">Compare As Of:</label>
+            <input type="date" name="compare_as_of_date" value="{{ compare_as_of_date|date:'Y-m-d' }}" class="form-control form-control-sm" placeholder="Comp Date">
+
+            {% if branches %}
+            <select name="branch" class="form-select form-select-sm">
+                <option value="">All Branches</option>
+                {% for b in branches %}
+                <option value="{{ b.pk }}" {% if branch and branch.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-repeat me-1"></i>Generate
+            </button>
+        </form>
+        <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Print
+        </button>
+    </div>
+</div>
+
+<!-- Balance Sheet Invariant Check Banner -->
+<div class="card mb-4 border-0 shadow-sm {% if report.primary.is_balanced %}bg-light border-start border-4 border-success{% else %}bg-light border-start border-4 border-danger{% endif %}">
+    <div class="card-body py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi {% if report.primary.is_balanced %}bi-check-circle-fill text-success fs-3{% else %}bi-exclamation-octagon-fill text-danger fs-3{% endif %}"></i>
+            <div>
+                <div class="fw-bold fs-6">
+                    Balance Sheet Invariant: 
+                    {% if report.primary.is_balanced %}
+                    <span class="text-success">Perfect Mathematical Equilibrium ($\text{Assets} = \text{Liabilities} + \text{Equity}$)</span>
+                    {% else %}
+                    <span class="text-danger">Out of Balance (Difference: KES {{ report.primary.difference|floatformat:2 }})</span>
+                    {% endif %}
+                </div>
+                <div class="text-muted small">
+                    Total Assets: <strong class="text-dark font-monospace">KES {{ report.primary.total_assets|floatformat:2 }}</strong> | Total Liabilities &amp; Equity: <strong class="text-dark font-monospace">KES {{ report.primary.total_liabilities_and_equity|floatformat:2 }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="p-2 px-3 bg-white rounded border text-center">
+                <span class="small text-muted text-uppercase fw-bold">Assets</span>
+                <div class="font-monospace fw-bold text-primary">KES {{ report.primary.total_assets|floatformat:2 }}</div>
+            </div>
+            <div class="p-2 px-3 bg-white rounded border text-center">
+                <span class="small text-muted text-uppercase fw-bold">Liabilities</span>
+                <div class="font-monospace fw-bold text-danger">KES {{ report.primary.total_liabilities|floatformat:2 }}</div>
+            </div>
+            <div class="p-2 px-3 bg-white rounded border text-center">
+                <span class="small text-muted text-uppercase fw-bold">Equity</span>
+                <div class="font-monospace fw-bold text-success">KES {{ report.primary.equity.total|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <span class="fw-bold fs-6">Statement of Financial Position (Balance Sheet)</span>
+            <div class="small opacity-75">As of: {{ as_of_date|date:"d F Y" }} | Currency: KES</div>
+        </div>
+        {% if report.is_comparative %}
+        <div class="badge bg-secondary font-monospace">Comparative As of: {{ compare_as_of_date|date:"d M Y" }}</div>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 55%;">Classification / Account Name</th>
+                    <th class="text-end" style="width: 22.5%;">As of {{ as_of_date|date:"d M Y" }} (KES)</th>
+                    {% if report.is_comparative %}
+                    <th class="text-end" style="width: 22.5%;">As of {{ compare_as_of_date|date:"d M Y" }} (KES)</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                <!-- ================= 1. ASSETS ================= -->
+                <tr class="table-primary fw-bold fs-6">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}"><i class="bi bi-bank me-2"></i>ASSETS</td>
+                </tr>
+
+                <!-- 1A. CURRENT ASSETS -->
+                <tr class="table-light fw-bold">
+                    <td class="ps-3" colspan="{% if report.is_comparative %}3{% else %}2{% endif %}">Current Assets</td>
+                </tr>
+                {% for a in report.primary.current_assets.rows %}
+                <tr>
+                    <td class="ps-5"><span class="font-monospace small text-muted me-2">{{ a.account.code }}</span> {{ a.account.name }}</td>
+                    <td class="text-end font-monospace">KES {{ a.balance|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-4">Total Current Assets</td>
+                    <td class="text-end font-monospace text-primary">KES {{ report.primary.current_assets.total|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.current_assets.total|floatformat:2 }}</td>{% endif %}
+                </tr>
+
+                <!-- 1B. NON-CURRENT (FIXED) ASSETS -->
+                {% if report.primary.fixed_assets.rows %}
+                <tr class="table-light fw-bold">
+                    <td class="ps-3" colspan="{% if report.is_comparative %}3{% else %}2{% endif %}">Non-Current Assets (Property, Plant &amp; Equipment)</td>
+                </tr>
+                {% for nca in report.primary.fixed_assets.rows %}
+                <tr>
+                    <td class="ps-5"><span class="font-monospace small text-muted me-2">{{ nca.account.code }}</span> {{ nca.account.name }}</td>
+                    <td class="text-end font-monospace">KES {{ nca.balance|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-4">Total Non-Current Assets</td>
+                    <td class="text-end font-monospace text-primary">KES {{ report.primary.fixed_assets.total|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.fixed_assets.total|floatformat:2 }}</td>{% endif %}
+                </tr>
+                {% endif %}
+
+                <!-- TOTAL ASSETS -->
+                <tr class="table-secondary fw-bold fs-6">
+                    <td>TOTAL ASSETS</td>
+                    <td class="text-end font-monospace text-primary">KES {{ report.primary.total_assets|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.total_assets|floatformat:2 }}</td>{% endif %}
+                </tr>
+
+                <!-- ================= 2. LIABILITIES ================= -->
+                <tr class="table-danger fw-bold fs-6">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}"><i class="bi bi-receipt-cutoff me-2"></i>LIABILITIES</td>
+                </tr>
+
+                <!-- 2A. CURRENT LIABILITIES -->
+                <tr class="table-light fw-bold">
+                    <td class="ps-3" colspan="{% if report.is_comparative %}3{% else %}2{% endif %}">Current Liabilities</td>
+                </tr>
+                {% for l in report.primary.current_liabilities.rows %}
+                <tr>
+                    <td class="ps-5"><span class="font-monospace small text-muted me-2">{{ l.account.code }}</span> {{ l.account.name }}</td>
+                    <td class="text-end font-monospace">KES {{ l.balance|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-4">Total Current Liabilities</td>
+                    <td class="text-end font-monospace text-danger">KES {{ report.primary.current_liabilities.total|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.current_liabilities.total|floatformat:2 }}</td>{% endif %}
+                </tr>
+
+                <!-- 2B. NON-CURRENT LIABILITIES -->
+                {% if report.primary.long_term_liabilities.rows %}
+                <tr class="table-light fw-bold">
+                    <td class="ps-3" colspan="{% if report.is_comparative %}3{% else %}2{% endif %}">Non-Current Liabilities (Long Term Debt)</td>
+                </tr>
+                {% for ncl in report.primary.long_term_liabilities.rows %}
+                <tr>
+                    <td class="ps-5"><span class="font-monospace small text-muted me-2">{{ ncl.account.code }}</span> {{ ncl.account.name }}</td>
+                    <td class="text-end font-monospace">KES {{ ncl.balance|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                <tr class="fw-bold border-bottom table-light">
+                    <td class="ps-4">Total Non-Current Liabilities</td>
+                    <td class="text-end font-monospace text-danger">KES {{ report.primary.long_term_liabilities.total|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.long_term_liabilities.total|floatformat:2 }}</td>{% endif %}
+                </tr>
+                {% endif %}
+
+                <!-- TOTAL LIABILITIES -->
+                <tr class="fw-bold border-bottom">
+                    <td>TOTAL LIABILITIES</td>
+                    <td class="text-end font-monospace text-danger">KES {{ report.primary.total_liabilities|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.total_liabilities|floatformat:2 }}</td>{% endif %}
+                </tr>
+
+                <!-- ================= 3. EQUITY ================= -->
+                <tr class="table-info fw-bold fs-6">
+                    <td colspan="{% if report.is_comparative %}3{% else %}2{% endif %}"><i class="bi bi-pie-chart me-2"></i>EQUITY &amp; CAPITAL RESERVES</td>
+                </tr>
+                {% for eq in report.primary.equity.rows %}
+                <tr>
+                    <td class="ps-4"><span class="font-monospace small text-muted me-2">{{ eq.account.code }}</span> {{ eq.account.name }}</td>
+                    <td class="text-end font-monospace">KES {{ eq.balance|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">-</td>{% endif %}
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td class="ps-4"><span class="badge bg-success-subtle text-success me-2">P&amp;L</span> Current Period Net Profit / (Loss)</td>
+                    <td class="text-end font-monospace fw-semibold {% if report.primary.equity.current_period_net_income >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        KES {{ report.primary.equity.current_period_net_income|floatformat:2 }}
+                    </td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.equity.current_period_net_income|floatformat:2 }}</td>{% endif %}
+                </tr>
+                <tr class="fw-bold border-bottom table-light">
+                    <td>TOTAL EQUITY</td>
+                    <td class="text-end font-monospace text-success">KES {{ report.primary.equity.total|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-muted">KES {{ report.comparative.equity.total|floatformat:2 }}</td>{% endif %}
+                </tr>
+
+                <!-- TOTAL LIABILITIES & EQUITY -->
+                <tr class="table-dark fw-bold fs-5">
+                    <td>TOTAL LIABILITIES &amp; EQUITY</td>
+                    <td class="text-end font-monospace text-warning">KES {{ report.primary.total_liabilities_and_equity|floatformat:2 }}</td>
+                    {% if report.is_comparative %}<td class="text-end font-monospace text-warning">KES {{ report.comparative.total_liabilities_and_equity|floatformat:2 }}</td>{% endif %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

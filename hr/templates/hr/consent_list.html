@@ -1,0 +1,108 @@
+{% extends 'hr/base_hr.html' %}
+{% block title %}Kenya Data Protection Act 2019 Register{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-shield-check me-2 text-primary"></i>Kenya Data Protection Act (DPA 2019) Governance</h1>
+    <p class="page-subtitle">Personal data processing consent, sensitive data access logs, and 30-day Data Subject Access Requests (DSAR).</p>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-md-6">
+    <div class="table-card h-100">
+      <h6 class="fw-bold mb-3"><i class="bi bi-file-earmark-lock me-1 text-primary"></i>Data Subject Rights Requests (DSAR)</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Employee</th>
+              <th>Request Type</th>
+              <th>Due Date (30d SLA)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for req in dsr_requests %}
+            <tr>
+              <td><strong>{{ req.employee.get_full_name }}</strong></td>
+              <td><span class="badge bg-light text-dark border">{{ req.get_request_type_display }}</span></td>
+              <td class="font-monospace {% if req.is_overdue %}text-danger fw-bold{% endif %}">{{ req.due_date|date:"d M Y" }}</td>
+              <td>
+                <span class="badge {% if req.status == 'completed' %}bg-success{% elif req.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                  {{ req.get_status_display }}
+                </span>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">No pending data subject requests.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="table-card h-100">
+      <h6 class="fw-bold mb-3"><i class="bi bi-check2-circle me-1 text-primary"></i>Recent Consent Acknowledgments</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Employee</th>
+              <th>Purpose</th>
+              <th>Policy Version</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in consents %}
+            <tr>
+              <td><strong>{{ c.employee.get_full_name }}</strong></td>
+              <td class="small">{{ c.purpose }}</td>
+              <td><span class="badge bg-light text-secondary border font-monospace">{{ c.privacy_policy_version }}</span></td>
+              <td class="small text-muted">{{ c.consented_at|date:"d M Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">No consent records logged.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="table-card">
+  <h6 class="fw-bold mb-3"><i class="bi bi-eye me-1 text-primary"></i>Sensitive Personal Data Access Log (Audit Trail)</h6>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Accessor</th>
+          <th>Subject (Employee)</th>
+          <th>Data Category</th>
+          <th>Action</th>
+          <th>IP Address</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in sensitive_logs %}
+        <tr>
+          <td><strong>{{ log.user.username|default:"System" }}</strong></td>
+          <td>{{ log.employee.get_full_name }}</td>
+          <td><span class="badge bg-info bg-opacity-10 text-dark border">{{ log.get_data_category_display }}</span></td>
+          <td>{{ log.get_action_display }}</td>
+          <td class="font-monospace small">{{ log.ip_address|default:"127.0.0.1" }}</td>
+          <td class="small text-muted">{{ log.timestamp|date:"d M Y H:i:s" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-3">No sensitive data access events logged recently.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
